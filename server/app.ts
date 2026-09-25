@@ -1,0 +1,188 @@
+import express, { type ErrorRequestHandler } from 'express';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import { z, ZodError } from 'zod';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { config } from './config';
+import { authenticate, browserActor, checkPassword, createGuest, csrf, currentUser, hash, logout, newSession, passwordHash, profile, requireActor, users } from './auth';
+import { AppError, requireValue } from './errors';
+import { rows, db } from './db';
+import { wallet, reserveRun, runs } from './wallet';
+import { conversation, executeOperation } from './operations';
+import { operations, describeOperation } from '../shared/catalog';
+import { currentRun, runView, decideApprovals, completeSurface, cancelRun } from './agent';
+import { createMcpServer } from './mcp';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { ensureStarter, starterPoolStatus, setStarterBudget } from './starterPool';
+import { adminStatus, requireAdmin, signInAdmin, signOutAdmin } from './admin';
+import { searchOperations, searchSchema } from './operationSearch';
+import release from '../release.json';
+import { checkout, stripeWebhook, topupQuote } from './payments';
+import { ensureIntroduction } from './onboarding';
+import {acceptUpload,readUpload} from './uploads';
+import { streamLiveState, readLiveState } from './liveState';
+import { buildResourceLinks } from './resourceLinks';
+import { devApiGate } from './devGate';
+
+const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
+const limiter = (limit: number, windowMs = 60000) => rateLimit({ windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
+  message: { error: { code: 'rate_limit', message: 'Please slow down and try again shortly.' } } });
+
+export function createApp() {
+  const app = express();
+  app.disable('x-powered-by');
+  if (config.production) app.set('trust proxy', 'loopback');
+  app.use(helmet({ contentSecurityPolicy: config.production ? {
+    directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      connectSrc: ["'self'"], imgSrc: ["'self'", 'data:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
+  } : false, crossOriginEmbedderPolicy: false }));
+  app.get('/api/health', async (_req, res) => { await db().command({ ping: 1 }); res.json({ ok: true }); });
+  app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '128kb' }), async (req, res) => {
+    await stripeWebhook(req.body, req.get('stripe-signature') || ''); res.json({ received: true });
+  });
+  app.post('/mcp', limiter(300), express.json({ limit: '128kb' }), authenticate, async (req, res) => {
+    const actor = requireActor(req);
+    if (actor.source === 'browser') throw new AppError(403, 'token_required', 'Connect MCP using an access token.');
+    const server = createMcpServer(actor);
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    res.on('close', () => { void transport.close(); void server.close(); });
+    await server.connect(transport); await transport.handleRequest(req, res, req.body);
+  });
+  app.all('/mcp', (_req, res) => { res.status(405).set('Allow', 'POST').json({ error: 'Use authenticated Streamable HTTP POST.' }); });
+  app.use('/api', devApiGate, limiter(180), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
+  app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  app.post('/api/session', limiter(30, 15 * 60000), async (req, res) => {
+    if (!req.actor) {
+      const user = await createGuest();
+      await newSession(res, user._id);
+      await ensureIntroduction(user._id);
+    } else if (req.actor.source === 'browser') { await ensureStarter(req.actor.userId); await ensureIntroduction(req.actor.userId); }
+    res.json({ ok: true });
+  });
+  app.get('/api/bootstrap', async (req, res) => {
+    const actor = requireActor(req);
+    res.json({ ...await readLiveState(actor.userId),
+      config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
+  });
+  app.get('/api/events', streamLiveState);
+  app.put('/api/uploads/:id',limiter(20),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
+  app.get('/api/files/:id',async(req,res)=>{
+    const {file,bytes}=await readUpload(requireActor(req),String(req.params.id),true);
+    res.set({'Content-Type':file.mime,'Content-Disposition':`${file.mime.startsWith('image/')?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`,'Cache-Control':'private, no-store'}).send(bytes);
+  });
+  app.get('/api/admin/session', async (req, res) => { res.json(await adminStatus(req)); });
+  app.post('/api/admin/login', limiter(10, 15 * 60000), async (req, res) => {
+    const data = z.strictObject({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/), password: z.string().min(8).max(128) }).parse(req.body);
+    res.json(await signInAdmin(req, res, data.username, data.password));
+  });
+  app.post('/api/admin/logout', async (req, res) => { await signOutAdmin(req, res); res.json({ ok: true }); });
+  app.get('/api/admin/starter-pool', async (req, res) => {
+    await requireAdmin(req);
+    res.json(await starterPoolStatus());
+  });
+  app.post('/api/admin/starter-pool', async (req, res) => {
+    const owner = await requireAdmin(req);
+    const { budgetDollars } = z.strictObject({ budgetDollars: z.number().min(0).max(100000).multipleOf(.01) }).parse(req.body);
+    res.json(await setStarterBudget(owner.id, Math.round(budgetDollars * 1e9)));
+  });
+  app.post('/api/account/register', limiter(15, 15 * 60000), async (req, res) => {
+    const actor = browserActor(req);
+    const data = credentials.parse(req.body);
+    const user = await currentUser(actor.userId);
+    if (user.handle) throw new AppError(409, 'registered', 'Your account is already saved.');
+    const encoded = await passwordHash(data.password);
+    const saved = requireValue(await users().findOneAndUpdate({ _id: user._id, handle: { $exists: false } }, { $set: { handle: data.handle, passwordHash: encoded } }, { returnDocument: 'after' }));
+    await newSession(res, saved._id, req);
+    res.json({ user: profile(saved) });
+  });
+  app.post('/api/account/login', limiter(15, 15 * 60000), async (req, res) => {
+    const data = credentials.parse(req.body);
+    const user = await users().findOne({ handle: data.handle });
+    if (!await checkPassword(data.password, user?.passwordHash)) throw new AppError(401, 'credentials', 'That handle and password did not match.');
+    await newSession(res, user!._id, req);
+    res.json({ user: profile(user!) });
+  });
+  app.post('/api/account/logout', async (req, res) => { browserActor(req); await logout(req, res); res.json({ ok: true }); });
+  app.get('/api/catalog', (req, res) => {
+    const actor = requireActor(req);
+    res.json({ operations: operations.filter(o => (actor.source === 'browser' || o.name !== 'profile.update') && (actor.scope === 'write' || o.kind === 'read')).map(o => describeOperation(o.name)) });
+  });
+  app.post('/api/catalog/search', async (req, res) => { res.json(await searchOperations(searchSchema.parse(req.body), requireActor(req))); });
+  app.post('/api/operations/:name', async (req, res) => {
+    const actor = requireActor(req);
+    const result = await executeOperation(String(req.params.name), req.body, actor, req.get('Idempotency-Key'), { confirmed: req.get('X-NewDrugs-Confirmed') === 'true' });
+    res.json({ ok: true, data: result, links: buildResourceLinks(String(req.params.name), req.body, result, actor) });
+  });
+  app.post('/api/chat', limiter(12), async (req, res) => {
+    const actor = browserActor(req);
+    if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Create an account to use your agent.');
+    const data = z.strictObject({ text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York') }).refine(value=>value.text||value.fileIds.length,'Add a message or a file.').parse(req.body);
+    if (!config.aiEnabled) throw new AppError(503, 'agent_unavailable', 'The agent is not connected yet. Please try again later.');
+    try { new Intl.DateTimeFormat('en', { timeZone: data.timezone }).format(); } catch { throw new AppError(422, 'timezone', 'Unknown timezone.'); }
+    const runId = `${actor.userId}:${data.requestId}`;
+    await ensureStarter(actor.userId);
+    res.status(202).json({ run: runView(await reserveRun(actor.userId, runId, data.text, { clientId: data.clientId, timezone: data.timezone, fileIds: data.fileIds })) });
+  });
+  app.get('/api/runs/:id', async (req, res) => { const actor = requireActor(req); res.json({ run: runView(requireValue(await runs().findOne({ _id: String(req.params.id), userId: actor.userId }))) }); });
+  app.post('/api/runs/:id/decisions', async (req, res) => {
+    const actor = browserActor(req);
+    const data = z.strictObject({ revision: z.number().int(), decisions: z.array(z.strictObject({ id: z.string(), approved: z.boolean() })).min(1).max(50) }).parse(req.body);
+    res.json(await decideApprovals(actor.userId, String(req.params.id), data.revision, data.decisions));
+  });
+  app.post('/api/runs/:id/surface', async (req, res) => {
+    const actor = browserActor(req); const data = z.strictObject({ id: z.string(), saved: z.boolean(), fileIds:z.array(z.uuid()).max(5).default([]) }).parse(req.body);
+    res.json(await completeSurface(actor.userId, String(req.params.id), data.id, data.saved, data.fileIds));
+  });
+  app.post('/api/runs/:id/cancel', async (req, res) => { res.json(await cancelRun(browserActor(req).userId, String(req.params.id))); });
+  app.get('/api/checkout/quotes', (req, res) => { requireActor(req); res.json({ quotes: [500,1000,2000].map(topupQuote) }); });
+  app.post('/api/checkout', limiter(10), async (req, res) => {
+    const actor = browserActor(req);
+    const data = z.strictObject({ cents: z.union([z.literal(500), z.literal(1000), z.literal(2000)]), requestId: z.uuid() }).parse(req.body);
+    res.json(await checkout(actor.userId, data.cents, data.requestId));
+  });
+  app.get('/api/tokens', async (req, res) => {
+    const actor = browserActor(req);
+    const tokens = await rows('tokens').find({ userId: actor.userId, revokedAt: null }, { projection: { hash: 0 } }).sort({ createdAt: -1 }).limit(20).toArray();
+    res.json({ tokens: tokens.map(t => ({ id: t._id, name: t.name, scope: t.scope, createdAt: t.createdAt, expiresAt: t.expiresAt })) });
+  });
+  app.post('/api/tokens', limiter(10), async (req, res) => {
+    const actor = browserActor(req);
+    if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Save your account before connecting an agent.');
+    const data = z.strictObject({ name: z.string().trim().max(60).default('My AI agent').transform(value => value || 'My AI agent'), scope: z.enum(['read', 'write']), expiresInDays: z.number().int().min(1).max(3650).nullable().default(null) }).parse(req.body);
+    if (await rows('tokens').countDocuments({ userId: actor.userId, revokedAt: null }) >= 20) throw new AppError(422, 'token_limit', 'Revoke an old connection first.');
+    const token = `nd_${randomBytes(32).toString('base64url')}`;
+    const { expiresInDays, ...access } = data;
+    const record = { _id: randomUUID(), userId: actor.userId, hash: hash(token), ...access, revokedAt: null, createdAt: new Date().toISOString(), expiresAt: expiresInDays === null ? null : new Date(Date.now() + expiresInDays * 86400000) };
+    await rows('tokens').insertOne(record);
+    res.json({ token, id: record._id, expiresAt: record.expiresAt });
+  });
+  app.delete('/api/tokens/:id', async (req, res) => {
+    const actor = browserActor(req);
+    await rows('tokens').updateOne({ _id: String(req.params.id), userId: actor.userId }, { $set: { revokedAt: new Date().toISOString() } });
+    res.json({ ok: true });
+  });
+  app.use('/api', (_req, _res, next) => next(new AppError(404, 'not_found', 'Unknown endpoint.')));
+  if (config.production) {
+    app.use('/downloads', express.static(resolve('dist/downloads'), { index: false, setHeaders: res => { res.setHeader('Cache-Control', 'no-cache'); } }));
+  }
+  if (config.production && config.APP_ENV === 'production') {
+    app.get('/admin', (_req, res) => { res.redirect('/admin/'); });
+    app.use('/admin', express.static(resolve('dist/admin'), { index: false }));
+    app.get('/admin/{*path}', (_req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(resolve('dist/admin/index.html')); });
+    app.use(express.static(resolve('dist/web'), { index: false }));
+    app.get('/{*path}', (_req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(resolve('dist/web/index.html')); });
+  }
+  if (config.APP_ENV === 'staging') app.use((_req, res) => { res.status(404).set('Cache-Control', 'no-store').end(); });
+  const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
+    if (res.headersSent) { res.end(); return; }
+    if (error instanceof ZodError) { res.status(422).json({ error: { code: 'validation', message: error.issues.map(i => i.message).join(' ') } }); return; }
+    if (error instanceof AppError) { res.status(error.status).json({ error: { code: error.code, message: error.message } }); return; }
+    if (error?.code === 11000) { res.status(409).json({ error: { code: 'conflict', message: 'That name or request is already in use. Please try again.' } }); return; }
+    console.error('Request failed', { name: error?.name || 'Error' });
+    res.status(500).json({ error: { code: 'internal', message: 'Something went wrong. Please try again.' } });
+  };
+  app.use(errorHandler);
+  return app;
+}

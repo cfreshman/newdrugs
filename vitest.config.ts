@@ -1,0 +1,11 @@
+import { defineConfig } from 'vitest/config';
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: '.env.cloud-test', quiet: true, override: true });
+process.env.STARTER_POOL_DB = 'newdrugs_test';
+process.env.APP_ENV = 'staging';
+process.env.UI_ORIGIN = 'https://dev.druggie.org';
+process.env.DEV_ACCESS_KEY = 'isolated-test-setup';
+process.env.STRIPE_SECRET_KEY = '';
+process.env.STRIPE_WEBHOOK_SECRET = '';
+process.env.DATA_DIR = '.data/test-files';
+export default defineConfig({ test: { include: ['tests/**/*.test.ts'], testTimeout: 20000, hookTimeout: 30000, fileParallelism: false } });

@@ -1,0 +1,141 @@
+import { randomUUID } from 'node:crypto';
+import { rows } from '../db';
+import { currentUser, profile, users, type Actor } from '../auth';
+import { AppError } from '../errors';
+import { postCards } from '../postProjection';
+import { coarsePoint, distanceMeters, METERS_PER_MILE, sharedAreaDistance } from '../../shared/geo';
+import type { SearchConstraints, SearchDataset, SearchMatch, SearchMode, SearchResult, SearchRetrieval } from '../../shared/search';
+import { EMBEDDING_MODEL, DIMENSIONS, INDEX_VERSION, type SearchDocument } from './model';
+import { sourceDocument } from './sources';
+import { getIndex } from './index';
+import { embed } from './embeddings';
+import { bm25, diversify, feedbackVector, fuse, hybridRank, hashText, words } from './ranking';
+
+export interface SearchInput extends SearchConstraints {
+  query: string; datasets: SearchDataset[]; mode: SearchMode; limit: number; cursor?: string; interest?: string;
+}
+type Ranked = { id: string; sourceHash: string; sourceRevision: string; score: number; signals: SearchMatch['signals'] };
+type Snapshot = { _id: string; userId: string; identity: string; input: SearchInput; vector?: number[]; ranked: Ranked[]; retrieval: SearchRetrieval; expiresAt: Date };
+async function blockedBy(userId: string) { return (await rows('blocks').find({ members: userId }).limit(1001).toArray()).flatMap(row => (row.members as string[]).filter(id => id !== userId)); }
+function within(document: Omit<SearchDocument, 'vector'>, input: SearchInput, actor: Actor, blocked: string[]) {
+  if (blocked.includes(document.ownerId) || (document.dataset === 'profiles' && document.ownerId === actor.userId)) return false;
+  if (!input.datasets.includes(document.dataset) && !(input.datasets.includes('threads') && document.dataset !== 'profiles')) return false;
+  if (input.authorId && document.ownerId !== input.authorId || input.after && document.createdAt < input.after || input.beforeDate && document.createdAt >= input.beforeDate) return false;
+  if (input.interest && !document.evidence.some(item => item.field === 'interests' && item.text.split(', ').includes(input.interest!.toLowerCase()))) return false;
+  if (input.near) { if (!document.area) return false; const [lng, lat] = coarsePoint(input.near).coordinates, [otherLng, otherLat] = document.area.point.coordinates; if (distanceMeters([lat,lng], [otherLat,otherLng]) > (input.radiusMiles || 25) * METERS_PER_MILE) return false; }
+  return true;
+}
+async function hydrate(ranked: Ranked[], input: SearchInput, actor: Actor): Promise<SearchMatch[]> {
+  const blocked = await blockedBy(actor.userId), results: SearchMatch[] = [];
+  // Bounded parallel canonical reads, never cached result payloads.
+  for (let offset = 0; offset < ranked.length; offset += 8) {
+    const batch = await Promise.all(ranked.slice(offset,offset+8).map(async rank => {
+      const split = rank.id.indexOf(':'), kind = rank.id.slice(0,split) as 'profiles' | 'posts', entityId = rank.id.slice(split+1);
+      if (!['profiles','posts'].includes(kind)) return null;
+      const source = await sourceDocument(kind, entityId);
+      if (!source || source.sourceHash !== rank.sourceHash || source.sourceRevision !== rank.sourceRevision || !within(source, input, actor, blocked)) return null;
+      let record: unknown;
+      if (kind === 'profiles') {
+        const person = await users().findOne({ _id: entityId, discoverable: true }); if (!person) return null;
+        record = profile(person);
+      } else {
+        const post = await rows('posts').findOne({ _id: entityId, deletedAt: { $exists: false } }); if (!post) return null;
+        record = (await postCards([post], actor.userId, blocked))[0];
+      }
+      if (input.near && source.area) { const [lng,lat] = coarsePoint(input.near).coordinates, [otherLng,otherLat] = source.area.point.coordinates; record = { ...(record as object), ...sharedAreaDistance(input.near, source.area.cell, distanceMeters([lat,lng],[otherLat,otherLng])) }; }
+      return { id: source._id, dataset: source.dataset, entityType: kind === 'profiles' ? 'person' : 'post', entityId, ownerId: source.ownerId, score: rank.score,
+        evidence: source.evidence, signals: rank.signals, sourceHash: source.sourceHash, sourceRevision: source.sourceRevision, record } as SearchMatch;
+    }));
+    results.push(...batch.filter((item): item is SearchMatch => Boolean(item)));
+  }
+  return results;
+}
+const identity = (input: SearchInput) => hashText(JSON.stringify({ ...input, cursor: undefined, limit: undefined }));
+async function ownedSnapshot(id: string, actor: Actor) {
+  const snapshot = await rows<Snapshot>('searchRetrievals').findOne({ _id: id, userId: actor.userId, expiresAt: { $gt: new Date() } });
+  if (!snapshot) throw new AppError(409, 'search_expired', 'This search expired. Search again.'); return snapshot;
+}
+async function page(snapshot: Snapshot, offset: number, limit: number, actor: Actor): Promise<SearchResult> {
+  const matches: SearchMatch[] = []; let skipped = 0;
+  while (offset < snapshot.ranked.length && matches.length < limit) {
+    const selected = snapshot.ranked.slice(offset,offset+limit-matches.length); offset += selected.length;
+    const current = await hydrate(selected, snapshot.input, actor); skipped += selected.length-current.length; matches.push(...current);
+  }
+  return { matches, retrieval: { ...snapshot.retrieval, incomplete: snapshot.retrieval.incomplete || Boolean(skipped), notices: [...snapshot.retrieval.notices, ...(skipped ? ['Some results changed or became unavailable. Search again for current matches.'] : [])] }, nextCursor: offset < snapshot.ranked.length ? `${snapshot._id}.${offset}` : null };
+}
+export async function searchPublic(input: SearchInput, actor: Actor, prepared?: number[], excluded: string[] = []): Promise<SearchResult> {
+  const user = await currentUser(actor.userId); if (!user.handle) throw new AppError(403, 'account_required', 'Create your account to search.');
+  if (input.near) coarsePoint(input.near);
+  if (input.after && input.beforeDate && input.after >= input.beforeDate) throw new AppError(422,'date_range','Choose an end date after the start date.');
+  if (input.cursor) {
+    const [id, value] = input.cursor.split('.'), offset = Number(value), snapshot = await ownedSnapshot(id,actor);
+    if (!Number.isSafeInteger(offset) || offset < 0 || snapshot.identity !== identity(input)) throw new AppError(409,'search_changed','The search changed. Start again without a cursor.');
+    return page(snapshot,offset,input.limit,actor);
+  }
+  const rateId = `${actor.userId}:${Math.floor(Date.now()/60000)}`;
+  const rate = await rows<{_id:string;count:number}>('searchRates').findOneAndUpdate({_id:rateId},{$inc:{count:1},$set:{expiresAt:new Date(Date.now()+120000)}},{upsert:true,returnDocument:'after'});
+  if (rate && rate.count > 30) throw new AppError(429,'search_rate','Give search a moment before trying again.');
+  const [blocked, pending] = await Promise.all([blockedBy(actor.userId),rows('searchOutbox').countDocuments({}, {limit:1})]);
+  const {index,release}=await getIndex();
+  try {
+  const eligible = [...index.metadata.values()].filter(document => !excluded.includes(document._id) && within(document,input,actor,blocked));
+  const notices: string[] = []; let vector = prepared, mode: SearchRetrieval['mode'] = input.mode;
+  const exactText = input.query.replace(/^@/,'').trim().toLowerCase();
+  const exact = input.datasets.includes('profiles') ? await users().find({ discoverable:true, _id:{$ne:actor.userId,$nin:blocked}, $or:[{handle:exactText},{name:{$regex:`^${exactText.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`,$options:'i'}}] }).limit(30).toArray() : [];
+  const exactDocuments = (await Promise.all(exact.map(user=>sourceDocument('profiles',user._id)))).filter((document):document is SearchDocument=>Boolean(document && within(document,input,actor,blocked)));
+  if (exactDocuments.length) mode = 'exact';
+  else if (input.mode !== 'keyword' && !vector) { try { vector = await embed(input.query,'query'); } catch { mode = 'keyword'; notices.push('Semantic search is temporarily unavailable. These are keyword matches.'); } }
+  const lexical = bm25(words(input.query),eligible.map(document=>({id:document._id,terms:document.terms}))).slice(0,150);
+  const dense = vector ? index.search(vector,new Set(eligible.map(document=>document._id))).filter(item=>item.score>=.2) : [];
+  const lexScores = new Map(lexical.map(item=>[item.id,item.score])), denseScores = new Map(dense.map(item=>[item.id,item.score]));
+  const ranking = mode === 'keyword' ? fuse([lexical]) : input.mode === 'semantic' ? dense : hybridRank(dense,lexical);
+  const fused = ranking.map(item => {
+    const document = index.metadata.get(item.id)!;
+    const freshness = document.dataset === 'profiles' ? 0 : Math.exp(-Math.max(0,Date.now()-Date.parse(document.createdAt))/(30*86400000));
+    return {...item,score:item.score*(1+.05*freshness),ownerId:document.ownerId,vector:index.vector(item.id),sourceHash:document.sourceHash,sourceRevision:document.sourceRevision,
+      signals:{semantic:denseScores.get(item.id),lexical:lexScores.get(item.id),freshness}};
+  }).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
+  const ranked: Ranked[] = exactDocuments.length ? exactDocuments.map(document=>({id:document._id,sourceHash:document.sourceHash,sourceRevision:document.sourceRevision,score:1,signals:{exact:true}}))
+    : diversify(fused,100).map(({id,score,sourceHash,sourceRevision,signals})=>({id,score,sourceHash,sourceRevision,signals}));
+  if (pending) notices.push('Recent changes are still being indexed.');
+  if (index.incomplete) notices.push('The search index has reached its current capacity. Results are incomplete.');
+  const id = randomUUID(), retrieval: SearchRetrieval = {id,mode,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,constraints:{near:input.near,radiusMiles:input.radiusMiles,authorId:input.authorId,after:input.after,beforeDate:input.beforeDate},candidates:eligible.length,incomplete:Boolean(pending)||index.incomplete||(mode==='keyword'&&input.mode!=='keyword'),notices,approximate:eligible.length>500&&Boolean(vector),indexedAt:[...index.metadata.values()].map(doc=>doc.indexedAt).sort().at(-1)};
+  const snapshot: Snapshot = {_id:id,userId:actor.userId,identity:identity(input),input:{...input,cursor:undefined},...(vector?{vector}:{}),ranked,retrieval,expiresAt:new Date(Date.now()+600000)};
+  await rows<Snapshot>('searchRetrievals').insertOne({...JSON.parse(JSON.stringify(snapshot)),expiresAt:snapshot.expiresAt});
+  // Bound short-lived owner-only retrieval memory. No saved inferred preferences.
+  const old = await rows('searchRetrievals').find({userId:actor.userId}).sort({expiresAt:-1}).skip(20).project({_id:1}).toArray();
+  if(old.length)await rows('searchRetrievals').deleteMany({_id:{$in:old.map(row=>row._id)},userId:actor.userId});
+  return await page(snapshot,0,input.limit,actor);
+  } finally { release(); }
+}
+export async function similarPublic(id: string, input: SearchInput, actor: Actor) {
+  const split=id.indexOf(':'),kind=id.slice(0,split),entityId=id.slice(split+1);
+  if(!['profiles','posts'].includes(kind))throw new AppError(422,'source','Choose a returned search record.');
+  const source=await sourceDocument(kind as 'profiles'|'posts',entityId),blocked=await blockedBy(actor.userId);
+  if(!source||blocked.includes(source.ownerId))throw new AppError(404,'unavailable','This record is unavailable.');
+  const stored=await rows<SearchDocument>('searchDocuments').findOne({_id:id,sourceHash:source.sourceHash,indexVersion:INDEX_VERSION});
+  const vector=stored?.vector||await embed(source.text,'document');
+  return searchPublic({...input,query:input.query||source.text.slice(0,500)},actor,vector,[id]);
+}
+export async function refinePublic(retrievalId: string, positive: string[], negative: string[], actor: Actor) {
+  const snapshot=await ownedSnapshot(retrievalId,actor);
+  if(!snapshot.vector)throw new AppError(409,'semantic_unavailable','Run a semantic search before refining it.');
+  const selected=[...new Set([...positive,...negative])];
+  if(!selected.length||positive.some(id=>negative.includes(id))||selected.some(id=>!snapshot.ranked.some(rank=>rank.id===id)))throw new AppError(422,'feedback','Choose distinct results from this search.');
+  const current=await hydrate(snapshot.ranked.filter(rank=>selected.includes(rank.id)),snapshot.input,actor);
+  if(current.length!==selected.length)throw new AppError(409,'search_changed','A selected result changed. Search again.');
+  const docs=await rows<SearchDocument>('searchDocuments').find({_id:{$in:selected},indexVersion:INDEX_VERSION}).toArray();
+  const vectorFor=(id:string)=>{const doc=docs.find(doc=>doc._id===id);if(!doc?.vector||doc.sourceHash!==current.find(item=>item.id===id)?.sourceHash)throw new AppError(409,'search_changed','A selected result is being indexed. Search again.');return doc.vector;};
+  return searchPublic(snapshot.input,actor,feedbackVector(snapshot.vector,positive.map(vectorFor),negative.map(vectorFor)),negative);
+}
+export async function explainPublic(retrievalId: string, id: string, actor: Actor) {
+  const snapshot=await ownedSnapshot(retrievalId,actor),rank=snapshot.ranked.find(rank=>rank.id===id);
+  if(!rank)throw new AppError(404,'unavailable','This result is unavailable.');
+  const match=(await hydrate([rank],snapshot.input,actor))[0];
+  if(!match)throw new AppError(409,'search_changed','This result changed or is no longer visible. Search again.');
+  return {match,retrieval:snapshot.retrieval};
+}
+export async function searchStatus() {
+  const [counts,pending,failed]=await Promise.all([rows('searchDocuments').aggregate< {_id:string;count:number}>([{$group:{_id:'$dataset',count:{$sum:1}}}]).toArray(),rows('searchOutbox').countDocuments({status:{$ne:'failed'}}),rows('searchOutbox').countDocuments({status:'failed'})]);
+  return {datasets:['profiles','posts','replies'].map(dataset=>({dataset,count:counts.find(item=>item._id===dataset)?.count||0})),pending,failed,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,capacity:10000,notice:'Public human-written profiles, posts and replies only. Thread searches retrieve individual posts/replies with their own author and source. No DMs, agent chats, files or inferred interests are indexed.'};
+}

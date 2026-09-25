@@ -1,0 +1,28 @@
+import {beforeAll,afterAll,expect,it} from 'vitest';
+import type {Server} from 'node:http';
+import {randomUUID} from 'node:crypto';
+import {connectDatabase,db,mongo,rows} from '../server/db';
+import {createApp} from '../server/app';
+import {hash,users} from '../server/auth';
+import {ensureStarterPool} from '../server/starterPool';
+import {config} from '../server/config';
+let server:Server,origin:string;
+beforeAll(async()=>{await connectDatabase();if(db().databaseName!=='newdrugs_test')throw new Error('Cloud test DB only.');await ensureStarterPool();server=createApp().listen(0,'127.0.0.1');await new Promise<void>(resolve=>server.once('listening',resolve));origin=`http://127.0.0.1:${(server.address() as {port:number}).port}`;});
+afterAll(async()=>{await new Promise<void>(resolve=>server.close(()=>resolve()));if(db().databaseName!=='newdrugs_test')throw new Error('Cloud test DB only.');for(const collection of await db().collections())await collection.deleteMany({});await mongo.close();});
+const request=(path:string,options:RequestInit={})=>fetch(origin+path,{...options,headers:{Origin:config.APP_ORIGIN,...options.headers}});
+it('keeps dev UI and anonymous API private while retaining health and authenticated CLI/MCP',async()=>{
+ expect((await request('/')).status).toBe(404);expect((await request('/api/health')).status).toBe(200);
+ expect((await request('/api/session',{method:'POST'})).status).toBe(404);
+ expect((await request('/api/session',{method:'POST',headers:{'X-NewDrugs-Dev-Key':'wrong'}})).status).toBe(404);
+ expect((await request('/api/bootstrap',{headers:{Authorization:'Bearer invalid'}})).status).toBe(401);
+ const guest=await request('/api/session',{method:'POST',headers:{'X-NewDrugs-Dev-Key':config.DEV_ACCESS_KEY}});expect(guest.status).toBe(200);
+ const cookie=guest.headers.get('set-cookie')!.split(';')[0],headers={Cookie:cookie,'X-NewDrugs-Dev-Key':config.DEV_ACCESS_KEY,'Content-Type':'application/json'};
+ const state=await (await request('/api/bootstrap',{headers})).json();expect(state.user.handle).toBeUndefined();
+ const refused=await request('/api/chat',{method:'POST',headers,body:JSON.stringify({text:'hello',requestId:randomUUID(),clientId:'test'})});expect(refused.status).toBe(403);expect((await refused.json()).error.code).toBe('account_required');
+ const register=await request('/api/account/register',{method:'POST',headers,body:JSON.stringify({handle:`gate_${randomUUID().slice(0,8)}`,password:'testpass8'})});expect(register.status).toBe(200);
+ const account=await register.json();expect(account.user.id).toBe(state.user.id);expect(account.user.handle).toBeTruthy();
+ const token=`nd_${randomUUID()}`;await rows('tokens').insertOne({_id:randomUUID(),userId:state.user.id,hash:hash(token),scope:'read',revokedAt:null,expiresAt:null});
+ const cli=await request('/api/operations/identity.get',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}'});expect(cli.status).toBe(200);expect((await cli.json()).data.id).toBe(state.user.id);
+ const mcp=await request('/mcp',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'gate-test',version:'1'}}})});expect(mcp.status).toBe(200);
+ expect(await users().countDocuments({_id:state.user.id})).toBe(1);
+});

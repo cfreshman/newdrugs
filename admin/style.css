@@ -1,0 +1,32 @@
+:root { --font-sans:'Noto Sans',sans-serif; --font-serif:'Noto Serif',serif; --font-mono:'Noto Sans Mono',monospace; --ink:#000; --muted:#60646d; --paper:#fff; --line:#d7d9dd; --radius:10px; --space:16px; font:14px/1.5 var(--font-sans); color:var(--ink); background:#f4f4f4; }
+* { box-sizing:border-box; scrollbar-width:none; }
+*::-webkit-scrollbar { display:none; }
+body { margin:0; }
+button,input,a { font:inherit; color:inherit; outline:none; }
+button { cursor:pointer; }
+button:disabled { cursor:default; }
+main { max-width:740px; margin:auto; padding:24px 16px 48px; }
+header { display:flex; align-items:center; justify-content:space-between; margin-bottom:32px; }
+header a { color:var(--muted); text-decoration:none; }
+header button { display:flex; align-items:center; gap:8px; border:0; background:none; padding:8px; }
+h1 { font-size:24px; margin:0 0 12px; font-weight:600; }
+h2 { font-size:16px; margin:32px 0 12px; }
+p { margin:0 0 16px; }
+form,label { display:flex; flex-direction:column; gap:8px; }
+form { gap:var(--space); }
+input { background:var(--paper); border:1px solid #8b8f96; border-radius:var(--radius); min-height:44px; padding:10px 12px; font-size:16px; width:100%; }
+input:focus-visible { border-color:var(--ink); }
+.primary { min-height:44px; border:0; background:var(--ink); color:var(--paper); border-radius:var(--radius); padding:10px 16px; }
+.primary:focus-visible { text-decoration:underline; }
+.signin { max-width:360px; margin:70px auto 0; }
+.totals { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:24px 0; }
+.totals div { background:var(--paper); padding:12px; border-radius:var(--radius); }
+dt { color:var(--muted); font-size:12px; }
+dd { margin:4px 0 0; font-size:22px; font-variant-numeric:tabular-nums; }
+.budget { flex-direction:row; align-items:flex-end; }
+.budget label { flex:1; }
+.note { color:var(--muted); font-size:12px; margin-top:16px; }
+table { width:100%; border-collapse:collapse; text-align:left; font-size:12px; }
+th,td { padding:10px 0; border-bottom:1px solid var(--line); }
+th:last-child,td:last-child { text-align:right; }
+.error { color:#b32a35; margin:16px 0 0; }
