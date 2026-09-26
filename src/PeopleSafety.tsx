@@ -35,3 +35,11 @@ export function BlockedPanel() {
   const unblock = async (personId: string) => { setBusy(personId); try { await operation('people.block', { personId, blocked: false }); await load(); } catch (error) { setError(errorText(error)); } finally { setBusy(''); } };
   return <><div className="blocked-list">{page?.items.map(person => <div key={person.id}><span>{person.handle ? `@${person.handle}` : person.name || 'Person'}</span><button className="text-link" disabled={Boolean(busy)} onClick={() => void unblock(person.personId)}>Unblock</button></div>)}</div>{page && !page.items.length && <p className="quiet">You haven’t blocked anyone.</p>}{page?.nextCursor && <button className="text-link" onClick={() => void load(page.nextCursor!)}>More</button>}{error && <p className="error" role="alert">{error}</p>}</>;
 }
+
+/** Reporting shares only the selected content, never a whole private conversation. */
+export function ContentReport({personId,postId,messageId,close}:{personId:string;postId?:string;messageId?:string;close():void}) {
+  const [reason,setReason]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[sent,setSent]=useState(false);
+  const intent=useRef<{text:string;key:string}|null>(null);
+  const submit=async(event:FormEvent)=>{event.preventDefault();if(!reason.trim()||busy)return;if(intent.current?.text!==reason.trim())intent.current={text:reason.trim(),key:crypto.randomUUID()};setBusy(true);try{await operation('people.report',{personId,reason:intent.current.text,...(postId?{postId}:{}),...(messageId?{messageId}:{})},{confirmed:true,key:intent.current.key});setSent(true);}catch(e){setError(errorText(e));}finally{setBusy(false);}};
+  return sent?<div role="status"><p>Report submitted.</p><button onClick={close}>Close</button></div>:<form className="fields content-report" onSubmit={submit}><label>What happened?<textarea value={reason} maxLength={1000} onChange={event=>setReason(event.target.value)}/></label>{messageId&&<p className="quiet small">This message and your report will be shared with the operator.</p>}<div className="panel-actions"><button type="button" disabled={busy} onClick={close}>Cancel</button><button className="solid" disabled={busy||!reason.trim()}>Submit report</button></div>{error&&<p className="error" role="status">{error}</p>}</form>;
+}

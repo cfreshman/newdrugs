@@ -1,3 +1,5 @@
+import { Flag } from '@phosphor-icons/react';
+import { ContentReport } from './PeopleSafety';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { Profile } from '../shared/types';
 import type { CoarseArea } from '../shared/geo';
@@ -14,9 +16,10 @@ import { usePanelLoading, usePanelVisible } from './PanelReadiness';
 import { useMessagePlacement } from './useMessagePlacement';
 import { CollapsibleMessage } from './CollapsibleMessage';
 import { useRecordRefresh } from './useRecordRefresh';
+import { captureHistoryAnchor, restoreHistoryAnchor, OlderMessages, useTopPagination } from './ChatHistory';
 
 interface Page<T> { items: T[]; nextCursor: string | null }
-interface Connection { id: string; members: string[]; fromId: string; toId: string; note: string; status: 'pending' | 'accepted' | 'declined' | 'withdrawn'; unread?: boolean; lastMessage?: { text: string; fromId: string; createdAt: string } }
+interface Connection { initialInvitation?:{fromId:string;note:string;createdAt:string}; disconnectedBy?:string; createdAt: string; id: string; members: string[]; fromId: string; toId: string; note: string; status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'disconnected'; unread?: boolean; lastMessage?: { text: string; fromId: string; createdAt: string } }
 interface DirectMessage { id: string; fromId: string; text: string; createdAt: string; pending?: boolean; failed?: boolean; key?: string; clientId?: string }
 type Navigate = (destination: Destination) => void;
 
@@ -33,19 +36,19 @@ export function LocationPanel({ user, areaCell, saved }: { user: Profile; areaCe
 
 export function PeoplePanel({ user, areaCell, radiusMiles = 25, initialQuery = '', initialScope, navigate }: { user: Profile; areaCell?: string; radiusMiles?: number; initialQuery?:string; initialScope?:Destination['scope']; navigate: Navigate }) {
   const [people, setPeople] = useState<(Page<Profile> & {retrieval?:SearchRetrieval}) | null>(null), [error, setError] = useState('');
-  const [query,setQuery]=useState(initialQuery), [radius,setRadius]=useState(radiusMiles), [scope,setScope]=useState<'all'|'nearby'>(initialScope==='all'?'all':areaCell || user.area ? 'nearby' : 'all'); const requestId=useRef(0);
+  const [query,setQuery]=useState(initialQuery ?? ''), [radius,setRadius]=useState(typeof radiusMiles === 'number' && Number.isFinite(radiusMiles) && radiusMiles >= 10 && radiusMiles <= 250 ? radiusMiles : 25), [scope,setScope]=useState<'all'|'nearby'>(initialScope==='all'?'all':areaCell || user.area ? 'nearby' : 'all'); const requestId=useRef(0);
   const near = areaCell || user.area?.cell;
   usePanelLoading((scope==='all'||Boolean(near)) && !people && !error);
   const load = useCallback(async (before?: string) => {
     if (scope==='nearby' && !near) return;
     const request=++requestId.current;
-    try { const page = await operation<Page<Profile>>('people.search', { scope, ...(scope==='nearby'?{near,radiusMiles:radius}:{}), ...(query?{query}:{}), ...(before ? { before } : {}) }); if(request!==requestId.current)return; setPeople(previous => before && previous ? { ...page, items: [...previous.items, ...page.items] } : page); setError(''); }
+    try { const page = await operation<Page<Profile>>('people.search', { scope, ...(scope==='nearby'?{near,radiusMiles:radius ?? 25}:{}), ...(query?{query}:{}), ...(before ? { before } : {}) }); if(request!==requestId.current)return; setPeople(previous => before && previous ? { ...page, items: [...previous.items, ...page.items] } : page); setError(''); }
     catch (error) { setError(errorText(error)); }
   }, [near, radius, query, scope]);
   useEffect(() => { setPeople(null); void load(); }, [load]);
   useRecordRefresh(['people'], load);
   return <>
-    <SearchField label="Search people by interests" value={query} onSearch={setQuery}/>
+    <SearchField label="Search people by interests" value={query} onSearch={value => { if (value === query) void load(); else setQuery(value); }}/>
     <nav className="view-tabs" aria-label="People filter"><button aria-pressed={scope==='nearby'} onClick={()=>setScope('nearby')}>Nearby</button><button aria-pressed={scope==='all'} onClick={()=>setScope('all')}>All people</button></nav>
     {scope==='nearby' && <div className="search-area-controls"><button className="text-link" onClick={()=>navigate({view:'location'})}>{near ? user.area?.cell===near ? user.area.label : 'Change area' : 'Choose your area'}</button>{near && <RadiusSelect value={radius} onChange={setRadius}/>}</div>}
     {people?.retrieval?.notices.map(notice=><p className="quiet small" key={notice}>{notice}</p>)}
@@ -62,8 +65,12 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
   const visible = usePanelVisible();
   const [inbox, setInbox] = useState<(Page<Connection> & { people: Profile[] }) | null>(null), [messages, setMessages] = useState<Page<DirectMessage> | null>(null);
   const [current, setCurrent] = useState<{ connection: Connection; people: Profile[] } | null>(null);
+  const [reconnectNote,setReconnectNote]=useState('');
+  const [reporting,setReporting]=useState<string|null>(null);
   const [filter, setFilter] = useState<'all' | 'invites'>('all');
   const [text, setText] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false), [olderError, setOlderError] = useState('');
+  const olderRequest = useRef<string | null>(null), prependAnchor = useRef<ReturnType<typeof captureHistoryAnchor> | null>(null), isVisible = useRef(visible); isVisible.current = visible;
   const generation = useRef(0), scroller = useRef<HTMLDivElement>(null), following = useRef(true), readThrough = useRef('');
   const input = useRef<HTMLTextAreaElement>(null);
   const composer = useRef<HTMLFormElement>(null), content = useRef<HTMLDivElement>(null);
@@ -81,7 +88,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     try {
       if (connectionId) {
         const relationship = await operation<{ connection: Connection; people: Profile[] }>('connections.get', { connectionId });
-        const page = relationship.connection.status === 'accepted' ? await operation<Page<DirectMessage>>('messages.list', { connectionId }) : null;
+        const page = (relationship.connection.status === 'accepted' || relationship.connection.initialInvitation) ? await operation<Page<DirectMessage>>('messages.list', { connectionId }) : null;
         if (request !== generation.current) return;
         setCurrent(relationship);
         setMessages(previous => page ? { ...page, nextCursor: previous && previous.items.length > page.items.length ? previous.nextCursor : page.nextCursor, items: merge(previous?.items || [], page.items) } : null);
@@ -89,7 +96,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
       if (request === generation.current) setError('');
     } catch (error) { if (request === generation.current) { setError(errorText(error)); setCurrent(null); setMessages(null); } }
   }, [connectionId]);
-  useEffect(() => { setMessages(null); setInbox(null); setCurrent(null); setText(''); following.current = true; readThrough.current = ''; pendingSend.current = null; void load(); return () => { generation.current++; }; }, [load]);
+  useEffect(() => { setMessages(null); setInbox(null); setCurrent(null); setText(''); setLoadingOlder(false); setOlderError(''); prependAnchor.current = null; following.current = true; readThrough.current = ''; pendingSend.current = null; void load(); return () => { generation.current++; }; }, [load]);
   useRecordRefresh(['connections', 'messages'], load);
   const markRead = useCallback(() => {
     if (!visible || !connectionId || current?.connection.status !== 'accepted' || document.hidden || !following.current) return;
@@ -106,11 +113,21 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     observer.observe(scroller.current); observer.observe(content.current); return () => observer.disconnect();
   }, [visible, Boolean(messages)]);
   const older = async () => {
-    if (!messages?.nextCursor || !connectionId) return;
-    const before = scroller.current ? { top: scroller.current.scrollTop, height: scroller.current.scrollHeight } : null;
-    try { const page = await operation<Page<DirectMessage>>('messages.list', { connectionId, before: messages.nextCursor }); following.current = false; setMessages(previous => ({ ...page, items: merge(previous?.items || [], page.items) })); requestAnimationFrame(() => { if (before && scroller.current) scroller.current.scrollTop = before.top + scroller.current.scrollHeight - before.height; }); }
-    catch (error) { setError(errorText(error)); }
+    const cursor = messages?.nextCursor; if (!cursor || !connectionId) return;
+    const key = `${connectionId}:${cursor}`; if (olderRequest.current === key) return;
+    const request = generation.current, before = scroller.current ? captureHistoryAnchor(scroller.current) : null;
+    olderRequest.current = key; setLoadingOlder(true); setOlderError('');
+    try {
+      const page = await operation<Page<DirectMessage>>('messages.list', { connectionId, before: cursor });
+      if (request !== generation.current) return;
+      prependAnchor.current = isVisible.current && scroller.current ? captureHistoryAnchor(scroller.current) : before;
+      following.current = false;
+      setMessages(previous => ({ ...page, items: merge(previous?.items || [], page.items) }));
+    } catch (error) { if (request === generation.current) setOlderError(errorText(error)); }
+    finally { if (olderRequest.current === key) olderRequest.current = null; if (request === generation.current) setLoadingOlder(false); }
   };
+  useTopPagination(scroller, { enabled: visible && !olderError, hasMore: Boolean(messages?.nextCursor), count: messages?.items.length || 0, scope: connectionId, load: older });
+  useLayoutEffect(() => { if (visible && prependAnchor.current && scroller.current) { restoreHistoryAnchor(scroller.current, prependAnchor.current); prependAnchor.current = null; } });
   const respond = async (connection: Connection, accept: boolean) => { setBusy(true); try { await operation('connections.respond', { connectionId: connection.id, accept }, { confirmed: true }); await load(); } catch (error) { setError(errorText(error)); } finally { setBusy(false); } };
   const send = async (event?: FormEvent, retry?: DirectMessage) => {
     event?.preventDefault(); const message = retry?.text || text.trim(); if (!message || !connectionId || busy) return;
@@ -132,23 +149,28 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     catch (error) { setError(errorText(error)); }
   };
   if (!connectionId) return <><nav className="view-tabs" aria-label="Inbox filter"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button><button aria-pressed={filter === 'invites'} onClick={() => setFilter('invites')}>Invitations</button></nav>
-    <div className="inbox-list">{inbox?.items.filter(connection => filter === 'all' || connection.status !== 'accepted').map(connection => {
+    <div className="inbox-list">{inbox?.items.filter(connection => filter === 'all' || connection.status === 'pending' || connection.status === 'declined' || connection.status === 'withdrawn').map(connection => {
       const person = inbox.people.find(person => person.id === connection.members.find(id => id !== userId));
-      return <article key={connection.id}><div className="inbox-heading"><button className="text-link" onClick={() => navigate({ view: 'person', resourceId: person?.id || connection.members.find(id => id !== userId) })}>{person?.handle ? `@${person.handle}` : person?.name || 'View profile'}</button>{connection.unread && <span className="unread-label">Unread</span>}</div>
+      return <article key={connection.id}><div className="inbox-heading"><button className="text-link" disabled={person?.discoverable===false&&!['accepted','pending'].includes(connection.status)&&!(connection.status==='declined'&&connection.toId===userId)} onClick={() => navigate({ view: 'person', resourceId: person?.id || connection.members.find(id => id !== userId) })}>{person?.handle ? `@${person.handle}` : person?.name || 'View profile'}</button>{connection.unread && <span className="unread-label">Unread</span>}</div>
         <p className="inbox-preview">{connection.lastMessage ? `${connection.lastMessage.fromId === userId ? 'You: ' : ''}${connection.lastMessage.text}` : connection.note}</p>
         {connection.status === 'accepted' ? <button className="text-link" onClick={() => navigate({ view: 'messages', resourceId: connection.id })}>Open conversation</button>
           : connection.status === 'pending' && connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(connection, true)}>Accept invitation</button></div>
             : connection.status === 'pending' ? <div className="inline-actions"><span className="quiet small">Invitation sent</span><button className="text-link small" disabled={busy} onClick={() => void withdraw(connection)}>Withdraw invitation</button></div>
-              : <span className="quiet small">{connection.status === 'withdrawn' ? 'Invitation withdrawn' : 'Invitation declined'}</span>}
-      </article>;
+              : <span className="quiet small">{connection.status === 'disconnected' ? 'Connection ended' : connection.status === 'withdrawn' ? 'Invitation withdrawn' : 'Invitation declined'}</span>}
+      {connection.status!=='accepted'&&<button onClick={()=>navigate({view:'messages',resourceId:connection.id})}>{connection.initialInvitation?'View conversation history':'View invitation'}</button>}</article>;
     })}</div>{inbox && !inbox.items.length && <><p className="quiet">No invitations or conversations yet.</p><button className="text-link" onClick={() => navigate({ view: 'people' })}>Find people nearby</button></>}
     {inbox?.nextCursor && <button className="text-link" onClick={() => void moreConnections()}>More conversations</button>}{error && <p className="error" role="alert">{error}</p>}</>;
   const other = current?.people.find(person => person.id !== userId);
-  return <div className={messages ? 'message-view' : undefined}>{other && <div className="message-view-actions"><button className="text-link" onClick={() => navigate({ view: 'person', resourceId: other.id })}>{other.handle ? `@${other.handle}` : other.name}</button>{messages && <a className="video-link" href="https://pair.video" target="_blank" rel="noopener noreferrer" title="Create a call, then share its link in this conversation"><VideoCamera size={19} />Video call</a>}</div>}
-    {current?.connection.status === 'pending' && <><p>{current.connection.note}</p>{current.connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(current.connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(current.connection, true)}>Accept invitation</button></div> : <><p className="quiet">Invitation sent. Messages open when they accept.</p><button className="text-link" disabled={busy} onClick={() => void withdraw(current.connection)}>Withdraw invitation</button></>}</>}
-    {current?.connection.status === 'declined' && <p className="quiet">This invitation was declined.</p>}{current?.connection.status === 'withdrawn' && <p className="quiet">This invitation was withdrawn.</p>}
+  return <div className={messages ? 'message-view' : undefined}>{other && <div className="message-view-actions"><button className="text-link" disabled={other.discoverable===false&&!['accepted','pending'].includes(current!.connection.status)&&!(current!.connection.status==='declined'&&current!.connection.toId===userId)} onClick={() => navigate({ view: 'person', resourceId: other.id })}>{other.handle ? `@${other.handle}` : other.name}</button>{messages && current?.connection.status==='accepted' && <a className="video-link" href="https://pair.video" target="_blank" rel="noopener noreferrer" title="Create a call, then share its link in this conversation"><VideoCamera size={19} />Video call</a>}</div>}
+    {current && ['pending','declined','withdrawn'].includes(current.connection.status) && <p>{current.connection.note}</p>}
+    {current?.connection.status === 'pending' && <>{current.connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(current.connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(current.connection, true)}>Accept invitation</button></div> : <><p className="quiet">Invitation sent. Messages open when they accept.</p><button className="text-link" disabled={busy} onClick={() => void withdraw(current.connection)}>Withdraw invitation</button></>}</>}
+    {current?.connection.status === 'declined' && <><p className="quiet">This invitation was declined.</p>{current.connection.toId===userId&&<button onClick={()=>navigate({view:'person',resourceId:current.connection.fromId})}>Send a new invitation</button>}</>}{current?.connection.status==='disconnected'&&<><p className="quiet">This connection has ended. Message history is read-only.</p>{current.connection.disconnectedBy===userId&&<form className="fields" onSubmit={event=>{event.preventDefault();if(!reconnectNote.trim()||busy)return;setBusy(true);void operation('connections.request',{personId:current.connection.members.find(id=>id!==userId),note:reconnectNote.trim()},{confirmed:true}).then(()=>{setReconnectNote('');return load();}).catch(e=>setError(errorText(e))).finally(()=>setBusy(false));}}><label>New invitation<textarea value={reconnectNote} maxLength={500} onChange={event=>setReconnectNote(event.target.value)}/></label><button className="solid" disabled={busy||!reconnectNote.trim()}>Send invitation</button></form>}</>}{current?.connection.status === 'withdrawn' && <p className="quiet">This invitation was withdrawn.</p>}
     {messages && <><div className="direct-messages" ref={scroller} onScroll={() => { if (!visible) return; const node = scroller.current!; following.current = node.scrollHeight - node.clientHeight - node.scrollTop < 24; markRead(); }}>
-      <div className="direct-message-content" ref={content}>{messages.nextCursor && <button className="text-link" onClick={() => void older()}>Earlier messages</button>}
-      {[...messages.items].reverse().map(message => <article className={`message ${message.fromId === userId ? 'user' : 'peer'}`} key={message.clientId || message.id} data-message-id={message.clientId ? `pending:${message.clientId}` : message.id}><div className="bubble"><CollapsibleMessage text={message.text} assistant={false} social scrollRef={scroller} /></div>{message.failed && <button className="retry-message" disabled={busy} onClick={() => void send(undefined, message)}>Not sent · retry</button>}</article>)}</div>
-    </div><form className="message-compose" ref={composer} onSubmit={send}><label className="sr-only" htmlFor="direct-message">Message</label><textarea id="direct-message" ref={input} value={text} maxLength={2000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(event); } }} /><button className="solid" aria-label="Send direct message" disabled={busy || !text.trim()}><ArrowUp size={20} weight="bold" /></button></form></>}{error && <p className="error" role="alert">{error}</p>}</div>;
+      <div className="direct-message-content" ref={content}><OlderMessages hasMore={Boolean(messages.nextCursor)} loading={loadingOlder} error={olderError} retry={() => void older()} />
+      {!messages.nextCursor && (current?.connection.initialInvitation?.note || current?.connection.note) && <article className={`message invitation-message ${(current.connection.initialInvitation?.fromId || current.connection.fromId) === userId ? 'user' : 'peer'}`} data-invitation-id={current.connection.id}>
+        <small className="invitation-meta">Invitation · <time dateTime={current.connection.initialInvitation?.createdAt || current.connection.createdAt}>{new Date(current.connection.initialInvitation?.createdAt || current.connection.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</time></small>
+        <div className="bubble"><CollapsibleMessage text={current.connection.initialInvitation?.note || current.connection.note} assistant={false} social scrollRef={scroller} /></div>
+      </article>}
+      {[...messages.items].reverse().map(message => <article className={`message ${message.fromId === userId ? 'user' : 'peer'}`} key={message.clientId || message.id} data-message-id={message.clientId ? `pending:${message.clientId}` : message.id}><div className="bubble"><CollapsibleMessage text={message.text} assistant={false} social scrollRef={scroller} /></div>{message.fromId!==userId&&<button className="report-message" aria-label="Report message" onClick={()=>setReporting(reporting===message.id?null:message.id)}><Flag size={14}/></button>}{reporting===message.id&&<ContentReport personId={message.fromId} messageId={message.id} close={()=>setReporting(null)}/>} {message.failed && <button className="retry-message" disabled={busy} onClick={() => void send(undefined, message)}>Not sent · retry</button>}</article>)}</div>
+    </div>{current?.connection.status==='accepted'&&<form className="message-compose" ref={composer} onSubmit={send}><label className="sr-only" htmlFor="direct-message">Message</label><textarea id="direct-message" ref={input} value={text} maxLength={2000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(event); } }} /><button className="solid" aria-label="Send direct message" disabled={busy || !text.trim()}><ArrowUp size={20} weight="bold" /></button></form>}</>}{error && <p className="error" role="alert">{error}</p>}</div>;
 }

@@ -1,3 +1,4 @@
+import { dictationText } from './dictationText';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface RecognitionResult { isFinal: boolean; 0: { transcript: string } }
@@ -40,7 +41,7 @@ export function useDictation(draft: string, setDraft: (value: string) => void, o
     const prefix = draft.trimEnd();
     instance.continuous = true; instance.interimResults = true; instance.lang = navigator.language || 'en-US';
     instance.onresult = event => {
-      const speech = Array.from(event.results).map(result => result[0].transcript).join(' ').trim();
+      const speech = dictationText(Array.from(event.results).map(result => result[0].transcript));
       const text = `${prefix}${prefix && speech ? ' ' : ''}${speech}`.slice(0, 6000);
       latestText.current = text; setDraft(text);
     };

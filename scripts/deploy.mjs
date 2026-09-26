@@ -8,7 +8,7 @@ const sshKey = process.env.NEWDRUGS_SSH_KEY || '/Users/work/.ssh/newdrugs_do';
 const target = process.env.NEWDRUGS_SSH_HOST || 'root@24.144.121.19';
 if (!/^[\w@.:-]+$/.test(target)) throw new Error('Invalid SSH host.');
 const sshOptions = ['-i',sshKey,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes'];
-const run = (command,args,options={}) => new Promise((resolveRun,reject) => { const child=spawn(command,args,{stdio:'inherit',...options}); child.on('error',reject); child.on('exit',code=>code===0?resolveRun():reject(new Error(`${command} exited ${code}`))); });
+const run = (command,args,options={}) => new Promise((resolveRun,reject) => { const child=spawn(command,args,{stdio:options.input ? ['pipe','inherit','inherit'] : 'inherit',...options}); if(options.input)child.stdin.end(options.input); child.on('error',reject); child.on('exit',code=>code===0?resolveRun():reject(new Error(`${command} exited ${code}`))); });
 await mkdir('.data/releases',{recursive:true});
 const lockPath = '.data/deploy.lock';
 while (true) {
@@ -21,6 +21,7 @@ while (true) {
   }
 }
 try {
+await run('ssh',[...sshOptions,target,`python3 - --stage both --apply`],{input:await readFile('scripts/release-retention.py','utf8')});
 await prepareVersion(instance === 'prod');
 // Rebuild after preparing the version so every deployed artifact has the same version.
 await run('npm',['run','build']);
@@ -38,6 +39,7 @@ tar -xzf release.tgz
 rm release.tgz
 npm ci --omit=dev --no-audit --no-fund
 previous=$(readlink /srv/newdrugs/${instance}/current || true)
+if test -n "$previous"; then ln -sfn "$previous" /srv/newdrugs/${instance}/previous; fi
 ln -sfn ${remote} /srv/newdrugs/${instance}/current.next
 mv -Tf /srv/newdrugs/${instance}/current.next /srv/newdrugs/${instance}/current
 systemctl enable newdrugs@${instance} >/dev/null
@@ -50,5 +52,6 @@ if test -n "$previous"; then ln -sfn "$previous" /srv/newdrugs/${instance}/curre
 exit 1`;
 await writeFile(`.data/releases/${instance}-activate.sh`,activate);
 await run('ssh',[...sshOptions,target,activate]);
+await run('ssh',[...sshOptions,target,`python3 - --stage ${instance} --apply`],{input:await readFile('scripts/release-retention.py','utf8')});
 console.log(`Deployed ${instance}: ${release}`);
 } finally { await unlink(lockPath).catch(()=>{}); }

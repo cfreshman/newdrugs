@@ -38,3 +38,5 @@ Without a URL or named profile, a new login uses the public website. Tokens can 
 Read [implementation status](docs/implementation-status.md), the [reactivity plan](docs/reactivity-plan.md), and the [semantic implementation](docs/semantic-search-implementation.md) and [research plan](docs/semantic-search-plan.md). Wayfinder and Pangaea are read-only references, never deployment targets for this repository.
 
 Installed copies follow Wayfinder's version-based daily auto-update behavior. Downloads are checksum verified, older/equal versions are ignored, and an updated CLI takes effect on the next invocation. `newdrugs update` checks immediately. Source checkouts never self-overwrite or self-uninstall. `newdrugs uninstall --yes` removes the installed package, its standard Codex/Claude Code MCP registrations and all locally saved connection profiles; it does not delete the website account. An older CLI without this updater needs one reinstall to acquire it.
+
+See [possible roadmaps](docs/roadmaps/README.md) for future directions, proposed sequences and pilot plans.

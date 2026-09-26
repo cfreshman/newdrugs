@@ -19,7 +19,7 @@ describe('chat interaction integration', () => {
     document.documentElement.style.cssText = '--chat-width:480;--chat-gutter:12;--orb-radius:36';
     transport.api.mockReset(); transport.post.mockReset(); transport.operation.mockReset();
     transport.api.mockImplementation((path: string) => path === '/tokens' ? Promise.resolve({ tokens: [] }) : path === '/checkout/quotes' ? Promise.resolve({ quotes: [] }) : bootstrap.promise);
-    transport.operation.mockImplementation((name: string) => Promise.resolve(name === 'people.get' ? { ...initial.user, id: 'friend', handle: 'friend', name: 'Friend', discoverable: true } : name === 'posts.get' ? { id: 'post', userId: 'friend', text: 'A real post', createdAt: new Date().toISOString(), city: '' } : { items: [], nextCursor: null, people: [] }));
+    transport.operation.mockImplementation((name: string) => Promise.resolve(name === 'inbox.get' ? { id: 'resource', title: 'An update', body: 'Useful info', links: [], producer: { kind: 'external', name: 'Test agent' }, createdAt: new Date().toISOString(), read: false, archived: false, unavailable: false } : name === 'automations.get' ? { id: 'resource', name: 'Morning update', instruction: 'Find something useful', schedule: { kind: 'weekly', timeZone: 'UTC', hour: 7, minute: 0, weekdays: [1] }, maxRunNanos: 50000000, dailyBudgetNanos: 200000000, privateChat: false, webSearch: false, status: 'paused', revision: 1, nextRunAt: null, createdAt: new Date().toISOString() } : name === 'people.get' ? { ...initial.user, id: 'friend', handle: 'friend', name: 'Friend', discoverable: true } : name === 'posts.get' ? { id: 'post', userId: 'friend', text: 'A real post', createdAt: new Date().toISOString(), city: '' } : { items: [], nextCursor: null, people: [] }));
     transport.post.mockImplementation((path: string) => path === '/chat' ? chat.promise : Promise.resolve({ ok: true }));
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) { return this.classList.contains('composer') ? rect(12, 550, 366, 76) : rect(150, 350, 228, 80); });
     vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.classList.contains('conversation') ? 1000 : 76; });
@@ -35,6 +35,53 @@ describe('chat interaction integration', () => {
     const input = dom.container.querySelector('textarea')!;
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, text);
     input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  it('hides Stop with the thinking row immediately when output completes, before run cleanup', async () => {
+    const sources: EventTarget[] = [];
+    vi.stubGlobal('EventSource', class extends EventTarget { constructor() { super(); sources.push(this); } close() {} });
+    await mount(); await act(async () => bootstrap.resolve({ ...initial, run: active }));
+    expect(dom.container.querySelector('.agent-status')).not.toBeNull();
+    expect(dom.container.querySelector('.stop-run')).not.toBeNull();
+    act(() => sources[0].dispatchEvent(new MessageEvent('state', { data: JSON.stringify({ userId: 'user', epoch: 'one', sequence: 1, change: { run: { ...active, draft: 'All done.', outputComplete: true, revision: 2 } } }) })));
+    expect(dom.container.querySelector('.agent-status')).toBeNull();
+    expect(dom.container.querySelector('.stop-run')).toBeNull();
+    expect(dom.container.querySelector('.agent-live')?.textContent).toContain('All done.');
+  });
+
+  it('auto-sends an automation example while preserving the existing composer draft', async () => {
+    await mount(); await load(); type('my unsent thought');
+    act(() => dom.container.querySelector<HTMLButtonElement>('[aria-label="Open New Drugs"]')!.click());
+    const button = [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent === 'Automations')!;
+    await act(async () => button.click());
+    await act(async () => dom.container.querySelector<HTMLButtonElement>('.automation-examples button')!.click());
+    expect(transport.post).toHaveBeenCalledWith('/chat', expect.objectContaining({ text: expect.stringContaining('Every morning at 7am'), fileIds: [] }));
+    expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')!.value).toBe('my unsent thought');
+  });
+  it('attaches an inbox update without sending, preserves the draft and sends the owned reference on submit', async () => {
+    await mount(); await load(); type('what do you think?');
+    act(() => dom.container.querySelector<HTMLButtonElement>('[aria-label="Open New Drugs"]')!.click());
+    const button = [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent === 'Agent inbox')!;
+    transport.operation.mockImplementation(async (name: string) => name === 'inbox.list' ? {items:[{id:'update',title:'A useful update',producer:{name:'Connected agent'},createdAt:new Date().toISOString(),read:false}],nextCursor:null} : name === 'inbox.get' ? {id:'update',title:'A useful update',body:'Source text',producer:{name:'Connected agent'},createdAt:new Date().toISOString(),links:[],read:false,archived:false,unavailable:false} : {items:[],nextCursor:null});
+    await act(async () => button.click()); await act(async () => dom.container.querySelector<HTMLButtonElement>('.inbox-row')!.click());
+    const discuss = [...dom.container.querySelectorAll<HTMLButtonElement>('.panel-actions button')].find(button => button.textContent === 'Bring into chat')!;
+    await act(async () => discuss.click());
+    expect(transport.post.mock.calls.some(call => call[0] === '/chat')).toBe(false);
+    expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')!.value).toBe('what do you think?');
+    act(() => dom.container.querySelector<HTMLFormElement>('.composer')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(transport.post).toHaveBeenCalledWith('/chat',expect.objectContaining({text:'what do you think?',inboxIds:['update']}));
+  });
+  it('sends a typed correction during review with the exact revision, clearing the composer immediately', async () => {
+    await mount();
+    const waiting: RunView = { ...active, status: 'waiting_for_approval', revision: 7, approvals: [{ id: 'action', operation: 'posts.create', input: { text: 'Old caption' }, title: 'Publish', detail: 'Publish this post', version: 'v1', digest: 'digest', human: true, kind: 'write', expiresAt: Date.now() + 60000, status: 'pending' }] };
+    await act(async () => bootstrap.resolve({ ...initial, run: waiting }));
+    type('no use tomorrow');
+    expect(dom.container.querySelector<HTMLButtonElement>('.send')!.disabled).toBe(false);
+    act(() => dom.container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    expect(transport.post).toHaveBeenCalledWith('/chat', expect.objectContaining({ text: 'no use tomorrow', review: { runId: 'run', revision: 7 } }));
+    expect((dom.container.querySelector('#thought') as HTMLTextAreaElement).value).toBe('');
+    expect(dom.container.querySelector('.message.user')?.textContent).toContain('no use tomorrow');
+    expect(transport.post.mock.calls.some(call => String(call[0]).endsWith('/decisions'))).toBe(false);
   });
 
   it('routes a guest into account creation before chat or a blank self-profile', async () => {
@@ -124,9 +171,9 @@ describe('chat interaction integration', () => {
   it.each(surfaceViews)('opens the exact native destination requested by the agent: %s', async view => {
     sessionStorage.setItem('nd-client', 'browser');
     await mount();
-    await act(async () => { bootstrap.resolve({ ...initial, user: { ...initial.user, handle: 'test' }, run: { ...active, status: 'waiting_for_input', surface: { id: `surface-${view}`, view, resourceId: 'resource', waiting: true } } }); });
+    await act(async () => { bootstrap.resolve({ ...initial, user: { ...initial.user, handle: 'test' }, run: { ...active, status: 'waiting_for_input', surface: { id: `surface-${view}`, view, resourceId: view === 'chat_history' ? undefined : 'resource', waiting: true } } }); });
     expect(dom.container.querySelector('dialog h2, .composer-surface h2')?.textContent).toBe(surfaceTitles[view]);
-    expect(Boolean(dom.container.querySelector('.connection-setup'))).toBe(view === 'connections');
+    expect(Boolean(dom.container.querySelector('.connection-setup'))).toBe(view === 'agents');
     if (view === 'location') {
       expect(dom.container.querySelector('.location-picker')).not.toBeNull();
       expect(dom.container.textContent).toContain('Save area');
@@ -165,6 +212,22 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('dialog')).toBeNull();
     expect(dom.container.querySelector('.inbox-list')).toBe(inbox);
     expect(dom.container.querySelector('.composer-switcher')?.classList.contains('launcher-open')).toBe(true);
+  });
+  it('opens a message notification in the launcher and preserves the underlying view', async () => {
+    await mount();
+    const notification = { id: 'notice', read: false, kind: 'message' as const, title: 'Message from Friend', text: 'hello', createdAt: new Date().toISOString(), link: { rel: 'open_in_newdrugs' as const, targetKind: 'exact' as const, resourceType: 'conversation', title: 'Open conversation', url: 'https://dev.druggie.org/messages/connection' } };
+    await act(async () => bootstrap.resolve({ ...initial, notifications: { unread: 1, items: [notification] } }));
+    transport.operation.mockImplementation(async (name: string) => name === 'connections.get' ? { connection: { id: 'connection', fromId: 'friend', toId: 'user', members: ['friend','user'], status: 'accepted', note: 'an invitation', createdAt: new Date().toISOString() }, people: [] } : { items: [], nextCursor: null, people: [] });
+    act(() => dom.container.querySelector<HTMLButtonElement>('.launcher-button')!.click());
+    await act(async () => [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent === 'Posts')!.click());
+    const original = dom.container.querySelector('.post-composer');
+    act(() => dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
+    await act(async () => dom.container.querySelector<HTMLButtonElement>('.notification-list button')!.click());
+    expect(dom.container.querySelector('dialog')).toBeNull();
+    expect(dom.container.querySelector('.composer-switcher')?.classList.contains('launcher-open')).toBe(true);
+    expect(dom.container.querySelector('.composer-view:not([hidden]) .message-view')).not.toBeNull();
+    act(() => dom.container.querySelector<HTMLButtonElement>('.composer-view:not([hidden]) .composer-surface-footer button')!.click());
+    expect(dom.container.querySelector('.composer-view:not([hidden]) .post-composer')).toBe(original);
   });
   it('opens a returned profile link in-app and preserves the chat draft', async () => {
     await mount();

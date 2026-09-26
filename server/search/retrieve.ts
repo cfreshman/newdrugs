@@ -9,14 +9,14 @@ import { EMBEDDING_MODEL, DIMENSIONS, INDEX_VERSION, type SearchDocument } from 
 import { sourceDocument } from './sources';
 import { getIndex } from './index';
 import { embed } from './embeddings';
-import { bm25, diversify, feedbackVector, fuse, hybridRank, hashText, words } from './ranking';
+import { bm25, semanticCandidate, diversify, feedbackVector, fuse, hybridRank, hashText, words } from './ranking';
 
 export interface SearchInput extends SearchConstraints {
   query: string; datasets: SearchDataset[]; mode: SearchMode; limit: number; cursor?: string; interest?: string;
 }
 type Ranked = { id: string; sourceHash: string; sourceRevision: string; score: number; signals: SearchMatch['signals'] };
 type Snapshot = { _id: string; userId: string; identity: string; input: SearchInput; vector?: number[]; ranked: Ranked[]; retrieval: SearchRetrieval; expiresAt: Date };
-async function blockedBy(userId: string) { return (await rows('blocks').find({ members: userId }).limit(1001).toArray()).flatMap(row => (row.members as string[]).filter(id => id !== userId)); }
+async function blockedBy(userId: string) { return [...(await users().find({suspendedAt:{$type:'string'}},{projection:{_id:1}}).toArray()).map(user=>user._id), ...(await rows('blocks').find({ members: userId }).limit(1001).toArray()).flatMap(row => (row.members as string[]).filter(id => id !== userId))]; }
 function within(document: Omit<SearchDocument, 'vector'>, input: SearchInput, actor: Actor, blocked: string[]) {
   if (blocked.includes(document.ownerId) || (document.dataset === 'profiles' && document.ownerId === actor.userId)) return false;
   if (!input.datasets.includes(document.dataset) && !(input.datasets.includes('threads') && document.dataset !== 'profiles')) return false;
@@ -86,7 +86,7 @@ export async function searchPublic(input: SearchInput, actor: Actor, prepared?: 
   if (exactDocuments.length) mode = 'exact';
   else if (input.mode !== 'keyword' && !vector) { try { vector = await embed(input.query,'query'); } catch { mode = 'keyword'; notices.push('Semantic search is temporarily unavailable. These are keyword matches.'); } }
   const lexical = bm25(words(input.query),eligible.map(document=>({id:document._id,terms:document.terms}))).slice(0,150);
-  const dense = vector ? index.search(vector,new Set(eligible.map(document=>document._id))).filter(item=>item.score>=.2) : [];
+  const dense = vector ? index.search(vector,new Set(eligible.map(document=>document._id))).filter(item=>semanticCandidate(item.score, lexical.find(match=>match.id===item.id)?.score)) : [];
   const lexScores = new Map(lexical.map(item=>[item.id,item.score])), denseScores = new Map(dense.map(item=>[item.id,item.score]));
   const ranking = mode === 'keyword' ? fuse([lexical]) : input.mode === 'semantic' ? dense : hybridRank(dense,lexical);
   const fused = ranking.map(item => {

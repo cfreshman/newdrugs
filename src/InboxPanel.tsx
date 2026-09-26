@@ -1,0 +1,27 @@
+import { useEffect, useRef, useState } from 'react';
+import { AgentMarkdown } from './AgentMarkdown';
+import { operation, errorText } from './api';
+import { useRecordRefresh } from './useRecordRefresh';
+import { usePanelVisible } from './PanelReadiness';
+import type { InboxItem } from '../shared/inbox';
+import type { Destination } from '../shared/navigation';
+export function InboxPanel({ itemId, navigate, discuss }: { itemId?: string; navigate(destination: Destination): void; discuss(item: InboxItem): void }) {
+  const [scope, setScope] = useState<'all'|'unread'|'archived'>('all'), [items, setItems] = useState<InboxItem[]>([]), [item, setItem] = useState<InboxItem>();
+  const [cursor, setCursor] = useState<string|null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [removing, setRemoving] = useState(false);
+  const visible = usePanelVisible(), generation = useRef(0);
+  const load = async (before?: string) => {
+    const ticket = ++generation.current; setLoading(true);
+    try {
+      if (itemId) { const update = await operation<InboxItem>('inbox.get', { itemId }); if (ticket === generation.current) setItem(update); }
+      else { const page = await operation<{items:InboxItem[];nextCursor:string|null}>('inbox.list', {scope,...(before?{before}:{})}); if (ticket === generation.current) { setItems(prior=>before?[...prior,...page.items]:page.items);setCursor(page.nextCursor); } }
+      if(ticket === generation.current)setError('');
+    } catch (e) { if(ticket === generation.current)setError(errorText(e)); }
+    finally { if(ticket === generation.current)setLoading(false); }
+  };
+  useEffect(()=>{if(visible)void load();return()=>{generation.current++;};},[itemId,scope,visible]);
+  useRecordRefresh(['inbox'],()=>{if(visible)void load();});
+  useEffect(()=>{if(itemId&&visible)void operation('inbox.mark_read',{itemId,read:true}).catch(e=>setError(errorText(e)));},[itemId,visible]);
+  const archive = async () => { try { setItem(await operation<InboxItem>('inbox.archive',{itemId,archived:!item?.archived})); }catch(e){setError(errorText(e));} };
+  if(itemId)return <>{item && <article className="agent-update"><h3>{item.title}</h3><p className="quiet small">{item.producer.name} · {new Date(item.createdAt).toLocaleString()}</p><AgentMarkdown text={item.body}/>{item.links.length>0&&<div className="delivery-links">{item.links.map(link=><AgentMarkdown key={link.url} text={`[${link.title.replace(/[\[\]\\]/g,'')}](${link.url.replace(/\)/g,'%29')})`}/>)}</div>}<div className="panel-actions"><button className="solid" disabled={item.unavailable} onClick={()=>discuss(item)}>Bring into chat</button><button onClick={()=>void operation<InboxItem>('inbox.mark_read',{itemId,read:!item.read}).then(setItem).catch(e=>setError(errorText(e)))}>{item.read?'Mark unread':'Mark read'}</button><button onClick={()=>void archive()}>{item.archived?'Restore':'Archive'}</button>{item.automationId&&<button onClick={()=>navigate({view:'automations',resourceId:item.automationId})}>Automation</button>}<button onClick={()=>setRemoving(true)}>Delete</button></div>{removing&&<div className="action-review"><p>Delete this update permanently?</p><div className="panel-actions"><button onClick={()=>setRemoving(false)}>Cancel</button><button onClick={()=>void operation('inbox.delete',{itemId},{confirmed:true}).then(()=>navigate({view:'inbox'})).catch(e=>setError(errorText(e)))}>Delete update</button></div></div>}</article>}{error&&<p role="status" className="error">{error}</p>}{loading&&!item&&<p className="quiet">Loading…</p>}</>;
+  return <><div className="panel-actions"><button onClick={()=>navigate({view:'automations'})}>Automations</button></div><nav className="view-tabs" aria-label="Inbox filter">{(['all','unread','archived'] as const).map(value=><button key={value} aria-pressed={scope===value} onClick={()=>setScope(value)}>{value==='all'?'Updates':value==='unread'?'Unread':'Archived'}</button>)}</nav><div className="inbox-items">{items.map(update=><button className="inbox-row" key={update.id} data-read={update.read||undefined} onClick={()=>navigate({view:'inbox',resourceId:update.id})}><strong>{update.title}</strong><span className="quiet small">{update.producer.name} · {new Date(update.createdAt).toLocaleDateString()} · {update.read?'Read':'Unread'}</span></button>)}</div>{!loading&&!items.length&&<><p className="quiet">Useful updates from your automations and connected agents appear here.</p><button className="text-link" onClick={()=>navigate({view:'automations'})}>Try an automation</button></>}{cursor&&<button className="text-link chat-search-more" onClick={()=>void load(cursor)}>More updates</button>}{error&&<p className="error" role="status">{error}</p>}</>;
+}

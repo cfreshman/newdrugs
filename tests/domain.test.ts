@@ -3,10 +3,11 @@ import { randomUUID, createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import sharp from 'sharp';
 import { connectDatabase, db, mongo, rows } from '../server/db';
-import { createGuest, currentUser, users, hash, type Actor } from '../server/auth';
+import { createGuest, currentUser, users, hash, registerAccount, type Actor } from '../server/auth';
 import { executeOperation } from '../server/operations';
-import { ensureStarterPool, ensureStarter, pools, starterPoolStatus, setStarterBudget } from '../server/starterPool';
+import { ensureStarterPool, ensureStarter, starterClaimKey, pools, starterPoolStatus, setStarterBudget } from '../server/starterPool';
 import { reserveRun, runs, recordTurnUsage, finishRun, wallet } from '../server/wallet';
+import { replyToReview } from '../server/reviewReply';
 import { decideApprovals, completeSurface } from '../server/agent';
 import { localMcp } from '../server/mcp';
 import { signInAdmin, adminIdentity } from '../server/admin';
@@ -27,14 +28,15 @@ const cell = nearestCoarseCell(41.824, -71.413);
 async function area() { await rows('locationAreas').updateOne({ _id: cell }, { $set: { label: 'Providence area', point: coarsePoint(cell) } }, { upsert: true }); return cell; }
 async function person(registered = true) {
   const user = await createGuest();
-  if (registered) await users().updateOne({ _id: user._id }, { $set: { handle: `test_${randomUUID().slice(0,8)}` } });
+  if (registered) { await users().updateOne({ _id: user._id }, { $set: { handle: `test_${randomUUID().slice(0,8)}`, starterClaimKey: hash(randomUUID()) } }); await ensureStarter(user._id); }
   return { userId: user._id, source: 'external', scope: 'write' } as Actor;
 }
 describe('starter pool and owner', () => {
   it('issues one dollar once and honors the shared limit under concurrent signups', async () => {
     await pools().updateOne({ _id: 'starter' }, { $set: { budgetNanos: 1_000_000_000 } });
     const people = await Promise.all([createGuest(), createGuest(), createGuest()]);
-    expect(people.reduce((n,u) => n + u.balanceNanos, 0)).toBe(1_000_000_000);
+    expect(people.reduce((n,u) => n + u.balanceNanos, 0)).toBe(0);
+    await Promise.all(people.map((u, i) => registerAccount(u._id, `starter_${i}`, 'test-password-hash', `192.0.2.${i+1}`)));
     await Promise.all(people.map(u => ensureStarter(u._id)));
     expect((await starterPoolStatus()).grantedNanos).toBe(1_000_000_000);
     await setStarterBudget('owner', 3_000_000_000);
@@ -380,4 +382,106 @@ it('opens an agent-selected post feed in exact order and rechecks visibility on 
  await executeOperation('posts.delete',{postId:two.id},author,randomUUID(),{confirmed:true});
  expect(await executeOperation('posts.list',{scope:'selected',postIds},reader)).toMatchObject({items:[{id:one.id}]});
  await expect(executeOperation('app.open',{view:'post_list'},reader)).rejects.toMatchObject({code:'posts_required'});
+});
+
+describe('photo posts and typed review rejection', () => {
+  async function photo(actor: Actor) {
+    const bytes = await sharp({ create: { width: 720, height: 1000, channels: 3, background: '#447733' } }).jpeg().toBuffer();
+    const file = await executeOperation('files.prepare', { name: 'plant.jpg', bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), purpose: 'agent_input' }, actor, randomUUID()) as UploadRef;
+    return acceptUpload(actor, file.id, bytes);
+  }
+  it('publishes only owned ready images, keeps idempotency, and hides deleted/blocked photos', async () => {
+    const actor = await person(), other = await person(), file = await photo(actor);
+    await expect(readUpload(other, file.id, true)).rejects.toMatchObject({ code: 'not_found' });
+    await expect(executeOperation('posts.create', { text: 'Stolen photo', fileIds: [file.id] }, other, randomUUID(), { confirmed: true })).rejects.toBeDefined();
+    await expect(executeOperation('posts.create', { text: 'No review', fileIds: [file.id] }, actor, randomUUID())).rejects.toBeDefined();
+    const key = randomUUID(), input = { text: 'check out this plant', fileIds: [file.id], areaCell: await area() };
+    const post = await executeOperation('posts.create', input, actor, key, { confirmed: true }) as any;
+    expect(post.photos).toEqual([{ id: file.id, name: 'plant.webp', url: `/api/files/${file.id}` }]);
+    for (const filter of [{ scope: 'own' }, { scope: 'public' }, { scope: 'selected', postIds: [post.id] }, { scope: 'public', near: cell, radiusMiles: 25 }]) {
+      const listed = await executeOperation('posts.list', filter, actor) as any;
+      expect(listed.items.find((item: any) => item.id === post.id)?.photos, JSON.stringify(filter)).toEqual(post.photos);
+    }
+    expect((await executeOperation('posts.create', input, actor, key, { confirmed: true }) as any).id).toBe(post.id);
+    const publicFile = await readUpload(other, file.id, true); expect((await sharp(publicFile.bytes).metadata()).width).toBe(512);
+    expect(await rows('posts').countDocuments()).toBe(1);
+    const reply = await executeOperation('posts.reply', { postId: post.id, text: 'another view', fileIds: [file.id] }, actor, randomUUID(), { confirmed: true }) as any;
+    expect(reply.photos[0].id).toBe(file.id);
+    expect((await executeOperation('posts.replies', { postId: post.id }, actor) as any).items[0].photos).toEqual(post.photos);
+    await executeOperation('people.block', { personId: other.userId, blocked: true }, actor, randomUUID());
+    await expect(readUpload(other, file.id, true)).rejects.toMatchObject({ code: 'not_found' });
+    await executeOperation('people.block', { personId: other.userId, blocked: false }, actor, randomUUID());
+    await executeOperation('posts.delete', { postId: post.id }, actor, randomUUID(), { confirmed: true });
+    expect((await executeOperation('posts.get', { postId: post.id }, actor) as any).photos).toEqual([]);
+    await readUpload(other, file.id, true); // Still attached to the reply.
+    await executeOperation('files.delete', { fileId: file.id }, actor, randomUUID(), { confirmed: true });
+    await expect(readUpload(other, file.id, true)).rejects.toBeDefined();
+    expect((await executeOperation('posts.get', { postId: reply.id }, actor) as any).photos).toEqual([]);
+  });
+  it('declines pending actions and saves the correction once, without a second credit hold', async () => {
+    const actor = await person(), other = await person(), id = `${actor.userId}:${randomUUID()}`;
+    await reserveRun(actor.userId, id, 'Publish these');
+    const approval = { operation: 'posts.create', input: { text: 'Draft' }, version: 'test', digest: 'test', title: 'Post', detail: 'Publish', human: true, kind: 'write' as const, expiresAt: Date.now() + 60000 };
+    await runs().updateOne({ _id: id }, { $set: { status: 'waiting_for_approval', revision: 4, approvals: [{ ...approval, id: 'a', status: 'pending' }, { ...approval, id: 'b', status: 'pending' }, { ...approval, id: 'done', status: 'approved', result: { ok: true } }] } });
+    const review = { runId: id, revision: 4 }, reply = { requestId: randomUUID(), text: 'nah use tomorrow', fileIds: [] };
+    await expect(replyToReview(other.userId, review, reply)).rejects.toMatchObject({ code: 'review_changed' });
+    const next = await replyToReview(actor.userId, review, reply);
+    expect(next.status).toBe('queued'); expect(next.approvals.map(action => action.status)).toEqual(['rejected', 'rejected', 'approved']);
+    expect(next.reviewReplies?.[0]).toMatchObject({ text: reply.text, actionIds: ['a', 'b'] });
+    await replyToReview(actor.userId, review, reply);
+    expect(await rows('messages').countDocuments({ userId: actor.userId, text: reply.text })).toBe(1);
+    expect((await wallet(actor.userId)).reservedNanos).toBe(60000000);
+    await expect(replyToReview(actor.userId, review, { ...reply, text: 'different' })).rejects.toMatchObject({ code: 'submission_conflict' });
+    await expect(decideApprovals(actor.userId, id, 4, [{ id: 'a', approved: true }])).rejects.toBeDefined();
+    await expect(replyToReview(actor.userId, review, { ...reply, requestId: randomUUID() })).rejects.toMatchObject({ code: 'review_changed' });
+    expect(await rows('posts').countDocuments()).toBe(0);
+  });
+});
+
+describe('notification history', () => {
+  it('retains read messages and invitations with exact links, restores unread for new messages, and respects blocks', async () => {
+    const sender = await person(), recipient = await person(), stranger = await person();
+    await users().updateOne({ _id: recipient.userId }, { $set: { discoverable: true } });
+    const invitation = await executeOperation('connections.request', { personId: recipient.userId, note: 'original invitation' }, sender, randomUUID(), { confirmed: true }) as any;
+    const inviteId = `invite:${invitation.id}`;
+    await expect(executeOperation('notifications.read', { notificationId: inviteId }, stranger, randomUUID())).rejects.toBeDefined();
+    await executeOperation('notifications.read', { notificationId: inviteId }, recipient, randomUUID());
+    const seenInvite = await executeOperation('notifications.list', {}, recipient) as any;
+    expect(seenInvite).toMatchObject({ unread: 0, items: [{ id: inviteId, read: true, text: 'original invitation' }] });
+    expect((await executeOperation('connections.get', { connectionId: invitation.id }, recipient) as any).connection.status).toBe('pending');
+    await executeOperation('connections.respond', { connectionId: invitation.id, accept: true }, recipient, randomUUID(), { confirmed: true });
+    const message = await executeOperation('messages.send', { connectionId: invitation.id, text: 'first DM' }, sender, randomUUID()) as any;
+    await executeOperation('messages.mark_read', { connectionId: invitation.id, throughMessageId: message.id }, recipient, randomUUID());
+    const history = await executeOperation('notifications.list', {}, recipient) as any;
+    expect(history.unread).toBe(0); expect(history.items).toHaveLength(2);
+    const savedMessage = history.items.find((item: any) => item.kind === 'message');
+    expect(savedMessage).toMatchObject({ read: true, text: 'first DM', link: { targetKind: 'exact', resourceId: invitation.id } });
+    expect(history.items.find((item: any) => item.id === inviteId)?.read).toBe(true);
+    await executeOperation('messages.send', { connectionId: invitation.id, text: 'second DM' }, sender, randomUUID());
+    const fresh = await executeOperation('notifications.list', {}, recipient) as any;
+    expect(fresh).toMatchObject({ unread: 1, items: [{ id: savedMessage.id, read: false, text: 'second DM' }, { id: inviteId, read: true }] });
+    await executeOperation('notifications.read', { notificationId: savedMessage.id }, recipient, randomUUID());
+    expect(await executeOperation('notifications.list', {}, recipient)).toMatchObject({ unread: 0 });
+    await executeOperation('people.block', { personId: sender.userId, blocked: true }, recipient, randomUUID());
+    expect(await executeOperation('notifications.list', {}, recipient)).toMatchObject({ unread: 0, items: [] });
+  });
+});
+
+describe('private conversation pagination', () => {
+  it('pages to the beginning without gaps or duplicates, including identical timestamps, and rejects foreign cursors', async () => {
+    const actor = await person(), other = await person();
+    const ids = Array.from({ length: 65 }, (_, index) => `history-${String(index).padStart(3,'0')}`);
+    await rows('messages').insertMany(ids.map(id => ({ _id: id, userId: actor.userId, role: 'user', text: id, source: 'app', createdAt: '2026-09-25T00:00:00.000Z' })));
+    const pages: string[] = []; let before: string | undefined;
+    do {
+      const page = await executeOperation('conversation.list', { limit: 30, ...(before ? { before } : {}) }, actor) as { items: { id: string }[]; nextCursor: string | null };
+      expect(page.items.map(item => item.id)).toEqual([...page.items.map(item => item.id)].sort());
+      pages.unshift(...page.items.map(item => item.id)); before = page.nextCursor || undefined;
+    } while (before);
+    expect(pages).toEqual(ids);
+    await expect(executeOperation('conversation.list', { before: ids[40] }, other)).rejects.toBeDefined();
+    const { readLiveState } = await import('../server/liveState');
+    const state = await readLiveState(actor.userId, ['messages']);
+    expect(state.messages).toHaveLength(60); expect(state.conversationCursor).toBe(ids[5]);
+  });
 });

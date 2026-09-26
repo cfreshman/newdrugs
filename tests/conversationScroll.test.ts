@@ -41,6 +41,14 @@ describe('conversation position and top fade', () => {
     render(1300, { viewId: 'one', completedId: 'answer' }); dom.frame(); expect(scroll.transcript.current?.scrollTop).toBe(1100);
     readAt(350); render(1300, { viewId: 'one', completedId: 'answer' }); dom.frame(); expect(scroll.transcript.current?.scrollTop).toBe(350);
   });
+  it('keeps the visible history in place when an older page is prepended', () => {
+    render(); dom.frame(); readAt(0);
+    scroll.preparePrepend(); render(1600);
+    expect(scroll.transcript.current?.scrollTop).toBe(600);
+    dom.resize(); dom.frame(); expect(scroll.transcript.current?.scrollTop).toBe(600);
+    scroll.preparePrepend(); render(1800, { viewId: 'one', submittedId: 'new-request' });
+    dom.frame(); expect(scroll.transcript.current?.scrollTop).toBe(1600);
+  });
   it('keeps the bottom edge anchored when dragging/keyboard resizes the viewport, even if layout scroll fires first', () => {
     render(); dom.frame(); readAt(300);
     viewportHeight = 100;

@@ -2,9 +2,11 @@ import { open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Login } from './config';
 import { MAX_UPLOAD_BYTES } from '../shared/uploads';
-export async function downloadFile(login:Login,id:string,path:string) {
+export async function downloadFile(login:Login,id:string,path:string,reportId?:string) {
   if(!/^[a-zA-Z0-9-]{1,100}$/.test(id)||!path)throw new Error('Use file-download <file-id> <destination>.');
-  const response=await fetch(new URL(`/api/files/${encodeURIComponent(id)}`,login.url),{redirect:'error',signal:AbortSignal.timeout(60000),headers:{Authorization:`Bearer ${login.token}`}});
+  if(reportId&&!/^[a-zA-Z0-9-]{1,100}$/.test(reportId))throw new Error('Invalid report ID.');
+  const endpoint=reportId?`/api/admin/cli/reports/${encodeURIComponent(reportId)}/files/${encodeURIComponent(id)}`:`/api/files/${encodeURIComponent(id)}`;
+  const response=await fetch(new URL(endpoint,login.url),{redirect:'error',signal:AbortSignal.timeout(60000),headers:{Authorization:`Bearer ${login.token}`}});
   if(!response.ok)throw new Error(`The file is unavailable (${response.status}).`);
   if(!response.body)throw new Error('The file has no contents.');
   const reader=response.body.getReader(),parts:Uint8Array[]=[];let size=0;

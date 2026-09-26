@@ -12,6 +12,7 @@ export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAcc
   const [quotes, setQuotes] = useState<PaymentQuote[]>([]);
   useEffect(() => { void api<{quotes:PaymentQuote[]}>('/checkout/quotes').then(result=>setQuotes(result.quotes)).catch(e=>console.error('Credit quote:',errorText(e))); }, []);
   const quote = quotes.find(q=>q.creditCents===amount);
+  const starter = !data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0;
   const cents = (value: number) => money(value * 10_000_000);
   const buy = async () => {
     if (!data.user.handle) { onAccount(); return; }
@@ -24,8 +25,8 @@ export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAcc
     } catch (e) { setError(errorText(e)); setBusy(false); }
   };
   return <>
-    <p className="balance">{balanceLabel(data.wallet.balanceNanos)}</p>
-    <p className="quiet balance-caption">Credit balance</p>
+    <p className="balance">{balanceLabel(data.wallet.balanceNanos + starter)}</p>
+    <p className="quiet balance-caption">{starter ? 'Starter credit available after signup' : 'Credit balance'}</p>
     <p><strong>New Drugs takes no cut.</strong> Your credit pays for AI at cost. No markup or subscription.</p>
     <div className="amounts" role="group" aria-label="Top-up amount">{[500, 1000, 2000].map(cents => <button key={cents} aria-pressed={amount === cents} onClick={() => setAmount(cents)}>${cents / 100}</button>)}</div>
     {quote && <dl className="checkout-quote"><div><dt>AI credit</dt><dd>{cents(quote.creditCents)}</dd></div><div><dt>Expected processing fee</dt><dd>{cents(quote.processingCents)}</dd></div><div className="quote-total"><dt>Total</dt><dd>{cents(quote.totalCents)}</dd></div></dl>}
@@ -46,7 +47,7 @@ export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAcc
   </>;
 }
 
-export function Account({ data, refresh, close, saved: onSaved, initialMode = 'register', onboarding = false }: { data: Bootstrap; refresh(): Promise<void>; close(): void; saved(): void; initialMode?: 'register' | 'login'; onboarding?: boolean }) {
+export function Account({ data, refresh, close, saved: onSaved, initialMode = 'register', onModeChange, onboarding = false }: { data: Bootstrap; refresh(): Promise<void>; close(): void; saved(): void; initialMode?: 'register' | 'login'; onModeChange?(mode: 'register' | 'login'): void; onboarding?: boolean }) {
   const [mode, setMode] = useState<'register' | 'login'>(initialMode);
   useEffect(() => setMode(initialMode), [initialMode]);
   const [error, setError] = useState('');
@@ -70,7 +71,7 @@ export function Account({ data, refresh, close, saved: onSaved, initialMode = 'r
         {mode === 'register' && <p className="quiet small">Save this in your password manager. Password recovery isn’t available yet.</p>}
         <button className="solid" disabled={busy}>{busy ? 'Saving…' : mode === 'register' ? 'Create account' : 'Sign in'}</button>
       </form>
-      <button className="text-link switch-account" onClick={() => { setError(''); setMode(mode === 'register' ? 'login' : 'register'); }}>{mode === 'register' ? 'Already here? Sign in' : 'Make an account'}</button>
+      <button className="text-link switch-account" onClick={() => { setError(''); const next = mode === 'register' ? 'login' : 'register'; setMode(next); onModeChange?.(next); }}>{mode === 'register' ? 'Already here? Sign in' : 'Make an account'}</button>
     </> : <>
       <ProfileEditor key={data.user.id} person={data.user} saved={async () => { await refresh(); onSaved(); }} />
       {onboarding && <button className="text-link profile-later" onClick={onSaved}>Set up my profile later</button>}

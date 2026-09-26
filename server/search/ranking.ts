@@ -47,3 +47,6 @@ export function hybridRank(dense: {id:string;score:number}[], lexical: {id:strin
     return {id:item.id,score:.85*semantic+.12*lexical/(lexical+3)+.03*item.score/(2/61)};
   }).sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
 }
+
+/** Trim only the weakest unsupported semantic neighbors; lexical evidence still qualifies. */
+export function semanticCandidate(score: number, lexical = 0) { return score >= (lexical > 0 ? .2 : .23); }

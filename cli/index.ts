@@ -6,7 +6,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSche
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import release from '../release.json';
-import { ConfigStore, validUrl, profileName, type Login } from './config';
+import { ConfigStore, operatorStore, validUrl, profileName, type Login } from './config';
 import { maybeAutoUpdate, uninstall } from './lifecycle';
 import { downloadFile } from './download';
 import { uploadLocalFile } from './upload';
@@ -63,8 +63,32 @@ async function main() {
   if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Profiles are human-authored in the app.`);
     return;
+  }
+  if (command === 'admin') {
+    const admin = operatorStore(store), sub = args[1] || 'help';
+    if (sub === 'help') { console.log('admin login --token-stdin [--url https://druggie.org]\nadmin file-download <report-id> <file-id> <destination>\nadmin profiles\nadmin use <profile>\nadmin logout\nadmin search [words]\nadmin describe <operation>\nadmin read <operation> [JSON]\nadmin execute <operation> [JSON] --yes [--key request-key]\nUse --profile for separate stage connections. Operator credentials are separate from social logins.'); return; }
+    if (sub === 'login') {
+      const login = { url: validUrl(option('--url') || 'https://druggie.org'), token: await readSecret() };
+      const result = await request(login, '/admin/cli/operations/identity.get', {});
+      await admin.set(selectedProfile || 'default', login); print(result); return;
+    }
+    if (sub === 'logout') { await admin.logout(selectedProfile); console.log('Operator signed out.'); return; }
+    if (sub === 'use') { await admin.use(profileName(args[2] || '')); return; }
+    if (sub === 'profiles') { const saved = await admin.load(); print({ profiles: Object.entries(saved.profiles).map(([name, value]) => ({ name, url: value.url, active: name === saved.activeProfile })) }); return; }
+    const login = await admin.resolve(selectedProfile);
+    if(sub==='file-download'){if(!args[2]||!args[3]||!args[4])throw new Error('Use admin file-download <report-id> <file-id> <destination>.');print(await downloadFile(login,args[3]||'',args[4]||'',args[2]||''));return;}
+    const ops = (await request<{ operations: Operation[] }>(login, '/admin/cli/catalog')).operations;
+    if (sub === 'search') { const words = args.slice(2).join(' ').toLowerCase().split(/\s+/).filter(Boolean); print({ operations: ops.filter(op => words.every(word => `${op.name} ${op.description}`.toLowerCase().includes(word))) }); return; }
+    const op = ops.find(op => op.name === args[2]);
+    if (!op) throw new Error('Run admin search to find an operator operation.');
+    if (sub === 'describe') { print(op); return; }
+    if (!(sub === 'read' && op.kind === 'read' || sub === 'execute' && op.kind === 'write')) throw new Error('Use admin read for reads and admin execute for writes.');
+    const input = args[3] && !args[3].startsWith('--') ? JSON.parse(args[3]) : {};
+    const key = op.kind === 'write' ? option('--key') || randomUUID() : undefined;
+    if (key) process.stderr.write(`Request key: ${key}\n`);
+    print(await request(login, `/admin/cli/operations/${encodeURIComponent(op.name)}`, input, key, args.includes('--yes'))); return;
   }
   if (command === 'login') {
     const url = validUrl(option('--url') || 'https://druggie.org');

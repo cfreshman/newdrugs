@@ -6,8 +6,8 @@ import { hashText, normalize } from './ranking';
 import { DIMENSIONS, EMBEDDING_MODEL, INDEX_VERSION } from './model';
 
 const inflight = new Map<string, Promise<number[]>>();
-export async function embed(text: string, kind: 'document' | 'query'): Promise<number[]> {
-  const key = hashText(`${INDEX_VERSION}:${EMBEDDING_MODEL}:${text}`);
+export async function embed(text: string, kind: 'document' | 'query', namespace = 'public'): Promise<number[]> {
+  const key = hashText(`${namespace}:${INDEX_VERSION}:${EMBEDDING_MODEL}:${text}`);
   if (inflight.has(key)) return inflight.get(key)!;
   const work = (async () => {
     if (kind === 'query') { const cached = await rows<{ _id: string; vector: number[]; expiresAt: Date }>('searchQueryVectors').findOne({ _id: key, expiresAt: { $gt: new Date() } }); if (cached) return cached.vector; }
@@ -25,7 +25,7 @@ export async function embed(text: string, kind: 'document' | 'query'): Promise<n
     if (!vector || vector.length !== DIMENSIONS || !vector.every(Number.isFinite)) throw new Error('embedding_invalid');
     const costNanos = response.usage.total_tokens * 20;
     await budget.updateOne({ _id: day }, { $inc: { spentNanos: costNanos - reserved } });
-    await rows('platformUsage').insertOne({ _id: randomUUID(), feature: 'social_search', kind, model: EMBEDDING_MODEL, tokens: response.usage.total_tokens, costNanos, createdAt: new Date().toISOString() });
+    await rows('platformUsage').insertOne({ _id: randomUUID(), feature: namespace === 'public' ? 'social_search' : 'chat_search', kind, model: EMBEDDING_MODEL, tokens: response.usage.total_tokens, costNanos, createdAt: new Date().toISOString() });
     const normalized = normalize(vector);
     if (kind === 'query') await rows('searchQueryVectors').updateOne({ _id: key }, { $set: { vector: normalized, expiresAt: new Date(Date.now() + 86400000) } }, { upsert: true });
     return normalized;

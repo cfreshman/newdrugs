@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { mkdtemp, rm, readFile, stat, writeFile, chmod, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigStore } from '../cli/config';
+import { ConfigStore, operatorStore } from '../cli/config';
 import { agentSetup } from '../shared/agentSetup';
 let directory: string;
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'newdrugs-cli-test-')); await chmod(directory, 0o700); });
@@ -38,4 +38,14 @@ it('generates a normal public setup prompt, with the separate dev profile only o
   expect(publicSetup.prompt).not.toMatch(/\bprod(?:uction)?\b|--profile/);
   expect(publicSetup.prompt).toContain('/downloads/newdrugs-cli.tgz');
   expect(agentSetup('http://localhost:7330').prompt).toContain('newdrugs --profile dev login --url https://dev.druggie.org');
+});
+
+it('never migrates social credentials into operator storage or deletes them on operator logout', async () => {
+  const store = new ConfigStore(join(directory, 'config.json')), admin = operatorStore(store);
+  await writeFile(join(directory, 'connection.json'), JSON.stringify({ url: 'https://druggie.org', token: 'social-only' }), { mode: 0o600 });
+  expect((await admin.load()).profiles).toEqual({});
+  await admin.set('dev', { url: 'https://dev.druggie.org', token: 'operator-only' });
+  expect((await store.resolve()).token).toBe('social-only');
+  await admin.removeAll();
+  expect((await store.resolve()).token).toBe('social-only');
 });

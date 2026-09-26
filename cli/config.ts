@@ -26,8 +26,8 @@ async function secure(path: string, directory = false) {
 export class ConfigStore {
   readonly file: string;
   readonly legacy: string;
-  constructor(file = process.env.NEWDRUGS_CONFIG || join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'newdrugs', 'config.json')) {
-    this.file = resolve(file); this.legacy = join(dirname(this.file), 'connection.json');
+  constructor(file = process.env.NEWDRUGS_CONFIG || join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'newdrugs', 'config.json'), migrateLegacy = true) {
+    this.file = resolve(file); this.legacy = migrateLegacy ? join(dirname(this.file), 'connection.json') : this.file;
   }
   async load(): Promise<Config> {
     await secure(dirname(this.file), true);
@@ -85,3 +85,5 @@ export class ConfigStore {
   use(name: string) { return this.mutate(config => { if (!Object.hasOwn(config.profiles, profileName(name))) throw new Error('That connection profile does not exist.'); config.activeProfile = name; }); }
   logout(name?: string) { return this.mutate(config => { const selected = profileName(name || config.activeProfile); delete config.profiles[selected]; if (config.activeProfile === selected) config.activeProfile = Object.hasOwn(config.profiles, 'default') ? 'default' : Object.keys(config.profiles)[0] || 'default'; }); }
 }
+
+export function operatorStore(store = new ConfigStore()) { return new ConfigStore(join(dirname(store.file), 'admin.json'), false); }

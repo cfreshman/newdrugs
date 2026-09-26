@@ -1,0 +1,13 @@
+import type { Actor } from './auth';
+import { rows } from './db';
+import { automationAuthorized } from './automations';
+import { AppError } from './errors';
+const accountReads = new Set(['connections.list','connections.get','connections.status','messages.list','notifications.list','agent.actions.list']);
+const publicReads = new Set(['identity.get','locations.search','locations.resolve','people.get','people.search','posts.list','posts.get','posts.replies','posts.search','search.query','search.similar','search.refine','search.explain','search.datasets','links.preview','app.open']);
+export function backgroundCanRead(actor: Actor, name: string) { return !actor.background || (publicReads.has(name) && (name !== 'links.preview' || actor.webSearch === true)) || Boolean(actor.accountActivity && accountReads.has(name)) || Boolean(actor.privateChat && ['conversation.search','conversation.window','conversation.list'].includes(name)); }
+export async function assertBackgroundAuthority(actor: Actor) {
+  if (!actor.background) return;
+  const run = actor.runId && await rows<import('./runTypes').RunRecord>('runs').findOneAndUpdate({ _id: actor.runId, userId: actor.userId, purpose: 'automation', status: 'running', cancelRequested: { $ne: true }, leaseUntil: { $gt: Date.now() } }, { $inc: { backgroundReadCount: 1 } }, { returnDocument: 'after' });
+  if (run && (run.backgroundReadCount || 0) > 100) { await rows('runs').updateOne({ _id: run._id }, { $set: { cancelRequested: true, error: 'This automation reached its read limit.' } }); throw new AppError(429, 'automation_limit', 'This automation reached its read limit.'); }
+  if (!run || !await automationAuthorized(run)) throw new AppError(403, 'automation_revoked', 'This automation no longer has authority.');
+}

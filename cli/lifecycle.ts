@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {ConfigStore} from './config';
+import {ConfigStore, operatorStore} from './config';
 const exec=promisify(execFile),CHECK_INTERVAL=86400000;
 export interface Installation {prefix:string;npm:string;npmCli?:string}
 export function isNewerVersion(candidate:string,current:string) {
@@ -75,6 +75,7 @@ export async function uninstall(confirmed:boolean,store:ConfigStore,install:Inst
   if(!install)throw new Error('This copy is not a recognized installed CLI, so it cannot be removed safely.');
   // Match Wayfinder: remove only this app's standard registrations, never other servers.
   for(const [command,args] of [['codex',['mcp','remove','newdrugs']],['claude',['mcp','remove','--scope','user','newdrugs']]] as const){try{await run(command,[...args],{timeout:10000,maxBuffer:100000,windowsHide:true});}catch{/* Optional host not installed or entry absent. */}}
+  await operatorStore(store).removeAll();
   await store.removeAll();
   const args=['uninstall','--global','--prefix',install.prefix,'newdrugs-cli','--ignore-scripts'];
   try{await run(install.npmCli?process.execPath:install.npm,install.npmCli?[install.npmCli,...args]:args,{timeout:120000,maxBuffer:200000,windowsHide:true});}

@@ -1,3 +1,4 @@
+import { backgroundCanRead } from './backgroundAuthority';
 import OpenAI from 'openai';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -45,7 +46,7 @@ export function cosine(a: number[], b: number[]) {
 }
 export async function searchOperations(raw: unknown, actor: Actor) {
   const input = searchSchema.parse(raw);
-  const available = operations.filter(o => (actor.source === 'browser' || o.name !== 'profile.update') && (actor.source !== 'agent' || o.agent) && (actor.scope === 'write' || o.kind === 'read'));
+  const available = operations.filter(o => backgroundCanRead(actor, o.name) && (actor.source === 'browser' || o.name !== 'profile.update') && (actor.source !== 'agent' || o.agent) && (actor.scope === 'write' || o.kind === 'read'));
   const documents = available.map(o => `${o.name}\n${o.kind}\n${o.description}\n${o.consequence || ''}\n${JSON.stringify(z.toJSONSchema(o.schema))}`);
   const identity = hash(JSON.stringify([input.query, input.mode, documents]));
   let offset = 0; let forcedKeyword = false;

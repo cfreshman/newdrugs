@@ -6,7 +6,7 @@ import { browserActor, hash, profile, users } from './auth';
 import { config } from './config';
 import { runs, wallet } from './wallet';
 import { runView } from './agent';
-import { conversation } from './operations';
+import { conversationPage } from './operations';
 import { AppError, requireValue } from './errors';
 import type { LiveChange, LiveTopic } from '../shared/liveState';
 import { notificationState } from './notifications';
@@ -26,6 +26,9 @@ async function changed(event: ChangeStreamDocument<Document>) {
   if (collection === 'directMessages' && document?.connectionId) members = (await rows('connections').findOne({ _id: String(document.connectionId) }, { projection: { members: 1 } }))?.members as string[] | undefined;
   if (collection === 'blocks' && !members) members = key.split(':');
   for (const listener of subscribers) {
+    if (collection === 'agentInbox' || collection === 'automations') { if (!document || document.userId === listener.userId) { listener.records([collection === 'agentInbox' ? 'inbox' : 'automations']); listener.dirty(['notifications']); } continue; }
+    if (collection === 'runs' && document?.purpose === 'automation') { const fields = 'updateDescription' in event ? Object.keys(event.updateDescription.updatedFields || {}) : ['status']; if (document.userId === listener.userId && fields.some(field => /^(status|sleep|chargedNanos|reservedNanos|inboxId|delivery|error|usagePending)(\.|$)/.test(field))) { listener.records(['automations']); listener.dirty(['wallet', 'notifications']); } continue; }
+    if (collection === 'chatSearchChunks') { if (!document || document.userId === listener.userId) listener.records(['chat_history']); continue; }
     if (collection === 'searchDocuments') { listener.records(['people','posts']); continue; }
     if (collection === 'posts' || collection === 'postLikes') { listener.records(['posts']); continue; }
     if (['connections', 'directMessages', 'blocks'].includes(collection)) {
@@ -35,8 +38,9 @@ async function changed(event: ChangeStreamDocument<Document>) {
     if (collection === 'uploads') { if (document?.userId === listener.userId || !document) listener.records(['storage']); continue; }
     if (collection === 'notifications') { if (document?.userId === listener.userId || !document) listener.dirty(['notifications']); continue; }
     if (collection === 'users') {
-      const publicFields = 'updateDescription' in event ? Object.keys(event.updateDescription.updatedFields || {}) : [];
+      const publicFields = 'updateDescription' in event ? [...Object.keys(event.updateDescription.updatedFields || {}), ...(event.updateDescription.removedFields || [])] : [];
       if (publicFields.some(field => /^(name|handle|photos)(\.|$)/.test(field))) listener.records(['posts']);
+      if(publicFields.includes('suspendedAt'))listener.records(['people','posts','connections','messages']);
       if (document?.discoverable || publicFields.includes('discoverable')) {
         if (event.operationType === 'insert' || publicFields.some(field => /^(name|handle|bio|interests|photos|area|discoverable)(\.|$)/.test(field))) listener.records(['people']);
       }
@@ -56,7 +60,7 @@ async function changed(event: ChangeStreamDocument<Document>) {
 async function startWatch() {
   if (starting) return starting;
   starting = (async () => {
-    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
+    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments', 'chatSearchChunks', 'agentInbox', 'automations'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
     watcher = stream;
     // Establish the cursor before taking a snapshot. All later changes either
     // appear in that snapshot or cause a fresh projection (often both).
@@ -78,7 +82,7 @@ export async function readLiveState(userId: string, requested: LiveTopic[] = top
     const result: LiveChange = {};
     if (requested.includes('user')) result.user = profile(owner);
     if (requested.includes('wallet')) result.wallet = await wallet(userId, session, owner);
-    if (requested.includes('messages')) result.messages = await conversation(userId, 60, undefined, session);
+    if (requested.includes('messages')) { const page = await conversationPage(userId, 60, undefined, session); result.messages = page.items; result.conversationCursor = page.nextCursor; result.conversationGeneration = owner.chatGeneration || 0; }
     if (requested.includes('notifications')) result.notifications = await notificationState(userId, session);
     if (requested.includes('run')) { const active = owner.activeRun && await runs().findOne({ _id: owner.activeRun, userId }, { session }); result.run = active ? runView(active) : null; }
     return result;
@@ -109,9 +113,10 @@ export async function streamLiveState(req: Request, res: Response) {
       const requested = [...dirty]; dirty.clear();
       const current = await readLiveState(userId, requested), change: LiveChange = {};
       for (const topic of requested) {
-        const serialized = JSON.stringify(current[topic]);
+        const serialized = JSON.stringify(topic === 'messages' ? [current.messages, current.conversationGeneration] : current[topic]);
         if (sent.get(topic) !== serialized) { Object.assign(change, { [topic]: current[topic] }); sent.set(topic, serialized); }
       }
+      if (change.messages) { change.conversationCursor = current.conversationCursor; change.conversationGeneration = current.conversationGeneration; }
       if (!closed && Object.keys(change).length) res.write(`event: state\ndata: ${JSON.stringify({ userId, epoch, sequence: ++sequence, change })}\n\n`);
     } catch (error) { console.error('Live projection interrupted', { name: error instanceof Error ? error.name : 'Error' }); close(); }
     finally { flushing = false; if (dirty.size && !closed) schedule([]); }
@@ -122,7 +127,7 @@ export async function streamLiveState(req: Request, res: Response) {
   subscribers.add(listener);
   try { await startWatch(); if (!closed) await flush(); }
   catch { close(); return; }
-  heartbeat = setInterval(() => { if (!closed) { res.write(': heartbeat\n\n'); schedule([]); } }, 15000);
+  heartbeat = setInterval(() => { if (!closed) { res.write(': heartbeat\n\n'); schedule(['wallet']); } }, 15000);
 }
 
 export async function stopLiveState() {

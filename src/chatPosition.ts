@@ -1,6 +1,7 @@
 export interface Point { x: number; y: number }
 export interface Viewport { width: number; height: number; left: number; top: number }
 export interface ChatDimensions { width: number; gutter: number; radius: number; bottomGutter?: number }
+export function mobileChatLayout() { return innerWidth < 640 || window.matchMedia('(pointer: coarse)').matches; }
 export function clampChat(point: Point, viewport: Viewport, composerHeight: number, dimensions: ChatDimensions): Point {
   const { gutter, radius } = dimensions;
   const half = Math.max(0, Math.min(dimensions.width, viewport.width - gutter * 2)) / 2;

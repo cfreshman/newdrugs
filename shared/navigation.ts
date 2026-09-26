@@ -1,11 +1,12 @@
-export const surfaceViews = ['profile', 'credits', 'connections', 'people', 'feed', 'post_list', 'person', 'post', 'messages', 'location', 'notifications', 'uploads', 'blocked', 'storage'] as const;
+export const surfaceViews = ['account_settings', 'inbox', 'automations', 'chat_history', 'profile', 'credits', 'agents', 'connections', 'people', 'feed', 'post_list', 'person', 'post', 'messages', 'location', 'notifications', 'uploads', 'blocked', 'storage'] as const;
 export type SurfaceView = typeof surfaceViews[number];
 export interface Destination { view: SurfaceView | 'settings' | 'chat'; resourceId?: string; areaCell?: string; radiusMiles?: number; query?: string; scope?: 'all' | 'nearby' | 'own'; postIds?:string[] }
 export interface ResourceLink { rel: 'open_in_newdrugs' | 'download'; targetKind: 'exact' | 'surface'; title: string; url: string; resourceType: string; resourceId?: string }
-export const surfaceRoutes: Record<Destination['view'], string> = { chat: '/', settings: '/settings', profile: '/profile', credits: '/billing', connections: '/agents', people: '/nearby', feed: '/feed', post_list: '/selected-posts', person: '/people', post: '/posts', messages: '/messages', location: '/location', notifications: '/notifications', uploads: '/uploads', blocked: '/blocked', storage: '/storage' };
-export const surfaceTitles: Record<Destination['view'], string> = { chat: 'Chat', settings: 'Settings', profile: 'Profile', credits: 'Add credit', connections: 'Connect an agent', people: 'People', feed: 'Posts', post_list: 'Posts for you', person: 'Profile', post: 'Post', messages: 'Messages', location: 'Choose your area', notifications: 'Notifications', uploads: 'Upload files', blocked: 'Blocked people', storage: 'Storage' };
+export const surfaceRoutes: Record<Destination['view'], string> = { account_settings: '/account', inbox: '/inbox', automations: '/automations', chat_history: '/chat-history', chat: '/', settings: '/settings', profile: '/profile', credits: '/billing', agents: '/agents', connections: '/connections', people: '/nearby', feed: '/feed', post_list: '/selected-posts', person: '/people', post: '/posts', messages: '/messages', location: '/location', notifications: '/notifications', uploads: '/uploads', blocked: '/blocked', storage: '/storage' };
+export const surfaceTitles: Record<Destination['view'], string> = { account_settings: 'Account', inbox: 'Agent inbox', automations: 'Automations', chat_history: 'Chat history', chat: 'Chat', settings: 'Settings', profile: 'Profile', credits: 'Add credit', agents: 'Connected agents', connections: 'Messages & invites', people: 'People', feed: 'Posts', post_list: 'Posts for you', person: 'Profile', post: 'Post', messages: 'Messages', location: 'Choose your area', notifications: 'Notifications', uploads: 'Upload files', blocked: 'Blocked people', storage: 'Storage' };
 
 export function destinationPath(destination: Destination) {
+  if (destination.view === 'chat' && destination.resourceId) return `/chat/${encodeURIComponent(destination.resourceId)}`;
   let path = surfaceRoutes[destination.view];
   if (destination.resourceId) path += `/${encodeURIComponent(destination.resourceId)}`;
   const query = new URLSearchParams();
@@ -24,8 +25,8 @@ export function parseDestination(value: string, origin: string): Destination | n
     if (url.username || url.password || !['https:', 'http:'].includes(url.protocol) || url.origin !== base.origin && !(local && (url.origin === 'https://dev.druggie.org' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && url.port === base.port && url.protocol === base.protocol))) return null;
     const path = url.pathname.replace(/\/$/, '') || '/';
     const route = Object.entries(surfaceRoutes).find(([, route]) => route === path);
-    const record = /^\/(people|posts|messages)\/([^/]+)$/.exec(path);
-    let destination: Destination | undefined = route ? { view: route[0] as Destination['view'] } : record ? { view: record[1] === 'people' ? 'person' : record[1] === 'posts' ? 'post' : 'messages', resourceId: decodeURIComponent(record[2]) } : undefined;
+    const record = /^\/(people|posts|messages|chat|inbox|automations)\/([^/]+)$/.exec(path);
+    let destination: Destination | undefined = route ? { view: route[0] as Destination['view'] } : record ? { view: record[1] === 'people' ? 'person' : record[1] === 'posts' ? 'post' : record[1] === 'chat' ? 'chat' : record[1] === 'inbox' ? 'inbox' : record[1] === 'automations' ? 'automations' : 'messages', resourceId: decodeURIComponent(record[2]) } : undefined;
     if (!destination || ['person', 'post'].includes(destination.view) && !destination.resourceId) return null;
     if (destination.resourceId && !/^[A-Za-z0-9:_.-]{1,150}$/.test(destination.resourceId)) return null;
     const area = url.searchParams.get('area'), radius = Number(url.searchParams.get('radius'));
@@ -33,13 +34,15 @@ export function parseDestination(value: string, origin: string): Destination | n
     if (radius >= 10 && radius <= 250) destination.radiusMiles = radius;
     if(destination.view==='post_list'){const ids=(url.searchParams.get('ids')||'').split(',');if(!ids.length||ids.length>30||ids.some(id=>!/^[A-Za-z0-9:_.-]{1,100}$/.test(id)))return null;destination.postIds=[...new Set(ids)];}
     const query = url.searchParams.get('q'), scope = url.searchParams.get('scope');
-    if (query && query.length<=500 && ['people','feed'].includes(destination.view)) destination.query=query;
-    if (scope && ['all','nearby','own'].includes(scope) && ['people','feed'].includes(destination.view)) destination.scope=scope as Destination['scope'];
+    if (query && query.length<=500 && ['people','feed','chat_history'].includes(destination.view)) destination.query=query;
+    if (scope && ['all','nearby','own'].includes(scope) && ['people','feed','chat_history'].includes(destination.view)) destination.scope=scope as Destination['scope'];
     return destination;
   } catch { return null; }
 }
 
 export const operationUiBindings: Record<string, { route: string; targetKind: ResourceLink['targetKind']; resourceType: string }[]> = {
+  'conversation.search': [{ route: '/chat/[id]', targetKind: 'exact', resourceType: 'chat_message' }],
+  'conversation.window': [{ route: '/chat/[id]', targetKind: 'exact', resourceType: 'chat_message' }],
   'identity.get': [{ route: '/people/[id]', targetKind: 'exact', resourceType: 'person' }],
   'profile.update': [{ route: '/people/[id]', targetKind: 'exact', resourceType: 'person' }],
   'people.get': [{ route: '/people/[id]', targetKind: 'exact', resourceType: 'person' }],
@@ -54,6 +57,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'connections.status': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }, { route: '/messages', targetKind: 'surface', resourceType: 'connections' }],
   'connections.get': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
   'connections.request': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'invitation' }],
+  'connections.disconnect': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
   'connections.withdraw': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'invitation' }],
   'people.blocked': [{ route: '/blocked', targetKind: 'surface', resourceType: 'blocked' }],
   'connections.respond': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
@@ -72,3 +76,15 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
 
 for (const name of ['search.query','search.similar','search.refine','search.explain']) operationUiBindings[name]=[{route:'/people/[id]',targetKind:'exact',resourceType:'person'},{route:'/posts/[id]',targetKind:'exact',resourceType:'post'}];
 operationUiBindings['posts.search']=[{route:'/posts/[id]',targetKind:'exact',resourceType:'post'}];
+
+/** Discard old BSON null optionals before handing a persisted surface to controls. */
+export function cleanDestinationContext(value: Partial<Omit<Destination, 'view'>>): Omit<Destination, 'view'> {
+  return {
+    ...(typeof value.resourceId === 'string' ? { resourceId: value.resourceId } : {}),
+    ...(typeof value.areaCell === 'string' ? { areaCell: value.areaCell } : {}),
+    ...(typeof value.query === 'string' ? { query: value.query } : {}),
+    ...(value.scope && ['all', 'nearby', 'own'].includes(value.scope) ? { scope: value.scope } : {}),
+    ...(typeof value.radiusMiles === 'number' && Number.isFinite(value.radiusMiles) && value.radiusMiles >= 10 && value.radiusMiles <= 250 ? { radiusMiles: value.radiusMiles } : {}),
+    ...(Array.isArray(value.postIds) ? { postIds: value.postIds.filter(id => typeof id === 'string') } : {}),
+  };
+}

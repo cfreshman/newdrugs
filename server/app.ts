@@ -1,3 +1,8 @@
+import { revokeAutomationCredential } from './automations';
+import { clearAgentChat, changeUsername, changeAccountPassword, verifyAccountPassword } from './account';
+import { backgroundCanRead } from './backgroundAuthority';
+import { adminCliRouter } from './adminCli';
+import { pushConfigured, pushDevices, saveSubscription, revokePush, subscriptionSchema } from './push';
 import express, { type ErrorRequestHandler } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -6,7 +11,7 @@ import { z, ZodError } from 'zod';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { config } from './config';
-import { authenticate, browserActor, checkPassword, createGuest, csrf, currentUser, hash, logout, newSession, passwordHash, profile, requireActor, users } from './auth';
+import { registerAccount, authenticate, browserActor, checkPassword, createGuest, csrf, currentUser, hash, logout, newSession, passwordHash, profile, requireActor, users } from './auth';
 import { AppError, requireValue } from './errors';
 import { rows, db } from './db';
 import { wallet, reserveRun, runs } from './wallet';
@@ -25,6 +30,8 @@ import {acceptUpload,readUpload} from './uploads';
 import { streamLiveState, readLiveState } from './liveState';
 import { buildResourceLinks } from './resourceLinks';
 import { devApiGate } from './devGate';
+import { previewImage } from './linkPreviews';
+import { replyToReview } from './reviewReply';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
 const limiter = (limit: number, windowMs = 60000) => rateLimit({ windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
@@ -51,11 +58,12 @@ export function createApp() {
     await server.connect(transport); await transport.handleRequest(req, res, req.body);
   });
   app.all('/mcp', (_req, res) => { res.status(405).set('Allow', 'POST').json({ error: 'Use authenticated Streamable HTTP POST.' }); });
+  app.use('/api/admin/cli', limiter(90), express.json({ limit: '16kb' }), adminCliRouter());
   app.use('/api', devApiGate, limiter(180), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter(30, 15 * 60000), async (req, res) => {
     if (!req.actor) {
-      const user = await createGuest();
+      const user = await createGuest(req.ip);
       await newSession(res, user._id);
       await ensureIntroduction(user._id);
     } else if (req.actor.source === 'browser') { await ensureStarter(req.actor.userId); await ensureIntroduction(req.actor.userId); }
@@ -67,6 +75,23 @@ export function createApp() {
       config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
   });
   app.get('/api/events', streamLiveState);
+  app.get('/api/push', async (req, res) => {
+    const actor = browserActor(req), user = await currentUser(actor.userId);
+    res.json({ inboxPush: Boolean(user.inboxPushEnabled), publicKey: pushConfigured() ? config.VAPID_PUBLIC_KEY : null, devices: user.handle ? (await pushDevices(user._id)).items : [] });
+  });
+  app.post('/api/push/preferences', async (req, res) => { const actor = browserActor(req); const data = z.strictObject({ inboxPush: z.boolean() }).parse(req.body); await users().updateOne({ _id: actor.userId }, { $set: { inboxPushEnabled: data.inboxPush } }); res.json(data); });
+  app.post('/api/push/subscribe', async (req, res) => {
+    const actor = browserActor(req);
+    res.json(await saveSubscription(actor.userId, hash(req.cookies[config.SESSION_COOKIE]), subscriptionSchema.parse(req.body)));
+  });
+  app.post('/api/push/unsubscribe', async (req, res) => {
+    const actor = browserActor(req), { deviceId } = z.strictObject({ deviceId: z.uuid() }).parse(req.body);
+    res.json(await revokePush(actor.userId, deviceId));
+  });
+  app.get('/api/link-previews/:id/image', async (req, res) => {
+    requireActor(req);
+    res.set({ 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' }).send(await previewImage(String(req.params.id)));
+  });
   app.put('/api/uploads/:id',limiter(20),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
   app.get('/api/files/:id',async(req,res)=>{
     const {file,bytes}=await readUpload(requireActor(req),String(req.params.id),true);
@@ -93,21 +118,35 @@ export function createApp() {
     const user = await currentUser(actor.userId);
     if (user.handle) throw new AppError(409, 'registered', 'Your account is already saved.');
     const encoded = await passwordHash(data.password);
-    const saved = requireValue(await users().findOneAndUpdate({ _id: user._id, handle: { $exists: false } }, { $set: { handle: data.handle, passwordHash: encoded } }, { returnDocument: 'after' }));
+    const saved = await registerAccount(user._id, data.handle, encoded, req.ip);
     await newSession(res, saved._id, req);
+    await ensureIntroduction(saved._id);
     res.json({ user: profile(saved) });
   });
   app.post('/api/account/login', limiter(15, 15 * 60000), async (req, res) => {
     const data = credentials.parse(req.body);
     const user = await users().findOne({ handle: data.handle });
     if (!await checkPassword(data.password, user?.passwordHash)) throw new AppError(401, 'credentials', 'That handle and password did not match.');
+    if(user!.suspendedAt)throw new AppError(403,'account_suspended','This account is suspended.');
     await newSession(res, user!._id, req);
+    await ensureIntroduction(user!._id);
     res.json({ user: profile(user!) });
+  });
+  app.post('/api/account/username', limiter(10, 15 * 60000), async (req, res) => {
+    const actor = browserActor(req), data = z.strictObject({ handle: credentials.shape.handle, currentPassword: z.string().min(1).max(128) }).parse(req.body);
+    const user = await verifyAccountPassword(actor.userId, data.currentPassword); res.json({ user: profile(await changeUsername(user, data.handle)) });
+  });
+  app.post('/api/account/password', limiter(10, 15 * 60000), async (req, res) => {
+    const actor = browserActor(req), data = z.strictObject({ password: credentials.shape.password, currentPassword: z.string().min(1).max(128) }).parse(req.body);
+    const user = await verifyAccountPassword(actor.userId, data.currentPassword); await changeAccountPassword(user, data.password, req.cookies[config.SESSION_COOKIE]); res.json({ ok: true });
+  });
+  app.post('/api/account/clear-chat', limiter(5, 15 * 60000), async (req, res) => {
+    const actor = browserActor(req); z.strictObject({ confirmed: z.literal(true) }).parse(req.body); await clearAgentChat(actor.userId); res.json({ ok: true });
   });
   app.post('/api/account/logout', async (req, res) => { browserActor(req); await logout(req, res); res.json({ ok: true }); });
   app.get('/api/catalog', (req, res) => {
     const actor = requireActor(req);
-    res.json({ operations: operations.filter(o => (actor.source === 'browser' || o.name !== 'profile.update') && (actor.scope === 'write' || o.kind === 'read')).map(o => describeOperation(o.name)) });
+    res.json({ operations: operations.filter(o => backgroundCanRead(actor, o.name) && (actor.source === 'browser' || o.name !== 'profile.update') && (actor.scope === 'write' || o.kind === 'read')).map(o => describeOperation(o.name)) });
   });
   app.post('/api/catalog/search', async (req, res) => { res.json(await searchOperations(searchSchema.parse(req.body), requireActor(req))); });
   app.post('/api/operations/:name', async (req, res) => {
@@ -118,12 +157,13 @@ export function createApp() {
   app.post('/api/chat', limiter(12), async (req, res) => {
     const actor = browserActor(req);
     if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Create an account to use your agent.');
-    const data = z.strictObject({ text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York') }).refine(value=>value.text||value.fileIds.length,'Add a message or a file.').parse(req.body);
+    const data = z.strictObject({ text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), inboxIds: z.array(z.uuid()).max(3).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York'), review: z.strictObject({ runId: z.string().max(200), revision: z.number().int().min(0) }).optional() }).refine(value=>value.text||value.fileIds.length||value.inboxIds.length,'Add a message or a file.').parse(req.body);
     if (!config.aiEnabled) throw new AppError(503, 'agent_unavailable', 'The agent is not connected yet. Please try again later.');
     try { new Intl.DateTimeFormat('en', { timeZone: data.timezone }).format(); } catch { throw new AppError(422, 'timezone', 'Unknown timezone.'); }
+    if (data.review) { res.status(202).json({ run: runView(await replyToReview(actor.userId, data.review, data)) }); return; }
     const runId = `${actor.userId}:${data.requestId}`;
     await ensureStarter(actor.userId);
-    res.status(202).json({ run: runView(await reserveRun(actor.userId, runId, data.text, { clientId: data.clientId, timezone: data.timezone, fileIds: data.fileIds })) });
+    res.status(202).json({ run: runView(await reserveRun(actor.userId, runId, data.text, { clientId: data.clientId, timezone: data.timezone, fileIds: data.fileIds, inboxIds: data.inboxIds })) });
   });
   app.get('/api/runs/:id', async (req, res) => { const actor = requireActor(req); res.json({ run: runView(requireValue(await runs().findOne({ _id: String(req.params.id), userId: actor.userId }))) }); });
   app.post('/api/runs/:id/decisions', async (req, res) => {
@@ -160,7 +200,7 @@ export function createApp() {
   });
   app.delete('/api/tokens/:id', async (req, res) => {
     const actor = browserActor(req);
-    await rows('tokens').updateOne({ _id: String(req.params.id), userId: actor.userId }, { $set: { revokedAt: new Date().toISOString() } });
+    await revokeAutomationCredential(actor.userId, String(req.params.id));
     res.json({ ok: true });
   });
   app.use('/api', (_req, _res, next) => next(new AppError(404, 'not_found', 'Unknown endpoint.')));
@@ -171,7 +211,7 @@ export function createApp() {
     app.get('/admin', (_req, res) => { res.redirect('/admin/'); });
     app.use('/admin', express.static(resolve('dist/admin'), { index: false }));
     app.get('/admin/{*path}', (_req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(resolve('dist/admin/index.html')); });
-    app.use(express.static(resolve('dist/web'), { index: false }));
+    app.use(express.static(resolve('dist/web'), { index: false, setHeaders: (res, path) => { if (path.endsWith('/sw.js')) res.setHeader('Cache-Control', 'no-cache'); } }));
     app.get('/{*path}', (_req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(resolve('dist/web/index.html')); });
   }
   if (config.APP_ENV === 'staging') app.use((_req, res) => { res.status(404).set('Cache-Control', 'no-store').end(); });

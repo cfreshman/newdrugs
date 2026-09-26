@@ -30,3 +30,6 @@ table { width:100%; border-collapse:collapse; text-align:left; font-size:12px; }
 th,td { padding:10px 0; border-bottom:1px solid var(--line); }
 th:last-child,td:last-child { text-align:right; }
 .error { color:#b32a35; margin:16px 0 0; }
+@media (max-width: 767px), (pointer: coarse) {
+  input, textarea, select, [contenteditable='true'] { font-size: 16px; }
+}

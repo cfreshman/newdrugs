@@ -8,7 +8,7 @@ const interactive = 'a[href], button, input, select, textarea, summary, [role="b
 
 // The same measured-height, pointer-safe collapse behavior as Wayfinder's
 // CollapsibleAgentMessage, with New Drugs' plain user text and Phosphor icons.
-export function CollapsibleMessage({ text, assistant, scrollRef, social = false }: { text: string; assistant: boolean; scrollRef: RefObject<HTMLDivElement | null>; social?: boolean }) {
+export function CollapsibleMessage({ text, assistant, scrollRef, social = false, reveal = false }: { text: string; assistant: boolean; scrollRef: RefObject<HTMLDivElement | null>; social?: boolean; reveal?: boolean }) {
   const id = useId();
   const wrapper = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -17,6 +17,7 @@ export function CollapsibleMessage({ text, assistant, scrollRef, social = false 
   const [preview, setPreview] = useState(256);
   const [long, setLong] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  useLayoutEffect(() => { if (reveal) setExpanded(true); }, [reveal]);
   const collapsed = long && !expanded;
   useLayoutEffect(() => {
     const node = content.current;

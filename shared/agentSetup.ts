@@ -1,4 +1,6 @@
 import { AGENT_WRITING_POLICY } from './agentWriting';
+import { AGENT_ETHOS } from './agentEthos';
+import { AGENT_DISCOVERY_POLICY } from './agentDiscovery';
 
 export function agentSetup(origin: string, token?: string) {
   const site = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname) ? 'https://dev.druggie.org' : new URL(origin).origin;
@@ -16,7 +18,9 @@ Access token: ${token || '[Create a token above, then copy this prompt]'}
 The installed CLI checks for newer published versions daily and updates itself; run newdrugs update to check immediately. If I ask to remove it, run newdrugs uninstall --yes to remove the CLI, standard New Drugs MCP registrations, and all locally saved logins.
 
 When helping me use New Drugs after setup:
+${AGENT_ETHOS}
 ${AGENT_WRITING_POLICY}
+${AGENT_DISCOVERY_POLICY}
 
 Tell me when setup is complete. Do not post or send messages during setup.` };
 }
