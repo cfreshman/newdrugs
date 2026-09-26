@@ -7,7 +7,7 @@ import { config } from './config';
 import { hash, users } from './auth';
 import { AppError, requireValue } from './errors';
 
-interface PushEvent { _id: string; userId: string; actorId: string; connectionId: string; kind: 'message' | 'invitation' | 'agent_update' | 'automation_status'; eventId: string; status: string; availableAt: number; attempts: number; delivered: string[]; expiresAt: Date; lease?: string }
+interface PushEvent { _id: string; userId: string; actorId: string; connectionId: string; kind: 'message' | 'invitation' | 'log_invitation' | 'agent_update' | 'automation_status'; eventId: string; status: string; availableAt: number; attempts: number; delivered: string[]; expiresAt: Date; lease?: string }
 const outbox = () => rows<PushEvent>('pushOutbox');
 export const pushConfigured = () => Boolean(config.VAPID_PUBLIC_KEY && config.VAPID_PRIVATE_KEY);
 export const subscriptionSchema = z.strictObject({ deviceId: z.uuid(), endpoint: z.url().max(2048), keys: z.strictObject({ p256dh: z.string().max(100), auth: z.string().max(30) }) });
@@ -44,6 +44,10 @@ export async function enqueuePush(userId: string, actorId: string, connectionId:
   if (!pushConfigured()) return;
   await outbox().updateOne({ _id: hash(`${kind}:${eventId}:${userId}`) }, { $setOnInsert: { userId, actorId, connectionId, kind, eventId, status: 'pending', availableAt: Date.now() + 1500, attempts: 0, delivered: [], expiresAt: new Date(Date.now() + 86400000) } }, { session, upsert: true });
 }
+export async function enqueueLogInvitationPush(userId:string,actorId:string,entryId:string,revision:number,session?:ClientSession){
+  if(!pushConfigured())return;
+  await outbox().updateOne({_id:hash(`log:${entryId}:${revision}:${userId}`)},{$setOnInsert:{userId,actorId,connectionId:entryId,kind:'log_invitation',eventId:String(revision),status:'pending',availableAt:Date.now()+1500,attempts:0,delivered:[],expiresAt:new Date(Date.now()+86400000)}},{session,upsert:true});
+}
 export async function enqueueInboxPush(userId: string, itemId: string, session: ClientSession) {
   if (!pushConfigured()) return;
   await outbox().updateOne({ _id: hash(`inbox:${itemId}`) }, { $setOnInsert: { userId, actorId: userId, connectionId: itemId, kind: 'agent_update', eventId: itemId, status: 'pending', availableAt: Date.now() + 1500, attempts: 0, delivered: [], expiresAt: new Date(Date.now() + 86400000) } }, { session, upsert: true });
@@ -59,6 +63,10 @@ export async function pushStillRelevant(event: { userId: unknown; actorId: unkno
   if(await users().findOne({_id:actorId,suspendedAt:{$type:'string'}}))return false;
   if (!await users().findOne({ _id: userId, suspendedAt:null, handle: { $type: 'string' } })) return false;
   if (await rows('blocks').findOne({ members: { $all: [userId, actorId] } })) return false;
+  if(event.kind==='log_invitation'){
+    const {logEntryFor}=await import('./log');try{const entry=await logEntryFor(userId,connectionId);if(!entry.invited.includes(userId))return false;}catch{return false;}
+    return Boolean(await rows('notifications').findOne({_id:`log:${connectionId}:${userId}`,userId,actorId,kind:'log_invitation',revision:Number(event.eventId),readAt:null}));
+  }
   if (event.kind === 'invitation') return Boolean(await rows('connections').findOne({ _id: connectionId, toId: userId, fromId: actorId, status: 'pending', notificationReadAt: null, createdAt: event.eventId }));
   if (!await rows('connections').findOne({ _id: connectionId, members: userId, status: 'accepted' })) return false;
   return Boolean(await rows('notifications').findOne({ userId, connectionId, kind: 'message', messageId: event.eventId, readAt: null }));
@@ -78,7 +86,7 @@ export async function deliverPush(send = webpush.sendNotification) {
     if (!await rows('sessions').findOne({ _id: String(device.sessionId), userId: event.userId, expiresAt: { $gt: new Date() } })) { await revokePush(String(event.userId), String(device.deviceId)); continue; }
     if (!await pushStillRelevant(event)) break;
     try {
-      await send({ endpoint: String(device.endpoint), keys: device.keys as { p256dh: string; auth: string } }, JSON.stringify({ title: 'New Drugs', body: event.kind === 'automation_status' ? 'You have an automation update.' : event.kind === 'agent_update' ? 'You have an agent update.' : event.kind === 'invitation' ? 'You have a new invitation.' : 'You have a new message.', url: `/${event.kind === 'automation_status' ? 'automations' : event.kind === 'agent_update' ? 'inbox' : 'messages'}/${encodeURIComponent(String(event.connectionId))}`, tag: `conversation-${hash(String(event.connectionId)).slice(0, 24)}` }), { vapidDetails: { subject: config.VAPID_SUBJECT, publicKey: config.VAPID_PUBLIC_KEY, privateKey: config.VAPID_PRIVATE_KEY }, timeout: 10000, TTL: 3600, urgency: 'normal', topic: hash(String(event.connectionId)).slice(0, 32) });
+      await send({ endpoint: String(device.endpoint), keys: device.keys as { p256dh: string; auth: string } }, JSON.stringify({ title: 'New Drugs', body: event.kind === 'log_invitation' ? 'You have a Log invitation.' : event.kind === 'automation_status' ? 'You have an automation update.' : event.kind === 'agent_update' ? 'You have an agent update.' : event.kind === 'invitation' ? 'You have a new invitation.' : 'You have a new message.', url: `/${event.kind === 'log_invitation' ? 'log' : event.kind === 'automation_status' ? 'automations' : event.kind === 'agent_update' ? 'inbox' : 'messages'}/${encodeURIComponent(String(event.connectionId))}`, tag: `conversation-${hash(String(event.connectionId)).slice(0, 24)}` }), { vapidDetails: { subject: config.VAPID_SUBJECT, publicKey: config.VAPID_PUBLIC_KEY, privateKey: config.VAPID_PRIVATE_KEY }, timeout: 10000, TTL: 3600, urgency: 'normal', topic: hash(String(event.connectionId)).slice(0, 32) });
       await outbox().updateOne({ _id: event._id, lease }, { $addToSet: { delivered: device._id } });
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode;

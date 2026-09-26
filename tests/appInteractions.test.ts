@@ -19,7 +19,7 @@ describe('chat interaction integration', () => {
     document.documentElement.style.cssText = '--chat-width:480;--chat-gutter:12;--orb-radius:36';
     transport.api.mockReset(); transport.post.mockReset(); transport.operation.mockReset();
     transport.api.mockImplementation((path: string) => path === '/tokens' ? Promise.resolve({ tokens: [] }) : path === '/checkout/quotes' ? Promise.resolve({ quotes: [] }) : bootstrap.promise);
-    transport.operation.mockImplementation((name: string) => Promise.resolve(name === 'inbox.get' ? { id: 'resource', title: 'An update', body: 'Useful info', links: [], producer: { kind: 'external', name: 'Test agent' }, createdAt: new Date().toISOString(), read: false, archived: false, unavailable: false } : name === 'automations.get' ? { id: 'resource', name: 'Morning update', instruction: 'Find something useful', schedule: { kind: 'weekly', timeZone: 'UTC', hour: 7, minute: 0, weekdays: [1] }, maxRunNanos: 50000000, dailyBudgetNanos: 200000000, privateChat: false, webSearch: false, status: 'paused', revision: 1, nextRunAt: null, createdAt: new Date().toISOString() } : name === 'people.get' ? { ...initial.user, id: 'friend', handle: 'friend', name: 'Friend', discoverable: true } : name === 'posts.get' ? { id: 'post', userId: 'friend', text: 'A real post', createdAt: new Date().toISOString(), city: '' } : { items: [], nextCursor: null, people: [] }));
+    transport.operation.mockImplementation((name: string) => Promise.resolve(name==='log.preferences'?{arrangement:'calendar',views:[]}:name==='log.get'?{id:'resource',ownerId:'user',date:'2026-09-26',title:'Test memory',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),membership:'member',contributors:[],invitations:[]}:name === 'inbox.get' ? { id: 'resource', title: 'An update', body: 'Useful info', links: [], producer: { kind: 'external', name: 'Test agent' }, createdAt: new Date().toISOString(), read: false, archived: false, unavailable: false } : name === 'automations.get' ? { id: 'resource', name: 'Morning update', instruction: 'Find something useful', schedule: { kind: 'weekly', timeZone: 'UTC', hour: 7, minute: 0, weekdays: [1] }, maxRunNanos: 50000000, dailyBudgetNanos: 200000000, privateChat: false, webSearch: false, status: 'paused', revision: 1, nextRunAt: null, createdAt: new Date().toISOString() } : name === 'people.get' ? { ...initial.user, id: 'friend', handle: 'friend', name: 'Friend', discoverable: true } : name === 'posts.get' ? { id: 'post', userId: 'friend', text: 'A real post', createdAt: new Date().toISOString(), city: '' } : { items: [], nextCursor: null, people: [] }));
     transport.post.mockImplementation((path: string) => path === '/chat' ? chat.promise : Promise.resolve({ ok: true }));
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) { return this.classList.contains('composer') ? rect(12, 550, 366, 76) : rect(150, 350, 228, 80); });
     vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.classList.contains('conversation') ? 1000 : 76; });
@@ -248,13 +248,18 @@ describe('chat interaction integration', () => {
     sessionStorage.setItem('nd-client', 'browser');
     await mount();
     await act(async () => { bootstrap.resolve({ ...initial, user: { ...initial.user, handle: 'test' }, run: { ...active, status: 'waiting_for_input', surface: { id: `surface-${view}`, view, resourceId: view === 'chat_history' ? undefined : 'resource', waiting: true } } }); });
-    expect(dom.container.querySelector('dialog h2, .composer-surface h2')?.textContent).toBe(surfaceTitles[view]);
+    expect(dom.container.querySelector('dialog h2, .composer-surface h2, .social-experience:not([hidden]) .mode-content-header h1')?.textContent).toBe(surfaceTitles[view]);
     expect(Boolean(dom.container.querySelector('.connection-setup'))).toBe(view === 'agents');
     if (view === 'location') {
       expect(dom.container.querySelector('.location-picker')).not.toBeNull();
       expect(dom.container.textContent).toContain('Save area');
       expect(dom.container.textContent).not.toContain('Create an access token');
     }
+  });
+  it('returns cancellation when a human leaves a requested Log editor',async()=>{
+    sessionStorage.setItem('nd-client','browser');await mount();await act(async()=>bootstrap.resolve({...initial,run:{...active,status:'waiting_for_input',surface:{id:'log-editor',view:'log_compose',waiting:true}}}));
+    const cancel=[...dom.container.querySelectorAll<HTMLButtonElement>('.social-log .log-editor button')].find(button=>button.textContent==='Cancel')!;expect(cancel).toBeTruthy();await act(async()=>cancel.click());
+    expect(transport.post).toHaveBeenCalledWith('/runs/run/surface',{id:'log-editor',saved:false});
   });
   it('toggles an inline launcher, keeps every child inline, hides dictation, and restores the untouched chat draft', async () => {
     await mount(); await load(); type('Keep this draft');

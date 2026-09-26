@@ -21,7 +21,7 @@ export interface User {
   area?: CoarseArea | null;
   photos?:string[];storageBytes?:number;
 }
-export interface Actor { userId: string; source: 'browser' | 'external' | 'agent'; scope: 'read' | 'write'; credentialId?: string; runId?: string; background?: boolean; privateChat?: boolean; accountActivity?: boolean; webSearch?: boolean }
+export interface Actor { userId: string; source: 'browser' | 'external' | 'agent'; scope: 'read' | 'write'; credentialId?: string; runId?: string; background?: boolean; logAccess?: boolean; privateChat?: boolean; accountActivity?: boolean; webSearch?: boolean }
 declare global { namespace Express { interface Request { actor?: Actor } } }
 export const users = () => rows<User>('users');
 export const profile = (u: User): Profile => ({ id: u._id, handle: u.handle, name: u.name, city: u.area?.label || '', area: u.area || null, photos:u.photos||[], bio: u.bio, interests: u.interests, discoverable: u.discoverable });
@@ -78,7 +78,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
         if (!active) throw new AppError(403, 'inactive_run', 'There is no active task.');
         const background = active.purpose === 'automation';
         if (background && !await automationAuthorized(active)) throw new AppError(403, 'automation_revoked', 'This automation stopped.');
-        req.actor = { userId: owner._id, source: 'agent', scope: background ? 'read' : 'write', runId: active._id, background, privateChat: background && Boolean(active.privateChat), accountActivity: background && Boolean(active.accountActivity), webSearch: background && Boolean(active.webSearch) };
+        req.actor = { userId: owner._id, source: 'agent', scope: background ? 'read' : 'write', runId: active._id, background, logAccess: background && Boolean(active.logAccess), privateChat: background && Boolean(active.privateChat), accountActivity: background && Boolean(active.accountActivity), webSearch: background && Boolean(active.webSearch) };
         next(); return;
       }
       const record = token && await rows('tokens').findOne({ hash: hash(token), revokedAt: null, $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] });

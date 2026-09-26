@@ -15,7 +15,7 @@ export async function messageInput(run: RunRecord) {
 
 /** Rebuild useful continuity without promoting historical text into instructions. */
 export async function sessionInput(run: RunRecord) {
-  if (run.purpose === 'automation') return [{ role: 'user' as const, content: [{ type: 'input_text' as const, text: `Saved automation instruction:\n${run.text}\nCurrent time: ${new Date().toISOString()}\nTimezone: ${run.timezone}\nPermitted social account activity lookup: ${Boolean(run.accountActivity)}\nPermitted private agent-chat lookup: ${Boolean(run.privateChat)}\nWeb search permitted: ${Boolean(run.webSearch)}\nOwner profile: ${JSON.stringify(profile(await currentUser(run.userId)))}\nRecent deliveries (avoid repetition): ${JSON.stringify(run.recentDeliveries || [])}` }] }];
+  if (run.purpose === 'automation') return [{ role: 'user' as const, content: [{ type: 'input_text' as const, text: `Saved automation instruction:\n${run.text}\nCurrent time: ${new Date().toISOString()}\nTimezone: ${run.timezone}\nPermitted social account activity lookup: ${Boolean(run.accountActivity)}\nPermitted private Log lookup: ${Boolean(run.logAccess)}\nPermitted private agent-chat lookup: ${Boolean(run.privateChat)}\nWeb search permitted: ${Boolean(run.webSearch)}\nOwner profile: ${JSON.stringify(profile(await currentUser(run.userId)))}\nRecent deliveries (avoid repetition): ${JSON.stringify(run.recentDeliveries || [])}` }] }];
   const recent = (await conversation(run.userId, 100)).filter(message => message.id !== `${run._id}:user`);
   const messages = [];
   let characters = 0;

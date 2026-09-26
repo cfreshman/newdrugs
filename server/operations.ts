@@ -1,3 +1,4 @@
+import {logOperation,logEntryFor} from './log';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
 import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
@@ -82,6 +83,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   const options = { session };
   const user = requireValue(await users().findOne({ _id: userId }, options));
   if (/^(people\.|posts\.|connections\.|messages\.|notifications\.|storage\.|search\.|links\.)/.test(name)) registered(user);
+  if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
   if (name.startsWith('automations.')) { registered(user); return automationOperation(name, d, actor, session); }
   if (name === 'runs.wake') return wakeRun(actor.userId, String(d.runId), true, session);
   if (name === 'runs.cancel') return (await import('./agent')).cancelRun(actor.userId, String(d.runId), session);
@@ -144,9 +146,11 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'links.preview': return linkPreview(String(d.url), userId);
     case 'locations.resolve': return resolveArea(String(d.cell));
     case 'app.open': {
+      if(d.view==='log'&&d.resourceId)await logEntryFor(userId,String(d.resourceId),session);
+      if(['log','log_compose'].includes(String(d.view)))registered(user);
       if(d.view==='people'&&d.scope&&!['all','nearby'].includes(String(d.scope)))throw new AppError(422,'people_scope','People supports Nearby or All people.');
       if (d.view === 'connections') d.view = 'messages';
-      if (actor.background && !['people','person','feed','post','post_list','location', ...(actor.privateChat ? ['chat_history'] : []), ...(actor.accountActivity ? ['messages','notifications'] : [])].includes(String(d.view))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');
+      if (actor.background && !['people','person','feed','post','post_list','location', ...(actor.logAccess?['log']:[]), ...(actor.privateChat ? ['chat_history'] : []), ...(actor.accountActivity ? ['messages','notifications'] : [])].includes(String(d.view))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');
       if (d.view === 'automations' && d.resourceId) await ownAutomation(userId, String(d.resourceId), session, true);
       if (d.view === 'inbox' && d.resourceId) await ownInbox(userId, String(d.resourceId), session);
       if (d.view === 'chat_history' && d.resourceId) requireValue(await rows('messages').findOne({ _id: String(d.resourceId), userId }, options));
@@ -158,7 +162,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         const connection = requireValue(await rows('connections').findOne({ _id: String(d.resourceId), members: userId }, options));
         await notBlocked(userId, (connection.members as string[]).find(id => id !== userId)!, session);
       }
-      return { open:d.view, resourceId:d.resourceId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
+      return { open:d.view,date:d.date,logMonth:d.logMonth,logScope:d.logScope,logArrangement:d.logArrangement,personId:d.personId, resourceId:d.resourceId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
     }
     case 'profile.update': {
       if (actor.source !== 'browser') throw new AppError(403, 'human_authored', 'Profiles are written by the person, not by their agent. Open the profile editor instead.');
@@ -496,6 +500,11 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
         other = (connection.members as string[]).find(id => id !== actor.userId);
       }
       if (other) await rows<{ _id: string; revision: number }>('contactPairs').updateOne({ _id: pairId(actor.userId, other) }, { $inc: { revision: 1 } }, { session, upsert: true });
+    }
+    if(name.startsWith('log.')&&op.kind==='write'&&parsed.entryId){
+      const entry=await rows('logEntries').findOne({_id:String(parsed.entryId)},{session,projection:{members:1,invited:1}});
+      const contacts=[...new Set([...(entry?.members as string[]||[]),...(entry?.invited as string[]||[]),...(parsed.personId?[String(parsed.personId)]:[])])].filter(id=>id!==actor.userId).sort();
+      for(const id of contacts)await rows<{_id:string;revision:number}>('contactPairs').updateOne({_id:pairId(actor.userId,id)},{$inc:{revision:1}},{session,upsert:true});
     }
     // Store the same JSON shape that the HTTP/MCP client receives. BSON would
     // otherwise turn nested undefined optional fields into null on a retry.

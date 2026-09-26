@@ -99,7 +99,15 @@ export function createApp() {
   app.put('/api/uploads/:id',limiter(20),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
   app.get('/api/files/:id',async(req,res)=>{
     const {file,bytes}=await readUpload(requireActor(req),String(req.params.id),true);
-    res.set({'Content-Type':file.mime,'Content-Disposition':`${file.mime.startsWith('image/')?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`,'Cache-Control':'private, no-store'}).send(bytes);
+    res.set({'Content-Type':file.mime,'Content-Disposition':`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`,'Cache-Control':'private, no-store','Accept-Ranges':'bytes'});
+    const range=req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
+    if(req.headers.range){
+      if(!range||(!range[1]&&!range[2])){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
+      const start=range[1]?Number(range[1]):Math.max(0,bytes.length-Number(range[2])),end=range[1]&&range[2]?Math.min(Number(range[2]),bytes.length-1):bytes.length-1;
+      if(start>end||start>=bytes.length){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
+      res.status(206).set('Content-Range',`bytes ${start}-${end}/${bytes.length}`).send(bytes.subarray(start,end+1));return;
+    }
+    res.send(bytes);
   });
   app.get('/api/admin/session', async (req, res) => { res.json(await adminStatus(req)); });
   app.post('/api/admin/login', limiter(10, 15 * 60000), async (req, res) => {
@@ -177,8 +185,8 @@ export function createApp() {
     res.json(await decideApprovals(actor.userId, String(req.params.id), data.revision, data.decisions));
   });
   app.post('/api/runs/:id/surface', async (req, res) => {
-    const actor = browserActor(req); const data = z.strictObject({ id: z.string(), saved: z.boolean(), fileIds:z.array(z.uuid()).max(5).default([]) }).parse(req.body);
-    res.json(await completeSurface(actor.userId, String(req.params.id), data.id, data.saved, data.fileIds));
+    const actor = browserActor(req); const data = z.strictObject({ id: z.string(), saved: z.boolean(), fileIds:z.array(z.uuid()).max(5).default([]),resourceId:z.uuid().optional() }).parse(req.body);
+    res.json(await completeSurface(actor.userId, String(req.params.id), data.id, data.saved, data.fileIds,data.resourceId));
   });
   app.post('/api/runs/:id/cancel', async (req, res) => { res.json(await cancelRun(browserActor(req).userId, String(req.params.id))); });
   app.get('/api/checkout/quotes', (req, res) => { requireActor(req); res.json({ quotes: [500,1000,2000].map(topupQuote) }); });

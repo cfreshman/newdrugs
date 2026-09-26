@@ -1,3 +1,4 @@
+import {AgentMarkdown} from './AgentMarkdown';
 import {LinkedText} from './LinkedText';
 import {LinkPreviews} from './LinkPreview';
 import { AutomationSummary } from './AutomationsPanel';
@@ -20,7 +21,7 @@ export function RunProgress({ run, refresh, open }: { run: RunView; refresh(): P
     {pending.length > 0 && <div className="action-review">
       {pending.map(action => <div className="review-action" key={action.id}>
         <p>{action.detail}</p>{action.automation && <AutomationSummary value={action.automation} />}{action.target && <p className="review-target">{action.target}</p>}
-        {!action.automation && Object.entries(action.input).filter(([key]) => !key.endsWith('Id') && key !== 'fileIds' && key !== 'links').map(([key, value]) => <p key={key} className="review-content">{key === 'text' || key === 'note' || key === 'reason' ? String(value) : `${key}: ${String(value)}`}</p>)}
+        {action.logEntry&&<div className="review-log-entry"><strong>{action.logEntry.title||'Untitled'}</strong><p>{action.logEntry.date}{action.logEntry.place?` · ${action.logEntry.place}`:''}</p>{action.logEntry.contributors.map(person=><section key={person.userId}><strong>{person.name}</strong>{person.note&&<AgentMarkdown text={person.note}/>}<PostPhotos photos={person.files.filter(file=>file.mime.startsWith('image/'))}/>{person.files.filter(file=>!file.mime.startsWith('image/')).map(file=><p key={file.id}>{file.name}</p>)}</section>)}<LinkPreviews text="" links={action.logEntry.links}/></div>}{!action.automation && !action.logEntry && Object.entries(action.input).filter(([key]) => !key.endsWith('Id') && key !== 'fileIds' && key !== 'links').map(([key, value]) => <p key={key} className="review-content">{key === 'text' || key === 'note' || key === 'reason' ? String(value) : `${key}: ${String(value)}`}</p>)}
         {Array.isArray(action.input.fileIds) && <PostPhotos photos={action.input.fileIds.filter((id): id is string => typeof id === 'string').map((id, index) => ({ id, name: `Photo ${index + 1}`, url: `/api/files/${encodeURIComponent(id)}` }))} />}
         {Array.isArray(action.input.links)&&<><div className="review-links">{action.input.links.filter((url):url is string=>typeof url==='string').map(url=><p key={url}><LinkedText text={url}/></p>)}</div><LinkPreviews text="" links={action.input.links.filter((url):url is string=>typeof url==='string')}/></>}
         <div className="review-buttons"><button disabled={saving} onClick={() => void decide([action.id], false)}>Reject</button><button className="confirm" disabled={saving} onClick={() => void decide([action.id], true)}>Confirm</button></div>

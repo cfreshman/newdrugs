@@ -5,7 +5,7 @@
 .mode-switch button[aria-pressed=true] {background:var(--ink);color:var(--on-assistant);}
 .mode-switch button svg,.mode-measure-item svg {flex:none;}
 .mode-switch button span {max-width:70px;opacity:1;transition:max-width 140ms ease,opacity 100ms ease;overflow:hidden;}
-.mode-switch[data-collapsed=true] {width:142px;}
+.mode-switch[data-collapsed=true] {width:188px;}
 .mode-switch[data-collapsed=true] button {width:43px;padding:9px 12px;gap:0;}
 .mode-switch[data-collapsed=true] button span {max-width:0;opacity:0;}
 .mode-switch-measure {visibility:hidden;pointer-events:none;top:-200px;width:max-content;transition:none;}
@@ -72,7 +72,7 @@
 .app[data-keyboard-open=true] .social-experience {top:calc(var(--viewport-top,0px) + var(--mode-top));bottom:auto;height:calc(var(--viewport-height,100dvh) - 2 * var(--mode-top));}
 .app[data-keyboard-open=true] .mode-content-header,.app[data-keyboard-open=true] .mode-mobile-nav {display:none;}
 @media(max-width:1200px){.app {--mode-rail:0px;--mode-sidebar:164px;}.social-experience {grid-template-columns:var(--mode-sidebar) minmax(0,var(--mode-main));}.mode-context-rail {display:none;}.social-friends {--mode-main:680px;}}
-@media(max-width:760px){.app {--settings-right:max(6px,env(safe-area-inset-right));--mode-gutter:6px;--mode-top:12px;--mode-bottom:calc(12px + var(--safe-area-bottom));--mode-gap:0px;}.mode-switch button,.mode-measure-item {font-size:12px;padding:8px 9px;gap:5px;}.mode-switch button svg,.mode-measure-item svg {width:17px;height:17px;}.mode-switch[data-collapsed=true] {width:136px;}.mode-switch[data-collapsed=true] button {width:41px;padding:8px 12px;}.social-experience {display:flex;}.mode-sidebar,.mode-context-rail {display:none;}.mode-main {flex:1;border-radius:20px;}.mode-content-header {padding:6px var(--panel-inset);}.mode-content-header h1 {font-size:18px;}.mode-mobile-nav {display:flex;flex:none;gap:3px;overflow:auto;padding:0 var(--panel-inset) 8px;}.mode-mobile-nav button {white-space:nowrap;border-radius:999px;background:transparent;padding:8px 11px;font-size:12px;}.mode-mobile-nav button[aria-pressed=true] {background:var(--surface-soft);font-weight:700;}.mode-page {padding:0 var(--panel-inset) var(--panel-inset);}.mode-page .view-tabs {margin:0 calc(-1 * var(--panel-inset));padding-inline:var(--panel-inset);}.mode-page .post-text {font-size:14px;}.social-friends .people-list {grid-template-columns:1fr;gap:14px;}.social-friends .people-list>button>img {max-height:300px;}.app:not([data-mode=agent]) .workspace {top:72px;right:12px;bottom:calc(12px + var(--safe-area-bottom));width:calc(100% - 24px);}.app:not([data-mode=agent])[data-keyboard-open=true] .workspace {top:calc(var(--viewport-top,0px) + var(--mode-top));bottom:auto;height:calc(var(--viewport-height,100dvh) - 2 * var(--mode-top));}.mode-page-compose .post-composer textarea {font-size:16px;}.mode-welcome {font-size:14px;}}
+@media(max-width:760px){.app {--settings-right:max(6px,env(safe-area-inset-right));--mode-gutter:6px;--mode-top:12px;--mode-bottom:calc(12px + var(--safe-area-bottom));--mode-gap:0px;}.mode-switch button,.mode-measure-item {font-size:12px;padding:8px 9px;gap:5px;}.mode-switch button svg,.mode-measure-item svg {width:17px;height:17px;}.mode-switch[data-collapsed=true] {width:180px;}.mode-switch[data-collapsed=true] button {width:41px;padding:8px 12px;}.social-experience {display:flex;}.mode-sidebar,.mode-context-rail {display:none;}.mode-main {flex:1;border-radius:20px;}.mode-content-header {padding:6px var(--panel-inset);}.mode-content-header h1 {font-size:18px;}.mode-mobile-nav {display:flex;flex:none;gap:3px;overflow:auto;padding:0 var(--panel-inset) 8px;}.mode-mobile-nav button {white-space:nowrap;border-radius:999px;background:transparent;padding:8px 11px;font-size:12px;}.mode-mobile-nav button[aria-pressed=true] {background:var(--surface-soft);font-weight:700;}.mode-page {padding:0 var(--panel-inset) var(--panel-inset);}.mode-page .view-tabs {margin:0 calc(-1 * var(--panel-inset));padding-inline:var(--panel-inset);}.mode-page .post-text {font-size:14px;}.social-friends .people-list {grid-template-columns:1fr;gap:14px;}.social-friends .people-list>button>img {max-height:300px;}.app:not([data-mode=agent]) .workspace {top:72px;right:12px;bottom:calc(12px + var(--safe-area-bottom));width:calc(100% - 24px);}.app:not([data-mode=agent])[data-keyboard-open=true] .workspace {top:calc(var(--viewport-top,0px) + var(--mode-top));bottom:auto;height:calc(var(--viewport-height,100dvh) - 2 * var(--mode-top));}.mode-page-compose .post-composer textarea {font-size:16px;}.mode-welcome {font-size:14px;}}
 
 .mode-page-person .profile-card:has(.profile-gallery) { display:grid; grid-template-columns:minmax(0,280px) minmax(0,1fr); column-gap:20px; align-items:start; }
 .mode-page-person .profile-gallery { grid-column:1;grid-row:1 / span 6; }
@@ -84,7 +84,7 @@
 
 .app:not([data-mode=agent]) .conversation { --top-fade:0px;margin-top:calc(-1 * var(--agent-dock-padding-top));padding-top:var(--agent-dock-padding-top); }
 @media(max-width:760px){
-  .mode-switch:not(.mode-switch-measure) {width:136px;}
+  .mode-switch:not(.mode-switch-measure) {width:180px;}
   .mode-switch button {width:41px;padding:8px 12px;gap:0;}
   .mode-switch button span {max-width:0;opacity:0;}
   .app:not([data-mode=agent])[data-agent-dock=true] .social-experience {visibility:hidden;pointer-events:none;}
@@ -137,3 +137,5 @@
   .app[data-standalone=true]:not([data-mode=agent]) .workspace {border-radius:0;padding-bottom:calc(var(--panel-inset) + var(--safe-area-bottom));}
   .app[data-standalone=true][data-keyboard-open=true]:not([data-mode=agent]) .social-experience {height:calc(var(--viewport-height,100dvh) - var(--mode-top));}
 }
+
+.mode-mobile-nav[hidden]{display:none;}

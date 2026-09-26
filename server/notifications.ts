@@ -21,12 +21,17 @@ export async function notificationState(userId: string, session?: ClientSession)
   invitations.push(...await rows('connections').find({ ...invitationFilter, $or: [{ status: { $ne: 'pending' } }, { notificationReadAt: { $ne: null } }] }, { session }).sort({ createdAt: -1 }).limit(100).toArray());
   const stored = await rows('notifications').find(unreadRecords, { session }).sort({ createdAt: -1 }).limit(100).toArray();
   stored.push(...await rows('notifications').find({ ...recordFilter, readAt: { $ne: null } }, { session }).sort({ createdAt: -1 }).limit(100).toArray());
-  const count = await rows('connections').countDocuments(unreadInvitations, { session }) + await rows('notifications').countDocuments(unreadRecords, { session });
+  let count = await rows('connections').countDocuments(unreadInvitations, { session }) + await rows('notifications').countDocuments(unreadRecords, { session });
   const people = await users().find({ _id: { $in: [...invitations.map(row => String(row.fromId)), ...stored.map(row => String(row.actorId))] } }, { session, projection: { name: 1, handle: 1 } }).toArray();
   const label = (id: string) => { const person = people.find(person => person._id === id); return person?.handle ? `@${person.handle}` : person?.name || 'Someone'; };
   const link = (connectionId: string): ResourceLink => ({ rel: 'open_in_newdrugs', targetKind: 'exact', title: 'Open conversation', url: new URL(destinationPath({ view: 'messages', resourceId: connectionId }), config.uiOrigin).href, resourceType: 'conversation', resourceId: connectionId });
   const items: Notification[] = invitations.map(row => ({ id: `invite:${row._id}`, kind: 'invitation', title: `Invitation from ${label(String(row.fromId))}`, text: String(row.note), createdAt: String(row.createdAt), read: row.status !== 'pending' || Boolean(row.notificationReadAt), connectionId: row._id, link: link(row._id) }));
   for (const row of stored) {
+    if(row.kind==='log_invitation'||row.kind==='log_update'){
+      const entry=await rows('logEntries').findOne({_id:String(row.entryId),deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]},{session,projection:{_id:1}});if(!entry){if(!row.readAt)count--;continue;}
+      items.push({id:row._id,kind:row.kind,title:String(row.title),text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open Log entry',url:new URL(destinationPath({view:'log',resourceId:entry._id}),config.uiOrigin).href,resourceType:'log_entry',resourceId:entry._id}});continue;
+    }
+
     if (row.kind === 'automation_status') { items.push({id:row._id,kind:'automation_status',title:String(row.title),text:String(row.text),createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open automation',url:new URL(destinationPath({view:'automations',resourceId:String(row.automationId)}),config.uiOrigin).href,resourceType:'automation',resourceId:String(row.automationId)}}); continue; }
     if (row.kind === 'agent_update') { items.push({ id: row._id, kind: 'agent_update', title: String(row.title), text: String(row.text || ''), createdAt: String(row.createdAt), read: Boolean(row.readAt), link: { rel: 'open_in_newdrugs', targetKind: 'exact', title: 'Open agent update', url: new URL(destinationPath({ view: 'inbox', resourceId: String(row.inboxId) }), config.uiOrigin).href, resourceType: 'inbox', resourceId: String(row.inboxId) } }); continue; }
     const social = row.kind === 'post_like' || row.kind === 'post_reply';

@@ -1,7 +1,7 @@
 import {useLayoutEffect,useRef,useState,type RefObject} from 'react';
-import {Robot,Users,Article} from '@phosphor-icons/react';
+import {Robot,Users,Article,CalendarDots} from '@phosphor-icons/react';
 import {MODE_LABELS,modeSwitchIntersects,type AppMode} from '../shared/experience';
-const modes:AppMode[]=['agent','posts','friends'];const icons={agent:Robot,friends:Users,posts:Article};
+const modes:AppMode[]=['agent','posts','friends','log'];const icons={agent:Robot,friends:Users,posts:Article,log:CalendarDots};
 export function ModeSwitcher({mode,change,chat,chatVisible,layoutKey}:{mode:AppMode;change(mode:AppMode):void;chat:RefObject<HTMLElement|null>;chatVisible:boolean;layoutKey:string}){
  const root=useRef<HTMLElement>(null),measure=useRef<HTMLDivElement>(null),[collapsed,setCollapsed]=useState(false),[fullWidth,setFullWidth]=useState(0),[overPanel,setOverPanel]=useState(false);
  useLayoutEffect(()=>{
@@ -15,7 +15,7 @@ export function ModeSwitcher({mode,change,chat,chatVisible,layoutKey}:{mode:AppM
    const crowded=Boolean(main&&main.width>0&&main.right>box.left&&main.left<box.left+width+buffer);
    const compact=crowded||window.matchMedia('(max-width: 760px)').matches||Boolean(chatVisible&&chat.current&&modeSwitchIntersects(chat.current.getBoundingClientRect(),box,width+buffer));
    setFullWidth(width);setCollapsed(compact);
-   const visibleWidth=compact?(window.matchMedia('(max-width: 760px)').matches?136:142):width;
+   const visibleWidth=compact?(window.matchMedia('(max-width: 760px)').matches?180:188):width;
    const panels=document.querySelectorAll<HTMLElement>('.social-experience:not([hidden]) .mode-main,.app:not([data-mode=agent]) .workspace:not([hidden]),.app[data-mode=agent] .workspace .bubble,.app[data-mode=agent] .workspace .composer-switcher,.app[data-mode=agent] .workspace .composer-menu-layer');
    setOverPanel([...panels].some(panel=>{const style=getComputedStyle(panel);return style.visibility!=='hidden'&&style.display!=='none'&&modeSwitchIntersects(panel.getBoundingClientRect(),box,visibleWidth);}));
   };

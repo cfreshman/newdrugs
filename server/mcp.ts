@@ -57,7 +57,7 @@ export function createMcpServer(actor: Actor, authority: ExecutionProof = {}) {
     if (actor.background && req.params.uri !== 'newdrugs://instructions') throw new Error('Background file access is unavailable.');
     const file=/^newdrugs:\/\/files\/([a-zA-Z0-9-]{1,100})$/.exec(req.params.uri);
     if (file) {
-      const { file: metadata, bytes } = await readUpload(actor, file[1]);
+      const { file: metadata, bytes } = await readUpload(actor, file[1],true);
       return { contents: [{ uri: req.params.uri, mimeType: metadata.mime,
         ...(metadata.mime.startsWith('text/') ? { text: bytes.toString('utf8') } : { blob: bytes.toString('base64') }) }] };
     }

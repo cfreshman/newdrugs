@@ -1,16 +1,22 @@
+import {logDate} from './log';
 import { modeForDestination, type AppMode } from './experience';
-export const surfaceViews = ['account_settings', 'inbox', 'automations', 'chat_history', 'profile', 'credits', 'agents', 'connections', 'people', 'feed', 'post_list', 'person', 'post', 'messages', 'location', 'notifications', 'uploads', 'blocked', 'storage'] as const;
+export const surfaceViews = ['log', 'log_compose', 'account_settings', 'inbox', 'automations', 'chat_history', 'profile', 'credits', 'agents', 'connections', 'people', 'feed', 'post_list', 'person', 'post', 'messages', 'location', 'notifications', 'uploads', 'blocked', 'storage'] as const;
 export type SurfaceView = typeof surfaceViews[number];
-export interface Destination { view: SurfaceView | 'settings' | 'chat' | 'compose'; mode?: AppMode; role?: 'all' | 'user' | 'assistant'; resourceId?: string; areaCell?: string; radiusMiles?: number; query?: string; scope?: 'all' | 'nearby' | 'own' | 'friends' | 'saved'; postIds?:string[] }
+export interface Destination { view: SurfaceView | 'settings' | 'chat' | 'compose'; mode?: AppMode; date?:string; logMonth?:string; logScope?:'all'|'private'|'shared'|'invitations'; logArrangement?:'calendar'|'gallery'|'list'; personId?:string; role?: 'all' | 'user' | 'assistant'; resourceId?: string; areaCell?: string; radiusMiles?: number; query?: string; scope?: 'all' | 'nearby' | 'own' | 'friends' | 'saved'; postIds?:string[] }
 export interface ResourceLink { rel: 'open_in_newdrugs' | 'download'; targetKind: 'exact' | 'surface'; title: string; url: string; resourceType: string; resourceId?: string }
-export const surfaceRoutes: Record<Destination['view'], string> = { compose: '/compose', account_settings: '/account', inbox: '/inbox', automations: '/automations', chat_history: '/chat-history', chat: '/', settings: '/settings', profile: '/profile', credits: '/billing', agents: '/agents', connections: '/connections', people: '/nearby', feed: '/feed', post_list: '/selected-posts', person: '/people', post: '/posts', messages: '/messages', location: '/location', notifications: '/notifications', uploads: '/uploads', blocked: '/blocked', storage: '/storage' };
-export const surfaceTitles: Record<Destination['view'], string> = { compose: 'New post', account_settings: 'Account', inbox: 'Agent inbox', automations: 'Automations', chat_history: 'Chat search', chat: 'Chat', settings: 'Settings', profile: 'Profile', credits: 'Add credit', agents: 'Connected agents', connections: 'Messages & invites', people: 'People', feed: 'Posts', post_list: 'Posts for you', person: 'Profile', post: 'Post', messages: 'Messages', location: 'Choose your area', notifications: 'Notifications', uploads: 'Upload files', blocked: 'Blocked people', storage: 'Storage' };
+export const surfaceRoutes: Record<Destination['view'], string> = { log:'/log',log_compose:'/log/new', compose: '/compose', account_settings: '/account', inbox: '/inbox', automations: '/automations', chat_history: '/chat-history', chat: '/', settings: '/settings', profile: '/profile', credits: '/billing', agents: '/agents', connections: '/connections', people: '/nearby', feed: '/feed', post_list: '/selected-posts', person: '/people', post: '/posts', messages: '/messages', location: '/location', notifications: '/notifications', uploads: '/uploads', blocked: '/blocked', storage: '/storage' };
+export const surfaceTitles: Record<Destination['view'], string> = { log:'Log',log_compose:'New entry', compose: 'New post', account_settings: 'Account', inbox: 'Agent inbox', automations: 'Automations', chat_history: 'Chat search', chat: 'Chat', settings: 'Settings', profile: 'Profile', credits: 'Add credit', agents: 'Connected agents', connections: 'Messages & invites', people: 'People', feed: 'Posts', post_list: 'Posts for you', person: 'Profile', post: 'Post', messages: 'Messages', location: 'Choose your area', notifications: 'Notifications', uploads: 'Upload files', blocked: 'Blocked people', storage: 'Storage' };
 
 export function destinationPath(destination: Destination) {
   let path = destination.view === 'chat' && destination.resourceId ? '/chat' : surfaceRoutes[destination.view];
   if (destination.resourceId) path += `/${encodeURIComponent(destination.resourceId)}`;
   if (destination.mode && destination.mode !== modeForDestination(destination)) path = `/${destination.mode}${path === '/' ? '/chat' : path}`;
   const query = new URLSearchParams();
+  if(destination.logMonth)query.set('month',destination.logMonth);
+  if(destination.logScope&&destination.logScope!=='all')query.set('scope',destination.logScope);
+  if(destination.logArrangement)query.set('layout',destination.logArrangement);
+  if(destination.personId)query.set('person',destination.personId);
+  if(destination.date)query.set('date',destination.date);
   if (destination.areaCell) query.set('area', destination.areaCell);
   if (destination.radiusMiles) query.set('radius', String(destination.radiusMiles));
   if (destination.query) query.set('q', destination.query);
@@ -27,26 +33,28 @@ export function parseDestination(value: string, origin: string): Destination | n
     if (url.username || url.password || !['https:', 'http:'].includes(url.protocol) || url.origin !== base.origin && !(local && (url.origin === 'https://dev.druggie.org' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && url.port === base.port && url.protocol === base.protocol))) return null;
     let path = url.pathname.replace(/\/$/, '') || '/';
     let mode: AppMode | undefined;
-    const prefix = /^\/(agent|friends|posts)(\/.*)?$/.exec(path);
-    if (prefix) {
-      const suffix = prefix[2] || (prefix[1] === 'agent' ? '/' : prefix[1] === 'friends' ? '/nearby' : '/feed');
+    const prefix = /^\/(agent|friends|posts|log)(\/.*)?$/.exec(path);
+    if (prefix && path !== '/log') {
+      const suffix = prefix[2] || (prefix[1] === 'agent' ? '/' : prefix[1] === 'friends' ? '/nearby' : prefix[1] === 'log' ? '/log' : '/feed');
       // /posts/:id is a canonical post, while /posts/people/:id retains Posts mode.
-      if (suffix === '/chat' || Object.values(surfaceRoutes).includes(suffix) || /^\/(people|posts|messages|chat|inbox|automations)\/[^/]+$/.test(suffix)) { mode = prefix[1] as AppMode; path = suffix === '/chat' ? '/' : suffix; }
+      if (suffix === '/chat' || Object.values(surfaceRoutes).includes(suffix) || /^\/(people|posts|messages|chat|inbox|automations|log)\/[^/]+$/.test(suffix)) { mode = prefix[1] as AppMode; path = suffix === '/chat' ? '/' : suffix; }
     }
     const route = Object.entries(surfaceRoutes).find(([, route]) => route === path);
-    const record = /^\/(people|posts|messages|chat|inbox|automations)\/([^/]+)$/.exec(path);
-    let destination: Destination | undefined = route ? { view: route[0] as Destination['view'] } : record ? { view: record[1] === 'people' ? 'person' : record[1] === 'posts' ? 'post' : record[1] === 'chat' ? 'chat' : record[1] === 'inbox' ? 'inbox' : record[1] === 'automations' ? 'automations' : 'messages', resourceId: decodeURIComponent(record[2]) } : undefined;
+    const record = /^\/(people|posts|messages|chat|inbox|automations|log)\/([^/]+)$/.exec(path);
+    let destination: Destination | undefined = route ? { view: route[0] as Destination['view'] } : record ? { view: record[1] === 'log' ? 'log' : record[1] === 'people' ? 'person' : record[1] === 'posts' ? 'post' : record[1] === 'chat' ? 'chat' : record[1] === 'inbox' ? 'inbox' : record[1] === 'automations' ? 'automations' : 'messages', resourceId: decodeURIComponent(record[2]) } : undefined;
     if (!destination || ['person', 'post'].includes(destination.view) && !destination.resourceId) return null;
     if (destination.resourceId && !/^[A-Za-z0-9:_.-]{1,150}$/.test(destination.resourceId)) return null;
     if (mode) destination.mode = mode;
+    const date=url.searchParams.get('date');if(date&&destination.view==='log_compose'){if(!logDate.safeParse(date).success)return null;destination.date=date;}
     const role = url.searchParams.get('role');
     if (destination.view === 'chat_history' && (role === 'user' || role === 'assistant')) destination.role = role;
     const area = url.searchParams.get('area'), radius = Number(url.searchParams.get('radius'));
     if (area && /^[0-9a-f]{15}$/.test(area)) destination.areaCell = area;
     if (radius >= 10 && radius <= 250) destination.radiusMiles = radius;
     if(destination.view==='post_list'){const ids=(url.searchParams.get('ids')||'').split(',');if(!ids.length||ids.length>30||ids.some(id=>!/^[A-Za-z0-9:_.-]{1,100}$/.test(id)))return null;destination.postIds=[...new Set(ids)];}
+    if(destination.view==='log'){const month=url.searchParams.get('month'),scope=url.searchParams.get('scope'),layout=url.searchParams.get('layout'),person=url.searchParams.get('person');if(month){if(!/^\d{4}-\d{2}$/.test(month)||!logDate.safeParse(`${month}-01`).success)return null;destination.logMonth=month;}if(scope){if(!['all','private','shared','invitations'].includes(scope))return null;destination.logScope=scope as Destination['logScope'];}if(layout){if(!['calendar','gallery','list'].includes(layout))return null;destination.logArrangement=layout as Destination['logArrangement'];}if(person&&/^[A-Za-z0-9:_.-]{1,100}$/.test(person))destination.personId=person;}
     const query = url.searchParams.get('q'), scope = url.searchParams.get('scope');
-    if (query && query.length<=500 && ['people','feed','chat_history'].includes(destination.view)) destination.query=query;
+    if (query && query.length<=500 && ['people','feed','chat_history','log'].includes(destination.view)) destination.query=query;
     if(destination.view==='people'&&scope&&!['all','nearby'].includes(scope))return null;
     if (scope && ['all','nearby','own','friends','saved'].includes(scope) && ['people','feed','chat_history'].includes(destination.view)) destination.scope=scope as Destination['scope'];
     return destination;
@@ -97,7 +105,12 @@ operationUiBindings['posts.search']=[{route:'/posts/[id]',targetKind:'exact',res
 /** Discard old BSON null optionals before handing a persisted surface to controls. */
 export function cleanDestinationContext(value: Partial<Omit<Destination, 'view'>>): Omit<Destination, 'view'> {
   return {
-    ...(value.mode && ['agent','friends','posts'].includes(value.mode) ? {mode:value.mode} : {}),
+    ...(value.logMonth&&logDate.safeParse(`${value.logMonth}-01`).success?{logMonth:value.logMonth}:{}),
+    ...(value.logScope&&['all','private','shared','invitations'].includes(value.logScope)?{logScope:value.logScope}:{}),
+    ...(value.logArrangement&&['calendar','gallery','list'].includes(value.logArrangement)?{logArrangement:value.logArrangement}:{}),
+    ...(typeof value.personId==='string'?{personId:value.personId}:{}),
+    ...(typeof value.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value.date)?{date:value.date}:{}),
+    ...(value.mode && ['agent','friends','posts','log'].includes(value.mode) ? {mode:value.mode} : {}),
     ...(value.role && ['all','user','assistant'].includes(value.role) ? {role:value.role} : {}),
     ...(typeof value.resourceId === 'string' ? { resourceId: value.resourceId } : {}),
     ...(typeof value.areaCell === 'string' ? { areaCell: value.areaCell } : {}),
@@ -107,3 +120,5 @@ export function cleanDestinationContext(value: Partial<Omit<Destination, 'view'>
     ...(Array.isArray(value.postIds) ? { postIds: value.postIds.filter(id => typeof id === 'string') } : {}),
   };
 }
+
+for(const name of ['log.list','log.get','log.create','log.update','log.contribute','log.invite','log.respond','log.export'])operationUiBindings[name]=[{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'}];

@@ -21,6 +21,7 @@ export async function validateInboxLinks(userId: string, links: InboxItem['links
     if (!destination?.resourceId) continue;
     if (++internal > 24) throw new AppError(422, 'inbox_links', 'Use at most 24 internal source links.');
     const id = destination.resourceId;
+    if (destination.view === 'log') await executeOperation('log.get',{entryId:id},actor);
     if (destination.view === 'post') await executeOperation('posts.get', { postId: id }, actor);
     if (destination.view === 'person') await executeOperation('people.get', { personId: id }, actor);
     if (destination.view === 'messages') await executeOperation('connections.get', { connectionId: id }, actor);

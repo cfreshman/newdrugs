@@ -27,13 +27,13 @@ export interface Approval {
   id: string; operation: string; input: Record<string, unknown>; version: string; digest: string;
   title: string; detail: string; target?: string; expiresAt: number;
   status: 'pending' | 'approved' | 'rejected'; human: boolean; kind: 'write' | 'input';
-  result?: unknown; automation?: import('./automations').AutomationConfig;
+  result?: unknown; logEntry?: import('./log').LogEntry; automation?: import('./automations').AutomationConfig;
 }
 export interface RunView {
   id: string; status: RunStatus; draft: string; progress: { id: string; text: string }[];
   phase?: import('./agentUi').AgentPhase; preamble?: string; cancelRequested?: boolean;
   outputComplete?: boolean; sleep?: { until: number; reason: string };
   approvals: Approval[]; clientId: string; error?: string; revision: number;
-  surface?: { id: string; view: string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
+  surface?: { id: string; view: string; date?:string; logMonth?:string;logScope?:import('./navigation').Destination['logScope'];logArrangement?:import('./navigation').Destination['logArrangement'];personId?:string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
   sources?: { url: string; title: string }[];
 }

@@ -64,7 +64,7 @@ async function main() {
   if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Profiles are human-authored in the app.`);
     return;
   }
   if (command === 'admin') {
@@ -109,7 +109,7 @@ async function main() {
   if (command === 'file-upload') {
     const key = option('--key') || randomUUID();
     process.stderr.write(`Request key: ${key}\n`);
-    print(await uploadLocalFile(login, args[1], (name, input, requestKey) => invoke(login, name, input, requestKey), key, option('--request')));
+    print(await uploadLocalFile(login, args[1], (name, input, requestKey) => invoke(login, name, input, requestKey), key, option('--request'),args.includes('--log')?'log_media':'agent_input'));
     return;
   }
   if (command === 'mcp') {

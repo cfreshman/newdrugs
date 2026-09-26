@@ -26,22 +26,24 @@ async function changed(event: ChangeStreamDocument<Document>) {
   if (collection === 'directMessages' && document?.connectionId) members = (await rows('connections').findOne({ _id: String(document.connectionId) }, { projection: { members: 1 } }))?.members as string[] | undefined;
   if (collection === 'blocks' && !members) members = key.split(':');
   for (const listener of subscribers) {
+    if(collection==='logEntries'){listener.records(['log']);continue;}
+    if(collection==='logPreferences'){if(key===listener.userId)listener.records(['log_preferences']);continue;}
     if (collection === 'agentInbox' || collection === 'automations') { if (!document || document.userId === listener.userId) { listener.records([collection === 'agentInbox' ? 'inbox' : 'automations']); listener.dirty(['notifications']); } continue; }
     if (collection === 'runs' && document?.purpose === 'automation') { const fields = 'updateDescription' in event ? Object.keys(event.updateDescription.updatedFields || {}) : ['status']; if (document.userId === listener.userId && fields.some(field => /^(status|sleep|chargedNanos|reservedNanos|inboxId|delivery|error|usagePending)(\.|$)/.test(field))) { listener.records(['automations']); listener.dirty(['wallet', 'notifications']); } continue; }
     if (collection === 'chatSearchChunks') { if (!document || document.userId === listener.userId) listener.records(['chat_history']); continue; }
     if (collection === 'searchDocuments') { listener.records(['people','posts']); continue; }
     if (collection === 'posts' || collection === 'postLikes') { listener.records(['posts']); continue; }
     if (['connections', 'directMessages', 'blocks'].includes(collection)) {
-      if (members?.includes(listener.userId)) { listener.dirty(['notifications']); listener.records(['connections', 'messages', 'people', 'posts']); }
+      if (members?.includes(listener.userId)) { listener.dirty(['notifications']); listener.records(['connections', 'messages', 'people', 'posts', 'log']); }
       continue;
     }
     if(collection==='postSaves'){if(document?.userId===listener.userId||!document)listener.records(['posts']);continue;}
-    if (collection === 'uploads') { if (document?.userId === listener.userId || !document) listener.records(['storage']); continue; }
+    if (collection === 'uploads') { if (document?.userId === listener.userId || !document) listener.records(['storage']); listener.records(['log']); continue; }
     if (collection === 'notifications') { if (document?.userId === listener.userId || !document) listener.dirty(['notifications']); continue; }
     if (collection === 'users') {
       const publicFields = 'updateDescription' in event ? [...Object.keys(event.updateDescription.updatedFields || {}), ...(event.updateDescription.removedFields || [])] : [];
-      if (publicFields.some(field => /^(name|handle|photos)(\.|$)/.test(field))) listener.records(['posts']);
-      if(publicFields.includes('suspendedAt'))listener.records(['people','posts','connections','messages']);
+      if (publicFields.some(field => /^(name|handle|photos)(\.|$)/.test(field))) listener.records(['posts','log']);
+      if(publicFields.includes('suspendedAt'))listener.records(['people','posts','connections','messages','log']);
       if (document?.discoverable || publicFields.includes('discoverable')) {
         if (event.operationType === 'insert' || publicFields.some(field => /^(name|handle|bio|interests|photos|area|discoverable)(\.|$)/.test(field))) listener.records(['people']);
       }
@@ -61,7 +63,7 @@ async function changed(event: ChangeStreamDocument<Document>) {
 async function startWatch() {
   if (starting) return starting;
   starting = (async () => {
-    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments', 'chatSearchChunks', 'agentInbox', 'automations', 'postSaves'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
+    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments', 'chatSearchChunks', 'agentInbox', 'automations', 'postSaves', 'logEntries', 'logPreferences'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
     watcher = stream;
     // Establish the cursor before taking a snapshot. All later changes either
     // appear in that snapshot or cause a fresh projection (often both).

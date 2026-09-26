@@ -5,7 +5,7 @@ import { MAX_UPLOAD_BYTES, type UploadRef } from '../shared/uploads';
 import type { Login } from './config';
 
 type Invoke = (name: string, input: unknown, key?: string) => Promise<unknown>;
-export async function uploadLocalFile(login: Login, path: string, invoke: Invoke, key: string = randomUUID(), requestId?: string) {
+export async function uploadLocalFile(login: Login, path: string, invoke: Invoke, key: string = randomUUID(), requestId?: string, purpose:'agent_input'|'log_media'='agent_input') {
   if (!path) throw new Error('Choose a file: newdrugs file-upload <path>.');
   const handle = await open(resolve(path), 'r');
   let bytes: Buffer;
@@ -18,7 +18,7 @@ export async function uploadLocalFile(login: Login, path: string, invoke: Invoke
     if (read !== info.size) throw new Error('The file changed while it was being read. Try again.');
     bytes = bytes.subarray(0, read);
   } finally { await handle.close(); }
-  const prepared = await invoke('files.prepare', { name: basename(path), bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), purpose: 'agent_input', ...(requestId ? { requestId } : {}) }, key) as { ok: boolean; data: UploadRef };
+  const prepared = await invoke('files.prepare', { name: basename(path), bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), purpose, ...(requestId ? { requestId } : {}) }, key) as { ok: boolean; data: UploadRef };
   if (!prepared.ok || !prepared.data?.uploadUrl) throw new Error('The upload could not be prepared.');
   const url = new URL(prepared.data.uploadUrl, login.url);
   if (url.origin !== new URL(login.url).origin || url.pathname !== `/api/uploads/${prepared.data.id}` || url.username || url.password) throw new Error('The server returned an invalid upload destination.');

@@ -19,6 +19,7 @@
   "shortcuts": [
     { "name": "People nearby", "url": "/nearby" },
     { "name": "Posts", "url": "/feed" },
-    { "name": "Messages", "url": "/messages" }
+    { "name": "Messages", "url": "/messages" },
+    { "name": "Log", "url": "/log" }
   ]
 }

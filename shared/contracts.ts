@@ -1,3 +1,4 @@
+import {logOutputs} from './log';
 import {timeResolveOutput,timeConvertOutput,timeOverlapOutput} from './utilitySchemas';
 import {customDocumentSchema} from './customMedia';
 import { recordAttachmentSchema } from './recordContext';
@@ -15,13 +16,14 @@ const connection = z.object({ id, members: z.array(id), fromId: id, toId: id, no
 const message = z.object({ id, connectionId: id, fromId: id, text: z.string(), createdAt: z.string(), clientId:z.string().optional() });
 const page = (item: z.ZodType) => z.object({ items: z.array(item), nextCursor: z.string().nullable() });
 const wallet = z.object({ starterAvailableNanos: z.number().optional(), balanceNanos: z.number(), reservedNanos: z.number(), availableNanos: z.number(), entries: z.array(z.object({ id, amountNanos: z.number(), label: z.string(), createdAt: z.string(), details: z.record(z.string(), z.unknown()).optional() })) });
-const upload=z.object({id,name:z.string(),purpose:z.enum(['profile_photo','agent_input']),bytes:z.number(),mime:z.string(),sha256:z.string(),ready:z.boolean(),uploadUrl:z.string(),url:z.string().optional()});
+const upload=z.object({id,name:z.string(),purpose:z.enum(['profile_photo','agent_input','log_media']),bytes:z.number(),mime:z.string(),sha256:z.string(),ready:z.boolean(),uploadUrl:z.string(),url:z.string().optional()});
 const chatMessage = z.object({ id, role: z.enum(['user', 'assistant']), text: z.string(), files:z.array(upload).optional(), inbox:z.array(z.object({id,title:z.string()})).optional(), records:z.array(recordAttachmentSchema).optional(), createdAt: z.string(), source: z.enum(['app', 'external']), status: z.string().optional() });
 export const resourceLinkOutput = z.object({ rel: z.enum(['open_in_newdrugs', 'download']), targetKind: z.enum(['exact', 'surface']), title: z.string(), url: z.url(), resourceType: z.string(), resourceId: z.string().optional() });
 const searchMatch = z.object({ id, dataset:z.enum(['profiles','posts','replies','threads']), entityType:z.enum(['person','post']), entityId:id, ownerId:id, score:z.number(), evidence:z.array(z.object({field:z.string(),text:z.string(),entityId:id,entityType:z.enum(['person','post'])})), signals:z.object({semantic:z.number().optional(),lexical:z.number().optional(),freshness:z.number().optional(),distance:z.number().optional(),diversity:z.number().optional(),exact:z.boolean().optional()}), sourceHash:z.string(),sourceRevision:z.string(),record:z.union([profileOutput,post]) });
 const searchRetrieval = z.object({id,mode:z.enum(['hybrid','semantic','keyword','exact']),model:z.string(),dimensions:z.number(),indexVersion:z.string(),constraints:z.object({scope:z.enum(['public','friends','saved']).optional(),near:z.string().optional(),radiusMiles:z.number().optional(),authorId:z.string().optional(),after:z.string().optional(),beforeDate:z.string().optional()}),candidates:z.number(),incomplete:z.boolean(),notices:z.array(z.string()),indexedAt:z.string().optional(),approximate:z.boolean()});
 const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetrieval,nextCursor:z.string().nullable()});
 export const outputs: Record<string, z.ZodType> = {
+  ...logOutputs,
   'automations.create': automationSchema, 'automations.get': automationSchema, 'automations.update': automationSchema, 'automations.enable': automationSchema, 'automations.pause': automationSchema, 'automations.delete': automationSchema,
   'automations.list': z.object({ items: z.array(automationSchema) }), 'automations.run_now': z.object({ runId: id }),
   'automations.runs': page(z.object({ id, status: z.string(), outcome: z.string().optional(), createdAt: z.string(), costNanos: z.number(), usagePending: z.boolean(), reason: z.string().optional(), inboxId: z.string().optional(), sleep: z.object({ until: z.number(), reason: z.string() }).optional() })),
@@ -41,7 +43,7 @@ export const outputs: Record<string, z.ZodType> = {
   'people.context':z.object({person:profileOutput.nullable(),profileAvailable:z.boolean(),connection:connection.nullable(),recentPosts:page(post)}),
   'activity.since':z.object({items:z.array(z.object({id,kind:z.enum(['invitation','connection_accepted','connection_declined','message','post_reply','post_like']),createdAt:z.string(),actor:z.object({id,name:z.string(),handle:z.string().optional()}),sourceId:id,text:z.string(),textTruncated:z.boolean(),postId:id.optional(),connectionId:id.optional(),link:resourceLinkOutput})),since:z.string(),until:z.string(),nextCursor:z.string().nullable(),notice:z.string()}),
   'identity.get': profileOutput, 'profile.update': profileOutput, 'people.get': profileOutput,
-  'app.open': z.object({ open: z.string(), resourceId: z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
+  'app.open': z.object({ open: z.string(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),logArrangement:z.enum(['calendar','gallery','list']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
   'search.query':searchResult, 'posts.search':searchResult, 'search.similar':searchResult, 'search.refine':searchResult,
   'search.explain':z.object({match:searchMatch,retrieval:searchRetrieval}),
   'search.datasets':z.object({datasets:z.array(z.object({dataset:z.string(),count:z.number()})),pending:z.number(),failed:z.number(),model:z.string(),dimensions:z.number(),indexVersion:z.string(),capacity:z.number(),notice:z.string()}),
@@ -54,7 +56,7 @@ export const outputs: Record<string, z.ZodType> = {
   'connections.get': z.object({ connection, people: z.array(profileOutput) }),
   'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.list': page(message), 'messages.send': message,
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
-  'notifications.list': z.object({ unread: z.number(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
+  'notifications.list': z.object({ unread: z.number(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),
   'people.block': z.object({ personId: id, blocked: z.boolean() }), 'people.report': z.object({ id, status: z.literal('unreviewed') }),
   'people.blocked': page(z.object({ id, personId: id, name: z.string(), handle: z.string().optional(), createdAt: z.string() })),
@@ -66,10 +68,14 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'log.invite':'Share this Log entry and its current notes, media and participants with this friend, inviting them to join.',
+  'log.delete':'Permanently remove this Log entry for everyone who shares it. Uploaded files remain in their owners’ Storage.',
+  'log.leave':'Remove your contribution from this shared Log entry and give up access. Other participants keep the entry.',
+
   'automations.create': 'Create and activate this automation with the displayed schedule, data access and AI spending limits. Hosted runs use your credits, including runs that finish silently.',
   'automations.enable': 'Enable this saved automation to run with its displayed schedule, data access and AI spending limits. Hosted runs use your credits, including runs that finish silently.',
   'inbox.delete': 'Permanently delete this inbox update. Its links in your chat will stop opening the update.',
-  'files.delete': 'Permanently delete this file. It will be removed from attached posts and existing chat attachments will no longer open; a current profile photo will also be removed from the profile.',
+  'files.delete': 'Permanently delete this file. It will be removed from attached posts and Log entries, and existing chat attachments will no longer open; a current profile photo will also be removed from the profile.',
   'posts.create': 'Publish this exact text and its attachments publicly.', 'posts.delete': 'Permanently delete this post.',
   'posts.reply': 'Publish this exact reply and its attachments to the selected public post.',
   'connections.disconnect': 'End this connection and stop new messages. Both people retain the existing conversation. Only you can initiate reconnection.',

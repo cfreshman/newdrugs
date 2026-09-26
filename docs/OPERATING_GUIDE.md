@@ -14,18 +14,18 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.19.1, release `20260926221734638` |
-| Cloud dev | `https://dev.druggie.org`, release `20260926221514327` |
-| Stage parity | Both include the admin user list, incoming replies and approved utilities 1–6. Dev was built before the latest production version increment. |
+| Cloud dev | `https://dev.druggie.org`, release `20260926233414675`; local frontend at `http://localhost:7330/log` |
+| Stage parity | Both have approved utilities. Dev additionally has the native Log experiment. Log has not been released to production. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
-| Outstanding requested work | None at the original handoff. See subsequent development notes below for later changes. |
+| Outstanding requested work | Log implementation is complete on dev within its documented parity map. Physical iPhone recording/playback verification and any production promotion remain separate. |
 
 **The shipped pre-Log system is checkpointed at `pre-log-v0.19.1`.** Preserve tracked and untracked work made after that checkpoint. Do not reset, clean, stash, or revert an experiment casually. Deployment still builds the working tree, not a Git commit. There is no Git remote configured.
 
-Recent completed work includes mode-aware URLs and browser history, bottom-pinned horizontal desktop dragging, the Chat search label, profile action menus with edge-aware positioning, inline profile name/username layout, matching username font sizes, DM jump-to-latest controls, header tap-to-top, and the compact secondary Agent footer. The last production patch removes an extra 4px inset on the draft post's author row.
+Recent completed work includes mode-aware URLs and browser history, bottom-pinned horizontal desktop dragging, the Chat search label, profile action menus with edge-aware positioning, inline profile name/username layout, matching username font sizes, DM jump-to-latest controls, header tap-to-top, and the compact secondary Agent footer. Earlier UI patches also removed an extra 4px inset on the draft post's author row.
 
-This handoff is documentation only. It does not authorize another production deployment, restart of a local frontend, new social activity, or a new feature project.
+This guide does not itself authorize another production deployment, restart of a local frontend, new social activity, or a new feature project.
 
 ## Subsequent development
 
@@ -390,3 +390,15 @@ There is no promise of physical-iPhone coverage, large-corpus search capacity, e
 4. Implement a complete, bounded change with the necessary manual UI, agent contract, authorization, links, and live updates. Avoid unrelated redesigns or deferred projects.
 5. Validate appropriately, deploy dev promptly, and only deploy production when explicitly requested. Report what is actually live and any real limitation.
 6. Update this guide's snapshot and relevant behavior notes after material changes so the next handoff does not depend on a conversation transcript.
+
+## Log experiment (current dev work)
+
+Read [the Log integration plan](log-integration/PLAN.md) and [parity decisions](log-integration/PARITY.md). Production remains v0.19.1; Log is dev-only until explicitly approved. Branch `experiment/log` starts from checkpoint tag `pre-log-v0.19.1`. The new fourth tab reuses `SocialExperience`, existing mode state, mobile behavior and main-panel navigation. Core source is `shared/log.ts`, `server/log.ts`, `src/LogPanel.tsx`, and `src/log.css`.
+
+Log is private or explicitly shared, never a public post dataset. Accounts/friends/auth stay canonical. Shared invitations require an accepted friendship and exact review; each person owns their own contribution. Writes carry current entry revisions and ordinary idempotency keys. The `logAccess` background grant is separate from `accountActivity` and `privateChat`, defaults false for old records, and allows reads only.
+
+Media uses the existing quota and file service with `log_media` purpose. `newdrugs file-upload <path> --log` uploads media through the CLI; source/dev builds expose this before a versioned prod CLI release. HTTP range responses recheck authorization. Deleting files removes Log references and updates revisions; detaching a file keeps it manageable in Storage. `log.list` returns bounded note previews; `log.get` and paginated `log.export` return full text.
+
+The Log source project `../logcal` is read-only, like the other references. Do not copy its JWT accounts, friend graph, exact GPS behavior, native configuration or anonymous share keys. The parity map documents adaptations and intentional omissions.
+
+Log completion evidence: dev release `20260926233414675`, with production unchanged at `20260926221734638`. Both health endpoints returned `ok:true`. The dev catalog exposes all 15 `log.*` operations, and live read-only CLI checks succeeded. The Log/push regression passed 101 tests; subsequent navigation/draft checks passed 71, plus focused backend tests for attachment order and stale revisions. Counts overlap across suites. Mobile UI was reviewed at 390px and 320px using disposable fixtures; no personal Log entries were created for QA. The code is checkpointed on `experiment/log`; see `git log` for the final implementation commit.

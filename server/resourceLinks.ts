@@ -10,6 +10,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   const add = (destination: Destination, title: string, targetKind: ResourceLink['targetKind'], resourceType: string, resourceId?: string) => {
     links.push({ rel: 'open_in_newdrugs', targetKind, title: title.slice(0, 160), url: new URL(destinationPath(destination), config.uiOrigin).href, resourceType, ...(resourceId ? { resourceId } : {}) });
   };
+  if(name.startsWith('log.')){for(const row of name==='log.neighbors'?[data.previous,data.next].filter(Boolean):rows)if(typeof row.id==='string')add({view:'log',resourceId:row.id},row.title||'Open Log entry','exact','log_entry',row.id);if(!links.length)add({view:'log'},'Open Log','surface','log');return links;}
   if(name==='people.context'){
     if(data.person?.id)links.push(...buildResourceLinks('people.get',{},data.person,actor));
     if(data.connection?.id)links.push(...buildResourceLinks('connections.status',{}, {connection:data.connection},actor));
@@ -24,7 +25,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
       if (match.entityType === 'post') add({view:'post',resourceId:match.entityId},'View matched post','exact','post',match.entityId);
     }
   } else if (['identity.get', 'profile.update', 'people.get', 'people.search'].includes(name)) {
-    if (name === 'identity.get' && !data.handle) { add({ view: 'profile' }, 'Create your account', 'surface', 'account'); return links; }
+  if (name === 'identity.get' && !data.handle) { add({ view: 'profile' }, 'Create your account', 'surface', 'account'); return links; }
     for (const row of rows) if (typeof row.id === 'string' && (name === 'people.get' || row.id === actor.userId || row.discoverable)) add({ view: 'person', resourceId: row.id }, `View ${row.handle ? '@' + row.handle : row.name || 'profile'}`, 'exact', 'person', row.id);
     if (name === 'people.search') add({ view: 'people', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined, query:input.query as string|undefined,scope:input.scope as Destination['scope'] }, 'Browse people', 'surface', 'people');
   } else if (['posts.incoming_replies','posts.thread_updates'].includes(name)) {
@@ -51,7 +52,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   }
   else if (name === 'app.open' && data.open === 'chat_history' && data.resourceId) add({ view: 'chat', resourceId: data.resourceId }, 'Open chat message', 'exact', 'chat_message', data.resourceId);
   else if (name.startsWith('conversation.')) add({ view: 'chat' }, 'Open your agent chat', 'surface', 'chat');
-  else if (name === 'app.open') add({ view: data.open, resourceId: data.resourceId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.resourceId);
+  else if (name === 'app.open') add({ view: data.open,date:data.date,logMonth:data.logMonth,logScope:data.logScope,logArrangement:data.logArrangement,personId:data.personId, resourceId: data.resourceId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.resourceId);
   else if (name === 'files.get' || name === 'files.list') for (const row of rows) if (row.ready && typeof row.id === 'string') links.push({ rel: 'download', targetKind: 'exact', title: String(row.name), url: new URL(`/api/files/${encodeURIComponent(row.id)}`, config.uiOrigin).href, resourceType: 'file', resourceId: row.id });
   // Deleted/blocked/reported records have no promised inspectable destination.
   return links.filter((link, index) => links.findIndex(other => other.url === link.url) === index).slice(0, 40);
