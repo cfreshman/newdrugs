@@ -1,3 +1,4 @@
+import {postAudience} from '../socialCollections';
 import { randomUUID } from 'node:crypto';
 import { rows } from '../db';
 import { currentUser, profile, users, type Actor } from '../auth';
@@ -17,7 +18,8 @@ export interface SearchInput extends SearchConstraints {
 type Ranked = { id: string; sourceHash: string; sourceRevision: string; score: number; signals: SearchMatch['signals'] };
 type Snapshot = { _id: string; userId: string; identity: string; input: SearchInput; vector?: number[]; ranked: Ranked[]; retrieval: SearchRetrieval; expiresAt: Date };
 async function blockedBy(userId: string) { return [...(await users().find({suspendedAt:{$type:'string'}},{projection:{_id:1}}).toArray()).map(user=>user._id), ...(await rows('blocks').find({ members: userId }).limit(1001).toArray()).flatMap(row => (row.members as string[]).filter(id => id !== userId))]; }
-function within(document: Omit<SearchDocument, 'vector'>, input: SearchInput, actor: Actor, blocked: string[]) {
+function within(document: Omit<SearchDocument, 'vector'>, input: SearchInput, actor: Actor, blocked: string[], audience:Awaited<ReturnType<typeof postAudience>> = null) {
+  if(audience && (document.dataset==='profiles'||(audience.authorIds&&!audience.authorIds.has(document.ownerId))||(audience.postIds&&!audience.postIds.has(document.entityId))))return false;
   if (blocked.includes(document.ownerId) || (document.dataset === 'profiles' && document.ownerId === actor.userId)) return false;
   if (!input.datasets.includes(document.dataset) && !(input.datasets.includes('threads') && document.dataset !== 'profiles')) return false;
   if (input.authorId && document.ownerId !== input.authorId || input.after && document.createdAt < input.after || input.beforeDate && document.createdAt >= input.beforeDate) return false;
@@ -27,13 +29,14 @@ function within(document: Omit<SearchDocument, 'vector'>, input: SearchInput, ac
 }
 async function hydrate(ranked: Ranked[], input: SearchInput, actor: Actor): Promise<SearchMatch[]> {
   const blocked = await blockedBy(actor.userId), results: SearchMatch[] = [];
+  const audience=await postAudience(input.scope,actor);
   // Bounded parallel canonical reads, never cached result payloads.
   for (let offset = 0; offset < ranked.length; offset += 8) {
     const batch = await Promise.all(ranked.slice(offset,offset+8).map(async rank => {
       const split = rank.id.indexOf(':'), kind = rank.id.slice(0,split) as 'profiles' | 'posts', entityId = rank.id.slice(split+1);
       if (!['profiles','posts'].includes(kind)) return null;
       const source = await sourceDocument(kind, entityId);
-      if (!source || source.sourceHash !== rank.sourceHash || source.sourceRevision !== rank.sourceRevision || !within(source, input, actor, blocked)) return null;
+      if (!source || source.sourceHash !== rank.sourceHash || source.sourceRevision !== rank.sourceRevision || !within(source, input, actor, blocked,audience)) return null;
       let record: unknown;
       if (kind === 'profiles') {
         const person = await users().findOne({ _id: entityId, discoverable: true }); if (!person) return null;
@@ -65,6 +68,7 @@ async function page(snapshot: Snapshot, offset: number, limit: number, actor: Ac
 }
 export async function searchPublic(input: SearchInput, actor: Actor, prepared?: number[], excluded: string[] = []): Promise<SearchResult> {
   const user = await currentUser(actor.userId); if (!user.handle) throw new AppError(403, 'account_required', 'Create your account to search.');
+  const audience=await postAudience(input.scope,actor);
   if (input.near) coarsePoint(input.near);
   if (input.after && input.beforeDate && input.after >= input.beforeDate) throw new AppError(422,'date_range','Choose an end date after the start date.');
   if (input.cursor) {
@@ -78,11 +82,11 @@ export async function searchPublic(input: SearchInput, actor: Actor, prepared?: 
   const [blocked, pending] = await Promise.all([blockedBy(actor.userId),rows('searchOutbox').countDocuments({}, {limit:1})]);
   const {index,release}=await getIndex();
   try {
-  const eligible = [...index.metadata.values()].filter(document => !excluded.includes(document._id) && within(document,input,actor,blocked));
+  const eligible = [...index.metadata.values()].filter(document => !excluded.includes(document._id) && within(document,input,actor,blocked,audience));
   const notices: string[] = []; let vector = prepared, mode: SearchRetrieval['mode'] = input.mode;
   const exactText = input.query.replace(/^@/,'').trim().toLowerCase();
   const exact = input.datasets.includes('profiles') ? await users().find({ discoverable:true, _id:{$ne:actor.userId,$nin:blocked}, $or:[{handle:exactText},{name:{$regex:`^${exactText.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`,$options:'i'}}] }).limit(30).toArray() : [];
-  const exactDocuments = (await Promise.all(exact.map(user=>sourceDocument('profiles',user._id)))).filter((document):document is SearchDocument=>Boolean(document && within(document,input,actor,blocked)));
+  const exactDocuments = (await Promise.all(exact.map(user=>sourceDocument('profiles',user._id)))).filter((document):document is SearchDocument=>Boolean(document && within(document,input,actor,blocked,audience)));
   if (exactDocuments.length) mode = 'exact';
   else if (input.mode !== 'keyword' && !vector) { try { vector = await embed(input.query,'query'); } catch { mode = 'keyword'; notices.push('Semantic search is temporarily unavailable. These are keyword matches.'); } }
   const lexical = bm25(words(input.query),eligible.map(document=>({id:document._id,terms:document.terms}))).slice(0,150);
@@ -99,7 +103,7 @@ export async function searchPublic(input: SearchInput, actor: Actor, prepared?: 
     : diversify(fused,100).map(({id,score,sourceHash,sourceRevision,signals})=>({id,score,sourceHash,sourceRevision,signals}));
   if (pending) notices.push('Recent changes are still being indexed.');
   if (index.incomplete) notices.push('The search index has reached its current capacity. Results are incomplete.');
-  const id = randomUUID(), retrieval: SearchRetrieval = {id,mode,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,constraints:{near:input.near,radiusMiles:input.radiusMiles,authorId:input.authorId,after:input.after,beforeDate:input.beforeDate},candidates:eligible.length,incomplete:Boolean(pending)||index.incomplete||(mode==='keyword'&&input.mode!=='keyword'),notices,approximate:eligible.length>500&&Boolean(vector),indexedAt:[...index.metadata.values()].map(doc=>doc.indexedAt).sort().at(-1)};
+  const id = randomUUID(), retrieval: SearchRetrieval = {id,mode,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,constraints:{scope:input.scope,near:input.near,radiusMiles:input.radiusMiles,authorId:input.authorId,after:input.after,beforeDate:input.beforeDate},candidates:eligible.length,incomplete:Boolean(pending)||index.incomplete||(mode==='keyword'&&input.mode!=='keyword'),notices,approximate:eligible.length>500&&Boolean(vector),indexedAt:[...index.metadata.values()].map(doc=>doc.indexedAt).sort().at(-1)};
   const snapshot: Snapshot = {_id:id,userId:actor.userId,identity:identity(input),input:{...input,cursor:undefined},...(vector?{vector}:{}),ranked,retrieval,expiresAt:new Date(Date.now()+600000)};
   await rows<Snapshot>('searchRetrievals').insertOne({...JSON.parse(JSON.stringify(snapshot)),expiresAt:snapshot.expiresAt});
   // Bound short-lived owner-only retrieval memory. No saved inferred preferences.

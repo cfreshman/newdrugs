@@ -5,7 +5,8 @@ import { setupDOM } from './dom';
 import { useChatPosition } from '../src/useChatPosition';
 let dom: ReturnType<typeof setupDOM>;
 let viewport: EventTarget & { width: number; height: number; offsetTop: number; offsetLeft: number; scale: number };
-function Probe() { const ref = useRef<HTMLDivElement>(null); const position = useChatPosition(ref); return createElement('div', { ref, style: position.style, 'data-draggable': position.draggable }, createElement('textarea')); }
+let controls:ReturnType<typeof useChatPosition>;
+function Probe({expanded=false}:{expanded?:boolean}) { const ref = useRef<HTMLDivElement>(null); const position = useChatPosition(ref,true,expanded,expanded);controls=position; return createElement('div', { ref, style: position.style, 'data-draggable': position.draggable }, createElement('textarea')); }
 beforeEach(() => {
   dom = setupDOM(); localStorage.clear();
   vi.stubGlobal('innerWidth', 390); vi.stubGlobal('innerHeight', 844);
@@ -72,4 +73,27 @@ it('commits the viewport position before a resize event returns', () => {
     viewport.dispatchEvent(new Event('resize'));
     expect(node.style.getPropertyValue('--chat-y')).toBe('564px');
   });
+});
+
+it('ignores a saved elevated desktop position and only drags horizontally',()=>{
+  vi.stubGlobal('innerWidth',1600);vi.stubGlobal('innerHeight',900);viewport.width=1600;viewport.height=900;
+  localStorage.setItem('nd-chat-position',JSON.stringify({x:.4,y:.3}));
+  act(()=>dom.root.render(createElement(Probe)));
+  const node=dom.container.firstElementChild as HTMLElement;
+  expect(node.dataset.draggable).toBe('true');expect(node.style.getPropertyValue('--chat-x')).toBe('640px');expect(node.style.getPropertyValue('--chat-y')).toBe('852px');
+  act(()=>{controls.onDragStart();controls.onDrag(120,-500);});
+  expect(node.style.getPropertyValue('--chat-x')).toBe('760px');expect(node.style.getPropertyValue('--chat-y')).toBe('852px');
+  act(()=>controls.onDragEnd());expect(JSON.parse(localStorage.getItem('nd-chat-position')!)).toEqual({x:760/1600,y:1});
+  act(()=>controls.onNudge(0,-30));expect(node.style.getPropertyValue('--chat-y')).toBe('852px');
+  act(()=>controls.onNudge(-30,0));expect(node.style.getPropertyValue('--chat-x')).toBe('730px');
+});
+it('keeps expanded desktop panels pinned while the viewport changes and horizontal bounds clamp',()=>{
+  vi.stubGlobal('innerWidth',1600);vi.stubGlobal('innerHeight',900);viewport.width=1600;viewport.height=900;
+  act(()=>dom.root.render(createElement(Probe,{expanded:true})));
+  const node=dom.container.firstElementChild as HTMLElement;
+  expect(controls.sideBySide).toBe(true);
+  act(()=>{controls.onDragStart();controls.onDrag(10000,-10000);});
+  expect(node.style.getPropertyValue('--chat-x')).toBe('1348px');expect(node.style.getPropertyValue('--chat-y')).toBe('852px');
+  act(()=>{viewport.height=650;viewport.offsetTop=20;viewport.dispatchEvent(new Event('resize'));});
+  expect(node.style.getPropertyValue('--chat-y')).toBe('622px');
 });

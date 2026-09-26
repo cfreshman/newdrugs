@@ -22,7 +22,7 @@ it('advertises an eligible dollar without giving guests spendable credit, and co
   expect(guest.balanceNanos).toBe(0); expect(await starterAvailable(guest)).toBe(1e9);
   expect((await pools().findOne({ _id: 'starter' }))?.grantedNanos).toBe(1e9);
   await ensureIntroduction(guest._id);
-  expect((await rows('messages').findOne({ _id: `intro:${guest._id}` }))?.text).toContain("I've given you a US dollar to start. Now join 1 other person on New Drugs.");
+  expect((await rows('messages').findOne({ _id: `intro:${guest._id}` }))?.text).toMatch(/\n\nJoin 1 other person on New Drugs\.$/);
   await registerAccount(guest._id, 'saved_account', 'test-hash', '192.0.2.1');
   expect((await currentUser(guest._id)).balanceNanos).toBe(1e9);
   expect(await starterAvailable(await createGuest('192.0.2.1'))).toBe(0);

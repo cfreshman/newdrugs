@@ -1,3 +1,4 @@
+import { resolveRecordContexts } from './recordContext';
 import { automationNotice } from './automationNotices';
 import { automationAuthorized, automations } from './automations';
 import { inboxContext, publishInbox } from './inbox';
@@ -75,12 +76,13 @@ export async function wallet(userId: string, session?: ClientSession, owner?: Us
 
 // Holds are extended before each paid model call and released when the run settles.
 export const RUN_RESERVE = 60_000_000; // $0.06, unused amount is always released.
-export async function reserveRun(userId: string, runId: string, text: string, options: { clientId: string; timezone: string; fileIds: string[]; inboxIds?: string[] } = { clientId: '', timezone: 'America/New_York', fileIds: [] }) {
+export async function reserveRun(userId: string, runId: string, text: string, options: { clientId: string; timezone: string; fileIds: string[]; inboxIds?: string[]; recordRefs?:import('../shared/recordContext').RecordReference[] } = { clientId: '', timezone: 'America/New_York', fileIds: [] }) {
   const inbox = await inboxContext(userId, options.inboxIds || []);
+  const records=await resolveRecordContexts(userId,options.recordRefs);
   return transaction(async session => {
     const user = await users().findOne({ _id: userId }, { session });
     requireValue(user);
-    const fingerprint = hash(JSON.stringify({ text, fileIds: options.fileIds, ...(options.inboxIds?.length ? { inboxIds: options.inboxIds } : {}) }));
+    const fingerprint = hash(JSON.stringify({ text, fileIds: options.fileIds, ...(options.inboxIds?.length ? { inboxIds: options.inboxIds } : {}),...(options.recordRefs?.length?{recordRefs:options.recordRefs}:{}) }));
     const prior = await runs().findOne({ _id: runId, userId }, { session });
     if (prior) {
       if (prior.fingerprint !== fingerprint) throw new AppError(409, 'submission_conflict', 'This submission id belongs to a different message.');
@@ -105,7 +107,7 @@ export async function reserveRun(userId: string, runId: string, text: string, op
       draft: '', progress: [], approvals: [], revision: 0, attempts: 0, failures: 0 };
     const files = await retainUploads(userId, options.fileIds, 'agent_input', session);
     await runs().insertOne(run, { session });
-    await rows('messages').insertOne({ _id: `${runId}:user`, userId, role: 'user', text, files, ...(inbox.length ? { inbox: inbox.map(item => ({ id: item.id, title: item.title })) } : {}), source: 'app', createdAt: now }, { session });
+    await rows('messages').insertOne({ _id: `${runId}:user`, userId, role: 'user', text, files, ...(records.attachments.length?{records:records.attachments}:{}), ...(inbox.length ? { inbox: inbox.map(item => ({ id: item.id, title: item.title })) } : {}), source: 'app', createdAt: now }, { session });
     if (text.trim()) await enqueueChatSearch(userId, `${runId}:user`, session);
     return run;
   });

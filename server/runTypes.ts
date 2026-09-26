@@ -5,6 +5,7 @@ export interface RunRecord extends Omit<RunView, 'id'> {
   delivery?: import('../shared/automations').AutomationOutcome; inboxId?: string; inboxIds?: string[];
   recentDeliveries?: { title: string; links: unknown; createdAt: string }[];
   sleep?: { until: number; reason: string; callId: string; turnId: string; wokeAt?: number }; superseded?: boolean;
+  recordRefs?: import('../shared/recordContext').RecordReference[];
   _id: string; userId: string; text: string; clientId: string; timezone: string; fileIds: string[];
   fingerprint: string; reservedNanos: number; costNanos: number; responseIds: string[];
   chargedNanos?: number; billingRate?: { model: string; input: number; cached: number; cacheWrite: number; output: number; version: string }; usagePending?: boolean; usageCheckAt?: number; usageChecks?: number;
@@ -12,5 +13,5 @@ export interface RunRecord extends Omit<RunView, 'id'> {
   providerSessionId?: string; providerTurnId?: string; previousTurnId?: string; inputSubmitted?: boolean; creatingSession?: boolean; sessionStartsIdle?: boolean; failures: number;
   attempts: number; nextAttempt?: number; approvals: Approval[];
   finalRecovery?: boolean;
-  reviewReplies?: { id: string; text: string; files: import('../shared/uploads').UploadRef[]; actionIds: string[] }[];
+  reviewReplies?: { id: string; text: string; files: import('../shared/uploads').UploadRef[]; recordRefs?:import('../shared/recordContext').RecordReference[]; actionIds: string[] }[];
 }

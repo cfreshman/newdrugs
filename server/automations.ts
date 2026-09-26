@@ -43,11 +43,12 @@ export async function automationOperation(name: string, data: Record<string, unk
   const userId = actor.userId;
   if (name === 'automations.list') return { items: (await automations().find({ userId, status: { $ne: 'deleted' } }, { session }).sort({ createdAt: -1 }).limit(50).toArray()).map(viewAutomation) };
   if (name === 'automations.create') {
-    const input = automationConfigSchema.parse(data); nextAutomationTime(input.schedule);
+    const input = automationConfigSchema.parse(data),nextRunAt=nextAutomationTime(input.schedule);
+    if(!nextRunAt)throw new AppError(422,'schedule','Choose a future time before creating this automation.');
     if (input.dailyBudgetNanos < input.maxRunNanos) throw new AppError(422, 'budget', 'Daily allowance must cover one run.');
     await users().updateOne({ _id: userId }, { $inc: { automationRevision: 1 } }, { session });
     if (await automations().countDocuments({ userId, status: { $ne: 'deleted' } }, { session }) >= 20) throw new AppError(409, 'automation_limit', 'Pause or remove old automations before adding more.');
-    const row: AutomationRow = { _id: randomUUID(), userId, ...input, revision: 1, generation: 1, status: 'paused', nextRunAt: null, createdAt: new Date().toISOString(), ...(actor.source === 'external' ? { credentialId: actor.credentialId } : {}) };
+    const row: AutomationRow = { _id: randomUUID(), userId, ...input, revision: 1, generation: 1, status: 'active', nextRunAt, createdAt: new Date().toISOString(), ...(actor.source === 'external' ? { credentialId: actor.credentialId } : {}) };
     await automations().insertOne(row, { session }); return viewAutomation(row);
   }
   const row = await ownAutomation(userId, String(data.automationId), session, ['automations.get','automations.runs'].includes(name));

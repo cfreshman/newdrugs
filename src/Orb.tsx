@@ -14,7 +14,7 @@ export function Orb({ active, listening, finishing, canSend, busy, draggable = t
   return <div className={`orb-stage ${active ? 'split' : ''}`}>
     {variants.map(variant => <button key={variant.key} className={`orb ${variant.color} ${active ? 'dictation-action' : ''} ${listening ? 'listening' : ''} ${busy ? 'thinking' : ''} ${dragging ? 'dragging' : ''}`}
       aria-label={variant.label} disabled={variant.disabled}
-      aria-describedby="orb-hint" type="button" title={active ? variant.label : draggable ? 'Dictate · drag to move chat' : 'Dictate'}
+      aria-describedby="orb-hint" type="button" title={active ? variant.label : draggable ? 'Dictate · drag sideways to move chat' : 'Dictate'}
       onPointerDown={e => { if (e.button !== 0 || !draggable) return; moved.current = false; gesture.current = { x: e.clientX, y: e.clientY, dragged: false }; onDragStart(); e.currentTarget.setPointerCapture(e.pointerId); }}
       onPointerMove={e => {
         const g = gesture.current;
@@ -30,7 +30,7 @@ export function Orb({ active, listening, finishing, canSend, busy, draggable = t
       onKeyDown={e => {
         if (!draggable) return;
         const step = e.shiftKey ? 30 : 10;
-        const directions: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+        const directions: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0] };
         if (directions[e.key]) { e.preventDefault(); onNudge(...directions[e.key]); }
       }}
       onClick={() => { if (!moved.current) variant.action(); moved.current = false; }}>

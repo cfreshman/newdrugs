@@ -71,7 +71,7 @@ it('shares and moderates only a reported message, not the rest of a private conv
 });
 it('keeps daily-budget deferrals enabled and reports failed runs separately from successful silence',async()=>{
  const a=await person(),definition={name:'Daily check',instruction:'Stay quiet if there is nothing useful.',schedule:{kind:'weekly',timeZone:'UTC',hour:7,minute:0,weekdays:[0,1,2,3,4,5,6]},maxRunNanos:50000000,dailyBudgetNanos:50000000};
- const created=await write('automations.create',definition,a),enabled=await write('automations.enable',{automationId:created.id,revision:created.revision},a);
+ const created=await write('automations.create',definition,a),enabled=created;
  await rows('runs').insertOne({_id:'settled-fixture',userId:a.userId,purpose:'automation',automationId:created.id,createdAt:new Date().toISOString(),status:'completed',usagePending:false,costNanos:50000000,budgetNanos:50000000});
  await automations().updateOne({_id:created.id},{$set:{nextRunAt:Date.now()-1000}});await tickAutomations();const waiting=await automations().findOne({_id:created.id});expect(waiting?.status).toBe('active');expect(waiting?.blockedCode).toBe('automation_budget');expect(waiting?.retryAt).toBe(Date.parse(new Date(Date.now()+86400000).toISOString().slice(0,10)));
  await rows('runs').updateOne({_id:'settled-fixture'},{$set:{createdAt:'2000-01-01T00:00:00.000Z'}});await automations().updateOne({_id:created.id},{$set:{retryAt:0}});await tickAutomations();const run=(await runs().findOne({automationId:created.id,status:'queued'}))!;expect(run).toBeTruthy();

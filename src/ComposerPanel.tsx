@@ -1,10 +1,12 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import {useTopControlClearance} from './useTopControlClearance';
+import { useLayoutEffect, useRef, type ReactNode, type CSSProperties } from 'react';
 import { PanelReadinessContext, PanelVisibilityContext, type PanelReadiness } from './PanelReadiness';
 import { mobileChatLayout } from './chatPosition';
 
 /** Real height animation; child screens fill the available space above the controls. */
 export function ComposerPanel({ open, input, children, contentKey = '', extentKey = '', dragging = false, obscured = false, sideBySide = false }: { open: boolean; input: ReactNode; children: ReactNode; contentKey?: string; extentKey?: string; dragging?: boolean; obscured?: boolean; sideBySide?: boolean }) {
   const frame = useRef<HTMLDivElement>(null), inputLayer = useRef<HTMLDivElement>(null), menuLayer = useRef<HTMLDivElement>(null);
+  const topClearance=useTopControlClearance(menuLayer,open&&sideBySide,`${extentKey}:${sideBySide}`);
   const animation = useRef<Animation | null>(null), initialized = useRef(false);
   const readiness = useRef<PanelReadiness>({ pending: new Set(), listeners: new Set() });
   const targetHeight = useRef(0);
@@ -47,10 +49,10 @@ export function ComposerPanel({ open, input, children, contentKey = '', extentKe
     observer.observe(input); if (content) observer.observe(content); if (footer) observer.observe(footer);
     window.addEventListener('resize', fitViewport); window.visualViewport?.addEventListener('resize', fitViewport); readiness.current.listeners.add(fitLayout);
     return () => { observer.disconnect(); window.removeEventListener('resize', fitViewport); window.visualViewport?.removeEventListener('resize', fitViewport); readiness.current.listeners.delete(fitLayout); };
-  }, [open, contentKey, extentKey, dragging, sideBySide]);
+  }, [open, contentKey, extentKey, dragging, sideBySide,topClearance]);
   useLayoutEffect(() => () => animation.current?.cancel(), []);
   return <PanelReadinessContext.Provider value={readiness.current}><div className={`composer-switcher ${open ? 'launcher-open' : ''} ${sideBySide ? 'side-open' : ''}`} ref={frame}>
     <div ref={inputLayer} className="composer-input-layer" inert={open && !sideBySide} aria-hidden={open && !sideBySide || undefined}>{input}</div>
-    <div ref={menuLayer} className="composer-menu-layer" inert={!open} aria-hidden={!open || undefined}><PanelVisibilityContext.Provider value={open && !obscured}>{children}</PanelVisibilityContext.Provider></div>
+    <div ref={menuLayer} style={{'--panel-control-gap':`${12+topClearance}px`} as CSSProperties} className="composer-menu-layer" inert={!open} aria-hidden={!open || undefined}><PanelVisibilityContext.Provider value={open && !obscured}>{children}</PanelVisibilityContext.Provider></div>
   </div></PanelReadinessContext.Provider>;
 }

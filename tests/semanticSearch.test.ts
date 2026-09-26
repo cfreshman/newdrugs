@@ -30,10 +30,30 @@ describe('public semantic retrieval',()=>{
   const owner=await person(''),bike=await person('I cycle on weekends'),photo=await person('photography'),remote=await person('bicycle',far),hidden=await person('bicycle',near,false),blocked=await person('bicycle');
   await executeOperation('people.block',{personId:blocked.userId,blocked:true},owner,randomUUID());await drain();
   const result=await search(owner);expect(result.matches.map(item=>item.entityId)).toEqual([bike.userId]);
+  const worldwide=await executeOperation('people.search',{scope:'all',query:'bicycle'},owner) as {items:unknown[]};expect(worldwide.items.length).toBeGreaterThan(0);
   expect(result.matches[0].record).toMatchObject({sameArea:true,distanceLabel:'In your approximate area'});expect(result.matches[0].record).not.toHaveProperty('approximateMiles');
   expect(buildResourceLinks('search.query',{},result,owner)[0]).toMatchObject({targetKind:'exact',resourceId:bike.userId});
   expect(JSON.stringify(result)).not.toContain(hidden.userId);expect(JSON.stringify(result)).not.toContain(remote.userId);expect(JSON.stringify(result)).not.toContain(blocked.userId);
   expect((await search(owner,{query:'@'+(await users().findOne({_id:photo.userId}))!.handle})).retrieval.mode).toBe('exact');
+ });
+ it('keeps friends browsing and semantic search inside current accepted connections',async()=>{
+  const owner=await person(''),friend=await person(''),pending=await person(''),stranger=await person('');
+  const posts=[];for(const actor of [friend,pending,stranger,owner])posts.push(await executeOperation('posts.create',{text:'bicycle ride'},actor,randomUUID(),{confirmed:true}) as {id:string});
+  await rows('connections').insertMany([{_id:'friend-edge',members:[owner.userId,friend.userId],status:'accepted'},{_id:'pending-edge',members:[owner.userId,pending.userId],status:'pending'}]);
+  const list=await executeOperation('posts.list',{scope:'friends'},owner) as {items:{id:string}[]};expect(list.items.map(p=>p.id)).toEqual([posts[0].id]);
+  expect((await executeOperation('posts.list',{scope:'friends',authorId:stranger.userId},owner) as {items:unknown[]}).items).toEqual([]);
+  await drain();const result=await executeOperation('posts.search',{scope:'friends',query:'bicycle'},owner) as SearchResult;expect(result.matches.map(p=>p.entityId)).toEqual([posts[0].id]);
+  await rows('connections').updateOne({_id:'friend-edge'},{$set:{status:'disconnected'}});
+  expect((await executeOperation('posts.list',{scope:'friends'},owner) as {items:unknown[]}).items).toEqual([]);
+  await expect(executeOperation('search.explain',{retrievalId:result.retrieval.id,matchId:result.matches[0].id},owner)).rejects.toMatchObject({code:'search_changed'});
+ });
+ it('limits saved semantic results to the caller and rechecks removal',async()=>{
+  const owner=await person(''),author=await person('');const post=await executeOperation('posts.create',{text:'bicycle ride'},author,randomUUID(),{confirmed:true}) as {id:string};
+  await executeOperation('posts.save',{postId:post.id,saved:true},owner,randomUUID());await drain();
+  const result=await executeOperation('posts.search',{scope:'saved',query:'bicycle'},owner) as SearchResult;expect(result.matches.map(p=>p.entityId)).toEqual([post.id]);
+  expect((await executeOperation('posts.search',{scope:'saved',query:'bicycle'},author) as SearchResult).matches).toEqual([]);
+  await executeOperation('posts.save',{postId:post.id,saved:false},owner,randomUUID());
+  await expect(executeOperation('search.explain',{retrievalId:result.retrieval.id,matchId:result.matches[0].id},owner)).rejects.toMatchObject({code:'search_changed'});
  });
  it('writes an indexing job atomically, coalesces edits and refuses stale vectors',async()=>{
   const owner=await person('bicycle');await drain();

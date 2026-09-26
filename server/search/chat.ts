@@ -104,6 +104,7 @@ export async function searchChat(input: ChatSearchInput, actor: Actor, embedding
     const terms = [...new Set(words(input.query))];
     const lexical = (text: string) => { const tokens = new Set(words(text)); return terms.length ? terms.filter(term => tokens.has(term)).length / terms.length : 0; };
     const scores = new Map<string, Ranked>();
+    const indexedSources = new Map<string,string>();
     const offer = (rank: Ranked) => {
       if (!scores.has(rank.messageId) || scores.get(rank.messageId)!.score < rank.score) scores.set(rank.messageId, rank);
       if (scores.size > 200) { const best = [...scores.values()].sort((a, b) => b.score - a.score || a.messageId.localeCompare(b.messageId)).slice(0, 100); scores.clear(); best.forEach(rank => scores.set(rank.messageId, rank)); }
@@ -112,6 +113,7 @@ export async function searchChat(input: ChatSearchInput, actor: Actor, embedding
     // Stream only this owner's vectors. No shared ANN graph can accidentally expose private chat.
     const cursor = chunks().find({ userId, indexVersion: CHAT_INDEX_VERSION, ...role }).batchSize(32).maxTimeMS(15000);
     for await (const chunk of cursor) {
+      indexedSources.set(chunk.messageId,chunk.sourceHash);
       const dense = vector ? dot(vector, chunk.vector) : 0, lex = lexical(chunk.text);
       if (!semanticCandidate(dense, lex) && !lex) continue;
       offer({ messageId: chunk.messageId, sourceHash: chunk.sourceHash, offset: chunk.offset, score: vector ? .9 * Math.max(0, dense) + .1 * lex : lex });
@@ -120,7 +122,12 @@ export async function searchChat(input: ChatSearchInput, actor: Actor, embedding
     if (terms.length) {
       const pattern = terms.slice(0, 20).map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
       const fresh = await rows('messages').find({ userId, ...role, kind: { $ne: 'introduction' }, text: { $regex: pattern, $options: 'i' } }).sort({ createdAt: -1, _id: -1 }).limit(100).toArray();
-      for (const message of fresh) if (searchable(message) && !scores.has(message._id)) offer({ messageId: message._id, sourceHash: chatMessageHash(message), offset: Math.max(0, String(message.text).toLowerCase().search(new RegExp(pattern, 'i')) - 100), score: vector ? .1 * lexical(String(message.text)) : lexical(String(message.text)) });
+      for (const message of fresh) {
+        if(!searchable(message)||scores.has(message._id))continue;
+        const sourceHash=chatMessageHash(message),lex=lexical(String(message.text));
+        if(lex<=0||indexedSources.get(message._id)===sourceHash)continue;
+        offer({messageId:message._id,sourceHash,offset:Math.max(0,String(message.text).toLowerCase().search(new RegExp(pattern,'i'))-100),score:vector ? .1*lex : lex});
+      }
     }
     const indexing = Boolean(await jobs().findOne({ userId })) || !Boolean((await rows('chatSearchMeta').findOne({ _id: CHAT_INDEX_VERSION }))?.done);
     if (indexing) notices.push('Older or recent messages are still being indexed.');

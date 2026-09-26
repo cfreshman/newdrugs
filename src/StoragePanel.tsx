@@ -1,3 +1,4 @@
+import {DeleteConfirmation} from './DeleteConfirmation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { File, Trash } from '@phosphor-icons/react';
 import type { UploadRef } from '../shared/uploads';
@@ -25,6 +26,6 @@ export function StoragePanel() {
   };
   return <>{storage && <><p className="storage-total"><strong>{storage.usedBytes ? size(storage.usedBytes) : '0 MB'}</strong> of {size(storage.limitBytes)}</p><progress className="storage-meter" max={storage.limitBytes} value={storage.usedBytes} aria-label="Storage used" /><p className="quiet small">Images are reduced to a 512px shorter side. Smaller images stay their original size.</p>
     <ul className="storage-list">{storage.items.map(file => <li key={file.id}><div className="storage-row">{file.ready && file.mime.startsWith('image/') ? <img src={`/api/files/${encodeURIComponent(file.id)}`} alt="" /> : <File size={32} />}<div className="storage-file">{file.ready ? <a href={`/api/files/${encodeURIComponent(file.id)}`} target="_blank" rel="noopener noreferrer">{file.name}</a> : <span>{file.name}</span>}<span className="quiet small">{size(file.bytes)} · {file.inProfile ? 'Profile photo' : file.attached ? 'Chat attachment' : 'Unattached'}</span></div><button type="button" className="storage-delete" aria-label={`Delete ${file.name}`} disabled={busy} onClick={() => setReview(review === file.id ? null : file.id)}><Trash size={20} /></button></div>
-      {review === file.id && <div className="fields storage-review"><p className="small">Delete {file.name}? {file.inProfile ? 'It will also be removed from your profile.' : file.attached ? 'It will no longer open from previous chats.' : ''}</p><div className="review-buttons"><button disabled={busy} onClick={() => setReview(null)}>Keep file</button><button disabled={busy} onClick={() => void remove(file)}>Delete permanently</button></div></div>}
+      {review === file.id && <DeleteConfirmation title={`Delete ${file.name}?`} detail={file.inProfile?'It will also be removed from your profile.':file.attached?'It will no longer open from previous chats.':'This can’t be undone.'} confirmLabel="Delete file" busy={busy} onCancel={()=>setReview(null)} onConfirm={()=>remove(file)}/>}
     </li>)}</ul>{!storage.items.length && <p className="quiet">No stored files.</p>}{storage.nextCursor && <button className="text-link" onClick={() => void load(storage.nextCursor!)}>More files</button>}</>}{error && <p className="error" role="alert">{error}</p>}</>;
 }

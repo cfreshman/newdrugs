@@ -44,17 +44,31 @@ export function cosine(a: number[], b: number[]) {
   const denominator = Math.hypot(...a) * Math.hypot(...b);
   return denominator ? a.reduce((n, value, index) => n + value * b[index], 0) / denominator : 0;
 }
+/** Search meaningful catalog documentation, without JSON validation boilerplate. */
+export function operationSearchText(op:{name:string;kind:string;description:string;schema:z.ZodType}){
+ const fields:string[]=[];
+ const visit=(schema:Record<string,any>,path:string,depth=0)=>{
+  if(depth>5)return;
+  if(schema.description)fields.push(`${path}: ${schema.description}`);
+  if(schema.enum)fields.push(`${path}: ${schema.enum.join(', ')}`);
+  for(const [name,value]of Object.entries(schema.properties||{})){fields.push(`${path}.${name}`);visit(value as Record<string,any>,`${path}.${name}`,depth+1);}
+  if(schema.items)visit(schema.items,`${path}[]`,depth+1);
+  for(const variant of [...(schema.anyOf||[]),...(schema.oneOf||[]),...(schema.allOf||[])])visit(variant,path,depth+1);
+ };
+ visit(z.toJSONSchema(op.schema),'Input');
+ return [`Operation: ${op.name}`,`Kind: ${op.kind}`,op.description,...new Set(fields)].join('\n').slice(0,8000);
+}
 export async function searchOperations(raw: unknown, actor: Actor) {
   const input = searchSchema.parse(raw);
   const available = operations.filter(o => backgroundCanRead(actor, o.name) && (actor.source === 'browser' || o.name !== 'profile.update') && (actor.source !== 'agent' || o.agent) && (actor.scope === 'write' || o.kind === 'read'));
-  const documents = available.map(o => `${o.name}\n${o.kind}\n${o.description}\n${o.consequence || ''}\n${JSON.stringify(z.toJSONSchema(o.schema))}`);
+  const documents = available.map(operationSearchText);
   const identity = hash(JSON.stringify([input.query, input.mode, documents]));
-  let offset = 0; let forcedKeyword = false;
+  let offset = 0; let forcedKeyword = false; let requireSemantic=false;
   if (input.cursor) {
     try {
       const cursor = JSON.parse(Buffer.from(input.cursor, 'base64url').toString('utf8'));
       if (cursor.identity !== identity || !Number.isSafeInteger(cursor.offset) || cursor.offset < 0) throw new Error();
-      offset = cursor.offset; forcedKeyword = cursor.mode === 'keyword';
+      offset = cursor.offset; forcedKeyword = cursor.mode === 'keyword'; requireSemantic=cursor.mode==='hybrid';
     } catch { throw new AppError(409, 'search_changed', 'The query or catalog changed. Start discovery again without a cursor.'); }
   }
   const query = input.query.toLowerCase();
@@ -69,6 +83,7 @@ export async function searchOperations(raw: unknown, actor: Actor) {
     try { const [catalog, [queryVector]] = await Promise.all([vectors(documents, 'catalog'), vectors([query], 'query')]); semantic = catalog.map(v => cosine(v, queryVector)); }
     catch (error) { console.error('Semantic discovery fallback', { name: error instanceof Error ? error.name : 'Error' }); }
   }
+  if(requireSemantic&&!semantic)throw new AppError(503,'discovery_unavailable','Semantic discovery is temporarily unavailable. Retry this same page.');
   const ranking = available.map((op, index) => ({ op, score: !query ? 1 : lexical[index] === 2 ? 2 : semantic ? .8 * Math.max(0, semantic[index]) + .2 * lexical[index] : lexical[index] }))
     .filter(({ score }, index) => !query || (semantic ? semantic[index] >= .2 || lexical[index] > 0 : score > 0))
     .sort((a, b) => b.score - a.score || a.op.name.localeCompare(b.op.name));

@@ -21,6 +21,7 @@ it('returns exact authorized profile links and labels collection destinations as
 it('does not fabricate inspectable links for deleted posts, unready files or unfocused messages', () => {
   expect(buildResourceLinks('posts.delete', { postId: 'gone' }, { id: 'gone', deleted: true }, actor)).toEqual([]);
   expect(buildResourceLinks('files.get', {}, { id: 'file', ready: false }, actor)).toEqual([]);
+  expect(buildResourceLinks('messages.get', { messageId: 'message' }, { id: 'message', connectionId: 'connection' }, actor)[0]).toMatchObject({ targetKind: 'surface', resourceType: 'conversation', resourceId: 'connection' });
   expect(buildResourceLinks('messages.send', { connectionId: 'connection' }, { id: 'message' }, actor)[0]).toMatchObject({ targetKind: 'surface', resourceId: 'connection' });
 });
 
@@ -28,4 +29,19 @@ it('takes a guest identity to account creation instead of a blank public profile
   const links = buildResourceLinks('identity.get', {}, { id: 'me', name: '', discoverable: false }, actor);
   expect(links[0]).toMatchObject({ targetKind: 'surface', resourceType: 'account' });
   expect(parseDestination(links[0].url, 'https://dev.druggie.org')).toEqual({ view: 'profile' });
+});
+
+it('uses the natural mode without a prefix and retains an explicit alternate mode',()=>{
+  expect(destinationPath({view:'post',resourceId:'abc',mode:'posts'})).toBe('/posts/abc');
+  expect(destinationPath({view:'post',resourceId:'abc',mode:'friends'})).toBe('/friends/posts/abc');
+  expect(destinationPath({view:'person',resourceId:'abc',mode:'posts'})).toBe('/posts/people/abc');
+  expect(parseDestination('/posts/abc','https://druggie.org')).toEqual({view:'post',resourceId:'abc'});
+  expect(parseDestination('/friends/posts/abc','https://druggie.org')).toEqual({view:'post',resourceId:'abc',mode:'friends'});
+  expect(parseDestination('/posts/nearby?q=tennis&scope=all','https://druggie.org')).toEqual({view:'people',mode:'posts',query:'tennis',scope:'all'});
+  expect(parseDestination('/posts/selected-posts?ids=one,two','https://druggie.org')).toEqual({view:'post_list',mode:'posts',postIds:['one','two']});
+  expect(parseDestination('/friends/automations/a','https://druggie.org')).toEqual({view:'automations',resourceId:'a',mode:'friends'});
+  expect(destinationPath(parseDestination('/posts','https://druggie.org')!)).toBe('/feed');
+  expect(destinationPath(parseDestination('/agent','https://druggie.org')!)).toBe('/');
+  expect(parseDestination('/posts/chat-history?q=tennis&role=user','https://druggie.org')).toEqual({view:'chat_history',query:'tennis',role:'user',mode:'posts'});
+  expect(parseDestination('/friends/posts/a%2Fb','https://druggie.org')).toBeNull();
 });

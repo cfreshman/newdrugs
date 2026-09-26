@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {parseSearchArgs,searchCatalog,type SearchPage} from './search';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -63,7 +64,7 @@ async function main() {
   if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Profiles are human-authored in the app.`);
     return;
   }
   if (command === 'admin') {
@@ -123,8 +124,8 @@ async function main() {
     process.on('SIGTERM', () => { void upstream.close(); void server.close(); });
     return;
   }
+  if (command === 'search') { print(await searchCatalog(parseSearchArgs(args.slice(1)),input=>request<SearchPage>(login,'/catalog/search',input)));return; }
   const available = await catalog(login);
-  if (command === 'search') { const query = args.slice(1).filter(a => a !== '--keyword').join(' '); print(await request(login, '/catalog/search', { query, mode: args.includes('--keyword') ? 'keyword' : 'semantic' })); return; }
   const op = available.find(o => o.name === args[1]);
   if (!op) throw new Error('Unknown operation. Run search to see what is available.');
   if (command === 'describe') { print(op); return; }

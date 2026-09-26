@@ -10,7 +10,13 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   const add = (destination: Destination, title: string, targetKind: ResourceLink['targetKind'], resourceType: string, resourceId?: string) => {
     links.push({ rel: 'open_in_newdrugs', targetKind, title: title.slice(0, 160), url: new URL(destinationPath(destination), config.uiOrigin).href, resourceType, ...(resourceId ? { resourceId } : {}) });
   };
-  if (name.startsWith('automations.')) { if (typeof input.automationId === 'string') add({ view: 'automations', resourceId: input.automationId }, 'Open automation', 'exact', 'automation', input.automationId); else for (const row of rows) if (row.id) add({ view: 'automations', resourceId: row.id }, 'Open automation', 'exact', 'automation', row.id); }
+  if(name==='people.context'){
+    if(data.person?.id)links.push(...buildResourceLinks('people.get',{},data.person,actor));
+    if(data.connection?.id)links.push(...buildResourceLinks('connections.status',{}, {connection:data.connection},actor));
+    for(const post of data.recentPosts?.items||[])if(post.id)add({view:'post',resourceId:post.id},'View post','exact','post',post.id);
+  }else if(name==='activity.since'){
+    for(const item of rows)if(item.link)links.push(item.link);
+  }else if (name.startsWith('automations.')) { if (typeof input.automationId === 'string') add({ view: 'automations', resourceId: input.automationId }, 'Open automation', 'exact', 'automation', input.automationId); else for (const row of rows) if (row.id) add({ view: 'automations', resourceId: row.id }, 'Open automation', 'exact', 'automation', row.id); }
   else if (name.startsWith('inbox.') && name !== 'inbox.delete') { for (const row of rows) if (row.id) add({ view: 'inbox', resourceId: row.id }, 'Open agent update', 'exact', 'inbox', row.id); }
   else if (['search.query','posts.search','search.similar','search.refine','search.explain'].includes(name)) {
     for (const match of Array.isArray(data.matches) ? data.matches : data.match ? [data.match] : []) {
@@ -21,16 +27,20 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     if (name === 'identity.get' && !data.handle) { add({ view: 'profile' }, 'Create your account', 'surface', 'account'); return links; }
     for (const row of rows) if (typeof row.id === 'string' && (name === 'people.get' || row.id === actor.userId || row.discoverable)) add({ view: 'person', resourceId: row.id }, `View ${row.handle ? '@' + row.handle : row.name || 'profile'}`, 'exact', 'person', row.id);
     if (name === 'people.search') add({ view: 'people', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined, query:input.query as string|undefined,scope:input.scope as Destination['scope'] }, 'Browse people', 'surface', 'people');
-  } else if (['posts.get', 'posts.create', 'posts.list', 'posts.replies', 'posts.reply', 'posts.like'].includes(name)) {
+  } else if (['posts.incoming_replies','posts.thread_updates'].includes(name)) {
+    for(const row of rows)if(typeof row.id==='string')add({view:'post',resourceId:row.id},'View reply','exact','post',row.id);
+    if(rows.length&&rows.every(row=>typeof row.id==='string'))add({view:'post_list',postIds:rows.map(row=>row.id)},name==='posts.incoming_replies'?'Replies to you':'Thread updates','surface','post_list');
+  } else if (['posts.save', 'posts.get', 'posts.create', 'posts.list', 'posts.replies', 'posts.reply', 'posts.like'].includes(name)) {
     for (const row of rows) if (typeof row.id === 'string') add({ view: 'post', resourceId: row.id }, 'View post', 'exact', 'post', row.id);
     if (name === 'posts.list' && input.scope === 'selected' && rows.length) add({view:'post_list',postIds:rows.map(row=>row.id)},'Posts for you','surface','post_list');
-    else if (name === 'posts.list') add({ view: 'feed', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined }, 'Browse posts', 'surface', 'feed');
+    else if (name === 'posts.list') add({ view: 'feed', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined, scope: input.scope==='public'? 'all':input.scope as Destination['scope'] }, 'Browse posts', 'surface', 'feed');
   } else if (name.startsWith('connections.')) {
     for (const row of name === 'connections.status' || name === 'connections.get' ? [object(data.connection)] : rows) if (typeof row.id === 'string') add({ view: 'messages', resourceId: row.id }, row.status === 'accepted' ? 'Open conversation' : 'View invitation', 'exact', row.status === 'accepted' ? 'conversation' : 'invitation', row.id);
     if (!links.length || name === 'connections.list') add({ view: 'messages' }, 'View invitations and conversations', 'surface', 'connections');
   } else if (name === 'notifications.list') return rows.map(row => row.link as ResourceLink).filter(Boolean);
-  else if (name.startsWith('messages.') && typeof input.connectionId === 'string') {
-    add({ view: 'messages', resourceId: input.connectionId }, 'Open conversation', name === 'messages.list' ? 'exact' : 'surface', 'conversation', input.connectionId);
+  else if (name.startsWith('messages.') && typeof (input.connectionId || data.connectionId) === 'string') {
+    const connectionId=String(input.connectionId || data.connectionId);
+    add({ view: 'messages', resourceId: connectionId }, 'Open conversation', name === 'messages.list' ? 'exact' : 'surface', 'conversation', connectionId);
   } else if (name === 'people.blocked' || name === 'people.block') add({ view: 'blocked' }, 'Manage blocked people', 'surface', 'blocked');
   else if (name === 'storage.list' || name === 'files.delete') add({ view: 'storage' }, 'Manage storage', 'surface', 'storage');
   else if (name === 'wallet.get') add({ view: 'credits' }, 'View credit and usage', 'surface', 'wallet');

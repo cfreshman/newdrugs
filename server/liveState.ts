@@ -35,6 +35,7 @@ async function changed(event: ChangeStreamDocument<Document>) {
       if (members?.includes(listener.userId)) { listener.dirty(['notifications']); listener.records(['connections', 'messages', 'people', 'posts']); }
       continue;
     }
+    if(collection==='postSaves'){if(document?.userId===listener.userId||!document)listener.records(['posts']);continue;}
     if (collection === 'uploads') { if (document?.userId === listener.userId || !document) listener.records(['storage']); continue; }
     if (collection === 'notifications') { if (document?.userId === listener.userId || !document) listener.dirty(['notifications']); continue; }
     if (collection === 'users') {
@@ -60,7 +61,7 @@ async function changed(event: ChangeStreamDocument<Document>) {
 async function startWatch() {
   if (starting) return starting;
   starting = (async () => {
-    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments', 'chatSearchChunks', 'agentInbox', 'automations'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
+    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments', 'chatSearchChunks', 'agentInbox', 'automations', 'postSaves'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
     watcher = stream;
     // Establish the cursor before taking a snapshot. All later changes either
     // appear in that snapshot or cause a fresh projection (often both).

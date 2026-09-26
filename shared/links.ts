@@ -1,16 +1,23 @@
+import {LinkifyIt} from 'linkify-it';
+import tlds from 'tlds' with {type:'json'};
+import type {CustomDocument} from './customMedia';
+import type {ProviderEmbed} from './postLinks';
 export interface TextLink { url: string; start: number; end: number }
-export interface LinkPreview { url: string; hostname: string; title: string; description: string; imageUrl?: string }
+export interface LinkPreview { url: string; hostname: string; title: string; description: string; imageUrl?: string; kind?:'image'; embed?:ProviderEmbed;custom?:CustomDocument }
 
-/** Keep balanced parentheses in URLs, but leave surrounding punctuation in text. */
-export function textLinks(text: string): TextLink[] {
-  const links: TextLink[] = [];
-  for (const match of text.matchAll(/https?:\/\/[^\s<>"'\u0000-\u001f]+/gi)) {
-    let url = match[0].replace(/[.,!?;:]+$/, '');
-    for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
-      while (url.endsWith(close) && url.split(close).length > url.split(open).length) url = url.slice(0, -1);
-    }
-    try { const parsed = new URL(url); if (parsed.username || parsed.password) continue; } catch { continue; }
-    links.push({ url, start: match.index, end: match.index + url.length });
-  }
-  return links;
+const parser=new LinkifyIt({fuzzyLink:true,fuzzyIP:false,fuzzyEmail:false,urlAuth:true}).tlds(tlds).add('ftp:',null).add('mailto:',null);
+
+/** Full public TLD list for bare domains; explicit URLs retain their original protocol. */
+export function textLinks(text:string):TextLink[]{
+ const links:TextLink[]=[];
+ for(const match of parser.match(text)||[]){
+  const url=match.schema===''?`https://${match.raw}`:match.schema==='//'?`https:${match.raw}`:match.url;
+  try{const parsed=new URL(url);if(!['https:','http:'].includes(parsed.protocol)||parsed.username||parsed.password)continue;}catch{continue;}
+  links.push({url,start:match.index,end:match.lastIndex});
+ }
+ return links;
+}
+/** Presentation only. Never use the compact label as a request or navigation target. */
+export function compactUrlLabel(value:string){
+ return /^(?:https?:\/\/|\/\/|www\.)\S+$/i.test(value)?value.replace(/^(?:https?:)?\/\//i,'').replace(/^www\./i,''):value;
 }

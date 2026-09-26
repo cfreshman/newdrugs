@@ -4,7 +4,7 @@ export interface Profile {
   area?: import('./geo').CoarseArea | null;
   photos?:string[];
 }
-export interface Message {
+export interface Message { records?:import('./recordContext').RecordAttachment[];
   id: string; role: 'user' | 'assistant'; text: string; createdAt: string;
   source: 'app' | 'external'; status?: 'complete' | 'interrupted' | 'pending' | 'failed';
   files?: import('./uploads').UploadRef[];

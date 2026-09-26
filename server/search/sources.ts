@@ -18,7 +18,8 @@ export async function sourceDocument(kind: 'profiles' | 'posts', entityId: strin
   }
   const post = await rows('posts').findOne({ _id: entityId, deletedAt: { $exists: false }, moderatedAt: { $exists: false } }, options);
   if (!post || !await users().findOne({ _id: String(post.userId), suspendedAt:null, handle: { $type: 'string' } }, options)) return null;
-  const text = String(post.text), sourceHash = hashText(`${INDEX_VERSION}:${text}`);
+  const text = [String(post.text),...(Array.isArray(post.links)?post.links.map(String):[])].filter(Boolean).join('\n'), sourceHash = hashText(`${INDEX_VERSION}:${text}`);
+  if(!text.trim())return null;
   return { _id: `posts:${entityId}`, dataset: post.parentId ? 'replies' : 'posts', entityId, ownerId: String(post.userId), text,
     evidence: [{ field: 'text', text, entityId, entityType: 'post' }], terms: termCounts(text), area: post.area as CoarseArea || null,
     createdAt: String(post.createdAt), sourceHash, sourceRevision: hashText(JSON.stringify([sourceHash, post.area || null, post.parentId || null])),

@@ -11,6 +11,6 @@ export function useControlDrag({ draggable = true, onDragStart, onDrag, onDragEn
     onPointerUp: reset,
     onPointerCancel: () => { moved.current = true; reset(); },
     onLostPointerCapture: reset,
-    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => { if (!draggable) return; const step = event.shiftKey ? 30 : 10; const direction: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }; if (direction[event.key]) { event.preventDefault(); onNudge(...direction[event.key]); } },
+    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => { if (!draggable) return; const step = event.shiftKey ? 30 : 10; const direction: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0] }; if (direction[event.key]) { event.preventDefault(); onNudge(...direction[event.key]); } },
   } };
 }

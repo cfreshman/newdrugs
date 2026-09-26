@@ -2,9 +2,9 @@ import type { Actor } from './auth';
 import { rows } from './db';
 import { automationAuthorized } from './automations';
 import { AppError } from './errors';
-const accountReads = new Set(['connections.list','connections.get','connections.status','messages.list','notifications.list','agent.actions.list']);
-const publicReads = new Set(['identity.get','locations.search','locations.resolve','people.get','people.search','posts.list','posts.get','posts.replies','posts.search','search.query','search.similar','search.refine','search.explain','search.datasets','links.preview','app.open']);
-export function backgroundCanRead(actor: Actor, name: string) { return !actor.background || (publicReads.has(name) && (name !== 'links.preview' || actor.webSearch === true)) || Boolean(actor.accountActivity && accountReads.has(name)) || Boolean(actor.privateChat && ['conversation.search','conversation.window','conversation.list'].includes(name)); }
+const accountReads = new Set(['people.context','activity.since','connections.list','connections.get','connections.status','messages.list','messages.get','notifications.list','agent.actions.list']);
+const publicReads = new Set(['time.resolve','time.convert','time.overlap','locations.meeting_area','posts.thread_updates','identity.get','locations.search','locations.resolve','people.get','people.search','posts.list','posts.get','posts.incoming_replies','posts.replies','posts.search','search.query','search.similar','search.refine','search.explain','search.datasets','links.preview','links.text','app.open']);
+export function backgroundCanRead(actor: Actor, name: string) { return !actor.background || (publicReads.has(name) && (!['links.preview','links.text'].includes(name) || actor.webSearch === true)) || Boolean(actor.accountActivity && accountReads.has(name)) || Boolean(actor.privateChat && ['conversation.search','conversation.window','conversation.list'].includes(name)); }
 export async function assertBackgroundAuthority(actor: Actor) {
   if (!actor.background) return;
   const run = actor.runId && await rows<import('./runTypes').RunRecord>('runs').findOneAndUpdate({ _id: actor.runId, userId: actor.userId, purpose: 'automation', status: 'running', cancelRequested: { $ne: true }, leaseUntil: { $gt: Date.now() } }, { $inc: { backgroundReadCount: 1 } }, { returnDocument: 'after' });

@@ -1,3 +1,4 @@
+import {LocationLabel,useLocationLabel} from './LocationLabel';
 import { useEffect, useRef, useState } from 'react';
 import { NavigationArrow, X } from '@phosphor-icons/react';
 import { operation, errorText } from './api';
@@ -5,6 +6,7 @@ import { nearestCoarseCell, type CoarseArea } from '../shared/geo';
 
 type Place = { id: string; label: string; cell: string };
 export function LocationPicker({ value, onChange }: { value: CoarseArea | null; onChange(area: CoarseArea | null): void }) {
+  const savedLabel=useLocationLabel(value?.label);
   const [query, setQuery] = useState(''), [places, setPlaces] = useState<Place[]>([]), [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const generation = useRef(0);
@@ -32,11 +34,11 @@ export function LocationPicker({ value, onChange }: { value: CoarseArea | null; 
     }, () => { if (request === generation.current) { setBusy(false); setError('Location was unavailable. You can search for your town.'); } }, { enableHighAccuracy: false, maximumAge: 300000, timeout: 10000 });
   };
   return <div className="location-picker">
-    <label>Approximate area<input type="search" value={query} placeholder={value?.label || 'Search for a town or city'} maxLength={100} autoComplete="off" onChange={event => { setQuery(event.target.value); setError(''); }} /></label>
-    {places.length > 0 && <ul className="place-results">{places.map(place => <li key={place.id}><button type="button" disabled={busy} onClick={() => void choose(place.cell)}>{place.label}</button></li>)}</ul>}
+    <label>Approximate area<input type="search" value={query} placeholder={savedLabel || 'Search for a town or city'} maxLength={100} autoComplete="off" onChange={event => { setQuery(event.target.value); setError(''); }} /></label>
+    {places.length > 0 && <ul className="place-results">{places.map(place => <li key={place.id}><button type="button" disabled={busy} onClick={() => void choose(place.cell)}><LocationLabel label={place.label}/></button></li>)}</ul>}
     <div className="location-actions"><button type="button" className="text-link" disabled={busy} onClick={locate}><NavigationArrow size={16} />{busy ? 'Finding your area…' : 'Use my location'}</button>
       {value && <button type="button" className="text-link" aria-label="Remove saved area" onClick={() => { generation.current++; setBusy(false); onChange(null); }}><X size={16} />Clear</button>}</div>
-    {value && <p className="small">{value.label}</p>}
+    {value && <p className="small"><LocationLabel label={value.label}/></p>}
     <p className="quiet small">Only an approximate area is shared.</p>
     {error && <p className="error" role="alert">{error}</p>}
   </div>;

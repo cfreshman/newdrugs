@@ -20,7 +20,7 @@ export function publicUrl(value: string) {
 }
 
 /** DNS is validated at every redirect and pinned to the actual socket lookup. */
-export async function fetchPublic(value: string, kind: 'page' | 'image', signal: AbortSignal, redirects = 0): Promise<{ bytes: Buffer; url: string; mime: string }> {
+export async function fetchPublic(value: string, kind: 'page' | 'image' | 'preview' | 'manifest' | 'text', signal: AbortSignal, redirects = 0): Promise<{ bytes: Buffer; url: string; mime: string }> {
   if (redirects > 3) throw new Error('Too many redirects.');
   const url = publicUrl(value), hostname = url.hostname.replace(/^\[|\]$/g, '');
   const answers = await Promise.race([lookup(hostname, { all: true }), new Promise<never>((_, reject) => {
@@ -30,12 +30,12 @@ export async function fetchPublic(value: string, kind: 'page' | 'image', signal:
   signal.throwIfAborted();
   if (!answers.length || answers.some(answer => !publicAddress(answer.address))) throw new Error('Non-public preview address.');
   const picked = answers.find(answer => answer.family === 4) || answers[0];
-  const limit = kind === 'page' ? 1024 * 1024 : 5 * 1024 * 1024;
+  const limit=kind==='text'?256*1024:['page','manifest'].includes(kind)?1024*1024:5*1024*1024;
   return new Promise((resolve, reject) => {
     const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, {
       agent: false, signal, family: picked.family,
       lookup: (_host, options, callback) => { if (options.all) callback(null, [picked]); else callback(null, picked.address, picked.family); },
-      headers: { 'User-Agent': 'NewDrugs-LinkPreview/1.0 (+https://druggie.org)', Accept: kind === 'page' ? 'text/html,application/xhtml+xml' : 'image/*', 'Accept-Encoding': 'identity' },
+      headers: { 'User-Agent': 'NewDrugs-LinkPreview/1.0 (+https://druggie.org)', Accept: kind === 'page' ? 'text/html,application/xhtml+xml' : kind==='manifest'?'application/json,text/plain,application/octet-stream':kind==='text'?'text/plain,text/markdown':kind==='preview'?'text/html,application/xhtml+xml,image/*':'image/*', 'Accept-Encoding': 'identity' },
     }, response => {
       const status = response.statusCode || 0;
       if ([301, 302, 303, 307, 308].includes(status) && response.headers.location) {
@@ -44,7 +44,8 @@ export async function fetchPublic(value: string, kind: 'page' | 'image', signal:
         return;
       }
       const mime = (response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-      const allowed = kind === 'page' ? ['text/html', 'application/xhtml+xml'].includes(mime) : ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'].includes(mime);
+      const html=['text/html','application/xhtml+xml'].includes(mime),image=['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(mime);
+      const allowed=kind==='manifest'?(/(?:^|[+/])json$/.test(mime)||['text/plain','application/octet-stream','application/muse','application/cif','application/pops'].includes(mime)):kind==='text'?['text/plain','text/markdown'].includes(mime):kind==='page'?html:kind==='image'?image:html||image;
       if (status !== 200 || !allowed || response.headers['content-encoding'] && response.headers['content-encoding'] !== 'identity' || Number(response.headers['content-length']) > limit) {
         response.destroy(); reject(new Error('Unsupported preview response.')); return;
       }

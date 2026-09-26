@@ -56,3 +56,11 @@ it('rejects SVG and HTML bytes even when a website labels them as a raster image
   expect(previewRaster(Buffer.from('<html>picture</html>'))).toBe(false);
   expect(previewRaster(Buffer.from([137,80,78,71,13,10,26,10]))).toBe(true);
 });
+it('accepts bounded custom manifests and plaintext, but does not treat HTML as a custom file',async()=>{
+ response(200,{'content-type':'application/json'},'{"spec":"MUSE","audio":"track.mp3"}');
+ expect((await fetchPublic('https://example.com/song.muse','manifest',AbortSignal.timeout(1000))).mime).toBe('application/json');
+ response(200,{'content-type':'text/plain'},'Article text');
+ expect((await fetchPublic('https://example.com/article.txt','text',AbortSignal.timeout(1000))).bytes.toString()).toBe('Article text');
+ response(200,{'content-type':'text/html'},'<script>not a media file</script>');
+ await expect(fetchPublic('https://example.com/song.muse','manifest',AbortSignal.timeout(1000))).rejects.toThrow();
+});

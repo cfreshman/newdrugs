@@ -1,3 +1,10 @@
+import {activitySince} from './activityUtilities';
+import {meetingAreas} from './meetingAreas';
+import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
+import type {TimeResolveInput,TimeConvertInput,TimeOverlapInput} from '../shared/utilitySchemas';
+import type {Profile} from '../shared/types';
+import {normalizedPostLinks} from '../shared/postLinks';
+import { setCollection, collectionPage, postAudience } from './socialCollections';
 import { profileVisibleTo } from './profileVisibility';
 import legacyOperationRevisions from '../shared/legacyOperationRevisions.json';
 import { automationOperation, ownAutomation } from './automations';
@@ -14,13 +21,13 @@ import { AppError, requireValue } from './errors';
 import { wallet } from './wallet';
 import type { Message } from '../shared/types';
 import { searchPlaces, resolveArea, geoPage } from './locations';
-import { coarsePoint, METERS_PER_MILE, sharedAreaDistance, type CoarseArea } from '../shared/geo';
+import { coarsePoint, distanceMeters, METERS_PER_MILE, sharedAreaDistance, type CoarseArea } from '../shared/geo';
 import {prepareUpload,ownUpload,uploadRef,uploads,retainUploads,discardUpload,deleteUpload,expireUploads} from './uploads';
 import { MAX_ACCOUNT_UPLOAD_BYTES } from '../shared/uploads';
 import type {UploadPurpose} from '../shared/uploads';
 import { notificationState, notifyConnection } from './notifications';
 import { postCards } from './postProjection';
-import { linkPreview } from './linkPreviews';
+import { linkPreview,linkText } from './linkPreviews';
 import { retainPostPhotos } from './uploads';
 
 import { enqueueSearch } from './search/queue';
@@ -47,7 +54,7 @@ async function connectionFor(userId: string, id: string, session?: ClientSession
   return c;
 }
 export function chatMessage(row: Row): Message {
-  return { id: row._id, role: row.role as Message['role'], text: String(row.text), source: row.source as Message['source'], createdAt: String(row.createdAt), ...(row.status ? { status: row.status as Message['status'] } : {}), ...(Array.isArray(row.inbox) ? { inbox: row.inbox as Message['inbox'] } : {}), ...(Array.isArray(row.files) ? { files: row.files as Message['files'] } : {}) };
+  return { id: row._id, role: row.role as Message['role'], text: String(row.text), source: row.source as Message['source'], createdAt: String(row.createdAt), ...(row.status ? { status: row.status as Message['status'] } : {}), ...(Array.isArray(row.records)?{records:row.records as Message['records']} : {}), ...(Array.isArray(row.inbox) ? { inbox: row.inbox as Message['inbox'] } : {}), ...(Array.isArray(row.files) ? { files: row.files as Message['files'] } : {}) };
 }
 export async function conversation(userId: string, limit = 30, before?: string, session?: ClientSession) {
   const cursor = before ? requireValue(await rows('messages').findOne({ _id: before, userId }, { session })) : null;
@@ -84,6 +91,36 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   const pageFilter = d.before ? { _id: { $lt: String(d.before) } } : {};
   const paginate = <T extends { _id: string }>(items: T[]) => ({ items: items.slice(0, limit).map(publicRow), nextCursor: items.length > limit ? items[limit - 1]._id : null });
   switch (name) {
+    case 'time.resolve': return resolveTime(d as unknown as TimeResolveInput);
+    case 'time.convert': return convertTime(d as unknown as TimeConvertInput);
+    case 'time.overlap': return overlapTimes(d as unknown as TimeOverlapInput);
+    case 'activity.since': registered(user);return activitySince(d,actor,await blockedIds(userId,session),session);
+    case 'locations.meeting_area': {
+      const ids=[...new Set([userId,...d.personIds as string[]])];if(ids.length<2)throw new AppError(422,'participants','Choose at least one other person.');
+      const people:Profile[]=[];for(const personId of ids)people.push(await run('people.get',{personId},actor,session) as Profile);
+      return meetingAreas(people,Number(d.limit));
+    }
+    case 'people.context': {
+      const relation=await run('connections.status',{personId:d.personId},actor,session) as {connection:Record<string,unknown>|null};
+      let person:Profile|null=null;
+      try{person=await run('people.get',{personId:d.personId},actor,session) as Profile;}catch(error){if(!(error instanceof AppError&&error.status===404&&relation.connection))throw error;}
+      const recentPosts=await run('posts.list',{scope:'public',authorId:d.personId,kind:'all',limit:d.postLimit},actor,session);
+      return {person,profileAvailable:Boolean(person),connection:relation.connection,recentPosts};
+    }
+    case 'posts.thread_updates': {
+      const blocked=await blockedIds(userId,session);
+      const found=await rows('posts').aggregate<Row>([
+        {$match:{parentId:{$exists:true},userId:{$nin:[userId,...blocked]},deletedAt:{$exists:false},moderatedAt:{$exists:false},...(d.since?{createdAt:{$gt:String(d.since)}}:{}),...pageFilter}},{$sort:{_id:-1}},
+        {$addFields:{thread:{$ifNull:['$rootId','$parentId']}}},
+        {$lookup:{from:'posts',let:{thread:'$thread'},pipeline:[{$match:{userId,deletedAt:{$exists:false},moderatedAt:{$exists:false},$expr:{$or:[{$eq:['$_id','$$thread']},{$eq:['$rootId','$$thread']}]}}},{$limit:1},{$project:{_id:1}}],as:'participation'}},
+        {$match:{'participation.0':{$exists:true}}},
+        {$lookup:{from:'posts',localField:'thread',foreignField:'_id',as:'threadRoot'}},{$match:{'threadRoot.0':{$exists:true},'threadRoot.userId':{$nin:blocked}}},
+        {$lookup:{from:'users',localField:'userId',foreignField:'_id',as:'replyAuthor'}},{$match:{'replyAuthor.0':{$exists:true}}},
+        {$limit:limit+1},{$project:{thread:0,participation:0,threadRoot:0,replyAuthor:0}},
+      ],{...options,maxTimeMS:10000}).toArray();
+      return {items:await postCards(found.slice(0,limit),userId,blocked,session),nextCursor:found.length>limit?found[limit-1]._id:null};
+    }
+
     case 'push.devices': return pushDevices(userId, session);
     case 'push.revoke': return revokePush(userId, String(d.deviceId), session);
     case 'files.prepare':return prepareUpload(d as {name:string;bytes:number;sha256:string;purpose:UploadPurpose},actor,session);
@@ -103,9 +140,11 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       return { items: receipts.slice(0, limit).map(receipt => ({ id: receipt._id, operation: receipt.operation, source: receipt.source, result: receipt.result, createdAt: receipt.createdAt })), nextCursor: receipts.length > limit ? receipts[limit - 1]._id : null };
     }
     case 'locations.search': return searchPlaces(String(d.query));
+    case 'links.text': return linkText(String(d.url),userId);
     case 'links.preview': return linkPreview(String(d.url), userId);
     case 'locations.resolve': return resolveArea(String(d.cell));
     case 'app.open': {
+      if(d.view==='people'&&d.scope&&!['all','nearby'].includes(String(d.scope)))throw new AppError(422,'people_scope','People supports Nearby or All people.');
       if (d.view === 'connections') d.view = 'messages';
       if (actor.background && !['people','person','feed','post','post_list','location', ...(actor.privateChat ? ['chat_history'] : []), ...(actor.accountActivity ? ['messages','notifications'] : [])].includes(String(d.view))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');
       if (d.view === 'automations' && d.resourceId) await ownAutomation(userId, String(d.resourceId), session, true);
@@ -151,9 +190,12 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'search.similar': return similarPublic(String(d.sourceId), d as unknown as SearchInput, actor);
     case 'search.refine': return refinePublic(String(d.retrievalId), d.positive as string[], d.negative as string[], actor);
     case 'search.explain': return explainPublic(String(d.retrievalId), String(d.matchId), actor);
+    case 'posts.save': {
+      registered(user);const post=requireValue(await rows('posts').findOne({_id:String(d.postId)},options));await notBlocked(userId,String(post.userId),session);if(d.saved&&(post.deletedAt||post.moderatedAt))throw new AppError(404,'unavailable','This post is unavailable.');await setCollection('postSaves',userId,post._id,Boolean(d.saved),session);return (await postCards([post],userId,await blockedIds(userId,session),session))[0];
+    }
     case 'people.search': {
       if (d.query && d.scope !== 'all' && !d.near && !user.area?.cell) throw new AppError(422,'location_required','Choose an approximate area to find nearby people.');
-      if (d.query) { const result = await searchPublic({ ...d, near: d.scope === 'all' ? undefined : d.near || user.area?.cell, query: d.query, mode: d.mode || 'hybrid', datasets: ['profiles'], cursor: d.before } as unknown as SearchInput, actor); return { items: result.matches.map(match => match.record), ...result }; }
+      if (d.query) { const result = await searchPublic({ ...d, scope:undefined, near: d.scope === 'all' ? undefined : d.near || user.area?.cell, query: d.query, mode: d.mode || 'hybrid', datasets: ['profiles'], cursor: d.before } as unknown as SearchInput, actor); return { items: result.matches.map(match => match.record), ...result }; }
       const blocked = await blockedIds(userId, session);
       if (d.scope === 'all') { const people = await users().find({discoverable:true,handle:{$type:'string'},_id:{$ne:userId,$nin:blocked,...(d.before?{$lt:String(d.before)}:{})},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})},options).sort({_id:-1}).limit(limit+1).toArray(); return {items:people.slice(0,limit).map(profile),nextCursor:people.length>limit?people[limit-1]._id:null}; }
       const cell=String(d.near||user.area?.cell||'');
@@ -168,11 +210,24 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       return {items:people.slice(0,limit).map(p=>({...profile(p),...sharedAreaDistance(cell,p.area!.cell,p.distanceMeters)})),nextCursor:people.length>limit?paging.cursor(people[limit-1]):null};
     }
     case 'posts.list': {
+      const audience=await postAudience(d.scope,actor,session);
       const blocked = await blockedIds(userId, session);
+      if(d.scope==='saved'){
+        if(d.authorId)await notBlocked(userId,String(d.authorId),session);
+        const cell=d.near?String(d.near):null,point=cell?coarsePoint(cell):null,kind=d.kind||'all';
+        const paging=await collectionPage('postSaves',userId,d.before,{authorId:d.authorId||null,kind,near:cell,radiusMiles:point?Number(d.radiusMiles||25):null},session);
+        const postFilter={'post.userId':d.authorId?{$eq:String(d.authorId),$nin:blocked}:{$nin:blocked},'post.deletedAt':{$exists:false},'post.moderatedAt':{$exists:false},
+          ...(kind==='posts'?{'post.parentId':{$exists:false}}:kind==='replies'?{'post.parentId':{$exists:true}}:{}),
+          ...(point?{'post.area.point':{$geoWithin:{$centerSphere:[point.coordinates,Number(d.radiusMiles||25)*METERS_PER_MILE/6371008.8]}}}:{})};
+        const saved=await rows('postSaves').aggregate<Row>([{$match:paging.filter},{$sort:{createdAt:-1,_id:-1}},{$lookup:{from:'posts',localField:'targetId',foreignField:'_id',as:'post'}},{$unwind:'$post'},{$match:postFilter},{$limit:limit+1}],options).toArray();
+        const records=saved.slice(0,limit).map(row=>row.post as Row),items=await postCards(records,userId,blocked,session);
+        return {items:items.map(item=>{const area=records.find(record=>record._id===item.id)?.area as CoarseArea|undefined;return point&&cell&&area?{...item,...sharedAreaDistance(cell,area.cell,distanceMeters([point.coordinates[1],point.coordinates[0]],[area.point.coordinates[1],area.point.coordinates[0]]))}:item;}),nextCursor:saved.length>limit?paging.cursor(saved[limit-1]):null};
+      }
       if(d.scope==='selected'){if(!Array.isArray(d.postIds)||!d.postIds.length)throw new AppError(422,'posts_required','Choose posts for this list.');if(d.before)throw new AppError(422,'selected_cursor','A selected list does not use chronological paging.');const ids=[...new Set(d.postIds as string[])];const records=await rows('posts').find({_id:{$in:ids},userId:{$nin:blocked},deletedAt:{$exists:false},moderatedAt:{$exists:false}},options).toArray();return {items:await postCards(ids.flatMap(id=>records.find(record=>record._id===id)||[]),userId,blocked,session),nextCursor:null};}
       if (d.authorId) { await notBlocked(userId, String(d.authorId), session); if (d.scope === 'own' && d.authorId !== userId) throw new AppError(422, 'author_scope', 'Use public scope for another author.'); }
-      const kind = d.kind || (d.scope === 'public' ? 'posts' : 'all');
-      const filter={userId:d.authorId || (d.scope==='public'?{$nin:blocked}:userId),deletedAt:{$exists:false},moderatedAt:{$exists:false},...(kind==='posts'?{parentId:{$exists:false}}:kind==='replies'?{parentId:{$exists:true}}:{})};
+      const kind = d.kind || (['public','friends','saved'].includes(String(d.scope)) ? 'posts' : 'all');
+      const friendIds=audience?.authorIds?[...audience.authorIds].filter(id=>!blocked.includes(id)):null;
+      const filter={userId:friendIds?{$in:friendIds.filter(id=>!d.authorId||id===d.authorId)}:d.authorId || (d.scope==='public'?{$nin:blocked}:userId),deletedAt:{$exists:false},moderatedAt:{$exists:false},...(kind==='posts'?{parentId:{$exists:false}}:kind==='replies'?{parentId:{$exists:true}}:{})};
       const cell=d.near?String(d.near):null;
       const paging=cell?geoPage({cell,radiusMiles:Number(d.radiusMiles||25),before:d.before as string|undefined},userId):null;
       const start:Document[]=cell?[{$geoNear:{near:coarsePoint(cell),key:'area.point',distanceField:'distanceMeters',spherical:true,maxDistance:Number(d.radiusMiles||25)*METERS_PER_MILE,query:filter}},{$sort:{distanceMeters:1,_id:1}},...paging!.stages]:[{$match:{...filter,...pageFilter}},{$sort:{_id:-1}}];
@@ -181,7 +236,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         { $lookup: { from: 'users', localField: 'userId', foreignField: '_id', as: 'author' } },
         { $unwind: '$author' },
         { $limit: limit + 1 },
-        { $project: { _id: 1, text: 1, fileIds: 1, city: 1, area:1,distanceMeters:1,userId: 1, createdAt: 1, parentId:1,rootId:1 } },
+        { $project: { _id: 1, text: 1, links:1, fileIds: 1, city: 1, area:1,distanceMeters:1,userId: 1, createdAt: 1, parentId:1,rootId:1 } },
       ], options).toArray();
       const projected=await postCards(posts.slice(0,limit),userId,blocked,session);
       return {items:projected.map((post,index)=>({...post,...(cell?sharedAreaDistance(cell,(posts[index].area as CoarseArea).cell,posts[index].distanceMeters):{})})),nextCursor:posts.length>limit?(paging?paging.cursor(posts[limit-1]):posts[limit-1]._id):null};
@@ -190,6 +245,20 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const post = requireValue(await rows('posts').findOne({ _id: String(d.postId) }, options));
       await notBlocked(userId, String(post.userId), session);
       return (await postCards([post],userId,await blockedIds(userId,session),session))[0];
+    }
+    case 'posts.incoming_replies': {
+      registered(user);
+      const blocked=await blockedIds(userId,session);
+      const replies=await rows('posts').aggregate<Row>([
+        {$match:{parentId:{$exists:true},userId:{$nin:[userId,...blocked]},deletedAt:{$exists:false},moderatedAt:{$exists:false},...(d.since?{createdAt:{$gt:String(d.since)}}:{}),...pageFilter}},
+        {$sort:{_id:-1}},
+        {$lookup:{from:'posts',localField:'parentId',foreignField:'_id',as:'ownedParent'}},
+        {$match:{'ownedParent.userId':userId}},
+        {$lookup:{from:'users',localField:'userId',foreignField:'_id',as:'replyAuthor'}},
+        {$match:{'replyAuthor.0':{$exists:true}}},
+        {$limit:limit+1},{$project:{ownedParent:0,replyAuthor:0}},
+      ],{...options,maxTimeMS:10000}).toArray();
+      return {items:await postCards(replies.slice(0,limit),userId,blocked,session),nextCursor:replies.length>limit?replies[limit-1]._id:null};
     }
     case 'posts.replies': {
       const parent=requireValue(await rows('posts').findOne({_id:String(d.postId)},options));await notBlocked(userId,String(parent.userId),session);
@@ -210,7 +279,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       registered(user);const parent=requireValue(await rows('posts').findOne({_id:String(d.postId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},options));await notBlocked(userId,String(parent.userId),session);
       const fileIds = await retainPostPhotos(userId, d.fileIds as string[], session);
       await rows<{_id:string;interactionRevision:number}>('posts').updateOne({_id:parent._id},{$inc:{interactionRevision:1}},options);
-      const reply={_id:nextId(),userId,text:d.text,fileIds,parentId:parent._id,rootId:parent.rootId||parent._id,city:'',area:null,createdAt:now};await rows('posts').insertOne(reply,options);await enqueueSearch('posts',reply._id,session!);
+      const reply={_id:nextId(),userId,text:d.text,links:normalizedPostLinks(d.links),fileIds,parentId:parent._id,rootId:parent.rootId||parent._id,city:'',area:null,createdAt:now};await rows('posts').insertOne(reply,options);await enqueueSearch('posts',reply._id,session!);
       if(parent.userId!==userId)await rows('notifications').insertOne({_id:hash(`post_reply:${reply._id}`),userId:parent.userId,actorId:userId,kind:'post_reply',postId:reply._id,text:String(d.text).slice(0,180),readAt:null,createdAt:now},options);
       return (await postCards([reply],userId,await blockedIds(userId,session),session))[0];
     }
@@ -219,7 +288,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const fileIds = await retainPostPhotos(userId, d.fileIds as string[], session);
       let area:CoarseArea|null=null;
       if(d.areaCell){const record=requireValue(await rows('locationAreas').findOne({_id:String(d.areaCell)},options));area={cell:String(d.areaCell),label:String(record.label),point:coarsePoint(String(d.areaCell))};}
-      const post = { _id: nextId(), userId, text: d.text, fileIds, area, city:area?.label||'', createdAt: now };
+      const post = { _id: nextId(), userId, text: d.text, links:normalizedPostLinks(d.links),fileIds, area, city:area?.label||'', createdAt: now };
       await rows('posts').insertOne(post, options);
       await enqueueSearch('posts',post._id,session!);
       return (await postCards([post],userId,[],session))[0];
@@ -237,6 +306,12 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const updatedAt = cursor?.updatedAt || cursor?.createdAt;
       const visible = await rows('connections').aggregate<Row>([
         { $match: { $and: [{ members: userId }, { members: { $nin: blocked } }] } },
+        ...(d.lastMessageFrom&&d.lastMessageFrom!=='any'?[
+          {$match:{$or:[{status:'accepted'},{initialInvitation:{$exists:true}}]}},
+          {$lookup:{from:'directMessages',localField:'_id',foreignField:'connectionId',pipeline:[{$sort:{_id:-1}},{$limit:1}],as:'latestMessage'}},{$unwind:'$latestMessage'},
+          {$match:{$expr:{$and:[{$in:['$latestMessage.fromId','$members']},{[d.lastMessageFrom==='other'?'$ne':'$eq']:['$latestMessage.fromId',userId]}]}}},
+          {$set:{lastMessage:{fromId:'$latestMessage.fromId',createdAt:'$latestMessage.createdAt',text:{$cond:[{$ifNull:['$latestMessage.moderatedAt',false]},'Message removed by moderation.','$latestMessage.text']}}}},{$project:{latestMessage:0}},
+        ]:[]),
         { $addFields: { updatedAt: { $ifNull: ['$updatedAt', '$createdAt'] } } },
         ...(cursor ? [{ $match: { $or: [{ updatedAt: { $lt: updatedAt } }, { updatedAt, _id: { $lt: cursor._id } }] } }] : []),
         { $sort: { updatedAt: -1, _id: -1 } }, { $limit: limit + 1 },
@@ -291,6 +366,9 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'connections.withdraw': {
       const result = requireValue(await rows('connections').findOneAndUpdate({ _id: String(d.connectionId), fromId: userId, status: 'pending' }, { $set: { status: 'withdrawn', updatedAt: now } }, { ...options, returnDocument: 'after' }), 'That invitation is no longer pending.');
       return publicRow(result);
+    }
+    case 'messages.get': {
+      const message=requireValue(await rows('directMessages').findOne({_id:String(d.messageId)},options));await connectionFor(userId,String(message.connectionId),session,true);return publicRow(message.moderatedAt?{...message,text:'Message removed by moderation.'}:message);
     }
     case 'messages.list': {
       await connectionFor(userId, String(d.connectionId), session, true);
@@ -348,7 +426,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if(!profileVisible&&!d.postId&&!d.messageId)throw new AppError(404,'unavailable','This profile is not available.');
       if(d.postId&&d.messageId)throw new AppError(422,'report_target','Choose one piece of evidence per report.');
       let evidence:Record<string,unknown>|undefined;
-      if(d.postId){const post=requireValue(await rows('posts').findOne({_id:String(d.postId),userId:String(d.personId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},options));await notBlocked(userId,String(post.userId),session);evidence={kind:'post',id:post._id,text:post.text,fileIds:post.fileIds||[],createdAt:post.createdAt};}
+      if(d.postId){const post=requireValue(await rows('posts').findOne({_id:String(d.postId),userId:String(d.personId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},options));await notBlocked(userId,String(post.userId),session);evidence={kind:'post',id:post._id,text:post.text,links:post.links||[],fileIds:post.fileIds||[],createdAt:post.createdAt};}
       if(d.messageId){const message=requireValue(await rows('directMessages').findOne({_id:String(d.messageId),fromId:String(d.personId),moderatedAt:{$exists:false}},options));requireValue(await rows('connections').findOne({_id:String(message.connectionId),members:userId},options));evidence={kind:'message',id:message._id,text:message.text,fromId:message.fromId,createdAt:message.createdAt};}
       const report = { _id: nextId(), fromId: userId, personId: d.personId, reason: d.reason, createdAt: now, status: 'unreviewed', profileSnapshot:profileVisible?profile(reportedPerson):null, ...(evidence?{evidence}:{}) };
       await rows('reports').insertOne(report, options);
@@ -381,10 +459,15 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if (actor.background && (!op || op.kind !== 'read' || !backgroundCanRead(actor, name))) throw new AppError(403, 'automation_scope', 'This background agent does not have access to that operation.');
   if (!op) throw new AppError(404, 'unknown_operation', 'Unknown operation.');
   const parsed = op.schema.parse(input) as Record<string, unknown>;
+  if(['posts.create','posts.reply'].includes(name)&&!parsed.text&&!(parsed.fileIds as string[]).length&&!(parsed.links as string[]|undefined)?.length)throw new AppError(422,'post_empty','Add text, a photo, or a URL before posting.');
   if (actor.source !== 'browser' && name === 'profile.update') throw new AppError(403, 'human_authored', 'Profiles are written by the person in the app.');
   if (actor.source === 'agent' && !op.agent) throw new AppError(403, 'unavailable', 'This operation is not available to the hosted agent.');
   if (name === 'inbox.publish') await validateInboxLinks(actor.userId, parsed.links as import('../shared/inbox').InboxItem['links'], String(parsed.body));
-  if (op.kind === 'read') return op.outputSchema.parse(await run(name, parsed, actor));
+  if (op.kind === 'read') {
+    const result=op.outputSchema.parse(await run(name, parsed, actor));
+    // Private bookmark metadata is account activity, even on public record reads.
+    return actor.background&&!actor.accountActivity?JSON.parse(JSON.stringify(result,(key,value)=>key==='saved'?undefined:value)):result;
+  }
   if (actor.scope !== 'write') throw new AppError(403, 'scope', 'This token only has read access.');
   if (!idempotencyKey || !/^[\w:.-]{8,150}$/.test(idempotencyKey)) throw new AppError(422, 'idempotency_required', 'Writes need an idempotency key of 8–150 characters. Reuse it only when retrying the same action.');
   const receiptId = hash(`${actor.userId}:${idempotencyKey}`);
@@ -405,7 +488,7 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
     }
     // Contact permissions and a simultaneous block must serialize on the same
     // document; snapshot reads alone permit a send/block write-skew race.
-    if (['connections.request', 'connections.respond', 'connections.withdraw', 'connections.disconnect', 'messages.send', 'people.block','posts.like','posts.reply'].includes(name)) {
+    if (['connections.request', 'connections.respond', 'connections.withdraw', 'connections.disconnect', 'posts.save', 'messages.send', 'people.block','posts.like','posts.reply'].includes(name)) {
       let other = parsed.personId as string | undefined;
       if(!other&&parsed.postId){const post=requireValue(await rows('posts').findOne({_id:String(parsed.postId)},{session}));other=String(post.userId);}
       if (!other && parsed.connectionId) {

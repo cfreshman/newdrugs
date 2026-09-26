@@ -1,3 +1,4 @@
+import type {Destination} from '../shared/navigation';
 import { AgentMarkdown } from './AgentMarkdown';
 import { usePanelVisible } from './PanelReadiness';
 import { useEffect, useRef, useState } from 'react';
@@ -6,9 +7,10 @@ import { SearchField } from './SearchField';
 import { operation, errorText } from './api';
 import type { ChatSearchResult } from '../shared/chatSearch';
 import { useRecordRefresh } from './useRecordRefresh';
-export function ChatSearchPanel({ initialQuery = '', openMessage }: { initialQuery?: string; openMessage(id: string): Promise<void> }) {
+export function ChatSearchPanel({ initialQuery = '', initialRole = 'all', onStateChange, openMessage }: { initialQuery?: string; initialRole?:Destination['role'];onStateChange?(context:Partial<Destination>):void; openMessage(id: string): Promise<void> }) {
   const visible = usePanelVisible();
-  const [query, setQuery] = useState(initialQuery || ''), [role, setRole] = useState<'all' | 'user' | 'assistant'>('all');
+  const [query, setQuery] = useState(initialQuery || ''), [role, setRole] = useState<'all' | 'user' | 'assistant'>(initialRole);
+  useEffect(()=>{setQuery(initialQuery||'');setRole(initialRole);},[initialQuery,initialRole]);
   const [result, setResult] = useState<ChatSearchResult | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState(''), [opening, setOpening] = useState<string>();
   const generation = useRef(0), refreshedAt = useRef(0);
   const load = async (cursor?: string) => {
@@ -25,8 +27,8 @@ export function ChatSearchPanel({ initialQuery = '', openMessage }: { initialQue
   // Index invalidations are coalesced by the live-state channel; do not poll or call a model while typing.
   useRecordRefresh(['chat_history'], () => { if (visible && result?.indexing && !loading && Date.now() - refreshedAt.current > 5000) { refreshedAt.current = Date.now(); void load(); } });
   return <>
-    <SearchField label="Search your chat" value={query} onSearch={value => { if (value === query) void load(); else setQuery(value); }} />
-    <nav className="view-tabs" aria-label="Chat author">{(['all', 'user', 'assistant'] as const).map(value => <button key={value} aria-pressed={role === value} onClick={() => setRole(value)}>{value === 'all' ? 'All' : value === 'user' ? 'You' : 'Your agent'}</button>)}</nav>
+    <SearchField label="Search your chat" value={query} onSearch={value => { if (value === query) void load(); else {setQuery(value);onStateChange?.({query:value,role});} }} />
+    <nav className="view-tabs" aria-label="Chat author">{(['all', 'user', 'assistant'] as const).map(value => <button key={value} aria-pressed={role === value} onClick={() => {setRole(value);onStateChange?.({query,role:value});}}>{value === 'all' ? 'All' : value === 'user' ? 'You' : 'Your agent'}</button>)}</nav>
     {!query && <p className="quiet">Find something you or your agent said. Only your chat is searched.</p>}
     {result?.notices.map(notice => <p key={notice} className="quiet small">{notice}</p>)}
     <div className="chat-search-results">{result?.items.map(item => {

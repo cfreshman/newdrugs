@@ -83,3 +83,13 @@ it('enqueues external conversation writes atomically and reports a keyword fallb
   const result = await searchChat({ query: 'cycling' }, me, async () => { throw Error('embedding_unavailable'); });
   expect(result.mode).toBe('keyword'); expect(result.items[0].id).toBe(saved.id); expect(result.notices.join(' ')).toContain('temporarily unavailable');
 });
+
+it('requires actual word evidence for fresh chat fallback and never re-adds indexed rejects',async()=>{
+ const me=await person();const substring=await message(me,'search profiles');
+ const queryVector=async()=>[1,...Array(511).fill(0)];
+ expect((await searchChat({query:'sea'},me,queryVector)).items).toEqual([]);
+ const relevant=await message(me,'sea outings');
+ expect((await searchChat({query:'sea'},me,queryVector)).items.map(item=>item.id)).toEqual([relevant]);
+ while(await indexChatMessage());
+ expect((await searchChat({query:'sea'},me,queryVector)).items.some(item=>item.id===substring)).toBe(false);
+});

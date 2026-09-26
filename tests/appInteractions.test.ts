@@ -15,7 +15,7 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 describe('chat interaction integration', () => {
   let dom: ReturnType<typeof setupDOM>, bootstrap: ReturnType<typeof deferred<Bootstrap>>, chat: ReturnType<typeof deferred<{ run: RunView }>>;
   beforeEach(() => {
-    dom = setupDOM(); vi.stubGlobal('innerWidth', 390); vi.stubGlobal('innerHeight', 844); bootstrap = deferred(); chat = deferred(); localStorage.clear(); sessionStorage.clear();
+    dom = setupDOM(); history.replaceState(null,'','/'); vi.stubGlobal('innerWidth', 390); vi.stubGlobal('innerHeight', 844); bootstrap = deferred(); chat = deferred(); localStorage.clear(); sessionStorage.clear();
     document.documentElement.style.cssText = '--chat-width:480;--chat-gutter:12;--orb-radius:36';
     transport.api.mockReset(); transport.post.mockReset(); transport.operation.mockReset();
     transport.api.mockImplementation((path: string) => path === '/tokens' ? Promise.resolve({ tokens: [] }) : path === '/checkout/quotes' ? Promise.resolve({ quotes: [] }) : bootstrap.promise);
@@ -37,6 +37,82 @@ describe('chat interaction integration', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
+  it('covers the mobile content panel while preserving the underlying social screen', async () => {
+    vi.stubGlobal('matchMedia', (query:string) => ({matches:query.includes('760'),media:query,addEventListener(){},removeEventListener(){}}));
+    await mount(); await load();
+    expect(dom.container.querySelector('.mode-switch')?.getAttribute('data-collapsed')).toBe('true');
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch button[aria-label="Posts"]')!.click());
+    const social=dom.container.querySelector('.social-posts');
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());
+    const dock=dom.container.querySelector<HTMLElement>('.workspace')!;
+    const bounds=dom.container.querySelector('.social-posts .mode-main')!.getBoundingClientRect();
+    expect(dock.hidden).toBe(false);expect(dock.style.left).toBe(`${bounds.left}px`);expect(dock.style.top).toBe(`${bounds.top}px`);expect(dock.style.width).toBe(`${bounds.width}px`);expect(dock.style.height).toBe(`${bounds.height}px`);
+    expect(dom.container.querySelector('.conversation')?.hasAttribute('data-fade-top')).toBe(false);
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('[aria-label="Close agent"]')!.click());
+    expect(dock.hidden).toBe(true);expect(dom.container.querySelector('.social-posts')).toBe(social);
+  });
+  it.each(['Friends','Posts'])('opens location and subsequent profile editing visibly in %s mode',async(mode)=>{
+    await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,area:{cell:'852a3313fffffff',label:'East Providence area, Rhode Island, US',point:{type:'Point',coordinates:[-71.3,41.8]}}}}));
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+    const page=dom.container.querySelector<HTMLElement>('.social-experience:not([hidden])')!;
+    const clickText=async(selector:string,text:string)=>act(async()=>[...page.querySelectorAll<HTMLButtonElement>(selector)].find(button=>button.textContent===text)!.click());
+    await clickText('.view-tabs button','Nearby');
+    await act(async()=>page.querySelector<HTMLButtonElement>('.composer-view:not([hidden]) .search-area-controls button')!.click());
+    expect(dom.container.querySelector('dialog[open] .location-picker')).not.toBeNull();
+    expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(true);
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('dialog [aria-label="Close"]')!.click());
+    await clickText('.mode-sidebar nav button','Your profile');
+    await clickText('.profile-contact button','Edit profile');
+    expect(dom.container.querySelector('dialog[open] .profile-editor-actions')).not.toBeNull();
+    expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(true);
+    expect(page.querySelector('.mode-content-header h1')?.textContent).toBe('Profile');
+  });
+  it('keeps profile titles consistent and exposes composition in Posts mode',async()=>{
+    await mount();await load();
+    for(const mode of ['Posts','Friends']){
+      await act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+      const page=dom.container.querySelector<HTMLElement>('.social-experience:not([hidden])')!;
+      await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(button=>button.textContent==='Your profile')!.click());
+      expect(page.querySelector('.mode-content-header h1')?.textContent).toBe('Profile');
+      expect(Boolean(page.querySelector('.mode-content-header [aria-label="New post"]'))).toBe(mode==='Posts');
+    }
+  });
+  it('returns the active mode to its base without resetting another mode on selection',async()=>{
+    await mount();await load();
+    const select=async(mode:string)=>act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+    await select('Posts');
+    const posts=dom.container.querySelector('.social-posts')!;
+    await act(async()=>[...posts.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(button=>button.textContent==='Your profile')!.click());
+    expect(posts.querySelector('h1')?.textContent).toBe('Profile');
+    await select('Friends');await select('Posts');expect(posts.querySelector('h1')?.textContent).toBe('Profile');
+    await select('Posts');expect(posts.querySelector('h1')?.textContent).toBe('Posts');
+  });
+  it('restores independent agent panel, draft and tool state for each tab',async()=>{
+    await mount();await load();
+    const select=async(mode:string)=>act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+    const write=(text:string)=>act(()=>{const input=dom.container.querySelector<HTMLTextAreaElement>('#thought')!;Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));});
+    const workspace=dom.container.querySelector<HTMLElement>('.workspace')!;
+    write('Agent draft');await select('Posts');expect(workspace.hidden).toBe(true);
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());write('Posts draft');
+    expect(dom.container.querySelector('.agent-dock-actions .dictation-slot + .agent-dock-close')).not.toBeNull();
+    expect(dom.container.querySelectorAll('[aria-label="Start dictation"]')).toHaveLength(1);
+    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.social-posts .mode-sidebar nav button')].find(button=>button.textContent==='People')!.click());
+    const search=dom.container.querySelector<HTMLInputElement>('.social-posts .composer-view:not([hidden]) input[type="search"]')!;
+    act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(search,'saved search');search.dispatchEvent(new Event('input',{bubbles:true}));});
+    await select('Friends');expect(workspace.hidden).toBe(true);
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());write('Friends draft');
+    expect(dom.container.querySelector('[aria-label="Close launcher"]')).toBeNull();
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('[aria-label="Close agent"]')!.click());
+    await select('Posts');expect(workspace.hidden).toBe(false);expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')!.value).toBe('Posts draft');
+    expect(dom.container.querySelector('[aria-label="Close launcher"]')).toBeNull();
+    expect(dom.container.querySelector('.social-posts .composer-view:not([hidden]) input[type="search"]')).toBe(search);expect(search.value).toBe('saved search');
+    await select('Friends');expect(workspace.hidden).toBe(true);expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')!.value).toBe('Friends draft');
+    await select('Agent');expect(workspace.hidden).toBe(false);expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')!.value).toBe('Agent draft');
+  });
+  it('loads the saved draft belonging to the initially selected mode',async()=>{
+    history.replaceState(null,'','/feed');localStorage.setItem('nd-mode:user','posts');localStorage.setItem('nd-draft:user','Agent draft');localStorage.setItem('nd-draft:user:posts','Posts draft');
+    await mount();await load();expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')!.value).toBe('Posts draft');
+  });
   it('hides Stop with the thinking row immediately when output completes, before run cleanup', async () => {
     const sources: EventTarget[] = [];
     vi.stubGlobal('EventSource', class extends EventTarget { constructor() { super(); sources.push(this); } close() {} });
@@ -212,6 +288,165 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('dialog')).toBeNull();
     expect(dom.container.querySelector('.inbox-list')).toBe(inbox);
     expect(dom.container.querySelector('.composer-switcher')?.classList.contains('launcher-open')).toBe(true);
+  });
+  it.each(['Posts','Friends'])('opens agent update notifications in the current %s browser panel',async(mode)=>{
+    localStorage.setItem('nd-draft:user','Agent draft');localStorage.setItem(`nd-draft:user:${mode.toLowerCase()}`,`${mode} draft`);
+    const notice={id:'agent-notice',read:false,kind:'agent_update' as const,title:'Agent update',text:'An update',createdAt:new Date().toISOString(),link:{rel:'open_in_newdrugs' as const,targetKind:'exact' as const,resourceType:'inbox',title:'Open update',url:'https://dev.druggie.org/inbox/resource'}};
+    await mount();await act(async()=>bootstrap.resolve({...initial,notifications:{unread:1,items:[notice]}}));
+    const select=async(value:string)=>act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${value}"]`)!.click());
+    await select(mode);const page=dom.container.querySelector('.social-experience:not([hidden])')!;
+    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='Your profile')!.click());
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.notification-list button')!.click());
+    expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe(mode.toLowerCase());
+    expect(dom.container.querySelector<HTMLElement>('.workspace')?.hidden).toBe(true);
+    expect(page.querySelector('.agent-update')?.textContent).toContain('An update');
+    expect(dom.container.querySelector('dialog')).toBeNull();
+    await act(async()=>page.querySelector<HTMLButtonElement>('.mode-content-header [aria-label="Back"]')!.click());
+    expect(page.querySelector('h1')?.textContent).toBe('Profile');
+    expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe(`${mode} draft`);
+  });
+  it.each(['/inbox/resource','/automations/resource','/chat-history'])('opens a mode-prefixed destination %s in Friends',async(path)=>{
+    localStorage.setItem('nd-mode:user','friends');localStorage.setItem('nd-draft:user','Agent draft');localStorage.setItem('nd-draft:user:friends','Friends draft');
+    history.replaceState(null,'',`/friends${path}`);
+    await mount();await load();
+    expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe('friends');
+    expect(dom.container.querySelector<HTMLElement>('.workspace')?.hidden).toBe(true);
+    expect(dom.container.querySelector('.social-friends .mode-content-header h1')?.textContent).toBe(path.startsWith('/inbox')?'Agent inbox':path.startsWith('/automations')?'Automations':'Chat search');
+    expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe('Friends draft');
+    dom.frame();expect(location.pathname).toBe(`/friends${path}`);
+  });
+  it.each([false,true])('brings a browser inbox update into chat, with mobile=%s',async(mobile)=>{
+    vi.stubGlobal('matchMedia',(query:string)=>({matches:mobile&&query.includes('760'),addEventListener(){},removeEventListener(){}}));
+    localStorage.setItem('nd-mode:user','posts');localStorage.setItem('nd-draft:user','Agent draft');localStorage.setItem('nd-draft:user:posts','Posts draft');history.replaceState(null,'','/posts/inbox/resource');
+    await mount();await load();const update=dom.container.querySelector('.social-posts .agent-update');
+    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.social-posts .panel-actions button')].find(x=>x.textContent==='Bring into chat')!.click());
+    expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe(mobile?'agent':'posts');
+    expect(dom.container.querySelector<HTMLElement>('.workspace')?.hidden).toBe(false);
+    expect(dom.container.querySelector('.inbox-attachments')?.textContent).toContain('An update');
+    expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe(mobile?'Agent draft':'Posts draft');
+    expect(transport.post.mock.calls.filter(([path])=>path==='/chat')).toHaveLength(0);
+    if(mobile)await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch button[aria-label="Posts"]')!.click());
+    else await act(async()=>dom.container.querySelector<HTMLButtonElement>('[aria-label="Close agent"]')!.click());
+    expect(dom.container.querySelector('.social-posts .agent-update')).toBe(update);
+    expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe('Posts draft');
+  });
+  it.each([false,true])('sends automation examples in the correct chat, with mobile=%s',async(mobile)=>{
+    vi.stubGlobal('matchMedia',(query:string)=>({matches:mobile&&query.includes('760'),addEventListener(){},removeEventListener(){}}));
+    localStorage.setItem('nd-mode:user','posts');localStorage.setItem('nd-draft:user','Agent draft');localStorage.setItem('nd-draft:user:posts','Posts draft');history.replaceState(null,'','/posts/automations');
+    await mount();await load();const example=dom.container.querySelector<HTMLButtonElement>('.social-posts .automation-examples button')!;const text=example.querySelector('span')!.textContent;
+    await act(async()=>example.click());await act(async()=>dom.frame());
+    expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe(mobile?'agent':'posts');
+    expect(transport.post).toHaveBeenCalledWith('/chat',expect.objectContaining({text}));
+    expect(transport.post.mock.calls.filter(([path])=>path==='/chat')).toHaveLength(1);
+    expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe(mobile?'Agent draft':'Posts draft');
+  });
+  it.each([false,true])('opens a browser chat-history result in the correct chat, with mobile=%s',async(mobile)=>{
+    vi.stubGlobal('matchMedia',(query:string)=>({matches:mobile&&query.includes('760'),addEventListener(){},removeEventListener(){}}));
+    const original=transport.operation.getMockImplementation()!;const message={id:'history-message',role:'user' as const,text:'Historical tennis message',createdAt:new Date().toISOString(),source:'app' as const};
+    transport.operation.mockImplementation((name:string,...args:unknown[])=>name==='conversation.search'?Promise.resolve({items:[{...message,score:1}],nextCursor:null,mode:'hybrid',indexing:false,notices:[]}):name==='conversation.window'?Promise.resolve({items:[message],targetId:message.id,olderCursor:null,newerCursor:null}):original(name,...args));
+    localStorage.setItem('nd-mode:user','posts');history.replaceState(null,'','/posts/chat-history?q=tennis');await mount();await load();
+    await act(async()=>dom.container.querySelector<HTMLElement>('.social-posts .chat-search-result')!.click());
+    expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe(mobile?'agent':'posts');
+    expect(transport.operation).toHaveBeenCalledWith('conversation.window',{messageId:message.id});
+    expect(dom.container.querySelector<HTMLElement>('.workspace')?.hidden).toBe(false);
+    expect(dom.container.querySelector('.workspace .conversation')?.textContent).toContain(message.text);
+  });
+  const travel=async(direction:'back'|'forward')=>{
+    await act(async()=>{await new Promise<void>(resolve=>{window.addEventListener('popstate',()=>resolve(),{once:true});history[direction]();});});
+    dom.frame();
+  };
+  it('routes bare inbox links to Agent regardless of the previously selected mode',async()=>{
+    localStorage.setItem('nd-mode:user','posts');history.replaceState(null,'','/inbox/resource');
+    await mount();await load();dom.frame();
+    expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe('agent');
+    expect(dom.container.querySelector('.workspace .agent-update')?.textContent).toContain('An update');
+    expect(location.pathname).toBe('/inbox/resource');
+  });
+  it('writes mode-aware routes and restores composition and browser history without losing its draft',async()=>{
+    await mount();await load();dom.frame();
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch [aria-label="Posts"]')!.click());dom.frame();
+    expect(location.pathname).toBe('/feed');
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.social-posts [aria-label="New post"]')!.click());dom.frame();
+    expect(location.pathname).toBe('/compose');
+    const input=dom.container.querySelector<HTMLTextAreaElement>('.social-posts .composer-view:not([hidden]) textarea')!;
+    act(()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'A preserved post draft');input.dispatchEvent(new Event('input',{bubbles:true}));});
+    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.social-posts .mode-sidebar nav button')].find(x=>x.textContent==='Your profile')!.click());dom.frame();
+    expect(location.pathname).toBe('/posts/people/user');
+    await travel('back');expect(location.pathname).toBe('/compose');expect(input.value).toBe('A preserved post draft');expect(input.closest<HTMLElement>('.composer-view')!.hidden).toBe(false);
+    await travel('back');expect(location.pathname).toBe('/feed');
+    await travel('forward');expect(location.pathname).toBe('/compose');expect(input.value).toBe('A preserved post draft');
+    await travel('forward');expect(location.pathname).toBe('/posts/people/user');
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch [aria-label="Friends"]')!.click());dom.frame();expect(location.pathname).toBe('/nearby');
+    await travel('back');expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe('posts');expect(location.pathname).toBe('/posts/people/user');
+  });
+  it('serializes feed filters and restores them through Back without resetting the scroll node',async()=>{
+    history.replaceState(null,'','/feed');await mount();await load();dom.frame();
+    const page=dom.container.querySelector('.social-posts')!,scroller=page.querySelector<HTMLElement>('.composer-view:not([hidden])')!;scroller.scrollTop=175;
+    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.view-tabs button')].find(x=>x.textContent==='Saved')!.click());dom.frame();
+    expect(new URLSearchParams(location.search).get('scope')).toBe('saved');
+    const search=page.querySelector<HTMLInputElement>('input[type="search"]')!;
+    act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(search,'garden');search.dispatchEvent(new Event('input',{bubbles:true}));});
+    await act(async()=>search.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));dom.frame();
+    expect(new URLSearchParams(location.search).get('q')).toBe('garden');
+    await travel('back');expect(search.value).toBe('');expect(new URLSearchParams(location.search).get('scope')).toBe('saved');
+    expect(page.querySelector('.composer-view:not([hidden])')).toBe(scroller);expect(scroller.scrollTop).toBe(175);
+    await travel('back');expect(page.querySelector('.view-tabs [aria-pressed="true"]')?.textContent).toBe('All');
+  });
+  it('applies a linked search to an already open People panel and scrolls that panel from the title',async()=>{
+    await mount();await act(async()=>bootstrap.resolve({...initial,messages:[{id:'search-link',role:'assistant',text:'[Find gardens](/nearby?q=gardening&scope=all)',createdAt:new Date().toISOString(),source:'app'}]}));dom.frame();
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch [aria-label="Posts"]')!.click());
+    const page=dom.container.querySelector('.social-posts')!;
+    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='People')!.click());
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());
+    const link=dom.container.querySelector<HTMLAnchorElement>('.conversation a')!;expect(link.getAttribute('href')).toBe('/posts/nearby?q=gardening&scope=all');
+    await act(async()=>link.click());dom.frame();
+    expect(page.querySelector<HTMLInputElement>('.composer-view:not([hidden]) input[type="search"]')!.value).toBe('gardening');
+    expect(location.pathname+location.search).toBe('/posts/nearby?q=gardening&scope=all');
+    const scroller=page.querySelector<HTMLElement>('.composer-view:not([hidden])')!,scrollTo=vi.fn();scroller.scrollTo=scrollTo;
+    act(()=>page.querySelector<HTMLElement>('.mode-content-header h1')!.click());expect(scrollTo).toHaveBeenCalledWith({top:0,behavior:'smooth'});
+  });
+  it('returns All posts to the feed after opening a DM URL directly',async()=>{
+    history.replaceState(null,'','/posts/messages/person-one%3Aperson-two');
+    await mount();await load();dom.frame();
+    const page=dom.container.querySelector('.social-posts')!;
+    expect(page.querySelector('h1')?.textContent).toBe('Messages');
+    expect(page.querySelector('.mode-sidebar [aria-current="page"]')?.textContent).toBe('Messages');
+    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='All posts')!.click());dom.frame();
+    expect(location.pathname).toBe('/feed');expect(page.querySelector('h1')?.textContent).toBe('Posts');
+    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='Messages')!.click());dom.frame();
+    expect(location.pathname).toBe('/posts/messages');
+    await travel('back');expect(location.pathname).toBe('/feed');
+    await travel('back');expect(location.pathname).toBe('/posts/messages/person-one%3Aperson-two');
+  });
+  it('resets a sidebar section to its root rather than restoring a record from its stack',async()=>{
+    history.replaceState(null,'','/posts/example');await mount();await load();dom.frame();
+    const page=dom.container.querySelector('.social-posts')!;
+    expect(page.querySelector('h1')?.textContent).toBe('Post');
+    const select=async(label:string)=>{await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent===label)!.click());dom.frame();};
+    await select('People');expect(location.pathname).toBe('/posts/nearby');
+    await select('All posts');expect(location.pathname).toBe('/feed');expect(page.querySelector('h1')?.textContent).toBe('Posts');
+  });
+  it.each(['Posts','Friends'])('opens a curated selection from the Agent sidepanel in the %s main panel',async(mode)=>{
+    vi.stubGlobal('innerWidth',1600);vi.stubGlobal('innerHeight',900);
+    const base=transport.operation.getMockImplementation()!;
+    transport.operation.mockImplementation((name:string,input:any)=>name==='posts.list'&&input?.scope==='selected'?Promise.resolve({items:input.postIds.map((id:string)=>({id,userId:'friend',text:`Selected ${id}`,createdAt:new Date().toISOString(),city:'',likeCount:0,replyCount:0,liked:false})),nextCursor:null}):base(name,input));
+    await mount();await act(async()=>bootstrap.resolve({...initial,messages:[{id:'side-link',role:'assistant',text:'[Your selected posts](/selected-posts?ids=post-b,post-a)',createdAt:new Date().toISOString(),source:'app'}]}));
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch [aria-label="${mode}"]`)!.click());
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());
+    const input=dom.container.querySelector<HTMLTextAreaElement>('#thought')!;act(()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'Keep this draft');input.dispatchEvent(new Event('input',{bubbles:true}));});
+    const link=dom.container.querySelector<HTMLAnchorElement>('.workspace .conversation a')!;
+    await act(async()=>link.click());dom.frame();
+    expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe(mode.toLowerCase());
+    const page=dom.container.querySelector(`.social-${mode.toLowerCase()} .composer-view:not([hidden])`)!;
+    expect([...page.querySelectorAll('.post-card')].map(card=>card.getAttribute('data-post-id'))).toEqual(['post-b','post-a']);
+    expect(transport.operation).toHaveBeenCalledWith('posts.list',{scope:'selected',postIds:['post-b','post-a']});
+    expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(false);expect(input.value).toBe('Keep this draft');
+    expect(location.pathname).toBe(mode==='Posts'?'/selected-posts':'/friends/selected-posts');
+  });
+  it('puts Notifications first in Settings',async()=>{
+    await mount();await load();await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
+    expect(dom.container.querySelector('.settings-menu button')?.textContent).toBe('Notifications');
   });
   it('opens a message notification in the launcher and preserves the underlying view', async () => {
     await mount();

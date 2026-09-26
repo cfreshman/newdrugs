@@ -1,0 +1,16 @@
+import {z} from 'zod';
+const zone=z.string().min(1).max(80).describe('An explicit IANA timezone, such as America/New_York. Do not infer it from a person’s approximate location.');
+const instant=z.union([z.iso.datetime({offset:true}),z.iso.datetime({offset:true,precision:-1})]);
+export const activityKinds=['invitations','messages','replies','reactions'] as const;
+export const activityInput=z.strictObject({since:instant,until:instant.optional(),kinds:z.array(z.enum(activityKinds)).min(1).max(4).default([...activityKinds]),limit:z.number().int().min(1).max(30).default(20),before:z.string().max(2000).optional()});
+export const timeResolveInput=z.strictObject({timeZone:zone,date:z.union([z.iso.date(),z.enum(['today','tomorrow','yesterday'])]).default('today'),time:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/),reference:instant.optional(),dayOffset:z.number().int().min(-3660).max(3660).default(0),nextWeekday:z.enum(['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']).optional(),includeToday:z.boolean().default(false),disambiguation:z.enum(['reject','earlier','later']).default('reject')});
+export const timeConvertInput=z.strictObject({at:instant.optional(),addMinutes:z.number().int().min(-5256000).max(5256000).default(0),timeZones:z.array(zone).min(1).max(12)});
+const local=z.string().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,9})?)?$/);
+export const timeOverlapInput=z.strictObject({participants:z.array(z.strictObject({label:z.string().min(1).max(80),timeZone:zone,disambiguation:z.enum(['reject','earlier','later']).default('reject'),windows:z.array(z.strictObject({start:z.union([instant,local]),end:z.union([instant,local])})).min(1).max(20)})).min(2).max(12),minimumMinutes:z.number().int().min(1).max(10080).default(30),offset:z.number().int().min(0).max(1000).default(0),limit:z.number().int().min(1).max(50).default(20)});
+export const localTimeOutput=z.object({timeZone:z.string(),localDateTime:z.string(),date:z.string(),time:z.string(),weekday:z.string(),offset:z.string()});
+export const timeResolveOutput=z.object({instant:z.string(),reference:z.string(),requestedLocalDateTime:z.string(),adjusted:z.boolean(),local:localTimeOutput});
+export const timeConvertOutput=z.object({reference:z.string(),instant:z.string(),local:z.array(localTimeOutput)});
+export const timeOverlapOutput=z.object({items:z.array(z.object({start:z.string(),end:z.string(),minutes:z.number(),local:z.array(z.object({label:z.string(),start:localTimeOutput,end:localTimeOutput}))})),total:z.number(),nextOffset:z.number().nullable()});
+export type TimeResolveInput=z.infer<typeof timeResolveInput>;
+export type TimeConvertInput=z.infer<typeof timeConvertInput>;
+export type TimeOverlapInput=z.infer<typeof timeOverlapInput>;

@@ -22,6 +22,7 @@ export function useConversationScroll(signals: { viewId?:string; submittedId?:st
   const previous = useRef({ top: 0, height: 0 });
   const headroom = useRef(0);
   const prepend = useRef<{ anchor: ReturnType<typeof captureHistoryAnchor>; signals: typeof signals } | null>(null);
+  const restoreView=useRef<{anchor:ReturnType<typeof captureHistoryAnchor>;following:boolean}|null>(null);
   const remember = () => {
     const el = transcript.current;
     if (el) { previous.current = { top: el.scrollTop, height: el.clientHeight }; setFadedTop(shouldFadeConversationTop(el)); setAwayFromBottom(!forceBottom.current && !following.current && el.scrollHeight - el.scrollTop - el.clientHeight > 24); }
@@ -38,6 +39,8 @@ export function useConversationScroll(signals: { viewId?:string; submittedId?:st
       restoreHistoryAnchor(transcript.current, saved.anchor);
       forceBottom.current = false; following.current = false; remember();
     }
+    const restored=restoreView.current;restoreView.current=null;
+    if(restored&&transcript.current){jumpTarget.current=null;following.current=restored.following;forceBottom.current=restored.following;if(!restored.following){restoreHistoryAnchor(transcript.current,restored.anchor);holdConversationScroll(transcript.current);}remember();}
     const frame=requestAnimationFrame(()=>{
       const el=transcript.current;if(!el)return;
       if (jumpTarget.current) {
@@ -84,6 +87,8 @@ export function useConversationScroll(signals: { viewId?:string; submittedId?:st
   }, [signals.viewId]);
   return {
     transcript, content, fadedTop, awayFromBottom,
+    capture:()=>transcript.current?{anchor:captureHistoryAnchor(transcript.current),following:following.current||forceBottom.current}:null,
+    restore:(saved:{anchor:ReturnType<typeof captureHistoryAnchor>;following:boolean}|null)=>{if(saved)restoreView.current=saved;else{forceBottom.current=true;following.current=true;}},
     jumpTo: (messageId: string) => { jumpTarget.current = messageId; forceBottom.current = false; following.current = false; },
     preparePrepend: () => {
       const el = transcript.current; if (!el || forceBottom.current) return;

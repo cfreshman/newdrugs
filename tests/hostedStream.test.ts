@@ -180,3 +180,17 @@ it('refreshes an outdated contract review without executing it or returning a sp
  const client={beta:{agents:{sessions:{events:{stream:async()=>stream,create},turns:{list:async()=>({data:[turn]}),retrieve:async()=>turn},items:{async *list(){}},retrieve:async()=>({required_actions:[{type:'function_call',call_id:'call',turn_id:'turn',name:'newdrugs_execute',arguments:JSON.stringify({operation:op.name,input})}]})}}}} as unknown as OpenAI;
  await processRun((await runs().findOne({_id:id}))!,client);const current=await runs().findOne({_id:id});expect(current?.status).toBe('waiting_for_approval');expect(current?.approvals[0]).toMatchObject({status:'pending',version:op.version,input});expect(create).not.toHaveBeenCalled();expect(await rows('posts').countDocuments()).toBe(0);
 });
+
+it.each([false,true])('reviews the full active-creation configuration before execution, existing approval=%s',async(existing)=>{
+ const {operations}=await import('../shared/catalog');const {hash}=await import('../server/auth');const {canonicalJSON}=await import('../server/operations');
+ const user=await fundedAccount(),id=`${user._id}:${randomUUID()}`,op=operations.find(o=>o.name==='automations.create')!;
+ const input=op.schema.parse({name:'Morning context',instruction:'Review my current account activity.',schedule:{kind:'weekly',timeZone:'America/New_York',weekdays:[1],hour:7,minute:0},accountActivity:true});
+ await reserveRun(user._id,id,'Set up the task');
+ await runs().updateOne({_id:id},{$set:{status:'running',lease:'lease',leaseUntil:Date.now()+60000,providerSessionId:'session',providerTurnId:'turn',inputSubmitted:true,approvals:existing?[{id:'create-call',operation:op.name,input,version:'old-contract',digest:hash(canonicalJSON({name:op.name,version:'old-contract',input})),title:'Create',detail:'Create',human:false,kind:'write',status:'approved',expiresAt:Date.now()+60000}]:[]}});
+ const controller=new AbortController(),stream={controller,async *[Symbol.asyncIterator](){if(!controller.signal.aborted)await new Promise<void>(resolve=>controller.signal.addEventListener('abort',()=>resolve(),{once:true}));}};
+ const create=vi.fn(),turn={id:'turn',status:'in_progress',usage:null};
+ const client={beta:{agents:{sessions:{events:{stream:async()=>stream,create},turns:{list:async()=>({data:[turn]}),retrieve:async()=>turn},items:{async *list(){}},retrieve:async()=>({required_actions:[{type:'function_call',call_id:'create-call',turn_id:'turn',name:'newdrugs_execute',arguments:JSON.stringify({operation:op.name,input})}]})}}}} as unknown as OpenAI;
+ await processRun((await runs().findOne({_id:id}))!,client);
+ const pending=await runs().findOne({_id:id});expect(pending?.status).toBe('waiting_for_approval');expect(pending?.approvals[0]).toMatchObject({operation:op.name,status:'pending',human:true,version:op.version,automation:input});
+ expect(await rows('automations').countDocuments()).toBe(0);expect(create).not.toHaveBeenCalled();
+});

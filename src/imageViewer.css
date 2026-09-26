@@ -1,0 +1,22 @@
+.newdrugs-image-viewer,.image-viewer-loading {--viewer-background:#090a0c;--viewer-control:#fff;--viewer-ink:#17191e;--viewer-gutter:12px;--viewer-control-size:44px;--pswp-bg:var(--viewer-background);--pswp-icon-color:var(--viewer-ink);--pswp-icon-color-secondary:var(--viewer-control);--pswp-icon-stroke-width:0;z-index:1000;font-family:var(--font-sans);}
+.image-viewer-loading {position:fixed;inset:0;display:grid;place-items:center;background:var(--viewer-background);color:white;touch-action:none;}
+.image-viewer-loading>button {position:absolute;top:max(var(--viewer-gutter),env(safe-area-inset-top));right:max(var(--viewer-gutter),env(safe-area-inset-right));}
+.newdrugs-image-viewer .pswp__button,.image-viewer-loading>button {display:grid;place-items:center;width:var(--viewer-control-size);height:var(--viewer-control-size);border:0;border-radius:50%;padding:0;background:var(--viewer-control);color:var(--viewer-ink);opacity:1;box-shadow:none;}
+.newdrugs-image-viewer .pswp__button:hover,.newdrugs-image-viewer .pswp__button:focus {background:var(--viewer-control);opacity:1;}
+.newdrugs-image-viewer .nd-viewer-icon {position:static;display:block;width:23px;height:23px;fill:currentColor;transform:none;}
+.newdrugs-image-viewer .pswp__top-bar {height:auto;gap:8px;padding:max(var(--viewer-gutter),env(safe-area-inset-top)) max(var(--viewer-gutter),env(safe-area-inset-right)) 0 max(var(--viewer-gutter),env(safe-area-inset-left));}
+.newdrugs-image-viewer .pswp__button--close {margin:0;}
+.newdrugs-image-viewer .pswp__counter {color:#fff;font-size:13px;line-height:44px;margin:0 auto 0 0;opacity:1;text-shadow:none;}
+.newdrugs-image-viewer .pswp__button--arrow {margin-top:-22px;}
+.newdrugs-image-viewer .pswp__button--arrow--prev {left:max(var(--viewer-gutter),env(safe-area-inset-left));}
+.newdrugs-image-viewer .pswp__button--arrow--next {right:max(var(--viewer-gutter),env(safe-area-inset-right));}
+.newdrugs-image-viewer .pswp__button--arrow:disabled {display:none;}
+.newdrugs-image-viewer .viewer-zoom-out,.newdrugs-image-viewer.pswp--zoomed-in .viewer-zoom-in {display:none;}
+.newdrugs-image-viewer.pswp--zoomed-in .viewer-zoom-out {display:block;}
+.newdrugs-image-viewer .pswp__button--zoom {display:none;}
+.newdrugs-image-viewer.pswp--zoom-allowed .pswp__button--zoom {display:grid;}
+.newdrugs-image-viewer.pswp--one-slide .pswp__button--arrow {display:none;}
+.image-viewer-error {color:#fff;align-self:center;margin:auto;text-align:center;}
+.image-viewer-spinner {animation:viewer-spin 900ms linear infinite;}
+@keyframes viewer-spin {to{transform:rotate(360deg);}}
+@media(pointer:coarse){.newdrugs-image-viewer .pswp__button--arrow {top:auto;bottom:max(var(--viewer-gutter),env(safe-area-inset-bottom));margin:0;}}

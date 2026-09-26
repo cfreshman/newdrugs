@@ -78,3 +78,35 @@ describe('base-page chat scrolling', () => {
     input.blur(); cleanup(); wheel(background); expect(chat.scrollTop).toBe(330);
   });
 });
+
+describe('social-mode background scrolling',()=>{
+ let dom:ReturnType<typeof setupDOM>,page:HTMLDivElement,content:HTMLDivElement,background:HTMLDivElement,cleanup:()=>void;
+ beforeEach(()=>{dom=setupDOM();page=document.createElement('div');content=document.createElement('div');background=document.createElement('div');page.append(background,content);document.body.append(page);Object.defineProperties(content,{clientHeight:{value:200},scrollHeight:{value:2000}});content.scrollTop=100;cleanup=bindPageChatScroll(page,content,{surface:'content',blocked:()=>false,onScroll:vi.fn()});});
+ afterEach(()=>{cleanup();dom.cleanup();});
+ const wheel=(target:Element)=>{const event=new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:80});target.dispatchEvent(event);return event;};
+ it('scrolls the main content after using a navigation button',()=>{
+  const tab=document.createElement('button');page.append(tab);tab.focus();expect(wheel(background).defaultPrevented).toBe(true);expect(content.scrollTop).toBe(180);
+ });
+ it('leaves the native content, agent subpanel, inputs and dialogs alone',()=>{
+  expect(wheel(content).defaultPrevented).toBe(false);
+  const dock=document.createElement('div');dock.className='workspace';page.append(dock);expect(wheel(dock).defaultPrevented).toBe(false);
+  const input=document.createElement('input');content.append(input);input.focus();expect(wheel(background).defaultPrevented).toBe(false);input.blur();
+  const modal=document.createElement('div');modal.setAttribute('aria-modal','true');page.append(modal);expect(wheel(background).defaultPrevented).toBe(false);expect(content.scrollTop).toBe(100);
+ });
+});
+
+describe('macOS scroll boundary shortcuts',()=>{
+ let dom:ReturnType<typeof setupDOM>;
+ beforeEach(()=>{dom=setupDOM();});afterEach(()=>dom.cleanup());
+ it.each(['chat','content'] as const)('routes Command arrows to the %s scroller and preserves text editing',surface=>{
+  const page=document.createElement('div'),scroller=document.createElement('div'),button=document.createElement('button'),input=document.createElement('textarea');page.append(scroller,button,input);document.body.append(page);
+  Object.defineProperties(scroller,{clientHeight:{value:200},scrollHeight:{value:2000}});scroller.scrollTop=500;
+  const cleanup=bindPageChatScroll(page,scroller,{surface,blocked:()=>false,onScroll:vi.fn()});
+  const press=(key:string)=>{const event=new KeyboardEvent('keydown',{key,metaKey:true,bubbles:true,cancelable:true});window.dispatchEvent(event);return event;};
+  button.focus();expect(press('ArrowDown').defaultPrevented).toBe(true);expect(scroller.scrollTop).toBe(1800);
+  expect(press('ArrowUp').defaultPrevented).toBe(true);expect(scroller.scrollTop).toBe(0);
+  input.focus();expect(press('ArrowDown').defaultPrevented).toBe(false);expect(scroller.scrollTop).toBe(0);
+  input.blur();const modal=document.createElement('div');modal.setAttribute('aria-modal','true');page.append(modal);expect(press('ArrowDown').defaultPrevented).toBe(false);
+  cleanup();
+ });
+});

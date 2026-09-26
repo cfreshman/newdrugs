@@ -3,19 +3,21 @@ import { useEffect, useRef, type RefObject } from 'react';
 const scrollOwner = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="listbox"], [role="menu"], [data-scroll-owner]';
 const touchControl = `${scrollOwner}, a, button, [role="button"], [role="slider"]`;
 
-export function bindPageChatScroll(page: HTMLElement, chat: HTMLElement, options: { blocked(): boolean; onScroll(): void }) {
+export function bindPageChatScroll(page: HTMLElement, chat: HTMLElement, options: { blocked(): boolean; onScroll(): void; surface?:'chat'|'content' }) {
   let momentum = 0;
   let gesture: { x: number; y: number; lastY: number; lastTime: number; speed: number; scrolling: boolean } | null = null;
   const stop = () => { cancelAnimationFrame(momentum); momentum = 0; gesture = null; };
-  const blocked = () => {
+  const blocked = (navigationKey = false) => {
     const focused = document.activeElement;
     const chatControl = focused instanceof Element && Boolean(focused.closest('.composer-input-layer, .dictation-slot, .launcher-controls'));
+    const focusOwnsScroll=navigationKey||options.surface==='content'?focused instanceof Element&&Boolean(focused.closest(scrollOwner)):Boolean(focused && focused !== document.body && focused !== page && !chat.contains(focused) && !chatControl);
     return options.blocked() || Boolean(document.querySelector('dialog[open], [aria-modal="true"], [data-page-scroll-lock]')) ||
-      Boolean(focused && focused !== document.body && focused !== page && !chat.contains(focused) && !chatControl);
+      focusOwnsScroll;
   };
   const eligible = (target: EventTarget | null, touch = false) => {
     if (blocked() || !(target instanceof Element) || !page.contains(target) || chat.contains(target)) return false;
     if (target.closest(touch ? touchControl : scrollOwner)) return false;
+    if(options.surface==='content'&&target.closest('.workspace'))return false;
     // Future native surfaces own their scrolling, even before they get focus.
     for (let node: Element | null = target; node && node !== page; node = node.parentElement) {
       if (node.scrollHeight > node.clientHeight && /auto|scroll/.test(getComputedStyle(node).overflowY)) return false;
@@ -74,13 +76,18 @@ export function bindPageChatScroll(page: HTMLElement, chat: HTMLElement, options
     momentum = requestAnimationFrame(coast);
   };
   const keydown = (event: KeyboardEvent) => {
-    if (document.activeElement instanceof Element && document.activeElement.closest(touchControl)) return;
-    if (blocked() || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || document.activeElement && chat.contains(document.activeElement)) return;
-    const amount = event.key === 'PageDown' || event.key === ' ' && !event.shiftKey ? chat.clientHeight * .85
-      : event.key === 'PageUp' || event.key === ' ' && event.shiftKey ? -chat.clientHeight * .85
-        : event.key === 'ArrowDown' ? 40 : event.key === 'ArrowUp' ? -40 : 0;
-    if (!amount || chat.scrollHeight <= chat.clientHeight) return;
-    event.preventDefault(); stop(); move(amount);
+    const boundary=event.metaKey&&!event.shiftKey&&(event.key==='ArrowUp'||event.key==='ArrowDown');
+    const focused=document.activeElement;
+    if(focused instanceof Element&&focused.closest(boundary?scrollOwner:touchControl))return;
+    if(blocked(boundary)||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey&&!boundary)return;
+    if(options.surface==='content'&&focused instanceof Element&&focused.closest('.workspace'))return;
+    if(!boundary&&focused&&chat.contains(focused))return;
+    const amount=boundary?(event.key==='ArrowDown'?chat.scrollHeight:-chat.scrollHeight)
+      :event.key==='PageDown'||event.key===' '&&!event.shiftKey?chat.clientHeight*.85
+      :event.key==='PageUp'||event.key===' '&&event.shiftKey?-chat.clientHeight*.85
+      :event.key==='ArrowDown'?40:event.key==='ArrowUp'?-40:0;
+    if(!amount||chat.scrollHeight<=chat.clientHeight)return;
+    event.preventDefault();stop();move(amount);
   };
   page.addEventListener('wheel', wheel, { passive: false });
   page.addEventListener('touchstart', touchStart, { passive: true });

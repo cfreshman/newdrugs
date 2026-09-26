@@ -1,3 +1,4 @@
+import {listAdminUsers,adminUsersSchema} from './adminUsers';
 import { readUpload, uploads } from './uploads';
 import { moderatePost, moderateReportedMessage, suspendUser } from './moderation';
 import { Router } from 'express';
@@ -14,6 +15,7 @@ export const adminKeys = () => mongo.db(config.STARTER_POOL_DB).collection<Admin
 const stage = () => config.APP_ENV === 'production' ? 'prod' : 'dev';
 const id = z.string().min(1).max(150);
 const specs = [
+  { name:'users.list',kind:'read',description:'List registered users in this stage, newest created first, with basic account metadata and credit balances. Excludes anonymous visits and internal test accounts. query matches a literal name/username fragment or an exact user ID. Use nextCursor with the same query to continue. Does not expose credentials, private messages, profile prose, location or claim fingerprints.',schema:adminUsersSchema },
   { name: 'identity.get', kind: 'read', description: 'Read the operator key identity and stage. This key is separate from social accounts.', schema: z.strictObject({}) },
   { name: 'reports.list', kind: 'read', description: 'List reports in this stage, newest IDs first. Use before to paginate.', schema: z.strictObject({ status: z.enum(['unreviewed', 'resolved', 'dismissed', 'all']).default('unreviewed'), before: id.optional(), limit: z.number().int().min(1).max(50).default(20) }) },
   { name: 'reports.get', kind: 'read', description: 'Read a report and the reported public profile. Includes only the exact content the reporter submitted as evidence, never the rest of a private conversation or agent chat.', schema: z.strictObject({ reportId: id }) },
@@ -41,6 +43,7 @@ export async function executeAdminOperation(key: AdminKey, name: string, raw: un
   if (spec.kind === 'read') {
     requireValue(await adminKeys().findOne({ _id: key._id, revokedAt: null, stages: stage() }));
     if (name === 'identity.get') return identity();
+    if (name === 'users.list') return listAdminUsers(input);
     if (name === 'starter.pool') return starterPoolStatus();
     if (name === 'keys.list') return { items: (await adminKeys().find({ stages: stage() }).limit(100).toArray()).map(row => ({ id: row._id, label: row.label, stages: row.stages, createdAt: row.createdAt, revokedAt: row.revokedAt })) };
     if(name==='reports.files'){

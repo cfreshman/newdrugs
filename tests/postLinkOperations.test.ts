@@ -1,0 +1,22 @@
+import {beforeAll,afterAll,expect,it} from 'vitest';
+import {randomUUID} from 'node:crypto';
+import {connectDatabase,db,mongo,rows} from '../server/db';
+import {createGuest,users,type Actor} from '../server/auth';
+import {executeOperation} from '../server/operations';
+import {sourceDocument} from '../server/search/sources';
+let owner:Actor;
+beforeAll(async()=>{await connectDatabase();if(db().databaseName!=='newdrugs_test')throw new Error('Isolated tests only.');const user=await createGuest();await users().updateOne({_id:user._id},{$set:{handle:`url_${randomUUID().slice(0,8)}`}});owner={userId:user._id,source:'external',scope:'write'};});
+afterAll(async()=>{if(db().databaseName==='newdrugs_test'&&owner){for(const name of ['posts','receipts','searchOutbox','notifications'])await rows(name).deleteMany({$or:[{userId:owner.userId},{actorId:owner.userId}]});await users().deleteOne({_id:owner.userId});}await mongo.close();});
+it('publishes and retrieves exact URL attachments across reads and replies, with confirmation and no blank posts',async()=>{
+ const input={links:['https://open.spotify.com/track/0Lr4kGOYn9l83EjuK6cZFQ']};
+ await expect(executeOperation('posts.create',input,owner,randomUUID())).rejects.toMatchObject({code:'confirmation_required'});
+ await expect(executeOperation('posts.create',{text:''},owner,randomUUID(),{confirmed:true})).rejects.toMatchObject({code:'post_empty'});
+ const key=randomUUID(),post=await executeOperation('posts.create',input,owner,key,{confirmed:true}) as {id:string;links:string[]};expect(post.links).toEqual(input.links);
+ expect(await executeOperation('posts.create',input,owner,key,{confirmed:true})).toEqual(post);
+ for(const args of [{scope:'own'},{scope:'public'},{scope:'selected',postIds:[post.id]}])expect((await executeOperation('posts.list',args,owner) as {items:{id:string;links:string[]}[]}).items.find(item=>item.id===post.id)?.links).toEqual(input.links);
+ expect(await executeOperation('posts.get',{postId:post.id},owner)).toMatchObject({links:input.links,text:''});
+ expect((await sourceDocument('posts',post.id))?.text).toContain(input.links[0]);
+ const reply=await executeOperation('posts.reply',{postId:post.id,links:['https://freshman.dev/']},owner,randomUUID(),{confirmed:true}) as {id:string};
+ expect((await executeOperation('posts.replies',{postId:post.id},owner) as {items:unknown[]}).items).toContainEqual(expect.objectContaining({id:reply.id,links:['https://freshman.dev/']}));
+ await executeOperation('posts.delete',{postId:post.id},owner,randomUUID(),{confirmed:true});expect(await executeOperation('posts.get',{postId:post.id},owner)).toMatchObject({deleted:true,links:[]});
+});

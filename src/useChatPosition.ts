@@ -18,7 +18,7 @@ const readPreference = () => {
   if (mobileChatLayout()) return { x: .5, y: 1 };
   try {
     const point = JSON.parse(localStorage.getItem('nd-chat-position') || 'null');
-    if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) return point as Point;
+    if (point && Number.isFinite(point.x)) return {x:point.x,y:1};
   } catch { /* Optional position preference. */ }
   return { x: .5, y: 1 };
 };
@@ -31,21 +31,22 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
   const keyboard = useRef({ width: innerWidth, height: Math.max(innerHeight, document.documentElement.clientHeight), open: false });
   const [composerHeight, setComposerHeight] = useState(156);
   const [revision, setRevision] = useState(0);
-  // Keyboard/panning only constrain the displayed position; they never replace the saved one.
+  // Keep only the horizontal preference. Every layout anchors to the visible bottom.
   const mobile = mobileChatLayout();
   const width = Math.min(dimensions.current.width, viewport.width - dimensions.current.gutter * 2), gap = 12;
   const sideBySide = launcherOpen && !mobile && viewport.width >= width * 2 + gap + dimensions.current.gutter * 2;
   const inputHeight = (composer.current?.querySelector<HTMLElement>('.composer-input-layer')?.offsetHeight || 76) + dimensions.current.radius * 2 + 6;
   // iOS standalone can both resize the window and pan the visual viewport for
   // its keyboard. A window-height anchor then lands near the visible top.
-  const base = clampChat(mobile ? { x: viewport.left + viewport.width / 2, y: viewport.top + viewport.height } : { x: preferred.current.x * innerWidth, y: preferred.current.y * innerHeight }, viewport, launcherOpen ? 156 : inputHeight, dimensions.current);
+  const base = clampChat({ x: mobile ? viewport.left + viewport.width / 2 : preferred.current.x * innerWidth, y: viewport.top + viewport.height }, viewport, launcherOpen ? 156 : inputHeight, dimensions.current);
   const position = sideBySide ? { ...base, x: Math.max(viewport.left + dimensions.current.gutter + width * 1.5 + gap, base.x) } : base;
   const anchor = position;
   const positionRef = useRef(anchor); positionRef.current = anchor;
   const dragOrigin = useRef(position);
   const move = useCallback((point: Point) => {
-    const next = clampChat(point, readViewport(), expanded ? 156 : composer.current?.offsetHeight ?? 156, dimensions.current);
-    preferred.current = { x: next.x / innerWidth, y: next.y / innerHeight };
+    const viewport=readViewport();
+    const next = clampChat({...point,y:viewport.top+viewport.height}, viewport, expanded ? 156 : composer.current?.offsetHeight ?? 156, dimensions.current);
+    preferred.current = { x: next.x / innerWidth, y: 1 };
     setRevision(n => n + 1);
   }, [composer, expanded]);
   const save = useCallback(() => {
@@ -98,6 +99,6 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
     onDragStart: () => { dragOrigin.current = positionRef.current; },
     onDrag: (dx: number, dy: number) => move({ x: dragOrigin.current.x + dx, y: dragOrigin.current.y + dy }),
     onDragEnd: save,
-    onNudge: (dx: number, dy: number) => { move({ x: positionRef.current.x + dx, y: positionRef.current.y + dy }); save(); },
+    onNudge: (dx: number, dy: number) => { if(!dx)return;move({ x: positionRef.current.x + dx, y: positionRef.current.y + dy }); save(); },
   };
 }

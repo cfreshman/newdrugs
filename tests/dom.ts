@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 
 export function setupDOM() {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue(null);
   let now = 0, nextFrame = 0, reduced = false, desktop = false;
   const frames = new Map<number, FrameRequestCallback>();
   const media = new EventTarget();

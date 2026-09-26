@@ -68,6 +68,12 @@ describe('conversation position and top fade', () => {
     render(900, { viewId: 'one', approvalIds: 'b' }); dom.frame(); expect(scroll.transcript.current?.scrollTop).toBe(200);
     render(1000, { viewId: 'one', approvalIds: 'b,c' }); dom.frame(); expect(scroll.transcript.current?.scrollTop).toBe(800);
   });
+  it('restores independent tab scroll positions instead of following the other tab',()=>{
+    render();dom.frame();readAt(200);const first=scroll.capture();
+    readAt(500);const second=scroll.capture();
+    act(()=>scroll.restore(first));render();dom.frame();expect(scroll.transcript.current?.scrollTop).toBe(200);
+    act(()=>scroll.restore(second));render();dom.frame();expect(scroll.transcript.current?.scrollTop).toBe(500);
+  });
   it('fades a chat touching the window top even at scrollTop zero, and removes the fade below it', () => {
     top = 0; render(200); dom.frame();
     expect(scroll.transcript.current?.scrollTop).toBe(0);

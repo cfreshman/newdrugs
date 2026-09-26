@@ -1,3 +1,7 @@
+import {listAdminUsers} from './adminUsers';
+import {mountAdminFrontend} from './adminFrontend';
+import {EMBED_ORIGINS} from '../shared/postLinks';
+import { recordReferenceSchema } from '../shared/recordContext';
 import { revokeAutomationCredential } from './automations';
 import { clearAgentChat, changeUsername, changeAccountPassword, verifyAccountPassword } from './account';
 import { backgroundCanRead } from './backgroundAuthority';
@@ -43,7 +47,7 @@ export function createApp() {
   if (config.production) app.set('trust proxy', 'loopback');
   app.use(helmet({ contentSecurityPolicy: config.production ? {
     directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      connectSrc: ["'self'"], imgSrc: ["'self'", 'data:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
+      connectSrc: ["'self'"], frameSrc:EMBED_ORIGINS, imgSrc: ["'self'", 'data:','https:'], mediaSrc:["'self'",'https:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
   } : false, crossOriginEmbedderPolicy: false }));
   app.get('/api/health', async (_req, res) => { await db().command({ ping: 1 }); res.json({ ok: true }); });
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '128kb' }), async (req, res) => {
@@ -103,6 +107,7 @@ export function createApp() {
     res.json(await signInAdmin(req, res, data.username, data.password));
   });
   app.post('/api/admin/logout', async (req, res) => { await signOutAdmin(req, res); res.json({ ok: true }); });
+  app.get('/api/admin/users', async (req,res)=>{await requireAdmin(req);res.json(await listAdminUsers(req.query));});
   app.get('/api/admin/starter-pool', async (req, res) => {
     await requireAdmin(req);
     res.json(await starterPoolStatus());
@@ -157,13 +162,13 @@ export function createApp() {
   app.post('/api/chat', limiter(12), async (req, res) => {
     const actor = browserActor(req);
     if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Create an account to use your agent.');
-    const data = z.strictObject({ text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), inboxIds: z.array(z.uuid()).max(3).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York'), review: z.strictObject({ runId: z.string().max(200), revision: z.number().int().min(0) }).optional() }).refine(value=>value.text||value.fileIds.length||value.inboxIds.length,'Add a message or a file.').parse(req.body);
+    const data = z.strictObject({ text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), inboxIds: z.array(z.uuid()).max(3).default([]), recordRefs:z.array(recordReferenceSchema).max(3).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York'), review: z.strictObject({ runId: z.string().max(200), revision: z.number().int().min(0) }).optional() }).refine(value=>value.text||value.fileIds.length||value.inboxIds.length||value.recordRefs.length,'Add a message or a file.').parse(req.body);
     if (!config.aiEnabled) throw new AppError(503, 'agent_unavailable', 'The agent is not connected yet. Please try again later.');
     try { new Intl.DateTimeFormat('en', { timeZone: data.timezone }).format(); } catch { throw new AppError(422, 'timezone', 'Unknown timezone.'); }
     if (data.review) { res.status(202).json({ run: runView(await replyToReview(actor.userId, data.review, data)) }); return; }
     const runId = `${actor.userId}:${data.requestId}`;
     await ensureStarter(actor.userId);
-    res.status(202).json({ run: runView(await reserveRun(actor.userId, runId, data.text, { clientId: data.clientId, timezone: data.timezone, fileIds: data.fileIds, inboxIds: data.inboxIds })) });
+    res.status(202).json({ run: runView(await reserveRun(actor.userId, runId, data.text, { clientId: data.clientId, timezone: data.timezone, fileIds: data.fileIds, inboxIds: data.inboxIds, recordRefs:data.recordRefs })) });
   });
   app.get('/api/runs/:id', async (req, res) => { const actor = requireActor(req); res.json({ run: runView(requireValue(await runs().findOne({ _id: String(req.params.id), userId: actor.userId }))) }); });
   app.post('/api/runs/:id/decisions', async (req, res) => {
@@ -208,9 +213,7 @@ export function createApp() {
     app.use('/downloads', express.static(resolve('dist/downloads'), { index: false, setHeaders: res => { res.setHeader('Cache-Control', 'no-cache'); } }));
   }
   if (config.production && config.APP_ENV === 'production') {
-    app.get('/admin', (_req, res) => { res.redirect('/admin/'); });
-    app.use('/admin', express.static(resolve('dist/admin'), { index: false }));
-    app.get('/admin/{*path}', (_req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(resolve('dist/admin/index.html')); });
+    mountAdminFrontend(app);
     app.use(express.static(resolve('dist/web'), { index: false, setHeaders: (res, path) => { if (path.endsWith('/sw.js')) res.setHeader('Cache-Control', 'no-cache'); } }));
     app.get('/{*path}', (_req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(resolve('dist/web/index.html')); });
   }
