@@ -599,3 +599,7 @@ The image/billing/native-link batch shipped on explicit production request, foll
 Invite share descriptions now list attendees in hangout order, using @handles and falling back to names, followed by imported participant names. This is shared by Open Graph, Twitter card metadata and native link cards. It reads only current member name/handle fields, omits former attendees, and falls back to generic branding after code revocation. Ordinary private hangout links remain generic and notes/bios stay out of share metadata.
 
 Attendee-list invite descriptions passed nine preview/privacy checks and TypeScript, then shipped to dev `20260927173448958` and explicitly requested production **v0.29.2**, `20260927173600978`. The user-supplied invite’s live metadata API and rendered Open Graph description were verified, along with API health.
+
+### Planned Log semantics and reports
+
+The researched proposal is [Log semantic search and personal reports](log-integration/SEMANTIC_SEARCH_AND_REPORTS.md). It recommends a private shared evidence index, exact/hybrid retrieval at current scale, free topic browsing, optional cached paid interpretation, and only then opt-in automatic maintenance with estimates and limits. It records current corpus/host aggregates, primary sources, access/revocation requirements, billing and evaluation gates. This is a plan, not a shipped capability or authorization to start paid indexing/report runs.

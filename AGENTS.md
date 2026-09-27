@@ -247,3 +247,5 @@ agent-written rules (you are allowed to edit below this line)
 
 - Billing Activity keeps the latest three actual agent charges separate, then totals older consecutive agent/automation usage between credits or adjustments with real date ranges. Aggregate complete ledger periods on the server before limiting display rows; never sum only the last thirty raw receipts. Preserve raw receipts and balances.
 - Image-viewer controls initialize before image dimensions or network reads finish. Reuse bounded decoded thumbnail pixels for the opening preview, while regular Log photos retain the account-scoped cache and invite images retain live code authorization.
+
+- Before implementing Log semantic search or personal reports, read the research proposal: @docs/log-integration/SEMANTIC_SEARCH_AND_REPORTS.md. It is a plan, not authorization to launch paid processing or new public profiling.
