@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {CircleNotch,X} from '@phosphor-icons/react';
 import type PhotoSwipe from 'photoswipe';
 import type {SlideData} from 'photoswipe';
@@ -33,7 +33,11 @@ const icon=(svg:string)=>svg.replace('<svg ','<svg aria-hidden="true" class="nd-
 export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;close():void}){
  const closeRef=useRef(close);closeRef.current=close;
  const [loading,setLoading]=useState(true),[failed,setFailed]=useState(false);
- const dismiss=useRef<HTMLButtonElement>(null);
+ const dismiss=useRef<HTMLButtonElement>(null),layer=useRef<HTMLDialogElement>(null),viewerRef=useRef<PhotoSwipe|null>(null);
+ const requestClose=()=>{if(viewerRef.current)viewerRef.current.close();else closeRef.current();};
+ // Enter the top layer before any async image/library loading. Keep the source
+ // hangout's popover in place below this dialog throughout open and close.
+ useLayoutEffect(()=>{const dialog=layer.current;if(!dialog)return;dialog.showModal();return()=>dialog.close();},[]);
  useEffect(()=>{
   const controller=new AbortController();let viewer:PhotoSwipe|undefined;
   const sourceFocus=items[index]?.element;
@@ -49,8 +53,8 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
     if(controller.signal.aborted)return;
     dataSource=items.map((_,i)=>slide(i));
     viewer=new PhotoSwipe({
-     dataSource,
-     index,mainClass:'newdrugs-image-viewer',bgOpacity:1,loop:false,
+     dataSource,appendToEl:layer.current!,
+     index,mainClass:'newdrugs-image-viewer',bgOpacity:1,loop:false,preloaderDelay:500,
      initialZoomLevel:fittedImageZoom,secondaryZoomLevel:level=>fittedImageZoom(level)*2.5,maxZoomLevel:level=>fittedImageZoom(level)*6,
      allowPanToNext:false,pinchToClose:false,closeOnVerticalDrag:false,
      tapAction:function(this:PhotoSwipe,_point,event){if((event.target as Element).closest('.pswp__img'))this.element?.classList.toggle('pswp--ui-visible');else this.close();},doubleTapAction:function(this:PhotoSwipe,point,event){if((event.target as Element).closest('.pswp__img'))this.currSlide?.toggleZoom(point);else this.close();},imageClickAction:'zoom',bgClickAction:'close',
@@ -67,12 +71,13 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
     viewer.options.zoomAnimationDuration=240;
     viewer.on('zoomLevelsUpdate',({zoomLevels})=>{zoomLevels.min=zoomLevels.initial;});
     viewer.on('destroy',()=>{if(!controller.signal.aborted)closeRef.current();});
-    viewer.on('afterInit',()=>{viewer?.element?.setAttribute('aria-label','Post photos');viewer?.element?.setAttribute('aria-modal','true');setLoading(false);});
+    viewer.on('afterInit',()=>{viewer?.element?.removeAttribute('role');setLoading(false);});
+    viewerRef.current=viewer;
     viewer.init();
-   }catch(error){if(!controller.signal.aborted){console.error('Image viewer:',error);setFailed(true);setLoading(false);}}
+   }catch(error){if(!controller.signal.aborted){console.error('Image viewer:',error);viewerRef.current=null;setFailed(true);setLoading(false);}}
   };
   void load();window.visualViewport?.addEventListener('resize',resize);
-  return()=>{controller.abort();window.visualViewport?.removeEventListener('resize',resize);viewer?.destroy();requestAnimationFrame(()=>{if(sourceFocus?.isConnected&&!sourceFocus.closest('[inert]'))sourceFocus.focus({preventScroll:true});});};
+  return()=>{controller.abort();window.visualViewport?.removeEventListener('resize',resize);viewerRef.current=null;viewer?.destroy();requestAnimationFrame(()=>{if(sourceFocus?.isConnected&&!sourceFocus.closest('[inert]'))sourceFocus.focus({preventScroll:true});});};
  },[items,index]);
- return loading||failed?<div className="image-viewer-loading" role="dialog" aria-modal="true" aria-label="Post photos" onKeyDown={event=>{if(event.key==='Escape')closeRef.current();}}><button ref={dismiss} aria-label="Close image viewer" onClick={()=>closeRef.current()}><X size={23}/></button>{failed?<a href={items[index]?.url} target="_blank" rel="noopener noreferrer">Open photo</a>:<CircleNotch size={28} className="image-viewer-spinner" aria-label="Loading photo"/>}</div>:null;
+ return <dialog ref={layer} className="image-viewer-layer" aria-label="Photos" onCancel={event=>{event.preventDefault();requestClose();}}>{(loading||failed)&&<div className="image-viewer-loading"><button ref={dismiss} aria-label="Close image viewer" onClick={requestClose}><X size={23}/></button>{failed?<a href={items[index]?.url} target="_blank" rel="noopener noreferrer">Open photo</a>:<CircleNotch size={28} className="image-viewer-spinner" aria-label="Loading photo"/>}</div>}</dialog>;
 }

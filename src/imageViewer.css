@@ -1,5 +1,7 @@
+@import './spinner.css';
+.image-viewer-layer{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:0;outline:none;background:transparent;color:var(--ink);overflow:hidden;transform:none;}.image-viewer-layer::backdrop{background:transparent;}
 .newdrugs-image-viewer,.image-viewer-loading {--viewer-background:#090a0c;--viewer-control:#fff;--viewer-ink:#17191e;--viewer-gutter:12px;--viewer-control-size:44px;--pswp-bg:var(--viewer-background);--pswp-icon-color:var(--viewer-ink);--pswp-icon-color-secondary:var(--viewer-control);--pswp-icon-stroke-width:0;z-index:1000;font-family:var(--font-ui);}
-.image-viewer-loading {position:fixed;inset:0;display:grid;place-items:center;background:var(--viewer-background);color:white;touch-action:none;}
+.image-viewer-loading {position:fixed;inset:0;display:grid;place-items:center;background:transparent;color:var(--ink);touch-action:none;}
 .image-viewer-loading>button {position:absolute;top:max(var(--viewer-gutter),env(safe-area-inset-top));right:max(var(--viewer-gutter),env(safe-area-inset-right));}
 .newdrugs-image-viewer .pswp__button,.image-viewer-loading>button {display:grid;place-items:center;width:var(--viewer-control-size);height:var(--viewer-control-size);border:0;border-radius:50%;padding:0;background:var(--viewer-control);color:var(--viewer-ink);opacity:1;box-shadow:none;}
 .newdrugs-image-viewer .pswp__button:hover,.newdrugs-image-viewer .pswp__button:focus {background:var(--viewer-control);opacity:1;}
@@ -17,6 +19,5 @@
 .newdrugs-image-viewer.pswp--zoom-allowed .pswp__button--zoom {display:grid;}
 .newdrugs-image-viewer.pswp--one-slide .pswp__button--arrow {display:none;}
 .image-viewer-error {color:#fff;align-self:center;margin:auto;text-align:center;}
-.image-viewer-spinner {animation:viewer-spin 900ms linear infinite;}
-@keyframes viewer-spin {to{transform:rotate(360deg);}}
+.image-viewer-spinner {--spinner-period:900ms;}
 @media(pointer:coarse){.newdrugs-image-viewer .pswp__button--arrow {top:auto;bottom:max(var(--viewer-gutter),env(safe-area-inset-bottom));margin:0;}}

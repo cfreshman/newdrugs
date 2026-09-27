@@ -35,5 +35,5 @@ export function useTopPagination(scroll: RefObject<HTMLDivElement | null>, optio
 }
 export function OlderMessages({ hasMore, loading, error, retry }: { hasMore: boolean; loading: boolean; error: string; retry(): void }) {
   if (!hasMore && !loading && !error) return null;
-  return <div className="history-loader">{loading ? <span role="status" aria-label="Loading earlier messages"><CircleNotch className="agent-spinner" size={16} aria-hidden="true" /></span> : error ? <button type="button" className="text-link small" onClick={retry}>Retry loading earlier messages</button> : null}</div>;
+  return <div className="history-loader">{loading ? <span role="status" aria-label="Loading earlier messages"><CircleNotch className="agent-spinner spinner-immediate" size={16} aria-hidden="true" /></span> : error ? <button type="button" className="text-link small" onClick={retry}>Retry loading earlier messages</button> : null}</div>;
 }

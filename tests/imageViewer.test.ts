@@ -11,13 +11,14 @@ vi.mock('photoswipe',()=>({default:class{
  element=document.createElement('div');events=new Map<string,()=>void>();
  constructor(options:any){this.options=options;options.showHideAnimationType='none';options.zoomAnimationDuration=0;library.options=options;library.instance=this;}
  on(name:string,fn:()=>void){this.events.set(name,fn);}
- init(){this.events.get('afterInit')?.();}
- destroy(){this.events.get('destroy')?.();}
+ init(){this.options.appendToEl.appendChild(this.element);this.events.get('afterInit')?.();}
+ close(){this.destroy();}
+ destroy(){this.element.remove();this.events.get('destroy')?.();}
  updateSize(){}
  refreshSlideContent(){}
 }}));
 let dom:ReturnType<typeof setupDOM>;
-beforeEach(()=>{dom=setupDOM();library.options=null;library.instance=null;});afterEach(()=>dom.cleanup());
+beforeEach(()=>{dom=setupDOM();library.options=null;library.instance=null;Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:vi.fn(function(this:HTMLDialogElement){this.setAttribute('open','');})});Object.defineProperty(HTMLDialogElement.prototype,'close',{configurable:true,value:vi.fn(function(this:HTMLDialogElement){this.removeAttribute('open');})});});afterEach(()=>dom.cleanup());
 it('opens the selected post photo with actual dimensions and retains the source anchor',()=>{
  const media=vi.fn();const photos=[{id:'a',url:'/a.webp',name:'Plant'},{id:'b',url:'/b.webp',name:'Second photo'}];
  act(()=>dom.root.render(createElement(ExperienceContext.Provider,{value:{mode:'posts',changeMode:vi.fn(),ask:vi.fn(),navigate:vi.fn(),media}},createElement(PostPhotos,{photos}))));
@@ -27,9 +28,9 @@ it('opens the selected post photo with actual dimensions and retains the source 
 });
 it('delegates focal zoom and pan to PhotoSwipe without closing or switching photos mid-pinch',async()=>{
  const close=vi.fn();await act(async()=>dom.root.render(createElement(ImageViewer,{items:[{id:'a',url:'/a.webp',name:'Plant',width:512,height:768}],index:0,close})));
- expect(library.options).toMatchObject({showHideAnimationType:'fade',zoomAnimationDuration:240,allowPanToNext:false,pinchToClose:false,closeOnVerticalDrag:false,bgClickAction:'close',trapFocus:true});
+ expect(library.options).toMatchObject({showHideAnimationType:'fade',zoomAnimationDuration:240,allowPanToNext:false,pinchToClose:false,closeOnVerticalDrag:false,bgClickAction:'close',trapFocus:true,preloaderDelay:500});
  expect(library.options.dataSource[0]).toMatchObject({width:512,height:768});expect(library.options.secondaryZoomLevel({panAreaSize:{x:256,y:512},elementSize:{x:512,y:768}})).toBe(1.25);
- expect(library.instance.element.getAttribute('aria-modal')).toBe('true');
+ const layer=dom.container.querySelector('dialog[open]')!;expect(library.options.appendToEl).toBe(layer);expect(layer.contains(library.instance.element)).toBe(true);expect(library.instance.element.hasAttribute('role')).toBe(false);
  act(()=>library.instance.events.get('destroy')());expect(close).toHaveBeenCalledOnce();
 });
 it('cancels dimension loading without opening a late viewer',async()=>{
@@ -44,4 +45,12 @@ it('opens a ready photo without waiting for another gallery image',async()=>{
 it('fits even our downscaled images to the full viewport without cropping',()=>{
  expect(fittedImageZoom({panAreaSize:{x:1440,y:900},elementSize:{x:512,y:512}})).toBe(900/512);
  expect(fittedImageZoom({panAreaSize:{x:390,y:844},elementSize:{x:512,y:768}})).toBe(390/512);
+});
+
+
+it('opens its top layer immediately while dimensions load and cancellation prevents a late viewer',async()=>{
+ const close=vi.fn();await act(async()=>dom.root.render(createElement(ImageViewer,{items:[{id:'loading',url:'/pending.webp',name:'Photo'}],index:0,close})));
+ const layer=dom.container.querySelector<HTMLDialogElement>('dialog')!;expect(layer.open).toBe(true);expect(layer.querySelector('.image-viewer-loading')).not.toBeNull();expect(library.instance).toBeNull();
+ const cancel=new Event('cancel',{cancelable:true});await act(async()=>layer.dispatchEvent(cancel));expect(cancel.defaultPrevented).toBe(true);expect(close).toHaveBeenCalledOnce();
+ await act(async()=>dom.root.render(null));expect(layer.close).toHaveBeenCalled();expect(library.instance).toBeNull();
 });

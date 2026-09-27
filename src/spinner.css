@@ -1,0 +1,5 @@
+:root{--spinner-delay:500ms;}
+:is(.spin,.agent-spinner,.image-viewer-spinner){animation:spinner-rotate var(--spinner-period,1s) linear infinite,spinner-wait var(--spinner-delay,500ms) linear;}
+.spinner-immediate{--spinner-delay:0ms;}
+@keyframes spinner-rotate{to{transform:rotate(360deg);}}
+@keyframes spinner-wait{from,to{opacity:0;}}

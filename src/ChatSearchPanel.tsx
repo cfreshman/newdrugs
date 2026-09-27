@@ -11,12 +11,12 @@ export function ChatSearchPanel({ initialQuery = '', initialRole = 'all', onStat
   const visible = usePanelVisible();
   const [query, setQuery] = useState(initialQuery || ''), [role, setRole] = useState<'all' | 'user' | 'assistant'>(initialRole);
   useEffect(()=>{setQuery(initialQuery||'');setRole(initialRole);},[initialQuery,initialRole]);
-  const [result, setResult] = useState<ChatSearchResult | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState(''), [opening, setOpening] = useState<string>();
+  const [result, setResult] = useState<ChatSearchResult | null>(null), [loading, setLoading] = useState(false), [appending,setAppending]=useState(false), [error, setError] = useState(''), [opening, setOpening] = useState<string>();
   const generation = useRef(0), refreshedAt = useRef(0);
   const load = async (cursor?: string) => {
     const ticket = ++generation.current;
     if (!query.trim()) { setResult(null); setLoading(false); setError(''); return; }
-    setLoading(true); setError('');
+    setLoading(true); setAppending(Boolean(cursor)); setError('');
     try {
       const page = await operation<ChatSearchResult>('conversation.search', { query, role, limit: 20, ...(cursor ? { cursor } : {}) });
       if (generation.current === ticket) setResult(previous => cursor && previous ? { ...page, items: [...previous.items, ...page.items] } : page);
@@ -42,7 +42,7 @@ export function ChatSearchPanel({ initialQuery = '', initialRole = 'all', onStat
         <div className="chat-search-excerpt"><AgentMarkdown text={item.text} /></div>
       </article>;
     })}</div>
-    {loading && <div className="history-loader"><span role="status" aria-label="Searching your chat"><CircleNotch className="agent-spinner" size={16} /></span></div>}
+    {loading && <div className="history-loader"><span role="status" aria-label="Searching your chat"><CircleNotch className={appending?'agent-spinner spinner-immediate':'agent-spinner'} size={16} /></span></div>}
     {result && !loading && !result.items.length && <p className="quiet">No matching messages.</p>}
     {result?.nextCursor && !loading && <button className="text-link chat-search-more" onClick={() => void load(result.nextCursor!)}>More messages</button>}
     {error && <p role="status" className="error">{error}</p>}

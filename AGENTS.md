@@ -240,3 +240,7 @@ agent-written rules (you are allowed to edit below this line)
 - Invite-code pages show the full read-only hangout before sign-in, including notes, links, photos, voice notes, video and remembered participants. Code reset, deletion and attachment removal revoke future media requests. Ordinary hangout links remain private; website share metadata still contains only the title/first photo. Preserve the native destination through sign-in, identity changes and auth-page reloads, then return to it after authentication/profile setup. Joining remains explicit; existing attendees open the hangout directly. Reset the browser title to New Drugs when the app mounts, retaining descriptive server share tags.
 
 - Hangouts opened from an ordered collection use Previous/Next within that collection, including its filters and pagination. Preserve the source list and Back position; adjacent navigation replaces the current hangout. Direct calendar/deep-link openings retain Older/Newer. List date/location text uses a plain ` - ` separator.
+
+- Image detail opens in its own native top-layer dialog above the still-open hangout. Keep the source popover/DOM/scroll intact during loading, viewing and dismissal; do not hide it just to put PhotoSwipe above the page.
+
+- Transient spinners appear only after 500ms, while retaining their layout space and immediate busy/disabled behavior. Scroller-boundary pagination indicators stay immediate. Use shared spinner styling and the explicit `spinner-immediate` exception; PhotoSwipe’s internal preloader follows the same 500ms delay.

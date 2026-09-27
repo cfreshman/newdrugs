@@ -14,7 +14,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.27.2, release `20260927164455996` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927164245326`; local frontend at `http://localhost:7330/log` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927165748529`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -567,3 +567,15 @@ Full invite views are deployed to dev `20260927163450735` and, after the explici
 Hangout typography follow-up: titles use normal `--ink` text color. Note authors match the attendee list’s 14px body sizing, line height and normal weight; actionable profile buttons share the accent/disabled styling, while invite-preview names are ordinary text. Deployed to dev `20260927164245326` with a successful build and health check; this styling follow-up is not yet on production.
 
 The typography follow-up subsequently shipped to production on explicit request: **v0.27.2**, `20260927164455996`. Build, deployment health, public API health and live release assets passed verification.
+
+### Image viewer above hangouts
+
+The flicker came from marking the social workspace covered, which hid its Log popover, while PhotoSwipe loaded into the ordinary document body. ImageViewer now opens a full-viewport native dialog before async loading and appends PhotoSwipe into that dialog. The active Log popover stays open underneath; its media remains paused while covered. Closing the viewer returns focus to the source image without dismissing/reopening the hangout or changing its navigation.
+
+TypeScript and 113 targeted viewer/Log/readiness/app tests passed. An isolated Chrome fixture verified the hangout remains `:popover-open` while the image dialog is `:modal`, and closing preserves its draft and restores focus. Fixture files and tabs were removed. No real account data was changed.
+
+The image-loading layer must stay transparent. An opaque black loader followed by PhotoSwipe’s transparent-to-black opening fade caused a second flash; only PhotoSwipe owns the background transition.
+
+Transient spinners now use `src/spinner.css`: hide the indicator for the first 500ms without delaying requests, content, busy state or control disabling. A short load ends without ever showing it. Once shown, it stays visible for the ongoing load and is removed as soon as ready; rerenders do not restart the wait. Scroll-boundary pagination spinners explicitly use `spinner-immediate`, and PhotoSwipe’s own preloader waits 500ms too. Native-browser timing verification confirmed a 200ms load never appeared, a long load was hidden at 100ms and visible after 500ms, immediate pagination stayed visible, and rotation continued. Temporary timing fixtures were removed.
+
+The complete image-layer/transparent-loading/spinner-delay follow-up is on cloud dev `20260927165748529`, with a successful build and database health check. The additional pagination/viewer suites passed 39 and 8 checks (overlapping earlier coverage). Production remains v0.27.2 pending an explicit request for this follow-up.

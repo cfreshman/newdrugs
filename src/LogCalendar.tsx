@@ -80,6 +80,6 @@ export function LogCalendar({month,scope,query,personId,jump,create,open,openPer
  return <div ref={root} className="log-calendar-history">
   <LogCalendarHeader><button type="button" className="log-weekday-row" aria-label="Scroll calendar to top" onClick={()=>root.current?.closest<HTMLElement>('.composer-view')?.scrollTo({top:0,behavior:'smooth'})}><span/>{['S','M','T','W','T','F','S'].map((day,index)=><span className="log-weekday" key={index}>{day}</span>)}<span/></button></LogCalendarHeader>
   {grid}
-  <div ref={sentinel} className="log-calendar-edge" aria-live="polite">{busy?<CircleNotch className="spin" size={22} aria-label="Loading older weeks"/>:error?<><p className="error">{error}</p><button onClick={()=>void load(loaded.current===0)}>Try again</button></>:<button onClick={()=>void load()}>Older weeks</button>}</div>
+  <div ref={sentinel} className="log-calendar-edge" aria-live="polite">{busy?<CircleNotch className="spin spinner-immediate" size={22} aria-label="Loading older weeks"/>:error?<><p className="error">{error}</p><button onClick={()=>void load(loaded.current===0)}>Try again</button></>:<button onClick={()=>void load()}>Older weeks</button>}</div>
  </div>;
 }
