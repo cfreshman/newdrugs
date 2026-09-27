@@ -11,7 +11,7 @@ import { AppError, requireValue } from './errors';
 import { MAX_UPLOAD_BYTES, MAX_ACCOUNT_UPLOAD_BYTES, type UploadPurpose, type UploadRef } from '../shared/uploads';
 import type { InputContentParam } from 'openai/resources/beta/agents/agents';
 
-interface Upload { _id:string; userId:string; name:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; mime:string; sha256:string; ready:boolean; retained?:boolean; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string }
+interface Upload { _id:string; userId:string; name:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string }
 export const uploads=()=>rows<Upload>('uploads');
 const digest=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const filePath=(id:string)=>{if(!/^[0-9a-f-]{36}$/.test(id))throw new Error('Invalid file identity.');return resolve(config.DATA_DIR,'files',id);};
@@ -89,13 +89,14 @@ export async function retainUploads(userId:string,ids:string[],purpose:UploadPur
   if(new Set(ids).size!==ids.length)throw new AppError(422,'duplicate_file','Choose each file once.');
   const files=[];
   for(const id of ids){const file=await ownUpload(userId,id,session);if(!file.ready||file.purpose!==purpose)throw new AppError(422,'file_not_ready','One of the files is not ready for this use.');files.push(file);}
-  if(files.length)await uploads().updateMany({_id:{$in:ids},userId},{$set:{retained:true},$unset:{expiresAt:''}},{session});
+  if(files.length)await uploads().updateMany({_id:{$in:ids},userId},{$set:{retained:true},$inc:{referenceRevision:1},$unset:{expiresAt:''}},{session});
   return files.map(uploadRef);
 }
 export async function retainPostPhotos(userId: string, ids: string[], session?: ClientSession) {
   if (ids.length > 4 || new Set(ids).size !== ids.length) throw new AppError(422, 'post_photos', 'Choose up to four different photos.');
   for (const id of ids) {
     const file = await ownUpload(userId, id, session);
+    if(file.logEntryId||await rows('logEntries').findOne({'contributions.fileIds':id,deletedAt:{$exists:false}},{session}))throw new AppError(422,'log_file_owned','This file belongs to a hangout. Upload a separate photo for the post.');
     if (!file.ready || file.purpose !== 'agent_input' || !file.mime.startsWith('image/')) throw new AppError(422, 'post_photo_required', 'Attach an uploaded JPEG, PNG or WebP photo.');
   }
   await retainUploads(userId, ids, 'agent_input', session);

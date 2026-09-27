@@ -1,3 +1,5 @@
+import {apiRequestLimits} from './requestLimits';
+import {pageContextCandidate} from '../shared/pageContext';
 import {listAdminUsers} from './adminUsers';
 import {mountAdminFrontend} from './adminFrontend';
 import {EMBED_ORIGINS} from '../shared/postLinks';
@@ -63,7 +65,7 @@ export function createApp() {
   });
   app.all('/mcp', (_req, res) => { res.status(405).set('Allow', 'POST').json({ error: 'Use authenticated Streamable HTTP POST.' }); });
   app.use('/api/admin/cli', limiter(90), express.json({ limit: '16kb' }), adminCliRouter());
-  app.use('/api', devApiGate, limiter(180), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
+  app.use('/api', devApiGate, apiRequestLimits(), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter(30, 15 * 60000), async (req, res) => {
     if (!req.actor) {
@@ -170,13 +172,13 @@ export function createApp() {
   app.post('/api/chat', limiter(12), async (req, res) => {
     const actor = browserActor(req);
     if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Create an account to use your agent.');
-    const data = z.strictObject({ text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), inboxIds: z.array(z.uuid()).max(3).default([]), recordRefs:z.array(recordReferenceSchema).max(3).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York'), review: z.strictObject({ runId: z.string().max(200), revision: z.number().int().min(0) }).optional() }).refine(value=>value.text||value.fileIds.length||value.inboxIds.length||value.recordRefs.length,'Add a message or a file.').parse(req.body);
+    const data = z.strictObject({ pageContext:pageContextCandidate.optional(), text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), inboxIds: z.array(z.uuid()).max(3).default([]), recordRefs:z.array(recordReferenceSchema).max(3).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York'), review: z.strictObject({ runId: z.string().max(200), revision: z.number().int().min(0) }).optional() }).refine(value=>value.text||value.fileIds.length||value.inboxIds.length||value.recordRefs.length,'Add a message or a file.').parse(req.body);
     if (!config.aiEnabled) throw new AppError(503, 'agent_unavailable', 'The agent is not connected yet. Please try again later.');
     try { new Intl.DateTimeFormat('en', { timeZone: data.timezone }).format(); } catch { throw new AppError(422, 'timezone', 'Unknown timezone.'); }
     if (data.review) { res.status(202).json({ run: runView(await replyToReview(actor.userId, data.review, data)) }); return; }
     const runId = `${actor.userId}:${data.requestId}`;
     await ensureStarter(actor.userId);
-    res.status(202).json({ run: runView(await reserveRun(actor.userId, runId, data.text, { clientId: data.clientId, timezone: data.timezone, fileIds: data.fileIds, inboxIds: data.inboxIds, recordRefs:data.recordRefs })) });
+    res.status(202).json({ run: runView(await reserveRun(actor.userId, runId, data.text, { clientId: data.clientId, timezone: data.timezone, fileIds: data.fileIds, inboxIds: data.inboxIds, recordRefs:data.recordRefs,pageContext:data.pageContext })) });
   });
   app.get('/api/runs/:id', async (req, res) => { const actor = requireActor(req); res.json({ run: runView(requireValue(await runs().findOne({ _id: String(req.params.id), userId: actor.userId }))) }); });
   app.post('/api/runs/:id/decisions', async (req, res) => {

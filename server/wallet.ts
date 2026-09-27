@@ -1,3 +1,4 @@
+import {resolvePageContext} from './pageContext';
 import { resolveRecordContexts } from './recordContext';
 import { automationNotice } from './automationNotices';
 import { automationAuthorized, automations } from './automations';
@@ -76,13 +77,14 @@ export async function wallet(userId: string, session?: ClientSession, owner?: Us
 
 // Holds are extended before each paid model call and released when the run settles.
 export const RUN_RESERVE = 60_000_000; // $0.06, unused amount is always released.
-export async function reserveRun(userId: string, runId: string, text: string, options: { clientId: string; timezone: string; fileIds: string[]; inboxIds?: string[]; recordRefs?:import('../shared/recordContext').RecordReference[] } = { clientId: '', timezone: 'America/New_York', fileIds: [] }) {
+export async function reserveRun(userId: string, runId: string, text: string, options: { pageContext?:import('../shared/pageContext').PageContextCandidate; clientId: string; timezone: string; fileIds: string[]; inboxIds?: string[]; recordRefs?:import('../shared/recordContext').RecordReference[] } = { clientId: '', timezone: 'America/New_York', fileIds: [] }) {
+  const pageContext=await resolvePageContext(userId,options.pageContext);
   const inbox = await inboxContext(userId, options.inboxIds || []);
   const records=await resolveRecordContexts(userId,options.recordRefs);
   return transaction(async session => {
     const user = await users().findOne({ _id: userId }, { session });
     requireValue(user);
-    const fingerprint = hash(JSON.stringify({ text, fileIds: options.fileIds, ...(options.inboxIds?.length ? { inboxIds: options.inboxIds } : {}),...(options.recordRefs?.length?{recordRefs:options.recordRefs}:{}) }));
+    const fingerprint = hash(JSON.stringify({ text, fileIds: options.fileIds, ...(options.inboxIds?.length ? { inboxIds: options.inboxIds } : {}),...(options.recordRefs?.length?{recordRefs:options.recordRefs}:{}),...(options.pageContext?{pageContext:options.pageContext}:{}) }));
     const prior = await runs().findOne({ _id: runId, userId }, { session });
     if (prior) {
       if (prior.fingerprint !== fingerprint) throw new AppError(409, 'submission_conflict', 'This submission id belongs to a different message.');
@@ -103,7 +105,7 @@ export async function reserveRun(userId: string, runId: string, text: string, op
       { $inc: { reservedNanos: RUN_RESERVE }, $set: { activeRun: runId } }, { session });
     if (!updated.modifiedCount) throw new AppError(402, 'credit_required', 'Add credit to continue. A reply needs $0.06 available; you only pay its actual cost.');
     const now = new Date().toISOString();
-    const run: RunRecord = { _id: runId, userId, text, ...options, fingerprint, status: 'queued', reservedNanos: RUN_RESERVE, costNanos: 0, chargedNanos: 0, billingRate: RATE, usagePending: true, responseIds: [], createdAt: now, updatedAt: now,
+    const run: RunRecord = { _id: runId, userId, text, ...options, pageContext, fingerprint, status: 'queued', reservedNanos: RUN_RESERVE, costNanos: 0, chargedNanos: 0, billingRate: RATE, usagePending: true, responseIds: [], createdAt: now, updatedAt: now,
       draft: '', progress: [], approvals: [], revision: 0, attempts: 0, failures: 0 };
     const files = await retainUploads(userId, options.fileIds, 'agent_input', session);
     await runs().insertOne(run, { session });

@@ -1,0 +1,60 @@
+:root {
+  color-scheme:light;
+  --glass:var(--floating-control-surface);
+  --panel-surface-top:#fff;
+  --panel-surface-bottom:#eef4fe;
+  --panel-header-surface:#ffffffbf;
+  --launcher-surface:#ffffffa8;
+  --inverse-ink:#fff;
+  --user-bubble:#2867c7;
+  --on-user:#fff;
+  --on-danger:#fff;
+  --audio-player-surface:#f1f3f4;
+  --audio-track:#c6c8cc;
+  --audio-track-fill:#70757b;
+}
+:root[data-theme=dark] {
+  color-scheme:dark;
+  --ink:#fff1eb;
+  --muted:#cbb8ae;
+  --muted-light:#b39b90;
+  --primary:#ff9475;
+  --primary-hover:#ffb29b;
+  --primary-ink:#ffc4b2;
+  --primary-soft:#51332e;
+  --on-primary:#301b16;
+  --surface:#241d1a;
+  --surface-glass:#241d1af0;
+  --floating-control-surface:#3b2d27db;
+  --surface-soft:#40312a;
+  --surface-blue:#362620;
+  --panel-surface-top:#211b19;
+  --panel-surface-bottom:#35241e;
+  --panel-header-surface:#241d1ac0;
+  --launcher-surface:#3b2d27d9;
+  --inverse-ink:#241710;
+  --user-bubble:#a7432b;
+  --border:#846a5e;
+  --border-strong:#a58a7a;
+  --divider:#4a3830;
+  --divider-soft:#392b25;
+  --danger:#ff9b91;
+  --on-danger:#301412;
+  --selection:#ff947555;
+  --backdrop:#0d0806bf;
+  --panel-shadow:0 18px 65px #0007;
+  --canvas:#1e2230;
+  --gradient-red:#5d3343;
+  --gradient-orange:#654238;
+  --gradient-yellow:#544535;
+  --gradient-green:#23463d;
+  --gradient-blue:#213c62;
+  --gradient-indigo:#343151;
+  --gradient-violet:#4e335f;
+  --audio-player-surface:#3e2d26;
+  --audio-track:#735648;
+  --audio-track-fill:#dfc4b6;
+}
+.appearance-options{margin:0;}.appearance-options button{display:flex;flex:1;align-items:center;justify-content:center;gap:7px;min-height:44px;}
+
+.preferences-panel{display:flex;flex-direction:column;gap:20px;}.preferences-panel h3{font-size:14px;margin:0 0 8px;}.landing-options button{gap:5px;padding-inline:7px;font-size:12px;}.settings-utilities{display:flex;gap:8px;}.settings-utilities>a,.settings-utilities>button{display:flex;flex:1;align-items:center;justify-content:center;gap:8px;min-width:0;padding:10px;border-radius:var(--radius-control);background:var(--surface-soft);text-decoration:none;font-size:14px;}

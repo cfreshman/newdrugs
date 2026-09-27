@@ -1,3 +1,4 @@
+import {defaultPreferences} from '../shared/preferences';
 import type { Request, Response } from 'express';
 import type { ChangeStream, ChangeStreamDocument, Document } from 'mongodb';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +12,7 @@ import { AppError, requireValue } from './errors';
 import type { LiveChange, LiveTopic } from '../shared/liveState';
 import { notificationState } from './notifications';
 
-const topics: LiveTopic[] = ['user', 'wallet', 'messages', 'run', 'notifications'];
+const topics: LiveTopic[] = ['preferences','user', 'wallet', 'messages', 'run', 'notifications'];
 type Subscriber = { userId: string; sessionId: string; dirty(topics: LiveTopic[]): void; records(keys: string[]): void; close(): void };
 const subscribers = new Set<Subscriber>();
 let watcher: ChangeStream | undefined;
@@ -27,6 +28,7 @@ async function changed(event: ChangeStreamDocument<Document>) {
   if (collection === 'blocks' && !members) members = key.split(':');
   for (const listener of subscribers) {
     if(collection==='logEntries'){listener.records(['log','people','posts']);continue;}
+    if(collection==='logBirthdays'){listener.records(['log_birthdays']);continue;}
     if(collection==='logPreferences'){if(key===listener.userId)listener.records(['log_preferences']);continue;}
     if (collection === 'agentInbox' || collection === 'automations') { if (!document || document.userId === listener.userId) { listener.records([collection === 'agentInbox' ? 'inbox' : 'automations']); listener.dirty(['notifications']); } continue; }
     if (collection === 'runs' && document?.purpose === 'automation') { const fields = 'updateDescription' in event ? Object.keys(event.updateDescription.updatedFields || {}) : ['status']; if (document.userId === listener.userId && fields.some(field => /^(status|sleep|chargedNanos|reservedNanos|inboxId|delivery|error|usagePending)(\.|$)/.test(field))) { listener.records(['automations']); listener.dirty(['wallet', 'notifications']); } continue; }
@@ -63,7 +65,7 @@ async function changed(event: ChangeStreamDocument<Document>) {
 async function startWatch() {
   if (starting) return starting;
   starting = (async () => {
-    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments', 'chatSearchChunks', 'agentInbox', 'automations', 'postSaves', 'logEntries', 'logPreferences'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
+    const stream = db().watch([{ $match: { 'ns.coll': { $in: ['users', 'runs', 'messages', 'ledger', 'sessions', 'connections', 'directMessages', 'blocks', 'posts', 'postLikes', 'notifications', 'uploads', 'searchDocuments', 'chatSearchChunks', 'agentInbox', 'automations', 'postSaves', 'logEntries', 'logPreferences', 'logBirthdays'] } } }], { fullDocument: 'updateLookup', maxAwaitTimeMS: 1000 });
     watcher = stream;
     // Establish the cursor before taking a snapshot. All later changes either
     // appear in that snapshot or cause a fresh projection (often both).
@@ -83,6 +85,7 @@ export async function readLiveState(userId: string, requested: LiveTopic[] = top
   return transaction(async session => {
     const owner = requireValue(await users().findOne({ _id: userId }, { session }));
     const result: LiveChange = {};
+    if (requested.includes('preferences')) result.preferences={...defaultPreferences,...owner.preferences};
     if (requested.includes('user')) result.user = profile(owner);
     if (requested.includes('wallet')) result.wallet = await wallet(userId, session, owner);
     if (requested.includes('messages')) { const page = await conversationPage(userId, 60, undefined, session); result.messages = page.items; result.conversationCursor = page.nextCursor; result.conversationGeneration = owner.chatGeneration || 0; }

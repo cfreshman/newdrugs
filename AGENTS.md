@@ -178,3 +178,41 @@ agent-written rules (you are allowed to edit below this line)
 
 - Log keeps Logcal's shared-hangout model: QR/code joining, reusable people from past shared hangouts, plus accepted New Drugs friends in the picker. Do not reintroduce a separate invitation/acceptance flow for new Log entries. Any attendee can show its code or add eligible people. A person removes only their own attendance/note/media; the last attendee removes the empty hangout. Co-attendance does not silently open New Drugs DMs.
 - Log has no generic panel header. Its scan/log controls and individual current-day hangout cards float over the scrolling calendar. Before 8am, yesterday's cards remain available too. Entry/editor/code panels overlay the preserved calendar; closing restores exact scroll. Keep source structure with New Drugs typography/colors.
+
+- Log Scan is the camera with a Cancel control. Do not add paste-code forms, image-file pickers or start/stop camera buttons. Shared links open the Join screen directly.
+
+- Log modals use the browser top layer to escape the panel clipping container, align to the base panel bounds with the same exterior gaps, and use only one content inset. Do not add extra header/footer padding.
+
+- Log editor uses Logcal’s Uncommon section with a Set as anniversary start toggle. Do not present One time/Anniversary/Birthday as recurrence choices: the marker remembers the original date, not a repeating hangout. Preserve existing birthday records without offering that invented choice for new entries.
+
+- Log weekday labels live outside the calendar scrollport and stay completely fixed, including the initial scroll. Do not use a sticky header that moves through its top padding before sticking.
+
+- An opened empty Log matches Logcal: keep the current person’s name header above their tap to add log prompt, and omit other empty note/media rows. Participants still appear in the with list.
+
+- Log Grid runs newest first from the top left, left to right like Instagram, overriding Logcal’s original right-to-left contact sheet.
+
+- Log Close returns to the previous screen. Older/Newer navigation replaces the current hangout instead of adding history. Adjacent entries are preloaded. Code/Close/Edit share equal widths. Log overlays take the full available page height minus normal exterior gaps, including behind the page header, while leaving the desktop side agent usable.
+- Remove me entirely belongs in the editor’s Uncommon section. Do not put a separate entry overflow menu/Ask agent action there. Hosted messages carry a server-validated current app route, following Wayfinder page context; it is a lookup hint, never permission to act. Reauthorize the referenced record when building model input.
+- Log note and other text inputs use the same backing. The media action rail keeps its full width when Remove/Set cover are hidden. Link attachments have explicit add/remove controls and compact previews. Bare domains do not acquire a display or stored root slash; keep explicit URL paths intact.
+
+- Tap to add log appears only on a truly empty entry. Existing title/place/links/media/anniversary or additional participants already count as information; do not nag for a separate note.
+
+- Today cards use horizontal swipes between full/left-square/right-square, saved per account in Log preferences. Squares and full cards have equal heights. Keep vertical list scrolling native and suppress clicks after a swipe. The loading spinner belongs in the media preview, including while the image itself loads.
+
+- Log filtering and saved views are CLI/MCP capabilities only. Do not show search, scope/person filters, or saved-view controls in the Log UI. Keep layout switching and export.
+
+- Log Grid/List include bottom scroll clearance measured from the floating controls, so the last item scrolls fully above today cards and Scan/Log buttons.
+
+- The Log three-dot control opens a compact Calendar/Grid/List picker and a More settings button for the separate Log settings panel. Cancel from Scan returns to its originating QR code when opened there; Scan opened from the calendar returns to the calendar. Close returns through the prior QR/entry screen; only Older/Newer replaces the current record.
+
+- Log sidenav includes People, Birthdays, Anniversaries and Log settings; mobile reaches the same pages from Log settings. Friends’ profiles have a Hangouts tab using the shared Log list, preserving the current app mode and profile tab when closing a hangout.
+- Birthday settings store month/day only and show reminders only to accepted New Drugs friends. Shared hangout attendance alone does not grant birthday access. Do not require/store a birth year. Use normal block/suspension gates; no public birthday directory. Older/Newer labels stay fixed, without neighboring dates that pop in after loading.
+- Scan/Log controls use the same bottom inset as their side inset.
+
+- Account Preferences contains Light/Dark/System theme, Mono/Sans/Serif font (Mono default), and a landing tab. Preferences stay private, sync between signed-in devices, and do not override explicit deep links. Account contains sign-in/security, blocked people and storage; Donate and Log out share a row.
+- Log arrangement is a saved setting, not URL state. Item dates use uppercase full weekday/month names. Older/Newer labels sit next to their respective outside arrows.
+- Log uploads belong to one hangout. Removing an attachment on Save or choosing Remove me entirely deletes that person's media and frees storage; other attendees keep theirs. Do not retain orphan files or reuse a Log file in another entry/post.
+- Open modal shells immediately, keeping loading content mounted and hidden until ready. Back/Close stays usable. Cached content appears immediately. No artificial loading delay.
+- The user explicitly approved the first Log production release and then migration of Cyrus and Laura's existing Logcal data. Migration must be additive/retry-safe, preserve account ownership and shared entries, and leave Logcal source data untouched.
+
+- When another landing tab is preferred, Agent uses explicit `/agent`. Dark-mode panels, gradients, inputs and controls use warm charcoal/red-orange rather than blue. Preserve original Logcal entry/person/media IDs internally; future account linking happens only through a separate explicitly requested migration.

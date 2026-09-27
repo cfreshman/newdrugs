@@ -1,3 +1,4 @@
+import {resolvePageContext,pageContextText} from './pageContext';
 import {logOperation} from './log';
 import { resolveRecordContexts } from './recordContext';
 import { automationConfigSchema, automationOutcomeSchema } from '../shared/automations';
@@ -243,7 +244,7 @@ async function handleActions(run: RunRecord, required: FunctionAction[], client:
           const version = operations.find(o=>o.name==='app.open')!.version;
           action = { id: call.call_id, operation: 'app.open', input, version, digest: digest('app.open', version, input), title: 'Open editor', detail: '', expiresAt: Date.now() + 86400000,
             status: input.waitForCompletion ? 'pending' : 'approved', human: input.waitForCompletion, kind: 'input' };
-          await update(run, { approvals: [...run.approvals, action], surface: JSON.parse(JSON.stringify({ id: call.call_id, view: input.view,date:input.date,logMonth:input.logMonth,logScope:input.logScope,logArrangement:input.logArrangement,personId:input.personId, waiting: input.waitForCompletion, resourceId: input.resourceId, areaCell: input.areaCell, radiusMiles: input.radiusMiles, postIds: input.postIds, query: input.query, scope: input.scope })) });
+          await update(run, { approvals: [...run.approvals, action], surface: JSON.parse(JSON.stringify({ id: call.call_id, view: input.view,date:input.date,logMonth:input.logMonth,logScope:input.logScope,personId:input.personId, waiting: input.waitForCompletion, resourceId: input.resourceId, areaCell: input.areaCell, radiusMiles: input.radiusMiles, postIds: input.postIds, query: input.query, scope: input.scope })) });
         }
         if (action.status === 'pending') continue;
         replies.push({ type: 'agent.session.input.tool_result', call_id: call.call_id, turn_id: call.turn_id, success: true, output: JSON.stringify({ ...objectResult(action.result || { opened: input.view, cancelled: action.status === 'rejected' }), links: [...(Array.isArray(objectResult(action.result).links)?objectResult(action.result).links as any[]:[]),...buildResourceLinks('app.open', input, { open: input.view, ...input }, { userId: run.userId, source: 'agent', scope: 'write' })] }) });
@@ -283,7 +284,7 @@ async function handleActions(run: RunRecord, required: FunctionAction[], client:
         if (action.result === undefined) {
           if (action.status === 'rejected' || action.expiresAt <= Date.now()) {
             const reply = run.reviewReplies?.find(reply => reply.actionIds.includes(action.id));
-            action.result = { ok: false, operation: action.operation, status: 'not_executed', message: 'Declined or expired.', ...(reply ? { userReply: { text: reply.text, files: reply.files, ...(reply.recordRefs?.length?{selectedContext:(await resolveRecordContexts(run.userId,reply.recordRefs)).content}:{}) }, instruction: 'The user sent this reply instead of confirming. Continue from their correction. The pending actions were rejected.' } : {}) };
+            action.result = { ok: false, operation: action.operation, status: 'not_executed', message: 'Declined or expired.', ...(reply ? { userReply: { text: reply.text, files: reply.files, pageContext:pageContextText(await resolvePageContext(run.userId,reply.pageContext)), ...(reply.recordRefs?.length?{selectedContext:(await resolveRecordContexts(run.userId,reply.recordRefs)).content}:{}) }, instruction: 'The user sent this reply instead of confirming. Continue from their correction. The pending actions were rejected.' } : {}) };
           }
           else {
             const op = operations.find(o => o.name === action.operation);

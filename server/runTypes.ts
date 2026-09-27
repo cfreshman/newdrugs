@@ -1,6 +1,6 @@
 import type { RunView, Approval } from '../shared/types';
 export interface RunRecord extends Omit<RunView, 'id'> {
-  creationRecoveries?: number; awakeMs?: number; backgroundReadCount?: number; credentialId?: string; completedSleeps?: Record<string, string>;
+  pageContext?:import('../shared/pageContext').AgentPageContext; creationRecoveries?: number; awakeMs?: number; backgroundReadCount?: number; credentialId?: string; completedSleeps?: Record<string, string>;
   purpose?: 'automation'; priority?: number; automationId?: string; automationGeneration?: number; automationName?: string; logAccess?: boolean; privateChat?: boolean; accountActivity?: boolean; webSearch?: boolean; budgetNanos?: number;
   delivery?: import('../shared/automations').AutomationOutcome; inboxId?: string; inboxIds?: string[];
   recentDeliveries?: { title: string; links: unknown; createdAt: string }[];
@@ -13,5 +13,5 @@ export interface RunRecord extends Omit<RunView, 'id'> {
   providerSessionId?: string; providerTurnId?: string; previousTurnId?: string; inputSubmitted?: boolean; creatingSession?: boolean; sessionStartsIdle?: boolean; failures: number;
   attempts: number; nextAttempt?: number; approvals: Approval[];
   finalRecovery?: boolean;
-  reviewReplies?: { id: string; text: string; files: import('../shared/uploads').UploadRef[]; recordRefs?:import('../shared/recordContext').RecordReference[]; actionIds: string[] }[];
+  reviewReplies?: { id: string; text: string; pageContext?:import('../shared/pageContext').AgentPageContext; files: import('../shared/uploads').UploadRef[]; recordRefs?:import('../shared/recordContext').RecordReference[]; actionIds: string[] }[];
 }

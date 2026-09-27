@@ -1,0 +1,26 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {createHash,randomUUID} from 'node:crypto';
+import {afterAll,beforeAll,it,expect} from 'vitest';
+import {connectDatabase,db,mongo,rows} from '../server/db';
+import {config} from '../server/config';
+import {importLogcal,validateLogcalPlan} from '../scripts/migrations/logcal-import';
+let directory:string;
+beforeAll(async()=>{if(new URL(config.MONGODB_URI).pathname!=='/newdrugs_test')throw Error('Isolated DB required');await connectDatabase();directory=await fs.mkdtemp(path.join(os.tmpdir(),'nd-migration-test-'));});
+afterAll(async()=>{for(const collection of await db().collections())await collection.deleteMany({});await mongo.close();await fs.rm(directory,{recursive:true,force:true});});
+it('validates ownership, imports atomically, preserves source identities, and never duplicates quota or overwrites on retry',async()=>{
+ for(const collection of await db().collections())await collection.deleteMany({});
+ const user1=randomUUID(),user2=randomUUID(),entryId=randomUUID(),fileId=randomUUID(),now=new Date().toISOString(),bytes=Buffer.from('test-only verified file'),digest=createHash('sha256').update(bytes).digest('hex');
+ const input={version:1,source:'logcal.app',sourceHash:'a'.repeat(64),exportedAt:now,accounts:[{sourceId:'old-one',handle:'one',userId:user1,birthday:{month:2,day:3}},{sourceId:'old-two',handle:'two',userId:user2,birthday:null}],entries:[{_id:entryId,title:'Original title',date:'2020-01-02',place:'Original place',links:[],recurrence:'none',coverFileId:fileId,ownerId:user1,members:[user1,user2],invited:[],contributions:[{userId:user1,note:'Human words',fileIds:[fileId]},{userId:user2,note:'Other human words',fileIds:[]}],historicalPeople:['Old friend'],revision:1,createdAt:now,updatedAt:now,migration:{source:'logcal.app',sourceId:'old-hangout',sourceHash:'b'.repeat(64),historicalPeople:[{sourceId:'old-friend',name:'Old friend'}],missingMedia:[],version:1}}],uploads:[{_id:fileId,userId:user1,logEntryId:entryId,purpose:'log_media',name:'photo.webp',expectedBytes:bytes.length,sourceHash:digest,bytes:bytes.length,mime:'image/webp',sha256:digest,ready:true,retained:true,referenceRevision:1,createdAt:now,migration:{source:'logcal.app',sourceId:'old-hangout',sourceUrl:'https://logcal-images-dev.s3.amazonaws.com/photo.jpg',kind:'image',version:1}}],missing:[]};
+ await rows('users').insertMany([{_id:user1,handle:'one',storageBytes:123},{_id:user2,handle:'two',storageBytes:0}]);await rows('logBirthdays').insertOne({_id:user1,month:8,day:9});await fs.mkdir(path.join(directory,'prepared'));await fs.writeFile(path.join(directory,'prepared',fileId),bytes);
+ const args={db:db(),client:mongo,input,preparedDir:path.join(directory,'prepared'),targetDir:path.join(directory,'target')};
+ const bad=structuredClone(input);bad.uploads[0].userId=user2;expect(()=>validateLogcalPlan(bad)).toThrow('Invalid attachment ownership');
+ const preview=await importLogcal(args);expect(preview).toMatchObject({entries:1,uploads:1,applied:false});expect(await rows('logEntries').countDocuments()).toBe(0);
+ expect(await importLogcal({...args,apply:true})).toMatchObject({applied:true});expect((await rows('users').findOne({_id:user1}))?.storageBytes).toBe(123+bytes.length);
+ expect((await rows('logEntries').findOne({_id:entryId}))?.migration).toMatchObject({sourceId:'old-hangout',historicalPeople:[{sourceId:'old-friend',name:'Old friend'}]});expect(await rows('users').countDocuments()).toBe(2);expect(await rows('notifications').countDocuments()).toBe(0);
+ expect(await rows('logBirthdays').findOne({_id:user1})).toMatchObject({month:8,day:9});
+ await rows('logEntries').updateOne({_id:entryId},{$set:{title:'Changed after import'}});
+ expect(await importLogcal({...args,apply:true})).toMatchObject({applied:false,alreadyApplied:true});expect((await rows('logEntries').findOne({_id:entryId}))?.title).toBe('Changed after import');expect((await rows('users').findOne({_id:user1}))?.storageBytes).toBe(123+bytes.length);
+ expect(await fs.readFile(path.join(directory,'target',fileId))).toEqual(bytes);
+});

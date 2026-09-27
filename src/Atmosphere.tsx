@@ -17,8 +17,8 @@ export function Atmosphere(){
   useEffect(()=>{
     const node=canvas.current!,context=node.getContext('2d');if(!context)return;
     const css=getComputedStyle(node);
-    const base=css.getPropertyValue('--canvas').trim();
-    const colors=fields.map(field=>css.getPropertyValue(`--gradient-${field.color}`).trim());
+    let base=css.getPropertyValue('--canvas').trim();
+    let colors=fields.map(field=>css.getPropertyValue(`--gradient-${field.color}`).trim());
     const drift=parseFloat(css.getPropertyValue('--atmosphere-drift'))||10;
     const spread=parseFloat(css.getPropertyValue('--atmosphere-spread'))||0.1;
     let frame=0,last=0,painted=0,elapsed=0;
@@ -52,9 +52,11 @@ export function Atmosphere(){
       frame=requestAnimationFrame(tick);
     };
     const visibility=()=>{cancelAnimationFrame(frame);last=0;if(!document.hidden)frame=requestAnimationFrame(tick);};
+    const theme=()=>{const current=getComputedStyle(node);base=current.getPropertyValue('--canvas').trim();colors=fields.map(field=>current.getPropertyValue(`--gradient-${field.color}`).trim());paint();};
+    window.addEventListener('newdrugs:theme',theme);
     resize();const observer=new ResizeObserver(resize);observer.observe(node);
     document.addEventListener('visibilitychange',visibility);visibility();
-    return()=>{cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener('visibilitychange',visibility);};
+    return()=>{window.removeEventListener('newdrugs:theme',theme);cancelAnimationFrame(frame);observer.disconnect();document.removeEventListener('visibilitychange',visibility);};
   },[]);
   return <canvas ref={canvas} className="atmosphere" aria-hidden="true"/>;
 }

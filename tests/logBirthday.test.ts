@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';
+import {birthdaySchema,birthdayOn} from '../shared/logBirthday';
+it('stores only a valid month/day and handles leap-day reminders without inventing a birth year',()=>{expect(birthdaySchema.parse({month:2,day:29})).toEqual({month:2,day:29});expect(birthdaySchema.safeParse({month:2,day:30}).success).toBe(false);expect(birthdaySchema.safeParse({month:4,day:31}).success).toBe(false);expect(birthdaySchema.safeParse({month:2,day:29,year:2000}).success).toBe(false);expect(birthdayOn({month:2,day:29},'2027-02-28')).toBe(true);expect(birthdayOn({month:2,day:29},'2028-02-29')).toBe(true);});

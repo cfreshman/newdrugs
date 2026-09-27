@@ -10,6 +10,9 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   const add = (destination: Destination, title: string, targetKind: ResourceLink['targetKind'], resourceType: string, resourceId?: string) => {
     links.push({ rel: 'open_in_newdrugs', targetKind, title: title.slice(0, 160), url: new URL(destinationPath(destination), config.uiOrigin).href, resourceType, ...(resourceId ? { resourceId } : {}) });
   };
+  if(name==='account.preferences'||name==='account.preferences_update'){add({view:'preferences'},'Preferences','surface','preferences');return links;}
+  if(name==='log.birthday_get'||name==='log.birthday_update'){add({view:'log_settings'},'Log settings','surface','log_settings');return links;}
+  if(name==='log.birthdays'){for(const item of data.items||[])add({view:'person',resourceId:item.personId},item.name,'exact','person',item.personId);return links;}
   if(name==='log.code'){add({view:'log_join',resourceId:data.code},'Join hangout','exact','log_join',data.entryId);return links;}
   if(name==='log.contacts'){for(const person of rows)if(person.id)add({view:'person',resourceId:person.id},person.name||'View person','exact','person',person.id);return links;}
   if(name==='log.join_preview'){add({view:'log_join',resourceId:String(input.code)},'Join hangout','exact','log_join',data.entryId);return links;}
@@ -55,7 +58,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   }
   else if (name === 'app.open' && data.open === 'chat_history' && data.resourceId) add({ view: 'chat', resourceId: data.resourceId }, 'Open chat message', 'exact', 'chat_message', data.resourceId);
   else if (name.startsWith('conversation.')) add({ view: 'chat' }, 'Open your agent chat', 'surface', 'chat');
-  else if (name === 'app.open') add({ view: data.open,date:data.date,logMonth:data.logMonth,logScope:data.logScope,logArrangement:data.logArrangement,personId:data.personId, resourceId: data.resourceId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.resourceId);
+  else if (name === 'app.open') add({ view: data.open,date:data.date,logMonth:data.logMonth,logScope:data.logScope,personId:data.personId, resourceId: data.resourceId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.resourceId);
   else if (name === 'files.get' || name === 'files.list') for (const row of rows) if (row.ready && typeof row.id === 'string') links.push({ rel: 'download', targetKind: 'exact', title: String(row.name), url: new URL(`/api/files/${encodeURIComponent(row.id)}`, config.uiOrigin).href, resourceType: 'file', resourceId: row.id });
   // Deleted/blocked/reported records have no promised inspectable destination.
   return links.filter((link, index) => links.findIndex(other => other.url === link.url) === index).slice(0, 40);

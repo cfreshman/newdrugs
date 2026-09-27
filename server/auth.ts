@@ -12,6 +12,7 @@ import type { CoarseArea } from '../shared/geo';
 const derive = promisify(scrypt);
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 export interface User {
+  preferences?:import('../shared/preferences').AccountPreferences;
   _id: string;
   suspendedAt?: string | null; suspensionReason?: string;
   name: string; handle?: string; passwordHash?: string; city: string; cityKey: string;

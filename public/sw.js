@@ -3,7 +3,7 @@ self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 function messagePath(value) {
   try { const url = new URL(typeof value === 'string' ? value : '/messages', self.location.origin);
-    if (url.origin === self.location.origin && /^\/(?:messages|inbox|automations)(?:\/[^/?#]+)?$/.test(url.pathname)) return url.pathname;
+    if (url.origin === self.location.origin && /^\/(?:messages|inbox|automations|log)(?:\/[^/?#]+)?$/.test(url.pathname)) return url.pathname;
   } catch { /* Fall back to the inbox. */ }
   return '/messages';
 }
@@ -12,8 +12,8 @@ self.addEventListener('push', event => {
     let data = {};
     try { data = event.data?.json() || {}; } catch { /* Still display a visible notification. */ }
     const path = messagePath(data.url);
-    await self.registration.showNotification('New Drugs', {
-      body: data.body === 'You have an agent update.' ? data.body : data.body === 'You have a new invitation.' ? data.body : 'You have a new message.',
+    await self.registration.showNotification('Notification', {
+      body: ['You have an agent update.','You have an automation update.','You have a new invitation.','You were added to a hangout.','You have a Log invitation.'].includes(data.body) ? data.body : 'You have a new message.',
       icon: '/icons/icon-192.png', tag: typeof data.tag === 'string' ? data.tag : 'newdrugs',
       data: { path },
     });

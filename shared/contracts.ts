@@ -1,3 +1,4 @@
+import {accountPreferencesSchema} from './preferences';
 import {logOutputs} from './log';
 import {timeResolveOutput,timeConvertOutput,timeOverlapOutput} from './utilitySchemas';
 import {customDocumentSchema} from './customMedia';
@@ -24,6 +25,7 @@ const searchRetrieval = z.object({id,mode:z.enum(['hybrid','semantic','keyword',
 const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetrieval,nextCursor:z.string().nullable()});
 export const outputs: Record<string, z.ZodType> = {
   ...logOutputs,
+  'account.preferences':accountPreferencesSchema,'account.preferences_update':accountPreferencesSchema,
   'automations.create': automationSchema, 'automations.get': automationSchema, 'automations.update': automationSchema, 'automations.enable': automationSchema, 'automations.pause': automationSchema, 'automations.delete': automationSchema,
   'automations.list': z.object({ items: z.array(automationSchema) }), 'automations.run_now': z.object({ runId: id }),
   'automations.runs': page(z.object({ id, status: z.string(), outcome: z.string().optional(), createdAt: z.string(), costNanos: z.number(), usagePending: z.boolean(), reason: z.string().optional(), inboxId: z.string().optional(), sleep: z.object({ until: z.number(), reason: z.string() }).optional() })),
@@ -43,7 +45,7 @@ export const outputs: Record<string, z.ZodType> = {
   'people.context':z.object({person:profileOutput.nullable(),profileAvailable:z.boolean(),connection:connection.nullable(),recentPosts:page(post)}),
   'activity.since':z.object({items:z.array(z.object({id,kind:z.enum(['invitation','connection_accepted','connection_declined','message','post_reply','post_like']),createdAt:z.string(),actor:z.object({id,name:z.string(),handle:z.string().optional()}),sourceId:id,text:z.string(),textTruncated:z.boolean(),postId:id.optional(),connectionId:id.optional(),link:resourceLinkOutput})),since:z.string(),until:z.string(),nextCursor:z.string().nullable(),notice:z.string()}),
   'identity.get': profileOutput, 'profile.update': profileOutput, 'people.get': profileOutput,
-  'app.open': z.object({ open: z.string(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),logArrangement:z.enum(['calendar','gallery','list']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
+  'app.open': z.object({ open: z.string(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
   'search.query':searchResult, 'posts.search':searchResult, 'search.similar':searchResult, 'search.refine':searchResult,
   'search.explain':z.object({match:searchMatch,retrieval:searchRetrieval}),
   'search.datasets':z.object({datasets:z.array(z.object({dataset:z.string(),count:z.number()})),pending:z.number(),failed:z.number(),model:z.string(),dimensions:z.number(),indexVersion:z.string(),capacity:z.number(),notice:z.string()}),
@@ -70,8 +72,8 @@ export const outputs: Record<string, z.ZodType> = {
 export const consequences: Record<string, string> = {
   'log.add_person':'Add this person to the shared hangout. They can see it and add their own note/photos. Other attendees keep their contributions.',
   'log.join':'Join this shared hangout as yourself. Its attendees can see your participation, and you can log future hangouts together.',
-  'log.delete':'Remove your own participation and contribution. Other attendees keep the hangout. The final attendee removes the empty hangout.',
-  'log.leave':'Remove your own participation and contribution. Other attendees keep the hangout. The final attendee removes the empty hangout.',
+  'log.delete':'Remove your own participation and contribution, permanently deleting your attached media and freeing its storage. Other attendees keep the hangout. The final attendee removes the empty hangout.',
+  'log.leave':'Remove your own participation and contribution, permanently deleting your attached media and freeing its storage. Other attendees keep the hangout. The final attendee removes the empty hangout.',
 
   'automations.create': 'Create and activate this automation with the displayed schedule, data access and AI spending limits. Hosted runs use your credits, including runs that finish silently.',
   'automations.enable': 'Enable this saved automation to run with its displayed schedule, data access and AI spending limits. Hosted runs use your credits, including runs that finish silently.',

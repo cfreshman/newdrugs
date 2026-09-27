@@ -4,7 +4,7 @@ export interface Profile {
   area?: import('./geo').CoarseArea | null;
   photos?:string[];
 }
-export interface Message { records?:import('./recordContext').RecordAttachment[];
+export interface Message { pageContext?:import('./pageContext').PageContextCandidate; records?:import('./recordContext').RecordAttachment[];
   id: string; role: 'user' | 'assistant'; text: string; createdAt: string;
   source: 'app' | 'external'; status?: 'complete' | 'interrupted' | 'pending' | 'failed';
   files?: import('./uploads').UploadRef[];
@@ -16,6 +16,7 @@ export interface Wallet {
   entries: { id: string; amountNanos: number; label: string; createdAt: string; details?: Record<string, unknown> }[];
 }
 export interface Bootstrap {
+  preferences?:import('./preferences').AccountPreferences;
   user: Profile; wallet: Wallet; messages: Message[];
   conversationCursor?: string | null; conversationGeneration?: number;
   run?: RunView | null;
@@ -34,6 +35,6 @@ export interface RunView {
   phase?: import('./agentUi').AgentPhase; preamble?: string; cancelRequested?: boolean;
   outputComplete?: boolean; sleep?: { until: number; reason: string };
   approvals: Approval[]; clientId: string; error?: string; revision: number;
-  surface?: { id: string; view: string; date?:string; logMonth?:string;logScope?:import('./navigation').Destination['logScope'];logArrangement?:import('./navigation').Destination['logArrangement'];personId?:string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
+  surface?: { id: string; view: string; date?:string; logMonth?:string;logScope?:import('./navigation').Destination['logScope'];personId?:string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
   sources?: { url: string; title: string }[];
 }

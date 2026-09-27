@@ -8,9 +8,9 @@ import type {ClientSession,Filter} from 'mongodb';
 import {rows} from './db';
 import {users,type Actor} from './auth';
 import {AppError,requireValue} from './errors';
-import {uploads,ownUpload,retainUploads} from './uploads';
+import {uploads,ownUpload,retainUploads,deleteUpload} from './uploads';
 import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogList} from '../shared/log';
-interface LogRow extends LogFields {_id:string;joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
+interface LogRow extends LogFields {_id:string;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
 const entries=()=>rows<LogRow>('logEntries');
 async function excluded(userId:string,session?:ClientSession){return [...(await rows('blocks').find({members:userId},{session}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)),...(await users().find({suspendedAt:{$type:'string'}},{session,projection:{_id:1}}).toArray()).map(row=>row._id)];}
 async function access(userId:string,session?:ClientSession):Promise<Filter<LogRow>>{const blocked=await excluded(userId,session);return {deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]};}
@@ -21,9 +21,20 @@ async function project(row:LogRow,userId:string,session?:ClientSession,preview=f
  const visible=new Set<string>();for(const person of people)if(await profileVisibleTo(userId,person,session))visible.add(person._id);
  const files=await uploads().find({_id:{$in:row.contributions.flatMap(c=>c.fileIds)},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session}).toArray();
  const person=(id:string)=>{const user=people.find(p=>p._id===id);return {userId:id,profileVisible:visible.has(id),name:user?.name||user?.handle||'Member',...(user?.handle?{handle:user.handle}:{}),...(user?.photos?.[0]&&visible.has(id)?{photoId:user.photos[0]}:{})};};
- return {id:row._id,ownerId:row.ownerId,title:row.title,date:row.date,place:row.place,links:row.links,recurrence:row.recurrence,coverFileId:files.some(f=>f._id===row.coverFileId)?row.coverFileId:null,revision:row.revision,createdAt:row.createdAt,updatedAt:row.updatedAt,membership:row.members.includes(userId)?'member':row.invited.includes(userId)?'invited':'declined',contributors:row.contributions.filter(c=>row.members.includes(c.userId)).map(c=>({...person(c.userId),note:preview?c.note.slice(0,500):c.note,...(preview&&c.note.length>500?{noteTruncated:true}:{}),files:c.fileIds.flatMap(id=>files.filter(f=>f._id===id&&f.userId===c.userId)).map(f=>({id:f._id,name:f.name,mime:f.mime,bytes:f.bytes,url:`/api/files/${f._id}`}))})),invitations:row.invited.map(person)};
+ return {id:row._id,ownerId:row.ownerId,...(row.historicalPeople?.length?{historicalPeople:row.historicalPeople}:{}),title:row.title,date:row.date,place:row.place,links:row.links,recurrence:row.recurrence,coverFileId:files.some(f=>f._id===row.coverFileId)?row.coverFileId:null,revision:row.revision,createdAt:row.createdAt,updatedAt:row.updatedAt,membership:row.members.includes(userId)?'member':row.invited.includes(userId)?'invited':'declined',contributors:row.contributions.filter(c=>row.members.includes(c.userId)).map(c=>({...person(c.userId),note:preview?c.note.slice(0,500):c.note,...(preview&&c.note.length>500?{noteTruncated:true}:{}),files:c.fileIds.flatMap(id=>files.filter(f=>f._id===id&&f.userId===c.userId)).map(f=>({id:f._id,name:f.name,mime:f.mime,bytes:f.bytes,url:`/api/files/${f._id}`}))})),invitations:row.invited.map(person)};
 }
-async function media(userId:string,ids:string[],session?:ClientSession){for(const id of ids){const file=await ownUpload(userId,id,session);if(!file.ready||!['image/','audio/','video/'].some(prefix=>file.mime.startsWith(prefix))||!['log_media','agent_input'].includes(file.purpose))throw new AppError(422,'log_media','Choose a ready photo, audio recording or video.');await retainUploads(userId,[id],file.purpose,session);}}
+async function media(userId:string,ids:string[],entryId:string,session?:ClientSession){
+ for(const id of ids){
+  const file=await ownUpload(userId,id,session);
+  if(!file.ready||!['image/','audio/','video/'].some(prefix=>file.mime.startsWith(prefix))||!['log_media','agent_input'].includes(file.purpose))throw new AppError(422,'log_media','Choose a ready photo, audio recording or video.');
+  if(file.logEntryId&&file.logEntryId!==entryId||await entries().findOne({_id:{$ne:entryId},'contributions.fileIds':id,deletedAt:{$exists:false}},{session})||await rows('posts').findOne({fileIds:id,deletedAt:{$exists:false}},{session})||await users().findOne({photos:id},{session}))throw new AppError(422,'log_file_owned','Upload a separate file for this hangout.');
+  await uploads().updateOne({_id:id,userId},{$set:{logEntryId:entryId},$inc:{referenceRevision:1}},{session});
+  await retainUploads(userId,[id],file.purpose,session);
+ }
+}
+async function removeMedia(actor:Actor,ids:string[],session?:ClientSession){
+ for(const id of new Set(ids))if(await uploads().findOne({_id:id,userId:actor.userId,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session}))await deleteUpload(actor,id,session);
+}
 async function notification(row:LogRow,actorId:string,userId:string,kind:'log_invitation'|'log_update'|'log_added',session?:ClientSession){await rows('notifications').updateOne({_id:`log:${row._id}:${userId}`},{$set:{userId,actorId,entryId:row._id,kind,title:kind==='log_added'?'You were added to a hangout':kind==='log_invitation'?'An invitation to a shared Log entry':'A shared hangout was updated',text:'',revision:row.revision,readAt:null,createdAt:new Date().toISOString()}},{upsert:true,session});if(kind==='log_invitation'||kind==='log_added')await enqueueLogInvitationPush(userId,actorId,row._id,row.revision,session,kind);}
 async function save(row:LogRow,revision:number,actor:Actor,session?:ClientSession){
  if(row.revision!==revision)throw new AppError(409,'log_changed','This entry changed. Reload it before saving.');
@@ -72,6 +83,15 @@ async function joinRow(row:LogRow,actor:Actor,session?:ClientSession){
 
 export async function logOperation(name:string,d:Record<string,unknown>,actor:Actor,session?:ClientSession):Promise<unknown>{
  const userId=actor.userId,now=new Date().toISOString();
+ if(name==='log.birthday_get'){const row=await rows('logBirthdays').findOne({_id:userId},{session});return {birthday:row?{month:row.month,day:row.day}:null};}
+ if(name==='log.birthday_update'){if(d.birthday)await rows('logBirthdays').updateOne({_id:userId},{$set:{...(d.birthday as {month:number;day:number}),updatedAt:now}},{session,upsert:true});else await rows('logBirthdays').deleteOne({_id:userId},{session});return {birthday:d.birthday};}
+ if(name==='log.birthdays'){
+  const blocked=await excluded(userId,session),connections=!actor.background||actor.accountActivity?await rows('connections').find({members:userId,status:'accepted'},{session}).toArray():[];
+  const ids=[...new Set([userId,...connections.flatMap(row=>(row.members as string[]).filter(id=>!blocked.includes(id)))])];
+  const people=(await users().find({_id:{$in:ids},suspendedAt:null},{session,projection:{name:1,handle:1}}).toArray()).map(person=>({id:person._id,name:person.name,handle:person.handle})),saved=await rows('logBirthdays').find({_id:{$in:people.map(person=>person.id)}},{session}).toArray();
+  return {items:saved.map(row=>{const person=people.find(person=>person.id===row._id)!;return {personId:row._id,name:person.name,handle:person.handle,month:row.month,day:row.day};})};
+ }
+
  if(name==='log.contacts'){
   const all=(await contactRows(actor,session)).filter(person=>!d.query||`${person.name} ${person.handle||''}`.toLowerCase().includes(String(d.query).toLowerCase()));
   const limit=Number(d.limit||20),signature=createHash('sha256').update(JSON.stringify([userId,d.query||''])).digest('hex');let offset=0;
@@ -89,13 +109,13 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
   return joinRow(row,actor,session);
  }
 
- if(name==='log.preferences')return logPreferencesSchema.parse((({arrangement,views}:any)=>({arrangement,views}))(await rows('logPreferences').findOne({_id:userId},{session})||{}));
+ if(name==='log.preferences')return logPreferencesSchema.parse((({arrangement,views,todayPresentation}:any)=>({arrangement,views,todayPresentation}))(await rows('logPreferences').findOne({_id:userId},{session})||{}));
  if(name==='log.preferences_update'){const value=logPreferencesSchema.parse(d);if(new Set(value.views.map(v=>v.id)).size!==value.views.length)throw new AppError(422,'log_views','Saved views must have different IDs.');await rows('logPreferences').updateOne({_id:userId},{$set:value},{upsert:true,session});return value;}
  if(name==='log.list'||name==='log.export'){const result=await list(userId,d as unknown as LogList,session,name==='log.export');return name==='log.export'?{...result,text:logPlainText(result.items)}:result;}
  if(name==='log.create'){
-  const fields=d.entry as LogFields,contribution=d.contribution as LogContribution;await media(userId,contribution.fileIds,session);
+  const fields=d.entry as LogFields,contribution=d.contribution as LogContribution,entryId=randomUUID();await media(userId,contribution.fileIds,entryId,session);
   if(fields.coverFileId&&(!contribution.fileIds.includes(fields.coverFileId)||!await uploads().findOne({_id:fields.coverFileId,ready:true,mime:{$regex:'^image/'}},{session})))throw new AppError(422,'log_cover','Choose a cover from this entry’s attachments.');
-  const row:LogRow={...fields,_id:randomUUID(),joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});return project(row,userId,session);
+  const row:LogRow={...fields,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});return project(row,userId,session);
  }
  if(name==='log.people'){
   const ids=await entries().distinct('members',{$and:[await access(userId,session),{members:userId}]},{session});
@@ -126,15 +146,15 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  }
  if(!row.members.includes(userId))throw new AppError(403,'log_membership','Accept the invitation before changing this entry.');
  if(name==='log.update'){
-  const entry=d.entry as LogFields;
-  if(d.contribution){const value=d.contribution as LogContribution;await media(userId,value.fileIds,session);row.contributions=row.contributions.map(c=>c.userId===userId?{...value,userId}:c);}
+  const previous=row.contributions.find(c=>c.userId===userId)?.fileIds||[],entry=d.entry as LogFields;
+  if(d.contribution){const value=d.contribution as LogContribution;await media(userId,value.fileIds,row._id,session);row.contributions=row.contributions.map(c=>c.userId===userId?{...value,userId}:c);}
   if(entry.coverFileId&&(!row.contributions.some(c=>c.fileIds.includes(entry.coverFileId!))||!await uploads().findOne({_id:entry.coverFileId,ready:true,mime:{$regex:'^image/'}},{session})))throw new AppError(422,'log_cover','Choose a photo from this entry’s attachments.');
-  Object.assign(row,entry);if(row.coverFileId&&!row.contributions.some(c=>c.fileIds.includes(row.coverFileId!)))row.coverFileId=null;return save(row,Number(d.revision),actor,session);
+  Object.assign(row,entry);if(row.coverFileId&&!row.contributions.some(c=>c.fileIds.includes(row.coverFileId!)))row.coverFileId=null;const result=await save(row,Number(d.revision),actor,session);await removeMedia(actor,previous.filter(id=>!row.contributions.some(c=>c.fileIds.includes(id))),session);return result;
  }
  if(name==='log.contribute'){
-  const value=d.contribution as LogContribution;await media(userId,value.fileIds,session);row.contributions=row.contributions.map(c=>c.userId===userId?{...value,userId}:c);
+  const previous=row.contributions.find(c=>c.userId===userId)?.fileIds||[],value=d.contribution as LogContribution;await media(userId,value.fileIds,row._id,session);row.contributions=row.contributions.map(c=>c.userId===userId?{...value,userId}:c);
   if(row.coverFileId&&!row.contributions.some(c=>c.fileIds.includes(row.coverFileId!)))row.coverFileId=null;
-  return save(row,Number(d.revision),actor,session);
+  const result=await save(row,Number(d.revision),actor,session);await removeMedia(actor,previous.filter(id=>!value.fileIds.includes(id)),session);return result;
  }
  if(name==='log.add_person'){
   const personId=String(d.personId);if(row.members.includes(personId))return project(row,userId,session);
@@ -150,10 +170,11 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
   row.invited=row.invited.filter(id=>id!==d.personId);await rows('notifications').deleteMany({entryId:row._id,userId:d.personId},{session});return save(row,Number(d.revision),actor,session);
  }
  if(name==='log.leave'||name==='log.delete'){
+  const fileIds=row.contributions.find(c=>c.userId===userId)?.fileIds||[];
   row.members=row.members.filter(id=>id!==userId);row.contributions=row.contributions.filter(c=>c.userId!==userId);
   if(row.coverFileId&&!row.contributions.some(c=>c.fileIds.includes(row.coverFileId!)))row.coverFileId=null;
-  if(!row.members.length){row.deletedAt=now;row.title='';row.place='';row.links=[];row.invited=[];row.joinKey=undefined;}
-  await save(row,Number(d.revision),actor,session);await rows('notifications').deleteMany({entryId:row._id,...(row.members.length?{userId}:{})},{session});
+  if(!row.members.length){row.deletedAt=now;row.title='';row.place='';row.links=[];row.invited=[];row.historicalPeople=[];row.joinKey=undefined;}
+  await save(row,Number(d.revision),actor,session);await removeMedia(actor,fileIds,session);await rows('notifications').deleteMany({entryId:row._id,...(row.members.length?{userId}:{})},{session});
   return name==='log.leave'?{left:true}:{deleted:true};
  }
  throw new AppError(404,'operation','Unknown Log operation.');

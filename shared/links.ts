@@ -19,5 +19,5 @@ export function textLinks(text:string):TextLink[]{
 }
 /** Presentation only. Never use the compact label as a request or navigation target. */
 export function compactUrlLabel(value:string){
- return /^(?:https?:\/\/|\/\/|www\.)\S+$/i.test(value)?value.replace(/^(?:https?:)?\/\//i,'').replace(/^www\./i,''):value;
+ return /^(?:https?:\/\/|\/\/|www\.)\S+$/i.test(value)?value.replace(/^(?:https?:)?\/\//i,'').replace(/^www\./i,'').replace(/^([^/?#]+)\/(?=[?#]|$)/,'$1'):value;
 }

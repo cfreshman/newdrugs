@@ -1,3 +1,9 @@
+import {PreferencesPanel} from './PreferencesPanel';
+import {useAppearance,useFont} from './useAppearance';
+import {defaultPreferences,initialDestination as landingDestination} from '../shared/preferences';
+import {LogPeople,LogDates} from './LogDirectory';
+import {LogSettings} from './LogSettings';
+import {capturePageContext} from '../shared/pageContext';
 import {LogCodePanel,LogScanPanel,LogJoinPanel} from './LogJoining';
 import {LogPanel,LogDetail,LogEditor} from './LogPanel';
 import {scrollFromPanelHeader} from './panelHeaderScroll';
@@ -18,7 +24,7 @@ import { AutomationsPanel } from './AutomationsPanel';
 import type { InboxAttachment, InboxItem } from '../shared/inbox';
 import { ChatSearchPanel } from './ChatSearchPanel';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Shield, HardDrives, ArrowClockwise } from '@phosphor-icons/react';
+import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Shield, HardDrives, ArrowClockwise } from '@phosphor-icons/react';
 import type { Bootstrap, Message, RunView } from '../shared/types';
 import { api, post, errorText, ApiError, balanceLabel } from './api';
 import { useDictation } from './useDictation';
@@ -52,9 +58,9 @@ import type { UploadRef } from '../shared/uploads';
 import { cleanDestinationContext, parseDestination, surfaceTitles, surfaceViews, type Destination } from '../shared/navigation';
 import release from '../release.json';
 
-const settingsViews = new Set(['settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'storage', 'notifications', 'location']);
-const inlineViews = new Set(['log','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads']);
-const accountViews = new Set(['log','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'notifications', 'agents']);
+const settingsViews = new Set(['preferences','appearance','account_menu','settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'storage', 'notifications', 'location']);
+const inlineViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads']);
+const accountViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'notifications', 'agents']);
 interface ComposerScreen { panel: Panel; context: Omit<Destination, 'view'>; history: { panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]; title: string; content: ReactNode; open: boolean; reset: number }
 function mergeRun(previous: RunView | null, next: RunView | null) {
   if (!next || !previous || next.id !== previous.id) return next;
@@ -74,7 +80,7 @@ export function App() {
   const standalone=useStandalone();
   const [clientId] = useState(browserSession);
   const [mode,setMode]=useState<AppMode>('agent'),[agentDockOpen,setAgentDockOpen]=useState(false);
-  const pendingAgentDestination=useRef<Destination|null>(null);
+  const pendingAgentDestination=useRef<Destination|null>(null),pendingHandoffDock=useRef<AppMode|null>(null);
   const pendingAgentTask=useRef<{kind:'discuss';item:InboxItem}|{kind:'example';prompt:string}|{kind:'record';record:RecordContext}|null>(null);
   const activeModeRef=useRef(mode);activeModeRef.current=mode;
   const [socialReset,setSocialReset]=useState({friends:0,posts:0,log:0});
@@ -87,6 +93,8 @@ export function App() {
   const [media,setMedia]=useState<{items:MediaItem[];index:number}|null>(null);
   const workspaceRef=useRef<HTMLElement>(null);
   const [data, setData] = useState<Bootstrap | null>(null);
+  useFont(data?(data.preferences?.font||'mono'):undefined);
+  useAppearance(data?(data.preferences||defaultPreferences).appearance:undefined);
   const chatHistory = useChatHistory(() => scroll.preparePrepend());
   const { messages, setMessages } = chatHistory;
   const [run, setRun] = useState<RunView | null>(null);
@@ -143,7 +151,7 @@ export function App() {
     const changedIdentity = identity.current !== next.user.id;
     if (!changedIdentity && revision !== liveRevision.current) return;
     if (changedIdentity) {
-      identity.current = next.user.id; tabWorkspaces.current={};setRecordAttachments([]);setSocialRequests({});setAgentDockOpen(false);completedRuns.current.clear(); submission.current = null;
+      identity.current = next.user.id; pendingHandoffDock.current=null;tabWorkspaces.current={};setRecordAttachments([]);setSocialRequests({});setAgentDockOpen(false);completedRuns.current.clear(); submission.current = null;
       dictation.cancel(); setLauncherOpen(false); setUnderlay(null); lastComposer.current = null; setAfterAccount(null); setResumeChat(null); setSubmitting(false); setSurface(null); setAttachments([]); setInboxAttachments([]); setPanel(null); setPanelHistory([]); seenSurfaces.current.clear();
       let outbox: Message[] = [];
       try { setDraft(localStorage.getItem(activeModeRef.current==='agent'?`nd-draft:${next.user.id}`:`nd-draft:${next.user.id}:${activeModeRef.current}`) || ''); outbox = JSON.parse(localStorage.getItem(`nd-outbox:${next.user.id}`) || '[]'); } catch { /* Optional storage. */ }
@@ -163,7 +171,7 @@ export function App() {
       if ('run' in change && !change.run) completedRuns.current.add(pending);
       submission.current = null; setSubmitting(false);
     }
-    setData(previous => previous ? { ...previous, ...change } : previous);
+    setData(previous => previous ? { ...previous, ...change,preferences:change.preferences&&(change.preferences.revision>=(previous.preferences?.revision||0))?change.preferences:previous.preferences } : previous);
     if ('run' in change) setRun(previous => change.run && completedRuns.current.has(change.run.id) ? null : mergeRun(previous, change.run ?? null));
     if (change.messages) chatHistory.receive(actorId, change.messages, change.conversationCursor, undefined, change.conversationGeneration);
   }, refresh);
@@ -173,7 +181,7 @@ export function App() {
       try {
         await post('/session'); const initial = await api<Bootstrap>('/bootstrap'); if (cancelled) return;
         identity.current = initial.user.id;
-        const initialDestination=parseDestination(location.href,location.origin);
+        const initialDestination=landingDestination(location.href,location.origin,initial.preferences?.landingPage||'agent');
         const initialMode=initialDestination?.mode|| (initialDestination?modeForDestination(initialDestination):'agent');
         setMode(initialMode);
         setData(initial); setRun(initial.run ?? null);
@@ -266,7 +274,7 @@ export function App() {
   };
   const backPanel = () => { const previous = panelHistory.at(-1); if (previous) { setPanel(previous.panel); setPanelContext(previous.context); setPanelHistory(history => history.slice(0, -1)); } else if (panelSpace === 'composer') setPanel(null); };
   const navigate = (destination: Destination) => {
-    if(mode==='agent'&&['log','log_compose','log_code','log_scan','log_join'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
+    if(mode==='agent'&&['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
     if(destination.mode&&destination.mode!==mode){pendingRoute.current={destination};changeMode(destination.mode);return;}
     const {mode:_mode,...local}=destination;destination=local;
     if(destination.view==='chat_history'&&destination.resourceId)destination={...destination,view:'chat'};
@@ -320,7 +328,7 @@ export function App() {
   const primaryContext=panelSpace==='composer'?panelContext:underlying?.context;
   const agentRoute:Destination=launcherOpen&&primaryPanel?{...primaryContext,view:primaryPanel==='account'?'profile':primaryPanel}:{view:'chat',...(chatHistory.windowed&&chatRoute?{resourceId:chatRoute}: {})};
   const primaryRoute:PrimaryRouteState=panel&&panelSpace==='modal'?{destination:{...panelContext,view:panel==='account'?'profile':panel},panels:panelHistory}:mode==='agent'?{destination:agentRoute,panels:panelHistory}:socialRoutes[mode]||{destination:{view:mode==='log'?'log':mode==='posts'?'feed':'people'}};
-  usePrimaryRoute(Boolean(data),mode,primaryRoute,restoreRoute);
+  usePrimaryRoute(Boolean(data),mode,primaryRoute,restoreRoute,data?.preferences?.landingPage||'agent');
   useLayoutEffect(()=>{
     if(mode!=='agent')return;
     const destination=pendingAgentDestination.current,task=pendingAgentTask.current;pendingAgentDestination.current=null;pendingAgentTask.current=null;
@@ -341,6 +349,15 @@ export function App() {
     navigator.serviceWorker.addEventListener('message', receive);
     return () => navigator.serviceWorker.removeEventListener('message', receive);
   });
+  const prepareAgentHandoff=(destination:Destination)=>{
+    if(!BROWSER_VIEWS.has(destination.view)||window.matchMedia('(max-width: 760px), (pointer: coarse)').matches)return;
+    const target=destination.mode||(mode==='agent'&&destination.view.startsWith('log')?'log':mode);
+    if(target==='agent')return;
+    if(target===mode){setAgentDockOpen(true);requestAnimationFrame(()=>scroll.follow());}
+    else pendingHandoffDock.current=target;
+  };
+  const navigateFromAgent=(destination:Destination)=>{prepareAgentHandoff(destination);navigate(destination);};
+  useLayoutEffect(()=>{if(pendingHandoffDock.current!==mode)return;pendingHandoffDock.current=null;if(!window.matchMedia('(max-width: 760px), (pointer: coarse)').matches){setAgentDockOpen(true);requestAnimationFrame(()=>scroll.follow());}},[mode]);
   const openRunSurface = (active: RunView) => {
     if (!active.surface) return;
     if (!(surfaceViews as readonly string[]).includes(active.surface.view)) { logError(`Unknown app destination: ${active.surface.view}`); return; }
@@ -348,7 +365,8 @@ export function App() {
     try { sessionStorage.setItem(`nd-surface:${active.surface.id}`, 'seen'); } catch { /* Optional storage. */ }
     setSurface({ runId: active.id, id: active.surface.id, view: active.surface.view });
     const view = active.surface.view as Destination['view'];
-    if(AGENT_VIEWS.has(view)||['log','log_compose','log_code','log_scan','log_join'].includes(view)){navigate({...cleanDestinationContext(active.surface),view});return;}
+    prepareAgentHandoff({...cleanDestinationContext(active.surface),view});
+    if(AGENT_VIEWS.has(view)||['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(view)){navigate({...cleanDestinationContext(active.surface),view});return;}
     open(view === 'profile' ? 'account' : view as Exclude<Panel, null>, cleanDestinationContext(active.surface), inlineViews.has(view) ? 'composer' : 'modal');
   };
   useEffect(() => {
@@ -385,6 +403,7 @@ export function App() {
     const commands: Record<string, Panel> = { '/profile': 'account', '/account': 'account', '/credits': 'credits', '/connect': 'agents', '/nearby': 'people', '/feed': 'feed', '/location': 'location', '/messages': 'messages', '/upload': 'uploads' };
     if (commands[text.toLowerCase()]) { const destination = commands[text.toLowerCase()]!; open(destination, {}, inlineViews.has(destination) ? 'composer' : 'modal'); setDraft(''); return; }
     if (!data.user.handle) { setAfterAccount({ chat: text }); setAccountMode('register'); setDraft(text); open('account'); return; }
+    const pageContext=retry?.pageContext||capturePageContext(location.href,location.origin);
     const review = retry?.review || (reviewing && run ? { runId: run.id, revision: run.revision } : undefined);
     const requestId = retry ? retry.id.split(':')[1] : crypto.randomUUID();
     const id = `${data.user.id}:${requestId}:user`;
@@ -394,11 +413,11 @@ export function App() {
     if (!retry && !fromExample) { if (!files.length && !attachedUpdates.length && !records.length) placeMessage(id, text); dictation.stop(); setDraft(''); setAttachments([]); setInboxAttachments([]);setRecordAttachments([]); }
     setRun(null);
     busyRef.current = true; setSubmitting(true); scroll.follow();
-    const message: Message = { id, role: 'user', text, files, createdAt: new Date().toISOString(), source: 'app', status: 'pending', review, ...(attachedUpdates.length ? { inbox: attachedUpdates } : {}),...(records.length?{records}:{}) };
+    const message: Message = { id, role: 'user', text, files, createdAt: new Date().toISOString(), source: 'app', status: 'pending', review, ...(pageContext?{pageContext}:{}), ...(attachedUpdates.length ? { inbox: attachedUpdates } : {}),...(records.length?{records}:{}) };
     setMessages(previous => [...previous.filter(m => m.id !== id), message]);
     let accepted = false;
     try {
-      const result = await post<{ run: RunView }>('/chat', { text, fileIds: files.map(file => file.id), ...(attachedUpdates.length ? { inboxIds: attachedUpdates.map(item => item.id) } : {}), ...(records.length?{recordRefs:records.map(({kind,id})=>({kind,id}))}:{}), requestId, clientId, ...(review ? { review } : {}), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      const result = await post<{ run: RunView }>('/chat', { text, fileIds: files.map(file => file.id), ...(attachedUpdates.length ? { inboxIds: attachedUpdates.map(item => item.id) } : {}), ...(records.length?{recordRefs:records.map(({kind,id})=>({kind,id}))}:{}), requestId, clientId, ...(pageContext?{pageContext}:{}), ...(review ? { review } : {}), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
       if (data.user.id !== identity.current) return;
       accepted = true;
       if (submission.current === runId) { submission.current = null; setSubmitting(false); }
@@ -426,7 +445,7 @@ export function App() {
   };
   const bubble = (message: Message) => <article className={`message ${message.role}`} data-message-id={message.id} data-search-target={chatHistory.windowed && chatHistory.targetId === message.id || undefined} key={message.id}>
     <span className="sr-only">{message.role === 'user' ? 'You' : 'Your agent'}: </span>
-    <div className="bubble">{message.text && <CollapsibleMessage reveal={chatHistory.windowed && chatHistory.targetId === message.id} text={message.text} assistant={message.role === 'assistant'} scrollRef={scroll.transcript} />}{message.records?.map(item=><button className="message-file" key={`${item.kind}:${item.id}`} onClick={()=>navigate(item.kind==='log'?{view:'log',resourceId:item.id}:item.kind==='post'?{view:'post',resourceId:item.id}:item.kind==='person'?{view:'person',resourceId:item.id}:{view:'messages'})}>{item.title}</button>)}{message.inbox?.map(item => <button className="message-file inbox-reference" key={item.id} onClick={() => navigate({ view: 'inbox', resourceId: item.id })}>{item.title}</button>)}{message.files?.map(file => <a className="message-file" href={`/api/files/${encodeURIComponent(file.id)}`} target="_blank" rel="noopener noreferrer" key={file.id}>{file.name}</a>)}{message.id === `intro:${data?.user.id}` && !data?.user.handle && <div className="welcome-actions"><button onClick={() => { setAccountMode('register'); open('account'); }}>Create account</button><button onClick={() => { setAccountMode('login'); open('account'); }}>Sign in</button></div>}</div>
+    <div className="bubble">{message.text && <NavigationContext.Provider value={message.role==='assistant'?navigateFromAgent:navigate}><CollapsibleMessage reveal={chatHistory.windowed && chatHistory.targetId === message.id} text={message.text} assistant={message.role === 'assistant'} scrollRef={scroll.transcript} /></NavigationContext.Provider>}{message.records?.map(item=><button className="message-file" key={`${item.kind}:${item.id}`} onClick={()=>navigate(item.kind==='log'?{view:'log',resourceId:item.id}:item.kind==='post'?{view:'post',resourceId:item.id}:item.kind==='person'?{view:'person',resourceId:item.id}:{view:'messages'})}>{item.title}</button>)}{message.inbox?.map(item => <button className="message-file inbox-reference" key={item.id} onClick={() => navigate({ view: 'inbox', resourceId: item.id })}>{item.title}</button>)}{message.files?.map(file => <a className="message-file" href={`/api/files/${encodeURIComponent(file.id)}`} target="_blank" rel="noopener noreferrer" key={file.id}>{file.name}</a>)}{message.id === `intro:${data?.user.id}` && !data?.user.handle && <div className="welcome-actions"><button onClick={() => { setAccountMode('register'); open('account'); }}>Create account</button><button onClick={() => { setAccountMode('login'); open('account'); }}>Sign in</button></div>}</div>
     {message.failure && <span className="small">{message.failure}</span>}
     {message.status === 'failed' && !message.failure && <button className="retry-message" disabled={busy} onClick={() => void send(undefined, message.text, message)}>Not sent · retry</button>}
   </article>;
@@ -444,23 +463,25 @@ export function App() {
     if(mode!=='agent'){revealConversation();requestAnimationFrame(()=>void send(undefined,prompt,undefined,true));}
     else void closePanel().then(()=>send(undefined,prompt,undefined,true));
   };
-  const completeLog=(entry?:import('../shared/log').LogEntry)=>{if(!surface||!['log','log_compose','log_code','log_scan','log_join'].includes(surface.view))return;if(!run?.surface?.waiting){setSurface(null);return;}const current=surface;void post(`/runs/${current.runId}/surface`,{id:current.id,saved:Boolean(entry),...(entry?{resourceId:entry.id}:{})}).then(()=>{setSurface(null);return refresh();}).catch(error=>logError(errorText(error)));};
+  const completeLog=(entry?:import('../shared/log').LogEntry)=>{if(!surface||!['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(surface.view))return;if(!run?.surface?.waiting){setSurface(null);return;}const current=surface;void post(`/runs/${current.runId}/surface`,{id:current.id,saved:Boolean(entry),...(entry?{resourceId:entry.id}:{})}).then(()=>{setSurface(null);return refresh();}).catch(error=>logError(errorText(error)));};
   const panelContent = panel ? (panel === 'settings' ? <nav className="settings-menu" aria-label="Settings">
         <button onClick={() => navigatePanel('notifications')}><Bell size={23} />Notifications</button>
-        <button onClick={() => { if (!data?.user.handle) setAccountMode('login'); navigatePanel('account'); }}><UserCircle size={23} />{data?.user.handle ? 'Profile' : 'Sign in'}</button>
-        {data?.user.handle && <button onClick={() => navigatePanel('account_settings')}><LockKey size={23} />Account</button>}
-        <button onClick={() => navigatePanel('credits')}><CreditCard size={23} />Billing</button>
-        <button onClick={() => navigatePanel('agents')}><Plugs size={23} />Connected agents</button>
-        <button onClick={() => navigatePanel('blocked')}><Shield size={23} />Blocked people</button>
-        <button onClick={() => navigatePanel('storage')}><HardDrives size={23} />Storage</button>
-        <a href="https://fuckingdonate.co/@cyrus" target="_blank" rel="noopener noreferrer"><Heart size={23} />Donate</a>
-        {data?.user.handle && <button onClick={() => { void post('/account/logout').then(() => location.reload()).catch(error => logError(errorText(error))); }}><SignOut size={23} />Log out</button>}
+        {data?.user.handle&&<button onClick={()=>navigatePanel('account')}><UserCircle size={23}/>Profile</button>}
+        <button onClick={()=>navigatePanel('account_menu')}><LockKey size={23}/>Account</button>
+        <button onClick={()=>navigatePanel('preferences')}><Sun size={23}/>Preferences</button>
+        <button onClick={()=>navigatePanel('credits')}><CreditCard size={23}/>Billing</button>
+        <button onClick={()=>navigatePanel('agents')}><Plugs size={23}/>Connected agents</button>
+        <div className="settings-utilities"><a href="https://fuckingdonate.co/@cyrus" target="_blank" rel="noopener noreferrer"><Heart size={21}/>Donate</a>{data?.user.handle&&<button onClick={()=>void post('/account/logout').then(()=>location.reload()).catch(e=>logError(errorText(e)))}><SignOut size={21}/>Log out</button>}</div>
         <p className="settings-credit"><a href="https://freshman.dev" target="_blank" rel="noopener noreferrer">Made by Cyrus Freshman</a></p>
-      </nav> : !data ? <p>Connecting…</p> : panel === 'credits' ? <Credits data={data} onAccount={() => navigatePanel('account')} onConnect={() => navigatePanel('agents')} />
+      </nav> : !data ? <p>Connecting…</p> : panel === 'appearance'||panel==='preferences' ? <PreferencesPanel value={data.preferences||defaultPreferences} changed={preferences=>{liveRevision.current++;setData(previous=>previous&&preferences.revision>=(previous.preferences?.revision||0)?{...previous,preferences}:previous);}}/>
+        : panel==='account_menu'?<nav className="settings-menu" aria-label="Account"><button onClick={()=>{if(data.user.handle)navigatePanel('account_settings');else{setAccountMode('login');navigatePanel('account');}}}><LockKey size={23}/>{data.user.handle?'Sign-in & security':'Sign in'}</button>{data.user.handle&&<><button onClick={()=>navigatePanel('blocked')}><Shield size={23}/>Blocked people</button><button onClick={()=>navigatePanel('storage')}><HardDrives size={23}/>Storage</button></>}</nav> : panel === 'credits' ? <Credits data={data} onAccount={() => navigatePanel('account')} onConnect={() => navigatePanel('agents')} />
         : panel === 'account_settings' && data.user.handle ? <AccountSettings user={data.user} refresh={refresh} cleared={async () => { try{for(const tab of ['agent','friends','posts','log'])localStorage.removeItem(tab==='agent'?`nd-draft:${data.user.id}`:`nd-draft:${data.user.id}:${tab}`);}catch{}for(const saved of Object.values(tabWorkspaces.current)){saved.draft='';saved.attachments=[];saved.inboxAttachments=[];saved.recordAttachments=[];saved.scroll=null;}setDraft(''); setRecordAttachments([]); setInboxAttachments([]); setAttachments([]); setSubmitting(false); setRun(null); submission.current = null; chatHistory.returnLatest(); await refresh(); scroll.follow(); }} />
         : panel === 'account' || needsAccount ? <Account data={data} initialMode={accountMode} onModeChange={setAccountMode} onboarding={Boolean(afterAccount)} refresh={refresh} close={() => void closePanel()} saved={() => void accountSaved()} />
-          : panel === 'log' ? panelContext.resourceId?<LogDetail entryId={panelContext.resourceId} user={data.user} navigate={navigate} onSaved={completeLog} onCancel={()=>completeLog()}/>:<LogPanel user={data.user} navigate={navigate} initialQuery={panelContext.query} {...panelContext} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))}/>
-          : panel === 'log_code' ? <LogCodePanel entryId={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
+          : panel === 'log' ? panelContext.resourceId?<LogDetail closeLabel={panelHistory.length?'Back':'Close'} onClose={backPanel} entryId={panelContext.resourceId} user={data.user} onAdjacent={resourceId=>setPanelContext(previous=>({...previous,resourceId}))} navigate={navigate} onSaved={completeLog} onCancel={()=>completeLog()}/>:<LogPanel user={data.user} navigate={navigate} initialQuery={panelContext.query} {...panelContext} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))}/>
+          : panel === 'log_people' ? <LogPeople closeLabel={panelHistory.length?'Back':'Close'} navigate={navigate} close={backPanel}/>
+          : panel === 'log_birthdays'||panel === 'log_anniversaries' ? <LogDates closeLabel={panelHistory.length?'Back':'Close'} kind={panel==='log_birthdays'?'birthdays':'anniversaries'} navigate={navigate} close={backPanel}/>
+          : panel === 'log_settings' ? <LogSettings closeLabel={panelHistory.length?'Back':'Close'} navigate={navigate} close={backPanel}/>
+          : panel === 'log_code' ? <LogCodePanel closeLabel={panelHistory.length?'Back':'Close'} entryId={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
           : panel === 'log_scan' ? <LogScanPanel navigate={navigate} close={backPanel}/>
           : panel === 'log_join' ? <LogJoinPanel code={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
           : panel === 'log_compose' ? <LogEditor user={data.user} date={panelContext.date} cancel={()=>{completeLog();backPanel();}} onSaved={entry=>{completeLog(entry);navigate({view:'log',resourceId:entry.id});}}/>
@@ -489,7 +510,7 @@ export function App() {
           onTap={() => { if (!inputOccupied) dictation.start(); }} onCancel={dictation.cancel} onSend={() => { void dictation.finish().then(text => { void send(undefined, text); }); }} {...effectiveDrag} /></div>;
   return <ExperienceContext.Provider value={{mode,changeMode,ask:askAbout,media:(items,index)=>setMedia({items,index}),navigate}}><NavigationContext.Provider value={navigate}><div className="app" inert={Boolean(media)} data-mode={mode} data-standalone={standalone||undefined} data-agent-dock={agentDockOpen||undefined} style={style} data-keyboard-open={keyboardOpen || undefined} ref={page} onKeyDown={event => { if (event.key === 'Escape' && launcherOpen && !event.defaultPrevented) { event.preventDefault(); void closePanel(); } }}>
     <Atmosphere/><div className="grain" aria-hidden="true" />
-    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockOpen} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockOpen} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={destination=>{if(destination)setAfterAccount({destination});setAccountMode('register');open('account');}}/>)}{mode!=='agent'&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockOpen} inert={mode!=='agent'&&!agentDockOpen}>
+    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockOpen} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockOpen} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={destination=>{if(destination)setAfterAccount({destination});setAccountMode('register');open('account');}}/>)}{mode!=='agent'&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockOpen} inert={mode!=='agent'&&!agentDockOpen}>
       <div className="conversation" data-fade-top={mode==='agent'&&scroll.fadedTop || undefined} ref={scroll.transcript} role="log" aria-label="Your conversation" aria-live="polite" aria-relevant="additions text" onScroll={scroll.onScroll}>
         <div className="conversation-content" ref={scroll.content}>
           <OlderMessages hasMore={Boolean(chatHistory.cursor)} loading={chatHistory.loading} error={chatHistory.error} retry={() => void chatHistory.loadOlder()} />

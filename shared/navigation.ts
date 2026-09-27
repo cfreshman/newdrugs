@@ -1,11 +1,11 @@
 import {logDate} from './log';
 import { modeForDestination, type AppMode } from './experience';
-export const surfaceViews = ['log_join','log_code','log_scan','log', 'log_compose', 'account_settings', 'inbox', 'automations', 'chat_history', 'profile', 'credits', 'agents', 'connections', 'people', 'feed', 'post_list', 'person', 'post', 'messages', 'location', 'notifications', 'uploads', 'blocked', 'storage'] as const;
+export const surfaceViews = ['preferences','account_menu','appearance','log_people','log_birthdays','log_anniversaries','log_settings','log_join','log_code','log_scan','log', 'log_compose', 'account_settings', 'inbox', 'automations', 'chat_history', 'profile', 'credits', 'agents', 'connections', 'people', 'feed', 'post_list', 'person', 'post', 'messages', 'location', 'notifications', 'uploads', 'blocked', 'storage'] as const;
 export type SurfaceView = typeof surfaceViews[number];
-export interface Destination { view: SurfaceView | 'settings' | 'chat' | 'compose'; mode?: AppMode; date?:string; logMonth?:string; logScope?:'all'|'private'|'shared'|'invitations'; logArrangement?:'calendar'|'gallery'|'list'; personId?:string; role?: 'all' | 'user' | 'assistant'; resourceId?: string; areaCell?: string; radiusMiles?: number; query?: string; scope?: 'all' | 'nearby' | 'own' | 'friends' | 'saved'; postIds?:string[] }
+export interface Destination { view: SurfaceView | 'settings' | 'chat' | 'compose'; mode?: AppMode; date?:string; logMonth?:string; logScope?:'all'|'private'|'shared'|'invitations'; personId?:string; role?: 'all' | 'user' | 'assistant'; resourceId?: string; areaCell?: string; radiusMiles?: number; query?: string; scope?: 'all' | 'nearby' | 'own' | 'friends' | 'saved'; postIds?:string[] }
 export interface ResourceLink { rel: 'open_in_newdrugs' | 'download'; targetKind: 'exact' | 'surface'; title: string; url: string; resourceType: string; resourceId?: string }
-export const surfaceRoutes: Record<Destination['view'], string> = { log_join:'/log/join',log_code:'/log/code',log_scan:'/log/scan',log:'/log',log_compose:'/log/new', compose: '/compose', account_settings: '/account', inbox: '/inbox', automations: '/automations', chat_history: '/chat-history', chat: '/', settings: '/settings', profile: '/profile', credits: '/billing', agents: '/agents', connections: '/connections', people: '/nearby', feed: '/feed', post_list: '/selected-posts', person: '/people', post: '/posts', messages: '/messages', location: '/location', notifications: '/notifications', uploads: '/uploads', blocked: '/blocked', storage: '/storage' };
-export const surfaceTitles: Record<Destination['view'], string> = { log_join:'Join hangout',log_code:'Hangout code',log_scan:'Scan',log:'Log',log_compose:'New entry', compose: 'New post', account_settings: 'Account', inbox: 'Agent inbox', automations: 'Automations', chat_history: 'Chat search', chat: 'Chat', settings: 'Settings', profile: 'Profile', credits: 'Add credit', agents: 'Connected agents', connections: 'Messages & invites', people: 'People', feed: 'Posts', post_list: 'Posts for you', person: 'Profile', post: 'Post', messages: 'Messages', location: 'Choose your area', notifications: 'Notifications', uploads: 'Upload files', blocked: 'Blocked people', storage: 'Storage' };
+export const surfaceRoutes: Record<Destination['view'], string> = { preferences:'/settings/preferences',account_menu:'/account/menu',appearance:'/appearance',log_people:'/log/contacts',log_birthdays:'/log/birthdays',log_anniversaries:'/log/anniversaries',log_settings:'/log/preferences',log_join:'/log/join',log_code:'/log/code',log_scan:'/log/scan',log:'/log',log_compose:'/log/new', compose: '/compose', account_settings: '/account', inbox: '/inbox', automations: '/automations', chat_history: '/chat-history', chat: '/', settings: '/settings', profile: '/profile', credits: '/billing', agents: '/agents', connections: '/connections', people: '/nearby', feed: '/feed', post_list: '/selected-posts', person: '/people', post: '/posts', messages: '/messages', location: '/location', notifications: '/notifications', uploads: '/uploads', blocked: '/blocked', storage: '/storage' };
+export const surfaceTitles: Record<Destination['view'], string> = { preferences:'Preferences',account_menu:'Account',appearance:'Preferences',log_people:'Log people',log_birthdays:'Birthdays',log_anniversaries:'Anniversaries',log_settings:'Log settings',log_join:'Join hangout',log_code:'Hangout code',log_scan:'Scan',log:'Log',log_compose:'New entry', compose: 'New post', account_settings: 'Sign-in & security', inbox: 'Agent inbox', automations: 'Automations', chat_history: 'Chat search', chat: 'Chat', settings: 'Settings', profile: 'Profile', credits: 'Add credit', agents: 'Connected agents', connections: 'Messages & invites', people: 'People', feed: 'Posts', post_list: 'Posts for you', person: 'Profile', post: 'Post', messages: 'Messages', location: 'Choose your area', notifications: 'Notifications', uploads: 'Upload files', blocked: 'Blocked people', storage: 'Storage' };
 
 export function destinationPath(destination: Destination) {
   let path = destination.view === 'chat' && destination.resourceId ? '/chat' : surfaceRoutes[destination.view];
@@ -14,7 +14,6 @@ export function destinationPath(destination: Destination) {
   const query = new URLSearchParams();
   if(destination.logMonth)query.set('month',destination.logMonth);
   if(destination.logScope&&destination.logScope!=='all')query.set('scope',destination.logScope);
-  if(destination.logArrangement)query.set('layout',destination.logArrangement);
   if(destination.personId)query.set('person',destination.personId);
   if(destination.date)query.set('date',destination.date);
   if (destination.areaCell) query.set('area', destination.areaCell);
@@ -52,7 +51,7 @@ export function parseDestination(value: string, origin: string): Destination | n
     if (area && /^[0-9a-f]{15}$/.test(area)) destination.areaCell = area;
     if (radius >= 10 && radius <= 250) destination.radiusMiles = radius;
     if(destination.view==='post_list'){const ids=(url.searchParams.get('ids')||'').split(',');if(!ids.length||ids.length>30||ids.some(id=>!/^[A-Za-z0-9:_.-]{1,100}$/.test(id)))return null;destination.postIds=[...new Set(ids)];}
-    if(destination.view==='log'){const month=url.searchParams.get('month'),scope=url.searchParams.get('scope'),layout=url.searchParams.get('layout'),person=url.searchParams.get('person');if(month){if(!/^\d{4}-\d{2}$/.test(month)||!logDate.safeParse(`${month}-01`).success)return null;destination.logMonth=month;}if(scope){if(!['all','private','shared','invitations'].includes(scope))return null;destination.logScope=scope as Destination['logScope'];}if(layout){if(!['calendar','gallery','list'].includes(layout))return null;destination.logArrangement=layout as Destination['logArrangement'];}if(person&&/^[A-Za-z0-9:_.-]{1,100}$/.test(person))destination.personId=person;}
+    if(destination.view==='log'){const month=url.searchParams.get('month'),scope=url.searchParams.get('scope'),person=url.searchParams.get('person');if(month){if(!/^\d{4}-\d{2}$/.test(month)||!logDate.safeParse(`${month}-01`).success)return null;destination.logMonth=month;}if(scope){if(!['all','private','shared','invitations'].includes(scope))return null;destination.logScope=scope as Destination['logScope'];}if(person&&/^[A-Za-z0-9:_.-]{1,100}$/.test(person))destination.personId=person;}
     const query = url.searchParams.get('q'), scope = url.searchParams.get('scope');
     if (query && query.length<=500 && ['people','feed','chat_history','log'].includes(destination.view)) destination.query=query;
     if(destination.view==='people'&&scope&&!['all','nearby'].includes(scope))return null;
@@ -62,9 +61,14 @@ export function parseDestination(value: string, origin: string): Destination | n
 }
 
 export const operationUiBindings: Record<string, { route: string; targetKind: ResourceLink['targetKind']; resourceType: string }[]> = {
+ 'log.birthday_get':[{route:'/log/preferences',targetKind:'surface',resourceType:'log_settings'}],
+ 'log.birthday_update':[{route:'/log/preferences',targetKind:'surface',resourceType:'log_settings'}],
+ 'log.birthdays':[{route:'/people/[id]',targetKind:'exact',resourceType:'person'}],
   'log.add_person':[{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'}],
   'log.code':[{route:'/log/join/[code]',targetKind:'exact',resourceType:'log_join'}],
   'log.join':[{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'}],
+  'account.preferences':[{route:'/settings/preferences',targetKind:'surface',resourceType:'preferences'}],
+  'account.preferences_update':[{route:'/settings/preferences',targetKind:'surface',resourceType:'preferences'}],
   'conversation.search': [{ route: '/chat/[id]', targetKind: 'exact', resourceType: 'chat_message' }],
   'conversation.window': [{ route: '/chat/[id]', targetKind: 'exact', resourceType: 'chat_message' }],
   'identity.get': [{ route: '/people/[id]', targetKind: 'exact', resourceType: 'person' }],
@@ -110,7 +114,6 @@ export function cleanDestinationContext(value: Partial<Omit<Destination, 'view'>
   return {
     ...(value.logMonth&&logDate.safeParse(`${value.logMonth}-01`).success?{logMonth:value.logMonth}:{}),
     ...(value.logScope&&['all','private','shared','invitations'].includes(value.logScope)?{logScope:value.logScope}:{}),
-    ...(value.logArrangement&&['calendar','gallery','list'].includes(value.logArrangement)?{logArrangement:value.logArrangement}:{}),
     ...(typeof value.personId==='string'?{personId:value.personId}:{}),
     ...(typeof value.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value.date)?{date:value.date}:{}),
     ...(value.mode && ['agent','friends','posts','log'].includes(value.mode) ? {mode:value.mode} : {}),

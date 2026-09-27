@@ -9,7 +9,14 @@ it('always displays a generic visible notification and rejects malformed/externa
     let work: Promise<void> | undefined;
     events.push({ data: { json: () => ({ url, body: 'Private message must not appear' }) }, waitUntil: (promise: Promise<void>) => { work = promise; } });
     await work;
-    expect(showNotification.mock.calls.at(-1)).toEqual(['New Drugs', expect.objectContaining({ body: 'You have a new message.', data: { path: url === '/messages/friend' ? url : '/messages' } })]);
+    expect(showNotification.mock.calls.at(-1)).toEqual(['Notification', expect.objectContaining({ body: 'You have a new message.', data: { path: url === '/messages/friend' ? url : '/messages' } })]);
   }
   expect(events.fetch).toBeUndefined();
+});
+
+it('keeps Log destinations and generic hangout notices in push',async()=>{
+ const events:Record<string,(event:any)=>void>={},showNotification=vi.fn().mockResolvedValue(undefined);
+ runInNewContext(code,{URL,self:{location:{origin:'https://druggie.org'},addEventListener:(name:string,fn:(event:any)=>void)=>{events[name]=fn;},registration:{showNotification}}});
+ let work:Promise<void>|undefined;events.push({data:{json:()=>({url:'/log/hangout-id',body:'You were added to a hangout.'})},waitUntil:(promise:Promise<void>)=>{work=promise;}});await work;
+ expect(showNotification).toHaveBeenCalledWith('Notification',expect.objectContaining({body:'You were added to a hangout.',data:{path:'/log/hangout-id'}}));
 });

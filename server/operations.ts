@@ -1,3 +1,4 @@
+import {defaultPreferences} from '../shared/preferences';
 import {logOperation,logEntryFor} from './log';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
@@ -134,6 +135,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const files=await uploads().find({userId,deletedAt:{$exists:false},moderatedAt:{$exists:false},...pageFilter},options).sort({_id:-1}).limit(limit+1).toArray();
       return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items:files.slice(0,limit).map(file=>({...uploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id))})),nextCursor:files.length>limit?files[limit-1]._id:null};
     }
+    case 'account.preferences':return {...defaultPreferences,...user.preferences};
+    case 'account.preferences_update':{if(!d.font&&!d.appearance&&!d.landingPage)throw new AppError(422,'preferences','Choose a preference to change.');const prior={...defaultPreferences,...user.preferences};const updated=requireValue(await users().findOneAndUpdate({_id:userId},{$set:{'preferences.font':d.font||prior.font,'preferences.appearance':d.appearance||prior.appearance,'preferences.landingPage':d.landingPage||prior.landingPage},$inc:{'preferences.revision':1}},{...options,returnDocument:'after'}));return {...defaultPreferences,...updated.preferences};}
     case 'identity.get': return profile(user);
     case 'agent.actions.list': {
       const visibleReceipts = { userId, ...(actor.background ? { operation: { $in: ['posts.create','posts.reply','posts.like','posts.delete','connections.request','connections.respond','connections.withdraw','messages.send'] } } : {}) };
@@ -147,7 +150,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'locations.resolve': return resolveArea(String(d.cell));
     case 'app.open': {
       if(['log','log_code'].includes(String(d.view))&&d.resourceId)await logEntryFor(userId,String(d.resourceId),session);
-      if(['log','log_compose','log_code','log_join','log_scan'].includes(String(d.view)))registered(user);
+      if(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_join','log_scan'].includes(String(d.view)))registered(user);
       if(d.view==='log_code'&&!d.resourceId)throw new AppError(422,'log_entry','Choose a hangout.');
       if(d.view==='log_join')await logOperation('log.join_preview',{code:String(d.resourceId||'')},actor,session);
       if(d.view==='people'&&d.scope&&!['all','nearby'].includes(String(d.scope)))throw new AppError(422,'people_scope','People supports Nearby or All people.');
@@ -164,7 +167,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         const connection = requireValue(await rows('connections').findOne({ _id: String(d.resourceId), members: userId }, options));
         await notBlocked(userId, (connection.members as string[]).find(id => id !== userId)!, session);
       }
-      return { open:d.view,date:d.date,logMonth:d.logMonth,logScope:d.logScope,logArrangement:d.logArrangement,personId:d.personId, resourceId:d.resourceId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
+      return { open:d.view,date:d.date,logMonth:d.logMonth,logScope:d.logScope,personId:d.personId, resourceId:d.resourceId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
     }
     case 'profile.update': {
       if (actor.source !== 'browser') throw new AppError(403, 'human_authored', 'Profiles are written by the person, not by their agent. Open the profile editor instead.');
@@ -514,6 +517,6 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
     await rows('receipts').insertOne({ _id: receiptId, userId: actor.userId, operation: name, source: actor.source, fingerprint, fingerprintVersion: 2, result, createdAt: new Date().toISOString() }, { session });
     return result;
   });
-  if(name==='files.delete'||name==='profile.update'&&parsed.photos)await expireUploads().catch(error=>console.error('Upload deletion cleanup:',error.name));
+  if(['files.delete','log.leave','log.delete','log.update','log.contribute'].includes(name)||name==='profile.update'&&parsed.photos)await expireUploads().catch(error=>console.error('Upload deletion cleanup:',error.name));
   return committed;
 }
