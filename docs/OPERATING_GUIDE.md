@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.27.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.27.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,7 +13,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.27.1, release `20260927163601831` |
+| Production | `https://druggie.org`, v0.27.2, release `20260927164455996` |
 | Cloud dev | `https://dev.druggie.org`, release `20260927164245326`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
@@ -565,3 +565,5 @@ The full invite-content change passed TypeScript and 150 targeted backend/UI/pri
 Full invite views are deployed to dev `20260927163450735` and, after the explicit production request, **v0.27.1**, production `20260927163601831`. Both deployment health checks passed. Live production assets and the CLI `log.join_preview` output schema were verified without writing social data or spending credits.
 
 Hangout typography follow-up: titles use normal `--ink` text color. Note authors match the attendee list’s 14px body sizing, line height and normal weight; actionable profile buttons share the accent/disabled styling, while invite-preview names are ordinary text. Deployed to dev `20260927164245326` with a successful build and health check; this styling follow-up is not yet on production.
+
+The typography follow-up subsequently shipped to production on explicit request: **v0.27.2**, `20260927164455996`. Build, deployment health, public API health and live release assets passed verification.
