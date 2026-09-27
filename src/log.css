@@ -158,7 +158,7 @@
 .log-home-actions{gap:8px;}
 .log-home-actions>.log-scan-button{flex:1;min-height:44px;border-radius:999px;background:var(--surface);border:1px solid var(--primary);color:var(--primary);}
 .log-home-actions>.log-outline-button{flex:2;border:1px solid var(--primary);background:var(--surface);color:var(--primary);font-weight:500;}
-.log-home-actions>.log-options-toggle{border:1px solid var(--border);background:var(--surface);}
+.log-home-actions>.log-options-toggle{border:1px solid var(--primary);background:var(--surface);color:var(--primary);}
 .log-today-floaters{display:flex;flex-direction:column;gap:8px;max-height:141px;overflow:auto;align-self:flex-end;width:min(100%,340px);overscroll-behavior:contain;}
 .log-today-card{display:flex;gap:8px;align-items:center;width:100%;min-height:60px;flex:none;background:var(--surface);border:1px solid var(--primary);border-radius:var(--radius-control);padding:6px;text-align:left;font-weight:400;font-size:13px;}
 .log-today-card img{width:46px;height:46px;flex:none;border-radius:calc(var(--radius-control) - 6px);object-fit:cover;}
