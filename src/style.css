@@ -150,6 +150,7 @@ a { color: inherit; }
 .agent-status { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.5; color: #c4c4c4; }
 .agent-status.after-content { margin-top: var(--space-2); }
 .agent-spinner { flex-shrink: 0; margin-top: 2px; animation: agent-spin 1s linear infinite; }
+.spin { flex-shrink:0; transform-origin:center; animation:agent-spin 1s linear infinite; }
 @keyframes agent-spin { to { transform: rotate(360deg); } }
 .action-review { border: var(--border-width) solid var(--border-strong); border-radius: var(--radius-input); background: var(--surface); padding: var(--space-3); font-size: var(--text-body); }
 .review-action + .review-action { margin-top: var(--space-3); padding-top: var(--space-3); border-top: var(--border-width) solid var(--divider); }

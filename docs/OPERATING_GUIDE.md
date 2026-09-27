@@ -14,7 +14,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.23.4, release `20260927132706715` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927132543335`; local frontend at `http://localhost:7330/log` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927135311617`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -504,3 +504,16 @@ For initial repository creation when explicitly requested:
 ```
 
 The helper supplies GitHub CLI credentials and GitHub SSH-to-HTTPS URL rewrites only through the wrapped process's Git configuration environment. Existing process-level Git configuration is preserved. It ignores inherited GH_TOKEN/GITHUB_TOKEN only inside the wrapper so they cannot override the requested saved account. It does not rewrite persistent Git configuration, remote URLs or commit identity. Eight isolated wrapper tests passed; a real read-only identity call returned cfreshman and restored the previously active account. No repository was created or pushed during validation.
+
+
+### Log mobile date field and square photo editor
+
+The mobile date control retains the native `type=date` picker, with padding/border on its outer label and a zero-padding, bounded-width input. This avoids the reported iOS width calculation issue tracked as WebKit 301648; the empty native value also retains a minimum height.
+
+Read Logcal’s `app/components/LogEntry.tsx`, `ImageCropper.tsx`, and `lib/crop-view.ts` before implementing the crop step. Selecting/taking a Log photo now opens `src/LogPhotoEditor.tsx` inside the existing Log panel. The underlying editor stays mounted and inert, retaining draft fields and scroll. Drag, simultaneous pinch/pan, wheel zoom, keyboard positioning, a 1–6× slider, Reset, Cancel and Use photo are supported. The handle and track share their height variable. The chosen square is rendered locally to at most 512px without upscaling and only uploaded after acceptance. Cancel discards the temporary source; hidden/unmounted export work cannot upload afterward. Audio/video uploads keep their existing paths.
+
+`src/photoCrop.ts` owns bounded source-space crop geometry and square output. Object URLs are revoked; late uploads after editor unmount are discarded. The previously undefined `.spin` class now uses the existing continuous rotation keyframes, fixing Log image/calendar loaders and other users of that class without OS-motion branches.
+
+39 crop/Log/calendar checks passed, including focal-point preservation, pointer transitions, crop-before-upload, cancellation, retained draft/scroll, capped export size, and no upscale. A disposable browser fixture checked date bounds and square crop dimensions at 390px and 320px, zoom/reset/keyboard movement, actual WebP export and changing spinner transforms. Fixture files/tab were removed and viewport reset. Physical iOS camera/picker behavior still needs device verification. These changes are dev-only; the user explicitly returned to development after v0.23.4.
+
+The mobile date/crop/spinner follow-up is live on dev `20260927135311617`, with a successful build and database health check. Production remains v0.23.4.

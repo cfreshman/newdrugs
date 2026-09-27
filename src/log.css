@@ -172,6 +172,11 @@
 .log-detail-body{display:flex;flex-direction:column;gap:10px;}
 .log-editor-body{margin:0;padding:0;border:0;display:flex;flex-direction:column;gap:10px;min-width:0;}
 .log-editor-body input,.log-editor-body textarea{width:100%;}
+/* iOS date controls add their padding outside a 100% width (WebKit 301648).
+   Keep the native picker, with spacing owned by its bounded outer field. */
+.log-editor-body .log-date-field{display:block;min-width:0;max-width:100%;padding:11px var(--space-3);border:var(--border-width) solid var(--border);border-radius:var(--radius-control);background:var(--surface);}
+.log-editor.fields .log-date-field input{display:block;appearance:none;-webkit-appearance:none;width:100%;min-width:0;max-width:100%;min-height:1.5em;padding:0;border:0;border-radius:0;background:transparent;line-height:1.5;}
+.log-date-field input::-webkit-date-and-time-value{min-height:1.5em;text-align:left;}
 .log-detail-footer,.log-editor-footer,.log-task-footer{position:static;flex:none;padding-top:8px;margin:0;background:none;}
 .log-contact-picker{padding:8px;border-radius:var(--radius-control);background:var(--surface-soft);}
 .log-contact-picker>div{max-height:200px;overflow:auto;margin-top:6px;}.log-contact-picker button{display:flex;align-items:center;gap:8px;text-align:left;width:100%;background:transparent;padding:8px;}.log-contact-picker img{width:32px;height:32px;border-radius:6px;object-fit:cover;}.log-contact-picker small{display:block;color:var(--muted);}.log-contact-picker button>svg{margin-left:auto;}
@@ -249,3 +254,16 @@
 .log-voice-progress>svg{flex:none;}
 .log-voice-track{--voice-arrow:18px;--voice-offset:calc((100% - var(--voice-arrow)) * var(--voice-step) / 15);display:block;position:relative;width:144px;height:20px;}
 .log-voice-track>svg{position:absolute;left:var(--voice-offset);top:1px;}
+
+.log-editor[hidden]{display:none;}
+.log-photo-editor-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;overflow:auto;overscroll-behavior:contain;}
+.log-crop-frame{position:relative;flex:none;align-self:center;width:min(100%,512px,max(120px,calc(100dvh - 210px)));aspect-ratio:1;overflow:hidden;border-radius:var(--radius-sm);background:var(--surface-soft);touch-action:none;user-select:none;cursor:grab;}
+.log-crop-frame:active{cursor:grabbing;}.log-crop-frame img{position:absolute;display:block;max-width:none;pointer-events:none;user-select:none;}
+.log-crop-loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);}
+.log-crop-zoom{--crop-track-height:20px;--crop-thumb-width:28px;display:flex;flex-direction:column;gap:8px;}.log-crop-zoom label{display:flex;justify-content:space-between;gap:8px;}
+.log-crop-zoom button{align-self:flex-start;padding:6px 14px;border-radius:999px;background:var(--surface-soft);}
+.log-crop-zoom input{appearance:none;-webkit-appearance:none;width:100%;min-width:0;height:28px;margin:0;padding:0;border:0;background:transparent;}
+.log-crop-zoom input::-webkit-slider-runnable-track{height:var(--crop-track-height);border-radius:4px;background:linear-gradient(to right,var(--primary) var(--crop-zoom),var(--surface-soft) var(--crop-zoom));}
+.log-crop-zoom input::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:var(--crop-thumb-width);height:var(--crop-track-height);border:0;border-radius:4px;margin-top:0;background:var(--primary);}
+.log-crop-zoom input::-moz-range-track{height:var(--crop-track-height);border-radius:4px;background:var(--surface-soft);}.log-crop-zoom input::-moz-range-progress{height:var(--crop-track-height);background:var(--primary);}.log-crop-zoom input::-moz-range-thumb{width:var(--crop-thumb-width);height:var(--crop-track-height);border:0;border-radius:4px;background:var(--primary);}
+.log-crop-actions{display:flex;gap:8px;}.log-crop-actions button{flex:1;}
