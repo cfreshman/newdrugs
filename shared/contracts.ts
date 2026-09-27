@@ -56,7 +56,7 @@ export const outputs: Record<string, z.ZodType> = {
   'connections.get': z.object({ connection, people: z.array(profileOutput) }),
   'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.list': page(message), 'messages.send': message,
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
-  'notifications.list': z.object({ unread: z.number(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
+  'notifications.list': z.object({ unread: z.number(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),
   'people.block': z.object({ personId: id, blocked: z.boolean() }), 'people.report': z.object({ id, status: z.literal('unreviewed') }),
   'people.blocked': page(z.object({ id, personId: id, name: z.string(), handle: z.string().optional(), createdAt: z.string() })),
@@ -68,9 +68,10 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
-  'log.invite':'Share this Log entry and its current notes, media and participants with this friend, inviting them to join.',
-  'log.delete':'Permanently remove this Log entry for everyone who shares it. Uploaded files remain in their owners’ Storage.',
-  'log.leave':'Remove your contribution from this shared Log entry and give up access. Other participants keep the entry.',
+  'log.add_person':'Add this person to the shared hangout. They can see it and add their own note/photos. Other attendees keep their contributions.',
+  'log.join':'Join this shared hangout as yourself. Its attendees can see your participation, and you can log future hangouts together.',
+  'log.delete':'Remove your own participation and contribution. Other attendees keep the hangout. The final attendee removes the empty hangout.',
+  'log.leave':'Remove your own participation and contribution. Other attendees keep the hangout. The final attendee removes the empty hangout.',
 
   'automations.create': 'Create and activate this automation with the displayed schedule, data access and AI spending limits. Hosted runs use your credits, including runs that finish silently.',
   'automations.enable': 'Enable this saved automation to run with its displayed schedule, data access and AI spending limits. Hosted runs use your credits, including runs that finish silently.',

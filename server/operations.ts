@@ -146,8 +146,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'links.preview': return linkPreview(String(d.url), userId);
     case 'locations.resolve': return resolveArea(String(d.cell));
     case 'app.open': {
-      if(d.view==='log'&&d.resourceId)await logEntryFor(userId,String(d.resourceId),session);
-      if(['log','log_compose'].includes(String(d.view)))registered(user);
+      if(['log','log_code'].includes(String(d.view))&&d.resourceId)await logEntryFor(userId,String(d.resourceId),session);
+      if(['log','log_compose','log_code','log_join','log_scan'].includes(String(d.view)))registered(user);
+      if(d.view==='log_code'&&!d.resourceId)throw new AppError(422,'log_entry','Choose a hangout.');
+      if(d.view==='log_join')await logOperation('log.join_preview',{code:String(d.resourceId||'')},actor,session);
       if(d.view==='people'&&d.scope&&!['all','nearby'].includes(String(d.scope)))throw new AppError(422,'people_scope','People supports Nearby or All people.');
       if (d.view === 'connections') d.view = 'messages';
       if (actor.background && !['people','person','feed','post','post_list','location', ...(actor.logAccess?['log']:[]), ...(actor.privateChat ? ['chat_history'] : []), ...(actor.accountActivity ? ['messages','notifications'] : [])].includes(String(d.view))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');

@@ -1,3 +1,4 @@
+import {LogCodePanel,LogScanPanel,LogJoinPanel} from './LogJoining';
 import {LogPanel,LogDetail,LogEditor} from './LogPanel';
 import {scrollFromPanelHeader} from './panelHeaderScroll';
 import {usePrimaryRoute, type PrimaryRouteState, type BrowserPanelState} from './usePrimaryRoute';
@@ -52,8 +53,8 @@ import { cleanDestinationContext, parseDestination, surfaceTitles, surfaceViews,
 import release from '../release.json';
 
 const settingsViews = new Set(['settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'storage', 'notifications', 'location']);
-const inlineViews = new Set(['log','log_compose','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads']);
-const accountViews = new Set(['log','log_compose','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'notifications', 'agents']);
+const inlineViews = new Set(['log','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads']);
+const accountViews = new Set(['log','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'notifications', 'agents']);
 interface ComposerScreen { panel: Panel; context: Omit<Destination, 'view'>; history: { panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]; title: string; content: ReactNode; open: boolean; reset: number }
 function mergeRun(previous: RunView | null, next: RunView | null) {
   if (!next || !previous || next.id !== previous.id) return next;
@@ -97,7 +98,7 @@ export function App() {
   const [panelReset, setPanelReset] = useState(0);
   const [panelSpace, setPanelSpace] = useState<'modal' | 'composer'>('modal');
   const [panelContext, setPanelContext] = useState<Omit<Destination, 'view'>>({});
-  const [afterAccount, setAfterAccount] = useState<{ panel?: Exclude<Panel, null>; context?: Omit<Destination, 'view'>; space?: 'modal' | 'composer'; chat?: string } | null>(null);
+  const [afterAccount, setAfterAccount] = useState<{ destination?:Destination; panel?: Exclude<Panel, null>; context?: Omit<Destination, 'view'>; space?: 'modal' | 'composer'; chat?: string } | null>(null);
   const [resumeChat, setResumeChat] = useState<string | null>(null);
   const [accountMode, setAccountMode] = useState<'register' | 'login'>('register');
   const [panelHistory, setPanelHistory] = useState<{ panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]>([]);
@@ -265,7 +266,7 @@ export function App() {
   };
   const backPanel = () => { const previous = panelHistory.at(-1); if (previous) { setPanel(previous.panel); setPanelContext(previous.context); setPanelHistory(history => history.slice(0, -1)); } else if (panelSpace === 'composer') setPanel(null); };
   const navigate = (destination: Destination) => {
-    if(mode==='agent'&&['log','log_compose'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
+    if(mode==='agent'&&['log','log_compose','log_code','log_scan','log_join'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
     if(destination.mode&&destination.mode!==mode){pendingRoute.current={destination};changeMode(destination.mode);return;}
     const {mode:_mode,...local}=destination;destination=local;
     if(destination.view==='chat_history'&&destination.resourceId)destination={...destination,view:'chat'};
@@ -347,7 +348,7 @@ export function App() {
     try { sessionStorage.setItem(`nd-surface:${active.surface.id}`, 'seen'); } catch { /* Optional storage. */ }
     setSurface({ runId: active.id, id: active.surface.id, view: active.surface.view });
     const view = active.surface.view as Destination['view'];
-    if(AGENT_VIEWS.has(view)||['log','log_compose'].includes(view)){navigate({...cleanDestinationContext(active.surface),view});return;}
+    if(AGENT_VIEWS.has(view)||['log','log_compose','log_code','log_scan','log_join'].includes(view)){navigate({...cleanDestinationContext(active.surface),view});return;}
     open(view === 'profile' ? 'account' : view as Exclude<Panel, null>, cleanDestinationContext(active.surface), inlineViews.has(view) ? 'composer' : 'modal');
   };
   useEffect(() => {
@@ -418,6 +419,7 @@ export function App() {
   const accountSaved = async () => {
     const intent = afterAccount; setAfterAccount(null);
     if (surface) { await closePanel(true); return; }
+    if (intent?.destination) { await closePanel(); navigate(intent.destination); return; }
     if (intent?.panel) { open(intent.panel, intent.context, intent.space); return; }
     if (intent?.chat) { await closePanel(); setResumeChat(intent.chat); return; }
     if (panelHistory.length) backPanel(); else await closePanel(true);
@@ -442,7 +444,7 @@ export function App() {
     if(mode!=='agent'){revealConversation();requestAnimationFrame(()=>void send(undefined,prompt,undefined,true));}
     else void closePanel().then(()=>send(undefined,prompt,undefined,true));
   };
-  const completeLog=(entry?:import('../shared/log').LogEntry)=>{if(!surface||!['log','log_compose'].includes(surface.view))return;if(!run?.surface?.waiting){setSurface(null);return;}const current=surface;void post(`/runs/${current.runId}/surface`,{id:current.id,saved:Boolean(entry),...(entry?{resourceId:entry.id}:{})}).then(()=>{setSurface(null);return refresh();}).catch(error=>logError(errorText(error)));};
+  const completeLog=(entry?:import('../shared/log').LogEntry)=>{if(!surface||!['log','log_compose','log_code','log_scan','log_join'].includes(surface.view))return;if(!run?.surface?.waiting){setSurface(null);return;}const current=surface;void post(`/runs/${current.runId}/surface`,{id:current.id,saved:Boolean(entry),...(entry?{resourceId:entry.id}:{})}).then(()=>{setSurface(null);return refresh();}).catch(error=>logError(errorText(error)));};
   const panelContent = panel ? (panel === 'settings' ? <nav className="settings-menu" aria-label="Settings">
         <button onClick={() => navigatePanel('notifications')}><Bell size={23} />Notifications</button>
         <button onClick={() => { if (!data?.user.handle) setAccountMode('login'); navigatePanel('account'); }}><UserCircle size={23} />{data?.user.handle ? 'Profile' : 'Sign in'}</button>
@@ -458,6 +460,9 @@ export function App() {
         : panel === 'account_settings' && data.user.handle ? <AccountSettings user={data.user} refresh={refresh} cleared={async () => { try{for(const tab of ['agent','friends','posts','log'])localStorage.removeItem(tab==='agent'?`nd-draft:${data.user.id}`:`nd-draft:${data.user.id}:${tab}`);}catch{}for(const saved of Object.values(tabWorkspaces.current)){saved.draft='';saved.attachments=[];saved.inboxAttachments=[];saved.recordAttachments=[];saved.scroll=null;}setDraft(''); setRecordAttachments([]); setInboxAttachments([]); setAttachments([]); setSubmitting(false); setRun(null); submission.current = null; chatHistory.returnLatest(); await refresh(); scroll.follow(); }} />
         : panel === 'account' || needsAccount ? <Account data={data} initialMode={accountMode} onModeChange={setAccountMode} onboarding={Boolean(afterAccount)} refresh={refresh} close={() => void closePanel()} saved={() => void accountSaved()} />
           : panel === 'log' ? panelContext.resourceId?<LogDetail entryId={panelContext.resourceId} user={data.user} navigate={navigate} onSaved={completeLog} onCancel={()=>completeLog()}/>:<LogPanel user={data.user} navigate={navigate} initialQuery={panelContext.query} {...panelContext} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))}/>
+          : panel === 'log_code' ? <LogCodePanel entryId={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
+          : panel === 'log_scan' ? <LogScanPanel navigate={navigate} close={backPanel}/>
+          : panel === 'log_join' ? <LogJoinPanel code={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
           : panel === 'log_compose' ? <LogEditor user={data.user} date={panelContext.date} cancel={()=>{completeLog();backPanel();}} onSaved={entry=>{completeLog(entry);navigate({view:'log',resourceId:entry.id});}}/>
           : panel === 'person' ? <PersonPanel personId={panelContext.resourceId || ''} user={data.user} navigate={navigate} />
             : panel === 'location' ? <LocationPanel user={data.user} areaCell={panelContext.areaCell} saved={async () => { await refresh(); if (surface) await closePanel(true); else if (panelHistory.length) backPanel(); else await closePanel(); }} />
@@ -484,7 +489,7 @@ export function App() {
           onTap={() => { if (!inputOccupied) dictation.start(); }} onCancel={dictation.cancel} onSend={() => { void dictation.finish().then(text => { void send(undefined, text); }); }} {...effectiveDrag} /></div>;
   return <ExperienceContext.Provider value={{mode,changeMode,ask:askAbout,media:(items,index)=>setMedia({items,index}),navigate}}><NavigationContext.Provider value={navigate}><div className="app" inert={Boolean(media)} data-mode={mode} data-standalone={standalone||undefined} data-agent-dock={agentDockOpen||undefined} style={style} data-keyboard-open={keyboardOpen || undefined} ref={page} onKeyDown={event => { if (event.key === 'Escape' && launcherOpen && !event.defaultPrevented) { event.preventDefault(); void closePanel(); } }}>
     <Atmosphere/><div className="grain" aria-hidden="true" />
-    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockOpen} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockOpen} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={()=>{setAccountMode('register');open('account');}}/>)}{mode!=='agent'&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockOpen} inert={mode!=='agent'&&!agentDockOpen}>
+    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockOpen} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockOpen} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={destination=>{if(destination)setAfterAccount({destination});setAccountMode('register');open('account');}}/>)}{mode!=='agent'&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockOpen} inert={mode!=='agent'&&!agentDockOpen}>
       <div className="conversation" data-fade-top={mode==='agent'&&scroll.fadedTop || undefined} ref={scroll.transcript} role="log" aria-label="Your conversation" aria-live="polite" aria-relevant="additions text" onScroll={scroll.onScroll}>
         <div className="conversation-content" ref={scroll.content}>
           <OlderMessages hasMore={Boolean(chatHistory.cursor)} loading={chatHistory.loading} error={chatHistory.error} retry={() => void chatHistory.loadOlder()} />

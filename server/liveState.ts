@@ -26,7 +26,7 @@ async function changed(event: ChangeStreamDocument<Document>) {
   if (collection === 'directMessages' && document?.connectionId) members = (await rows('connections').findOne({ _id: String(document.connectionId) }, { projection: { members: 1 } }))?.members as string[] | undefined;
   if (collection === 'blocks' && !members) members = key.split(':');
   for (const listener of subscribers) {
-    if(collection==='logEntries'){listener.records(['log']);continue;}
+    if(collection==='logEntries'){listener.records(['log','people','posts']);continue;}
     if(collection==='logPreferences'){if(key===listener.userId)listener.records(['log_preferences']);continue;}
     if (collection === 'agentInbox' || collection === 'automations') { if (!document || document.userId === listener.userId) { listener.records([collection === 'agentInbox' ? 'inbox' : 'automations']); listener.dirty(['notifications']); } continue; }
     if (collection === 'runs' && document?.purpose === 'automation') { const fields = 'updateDescription' in event ? Object.keys(event.updateDescription.updatedFields || {}) : ['status']; if (document.userId === listener.userId && fields.some(field => /^(status|sleep|chargedNanos|reservedNanos|inboxId|delivery|error|usagePending)(\.|$)/.test(field))) { listener.records(['automations']); listener.dirty(['wallet', 'notifications']); } continue; }

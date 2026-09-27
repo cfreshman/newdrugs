@@ -1,3 +1,4 @@
+import {logContactSchema,logCodeOutput,logJoinPreview} from './logJoining';
 import {z} from 'zod';
 import {Temporal} from '@js-temporal/polyfill';
 export const logDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value=>{try{return Temporal.PlainDate.from(value).toString()===value;}catch{return false;}},'Choose a valid calendar date.');
@@ -16,10 +17,12 @@ export type LogView=z.infer<typeof logViewSchema>;
 export type LogList=z.infer<z.ZodObject<typeof logListInput>>;
 export interface LogPage {items:LogEntry[];nextCursor:string|null}
 export const logOutputs={
+ 'log.contacts':z.object({items:z.array(logContactSchema),nextCursor:z.string().nullable()}),
+ 'log.code':logCodeOutput,'log.join_preview':logJoinPreview,'log.join':logEntrySchema,'log.add_person':logEntrySchema,
  'log.people':z.object({items:z.array(z.object({userId:z.string(),name:z.string(),handle:z.string().optional()}))}),
  'log.neighbors':z.object({previous:logEntrySchema.nullable(),next:logEntrySchema.nullable()}),
  'log.list':z.object({items:z.array(logEntrySchema),nextCursor:z.string().nullable()}),
- ...Object.fromEntries(['get','create','update','contribute','invite','respond','revoke'].map(name=>[`log.${name}`,logEntrySchema])),
+ ...Object.fromEntries(['get','create','update','contribute','respond','revoke'].map(name=>[`log.${name}`,logEntrySchema])),
  'log.leave':z.object({left:z.literal(true)}),'log.delete':z.object({deleted:z.literal(true)}),
  'log.preferences':logPreferencesSchema,'log.preferences_update':logPreferencesSchema,
  'log.export':z.object({items:z.array(logEntrySchema),text:z.string(),nextCursor:z.string().nullable()}),

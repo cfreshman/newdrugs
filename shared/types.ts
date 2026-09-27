@@ -27,7 +27,7 @@ export interface Approval {
   id: string; operation: string; input: Record<string, unknown>; version: string; digest: string;
   title: string; detail: string; target?: string; expiresAt: number;
   status: 'pending' | 'approved' | 'rejected'; human: boolean; kind: 'write' | 'input';
-  result?: unknown; logEntry?: import('./log').LogEntry; automation?: import('./automations').AutomationConfig;
+  result?: unknown; logJoin?: import('./logJoining').LogJoinPreview; logEntry?: import('./log').LogEntry; automation?: import('./automations').AutomationConfig;
 }
 export interface RunView {
   id: string; status: RunStatus; draft: string; progress: { id: string; text: string }[];

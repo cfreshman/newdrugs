@@ -265,6 +265,7 @@ async function handleActions(run: RunRecord, required: FunctionAction[], client:
         if (!action) {
           action = { id: call.call_id, operation: op.name, input: parsed, version: op.version, digest: digest(op.name, op.version, parsed), title: op.name.replaceAll('.', ' '),
             detail: op.consequence || op.description, expiresAt: Date.now() + 15 * 60000, human: op.confirmationRequired, status: op.confirmationRequired ? 'pending' : 'approved', kind: 'write' };
+          if(op.name==='log.join'&&parsed.code)action.logJoin=await executeOperation('log.join_preview',{code:parsed.code},{userId:run.userId,source:'agent',scope:'read'}) as import('../shared/logJoining').LogJoinPreview;
           if(op.name.startsWith('log.')&&parsed.entryId)action.logEntry=await executeOperation('log.get',{entryId:parsed.entryId},{userId:run.userId,source:'agent',scope:'read'}) as import('../shared/log').LogEntry;
           let personId = parsed.personId;
           if (parsed.connectionId) { const c = await rows('connections').findOne({ _id: String(parsed.connectionId), members: run.userId }); personId = (c?.members as string[] | undefined)?.find(id => id !== run.userId); }

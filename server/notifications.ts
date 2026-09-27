@@ -27,7 +27,7 @@ export async function notificationState(userId: string, session?: ClientSession)
   const link = (connectionId: string): ResourceLink => ({ rel: 'open_in_newdrugs', targetKind: 'exact', title: 'Open conversation', url: new URL(destinationPath({ view: 'messages', resourceId: connectionId }), config.uiOrigin).href, resourceType: 'conversation', resourceId: connectionId });
   const items: Notification[] = invitations.map(row => ({ id: `invite:${row._id}`, kind: 'invitation', title: `Invitation from ${label(String(row.fromId))}`, text: String(row.note), createdAt: String(row.createdAt), read: row.status !== 'pending' || Boolean(row.notificationReadAt), connectionId: row._id, link: link(row._id) }));
   for (const row of stored) {
-    if(row.kind==='log_invitation'||row.kind==='log_update'){
+    if(row.kind==='log_invitation'||row.kind==='log_update'||row.kind==='log_added'){
       const entry=await rows('logEntries').findOne({_id:String(row.entryId),deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]},{session,projection:{_id:1}});if(!entry){if(!row.readAt)count--;continue;}
       items.push({id:row._id,kind:row.kind,title:String(row.title),text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open Log entry',url:new URL(destinationPath({view:'log',resourceId:entry._id}),config.uiOrigin).href,resourceType:'log_entry',resourceId:entry._id}});continue;
     }

@@ -3,7 +3,7 @@ import { destinationPath, parseDestination, surfaceViews } from '../shared/navig
 import { buildResourceLinks } from '../server/resourceLinks';
 const actor = { userId: 'me', source: 'external' as const, scope: 'read' as const };
 it.each(surfaceViews)('round-trips the canonical %s route', view => {
-  const destination = { view, ...(view==='post_list'?{postIds:['post:one','post:two']}:{}), ...(['person', 'post', 'messages'].includes(view) ? { resourceId: 'record:123' } : {}), areaCell: '852a3067fffffff', radiusMiles: 25 };
+  const destination = { view, ...(view==='post_list'?{postIds:['post:one','post:two']}:{}), ...(['person', 'post', 'messages', 'log_join', 'log_code'].includes(view) ? { resourceId: 'record:123' } : {}), areaCell: '852a3067fffffff', radiusMiles: 25 };
   expect(parseDestination(destinationPath(destination), 'https://dev.druggie.org')).toEqual(destination);
 });
 it('rejects unknown, credentialed and cross-stage URLs rather than opening a fallback panel', () => {

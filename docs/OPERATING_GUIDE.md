@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Verified September 26, 2026. Production: v0.19.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.19.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -14,12 +14,12 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.19.1, release `20260926221734638` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927014740493`; local frontend at `http://localhost:7330/log` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927042457032`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both have approved utilities. Dev additionally has the native Log experiment. Log has not been released to production. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
-| Outstanding requested work | Log implementation is complete on dev within its documented parity map. Physical iPhone recording/playback verification and any production promotion remain separate. |
+| Outstanding requested work | The shared-hangout/QR/headerless-calendar correction is live on dev. Physical iPhone camera/recording checks and production promotion remain separate. Physical iPhone recording/playback verification and any production promotion remain separate. |
 
 **The shipped pre-Log system is checkpointed at `pre-log-v0.19.1`.** Preserve tracked and untracked work made after that checkpoint. Do not reset, clean, stash, or revert an experiment casually. Deployment still builds the working tree, not a Git commit. There is no Git remote configured.
 
@@ -395,14 +395,18 @@ There is no promise of physical-iPhone coverage, large-corpus search capacity, e
 
 Read [the Log integration plan](log-integration/PLAN.md) and [parity decisions](log-integration/PARITY.md). Production remains v0.19.1; Log is dev-only until explicitly approved. Branch `experiment/log` starts from checkpoint tag `pre-log-v0.19.1`. The new fourth tab reuses `SocialExperience`, existing mode state, mobile behavior and main-panel navigation. Core source is `shared/log.ts`, `server/log.ts`, `src/LogPanel.tsx`, and `src/log.css`.
 
-Log is private or explicitly shared, never a public post dataset. Accounts/friends/auth stay canonical. Shared invitations require an accepted friendship and exact review; each person owns their own contribution. Writes carry current entry revisions and ordinary idempotency keys. The `logAccess` background grant is separate from `accountActivity` and `privateChat`, defaults false for old records, and allows reads only.
+Log is private or explicitly shared, never a public post dataset. Accounts/friends/auth stay canonical. People join by authenticated QR code or are directly added from past shared hangouts/accepted New Drugs friends. There is no new per-entry invite flow. Each person owns their contribution; leaving removes only themselves, even for the creator. Writes carry current entry revisions and ordinary idempotency keys. The `logAccess` background grant is separate from `accountActivity` and `privateChat`, defaults false for old records, and allows reads only.
 
 Media uses the existing quota and file service with `log_media` purpose. `newdrugs file-upload <path> --log` uploads media through the CLI; source/dev builds expose this before a versioned prod CLI release. HTTP range responses recheck authorization. Deleting files removes Log references and updates revisions; detaching a file keeps it manageable in Storage. `log.list` returns bounded note previews; `log.get` and paginated `log.export` return full text.
 
-The Log source project `../logcal` is read-only, like the other references. Do not copy its JWT accounts, friend graph, exact GPS behavior, native configuration or anonymous share keys. The parity map documents adaptations and intentional omissions.
+The Log source project `../logcal` is read-only, like the other references. Do not copy its JWT accounts, friend graph, exact GPS behavior, native configuration. QR sharing remains part of Log, using authenticated joins and rotatable 128-bit codes. The parity map documents adaptations and intentional omissions.
 
 Log completion evidence: dev release `20260926233414675`, with production unchanged at `20260926221734638`. Both health endpoints returned `ok:true`. The dev catalog exposes all 15 `log.*` operations, and live read-only CLI checks succeeded. The Log/push regression passed 101 tests; subsequent navigation/draft checks passed 71, plus focused backend tests for attachment order and stale revisions. Counts overlap across suites. Mobile UI was reviewed at 390px and 320px using disposable fixtures; no personal Log entries were created for QA. The code is checkpointed on `experiment/log`; see `git log` for the final implementation commit.
 
 The first Log UI was corrected after the user clarified “New Drugs skin, Logcal bones.” Keep the reference calendar’s continuous backward weeks, flat square mosaics and four-wide contact sheet. Do not reintroduce month-by-month paging as the main experience. `src/LogCalendar.tsx` owns progressive calendar loading; `src/logCalendarModel.ts` defines adjacent year chunks. Day tiles open one entry or a chooser, and empty days create a dated draft. Photos lead entry details and editor media comes first. New Drugs fonts, palette, controls and native routing remain in use.
 
 UI correction deployed to cloud dev as `20260927003706998`. Production remains unchanged. The correction keeps New Drugs styling and restores Logcal’s continuous calendar, square mosaics, four-wide contact sheet, Today strip, photo-first details, media-first editor, and bottom entry actions.
+
+The latest Log correction restores source sharing and composition: `shared/logJoining.ts`, `src/LogJoining.tsx`, and `src/LogChrome.tsx` add local QR generation/scanning, join preview, and calendar-overlay controls. `log.contacts` merges co-attendees with accepted platform friends. `log.add_person` directly adds one contact after review; `log.join` joins by code. `log.leave` and compatibility `log.delete` remove only the caller. Legacy pending invitations remain processable, but `log.invite` is removed from the catalog. Do not bring back creator-only shared deletion or accepted-friend-only Log access. The main Log calendar has no header; the calendar stays mounted below entry overlays, with per-hangout today floaters and Scan/Log controls above it. Full physical iPhone camera/recording validation is still outstanding.
+
+Verified corrected dev release: `20260927042457032`, healthy. The preceding same-backend release passed live CLI `log.join` schema and `log.contacts` read checks. Backend/UI integration: 127 passed; follow-up UI/date/navigation/contracts: 111 passed; final interaction guards: 4 passed. Counts overlap. TypeScript and build pass. Production remains `20260926221734638` (v0.19.1). Temporary browser fixtures were removed, viewport restored, and the test tab closed.

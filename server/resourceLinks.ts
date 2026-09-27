@@ -10,6 +10,9 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   const add = (destination: Destination, title: string, targetKind: ResourceLink['targetKind'], resourceType: string, resourceId?: string) => {
     links.push({ rel: 'open_in_newdrugs', targetKind, title: title.slice(0, 160), url: new URL(destinationPath(destination), config.uiOrigin).href, resourceType, ...(resourceId ? { resourceId } : {}) });
   };
+  if(name==='log.code'){add({view:'log_join',resourceId:data.code},'Join hangout','exact','log_join',data.entryId);return links;}
+  if(name==='log.contacts'){for(const person of rows)if(person.id)add({view:'person',resourceId:person.id},person.name||'View person','exact','person',person.id);return links;}
+  if(name==='log.join_preview'){add({view:'log_join',resourceId:String(input.code)},'Join hangout','exact','log_join',data.entryId);return links;}
   if(name.startsWith('log.')){for(const row of name==='log.neighbors'?[data.previous,data.next].filter(Boolean):rows)if(typeof row.id==='string')add({view:'log',resourceId:row.id},row.title||'Open Log entry','exact','log_entry',row.id);if(!links.length)add({view:'log'},'Open Log','surface','log');return links;}
   if(name==='people.context'){
     if(data.person?.id)links.push(...buildResourceLinks('people.get',{},data.person,actor));

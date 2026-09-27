@@ -5,5 +5,5 @@ import { rows } from './db';
 export async function profileVisibleTo(viewerId: string, owner: User, session?: ClientSession) {
   if (owner.suspendedAt) return viewerId === owner._id;
   if (viewerId === owner._id || owner.discoverable) return true;
-  return Boolean(await rows('connections').findOne({ members: { $all: [viewerId, owner._id] }, $or: [{ status: { $in: ['pending','accepted'] } }, { status: 'declined', toId: viewerId }] }, { session }));
+  return Boolean(await rows('logEntries').findOne({members:{$all:[viewerId,owner._id]},deletedAt:{$exists:false}},{session,projection:{_id:1}}))||Boolean(await rows('connections').findOne({ members: { $all: [viewerId, owner._id] }, $or: [{ status: { $in: ['pending','accepted'] } }, { status: 'declined', toId: viewerId }] }, { session }));
 }
