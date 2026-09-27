@@ -14,7 +14,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.27.1, release `20260927163601831` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927163450735`; local frontend at `http://localhost:7330/log` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927164245326`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -563,3 +563,5 @@ The user explicitly expanded invite previews to the full hangout information. Va
 The full invite-content change passed TypeScript and 150 targeted backend/UI/privacy tests, including full notes through CLI previews, no implicit joining, Markdown rendering, audio/video ranges, forged/nonmember attachment rejection, moderation/removal/suspension/code-reset revocation, and unchanged private-link/share-metadata boundaries.
 
 Full invite views are deployed to dev `20260927163450735` and, after the explicit production request, **v0.27.1**, production `20260927163601831`. Both deployment health checks passed. Live production assets and the CLI `log.join_preview` output schema were verified without writing social data or spending credits.
+
+Hangout typography follow-up: titles use normal `--ink` text color. Note authors match the attendee list’s 14px body sizing, line height and normal weight; actionable profile buttons share the accent/disabled styling, while invite-preview names are ordinary text. Deployed to dev `20260927164245326` with a successful build and health check; this styling follow-up is not yet on production.

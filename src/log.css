@@ -115,13 +115,13 @@
 .log-editor-people{display:flex;flex-wrap:wrap;gap:4px;}.log-editor-people span{border:1px solid var(--primary);border-radius:999px;padding:4px 10px;color:var(--primary);font-size:13px;}
 .log-editor-footer{position:sticky;bottom:0;justify-content:flex-end;background:var(--panel-surface-bottom);padding-block:8px;z-index:2;}
 .mode-page-log:has(>.log-detail){height:100%;}.log-detail{min-height:100%;gap:8px;}
-.log-detail h2{font:600 20px/1.3 var(--font-ui);color:var(--primary);}
+.log-detail h2{font:600 20px/1.3 var(--font-ui);color:var(--ink);}
 .log-photo-strip .post-photos{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:none;overscroll-behavior-x:contain;margin:0;}
 .log-photo-strip .post-photos>a{flex:0 0 min(100%,380px);scroll-snap-align:start;max-height:460px;}
 .log-photo-strip .post-photos img{max-height:460px;width:100%;object-fit:contain;}
 .log-photo-strip:has(.post-photos):empty{display:none;}
-.log-entry-facts p{margin:0;font-size:14px;line-height:1.6;}.log-with button{padding:0;background:transparent;color:var(--primary);font-size:inherit;}.log-with button:disabled{color:var(--muted);}
-.log-contribution .log-author{color:var(--primary);font-weight:400;}.log-author strong{font-weight:500;}.log-contribution .log-author img,.log-contribution .log-author svg,.log-contribution .log-author .quiet{display:none;}
+.log-entry-facts p{margin:0;}.log-entry-facts p,.log-contribution .log-author{font-size:var(--text-body);line-height:1.6;font-weight:400;color:var(--ink);}.log-with button,.log-contribution button.log-author{padding:0;background:transparent;color:var(--primary);font-size:var(--text-body);line-height:1.6;font-weight:400;}.log-with button:disabled,.log-contribution button.log-author:disabled{color:var(--muted);}
+.log-author strong{font-weight:500;}.log-contribution .log-author img,.log-contribution .log-author svg,.log-contribution .log-author .quiet{display:none;}
 .log-note-content,.log-add-note{border-left:1px solid var(--divider);padding-left:12px;}.log-note-content p{margin:0;}.log-add-note{text-align:left;background:transparent;border-radius:0;padding:10px 12px;color:var(--muted);}
 .log-detail-footer{position:sticky;bottom:0;z-index:3;margin-top:auto;padding-top:12px;background:var(--panel-surface-bottom);display:flex;flex-direction:column;gap:8px;}
 .log-detail-footer .log-adjacent{margin:0;}.log-detail-footer .log-adjacent button{flex:1;max-width:none;justify-content:flex-start;}.log-detail-footer .log-adjacent button:disabled{color:var(--muted);}
