@@ -1,7 +1,9 @@
+import {logImageUrl} from './logImageCache';
 import {useRef} from 'react';
 import {useExperience} from './ExperienceContext';
 export interface PostPhoto { id: string; name: string; url: string }
-export function PostPhotos({ photos }: { photos: PostPhoto[] }) {
+export function PostPhotos({ photos:original, log=false }: { photos: PostPhoto[]; log?:boolean }) {
+  const photos=log?original.map(photo=>({...photo,url:logImageUrl(photo.url)})):original;
   const gallery=useRef<HTMLDivElement>(null),experience=useExperience();
   if (!photos.length) return null;
   return <div ref={gallery} className="post-photos" data-count={photos.length}>{photos.map((photo,index) => <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${photo.name}`} onClick={event=>{

@@ -216,3 +216,6 @@ agent-written rules (you are allowed to edit below this line)
 - The user explicitly approved the first Log production release and then migration of Cyrus and Laura's existing Logcal data. Migration must be additive/retry-safe, preserve account ownership and shared entries, and leave Logcal source data untouched.
 
 - When another landing tab is preferred, Agent uses explicit `/agent`. Dark-mode panels, gradients, inputs and controls use warm charcoal/red-orange rather than blue. Preserve original Logcal entry/person/media IDs internally; future account linking happens only through a separate explicitly requested migration.
+
+- Cache recent Log photos locally with IndexedDB through the marked-image service-worker path. Keep it account-scoped, bounded by bytes/count/age and available browser quota, with LRU eviction, background revalidation, and deletion/logout invalidation. Do not cache app/API responses or videos/audio. Do not clear persisted photos on startup before account identity is known.
+- Load older Log weeks one scrollport ahead, adapting on resize. Apply mobile bottom safe area once: outside inset panels, inside standalone edge-to-edge panels and their floating controls. Remove it while the keyboard is open. In mobile standalone, Log overlays fit the main content panel and leave the top mode/settings controls usable.

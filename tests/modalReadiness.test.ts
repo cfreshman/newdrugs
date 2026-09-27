@@ -24,3 +24,9 @@ it('opens an empty Log shell immediately with Back available, then reveals conte
  const back=dom.container.querySelector<HTMLButtonElement>('.log-loading-footer button')!;expect(back.textContent).toBe('Back');act(()=>back.click());expect(close).toHaveBeenCalledOnce();
  await act(async()=>finish());expect(shell.hasAttribute('data-loading')).toBe(false);expect(shell.textContent).toContain('Loaded entry');expect(shell.querySelector('.log-loading-footer')).toBeNull();
 });
+
+it('keeps the top controls accessible in mobile standalone by using the content panel bounds',async()=>{
+ dom.desktop(true);const app=document.createElement('div');app.className='app';app.dataset.standalone='true';const outer=document.createElement('section');outer.className='social-experience';const panel=document.createElement('div');outer.append(panel);app.append(outer);document.body.append(app);vi.spyOn(outer,'getBoundingClientRect').mockReturnValue(rect(0,6,390,838));vi.spyOn(panel,'getBoundingClientRect').mockReturnValue(rect(0,53,390,791));
+ await act(async()=>dom.root.render(h(LogModal,{active:true,close:vi.fn(),anchor:{current:panel},children:h('div',{},'Entry')})));
+ const modal=dom.container.querySelector<HTMLElement>('.log-modal')!;expect(modal.style.top).toBe('53px');expect(modal.style.height).toBe('791px');
+});

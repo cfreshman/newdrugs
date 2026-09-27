@@ -151,7 +151,7 @@
 .log-native .mode-pages>.composer-view:not(.composer-underlay)>.mode-page{padding:var(--panel-inset);}
 .log-native .mode-page-log:has(>.log-browser){padding-bottom:var(--panel-inset)!important;}
 .log-chrome-host{position:absolute;inset:0;pointer-events:none;z-index:4;}
-.log-floating{position:absolute;inset:auto var(--panel-inset) var(--panel-inset);pointer-events:none;}
+.log-floating{position:absolute;inset:auto var(--panel-inset) calc(var(--panel-inset) + var(--panel-safe-bottom,0px));pointer-events:none;}
 .log-floating-inline{position:sticky;bottom:0;}
 .log-floating button,.log-floating .log-options,.log-today-floaters{pointer-events:auto;}
 .log-home-footer{position:static;padding:0;margin:0;background:none;gap:8px;}
@@ -187,7 +187,7 @@
 /* Native top-layer dialogs cannot be clipped by the calendar's scrollport or corners. */
 .log-modal{position:fixed;inset:auto;left:50%;top:calc(var(--viewport-top,0px) + var(--mode-top,12px));transform:translateX(-50%);width:min(680px,calc(100% - 2 * var(--mode-gutter,12px)));height:calc(var(--viewport-height,100dvh) - var(--mode-top,12px) - var(--mode-bottom,12px));max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:var(--radius-panel);background:linear-gradient(var(--panel-surface-top),var(--panel-surface-bottom));color:var(--ink);overflow:hidden;}
 .log-modal[data-open=true]{display:block;}.log-modal:not([data-open=true]){display:none;}.log-modal::backdrop{background:transparent;pointer-events:none;}
-.log-modal>.composer-view{height:100%;min-height:0;overflow:hidden;}.log-modal .mode-page{height:100%;min-height:0;padding:var(--panel-inset);}
+.log-modal>.composer-view{height:100%;min-height:0;overflow:hidden;}.log-modal .mode-page{height:100%;min-height:0;padding:var(--panel-inset);padding-bottom:calc(var(--panel-inset) + var(--panel-safe-bottom,0px));}
 .log-modal :is(.log-detail,.log-editor,.log-task){height:100%;min-height:0;gap:8px;}
 .log-modal .log-task-content{padding:0;}.log-modal :is(.log-detail-footer,.log-editor-footer,.log-task-footer){padding:0;margin:0;}
 .log-modal .log-entry-actions{margin:0;}
@@ -230,4 +230,4 @@
 
 .log-detail-footer .log-adjacent button:last-child{justify-content:flex-end;}
 .log-modal[data-loading=true]>.composer-view{visibility:hidden;pointer-events:none;}
-.log-loading-footer{position:absolute;inset:auto var(--panel-inset) var(--panel-inset);margin:0;}
+.log-loading-footer{position:absolute;inset:auto var(--panel-inset) calc(var(--panel-inset) + var(--panel-safe-bottom,0px));margin:0;}

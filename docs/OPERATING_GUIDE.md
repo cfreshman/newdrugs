@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.21.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.21.3.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.21.2, release `20260927110225148` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927110013002`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.21.3, release `20260927112944660` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927112737233`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -438,3 +438,8 @@ Push titles are `Notification`, avoiding duplicate app-name chrome on iOS. The s
 
 
 Production v0.21.2 (`20260927110225148`) and dev (`20260927110013002`) include separate request budgets: 1,200/minute API, 3,000/minute media. Live headers confirmed both limits; sensitive endpoint limits remain. The production frontend matches its built HTML, both services are healthy, and authenticated CLI downloads of an imported photo/audio/video matched their hashes. Migration completion details and filesystem ownership verification are in MIGRATION.md.
+
+The subsequent Log photo-cache/safe-area follow-up is documented in [IMAGE_CACHE.md](log-integration/IMAGE_CACHE.md). It replaces the earlier push-only service-worker policy with an explicit, private Log-image cache only. It does not cache HTML, operations, audio/video or account data. Preserve its startup identity gate, bounds and deletion/logout handling. Calendar prefetch now starts one viewport early; standalone Log overlays preserve access to top controls and put the home-indicator inset inside the panel.
+
+
+The cache/safe-area follow-up shipped to dev `20260927112737233` and production **v0.21.3**, `20260927112944660`. The production HTML, service worker and cache script match their built artifacts; health checks pass. The UI/cache/calendar/modal regression suite passed 109 tests, followed by 19 cache/layout checks and 76 app/identity checks after final adjustments; counts overlap. Browser verification confirmed an IndexedDB hit across reload without an extra network request and simulated 34px bottom safe area in browser/standalone/keyboard layouts. Physical iPhone verification remains user/device testing. No semantic Log index was added: Log search remains private text/Boolean matching with date/person/scope filters.

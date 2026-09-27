@@ -1,5 +1,5 @@
 /* Three primary experiences. The original Agent composition stays intact. */
-.app { --mode-switch-clearance:24px; --agent-min-width:320px; --agent-max-width:620px; --mode-header-height:56px; --mode-gutter: 20px; --mode-top: 12px; --mode-bottom: 16px; --mode-sidebar: 184px; --mode-main: 680px; --mode-rail: 252px; --mode-gap: 20px; }
+.app { --mode-switch-clearance:24px; --agent-min-width:320px; --agent-max-width:620px; --mode-header-height:56px; --mode-gutter: 20px; --mode-top: 12px; --mode-bottom: max(16px,calc(6px + var(--safe-area-bottom))); --panel-safe-bottom:0px; --mode-sidebar: 184px; --mode-main: 680px; --mode-rail: 252px; --mode-gap: 20px; }
 .mode-switch { position:fixed;z-index:8;top:12px;left:12px;display:flex;align-items:center;padding:4px;gap:2px;border-radius:999px;background:var(--glass);backdrop-filter:blur(22px);color:var(--ink);width:var(--mode-expanded-width,max-content);transition:width 140ms ease;overflow:hidden;box-shadow:0 2px 12px #24243206; }
 .mode-switch button,.mode-measure-item {display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 13px;white-space:nowrap;border-radius:999px;background:transparent;font-size:13px;line-height:20px;flex:none;}
 .mode-switch button[aria-pressed=true] {background:var(--ink);color:var(--inverse-ink);}
@@ -130,11 +130,12 @@
 
 /* Installed mobile social modes use the whole content area below top controls. */
 @media(max-width:760px){
+  .app[data-standalone=true]:not([data-mode=agent]) {--panel-safe-bottom:var(--safe-area-bottom);}
   .app[data-standalone=true]:not([data-mode=agent]) .social-experience {left:0;right:0;bottom:0;}
   .app[data-standalone=true]:not([data-mode=agent]) .mode-main {--mode-panel-radius:0px;border-radius:0;}
   .app[data-standalone=true]:not([data-mode=agent]) :is(.mode-content-header,.mode-mobile-nav,.mode-page) {padding-left:max(var(--panel-inset),env(safe-area-inset-left));padding-right:max(var(--panel-inset),env(safe-area-inset-right));}
-  .app[data-standalone=true]:not([data-mode=agent]) .mode-page {padding-bottom:calc(var(--panel-inset) + var(--safe-area-bottom));}
-  .app[data-standalone=true]:not([data-mode=agent]) .workspace {border-radius:0;padding-bottom:calc(var(--panel-inset) + var(--safe-area-bottom));}
+  .app[data-standalone=true]:not([data-mode=agent]) .mode-page {padding-bottom:calc(var(--panel-inset) + var(--panel-safe-bottom));}
+  .app[data-standalone=true]:not([data-mode=agent]) .workspace {border-radius:0;padding-bottom:calc(var(--panel-inset) + var(--panel-safe-bottom));}
   .app[data-standalone=true][data-keyboard-open=true]:not([data-mode=agent]) .social-experience {height:calc(var(--viewport-height,100dvh) - var(--mode-top));}
 }
 

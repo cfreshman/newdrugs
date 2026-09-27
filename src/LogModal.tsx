@@ -6,7 +6,7 @@ export function LogModal({active,close,children,anchor,closeLabel='Close'}:{clos
  const ref=useRef<HTMLDivElement>(null),opened=useRef(false);
  useLayoutEffect(()=>{const dialog=ref.current,panel=anchor.current;if(!active||!dialog||!panel)return;
   const outer=panel.closest<HTMLElement>('.social-experience')||panel;
-  const place=()=>{const bounds=panel.getBoundingClientRect(),vertical=outer.getBoundingClientRect();if(!bounds.width||!bounds.height)return;Object.assign(dialog.style,{left:`${bounds.left}px`,top:`${vertical.top}px`,width:`${bounds.width}px`,height:`${vertical.height}px`,transform:'none',borderRadius:getComputedStyle(panel).borderRadius});};
+  const place=()=>{const bounds=panel.getBoundingClientRect(),standalone=panel.closest<HTMLElement>('.app')?.dataset.standalone==='true'&&window.matchMedia('(max-width:760px), (pointer:coarse)').matches,vertical=standalone?bounds:outer.getBoundingClientRect();if(!bounds.width||!bounds.height)return;Object.assign(dialog.style,{left:`${bounds.left}px`,top:`${vertical.top}px`,width:`${bounds.width}px`,height:`${vertical.height}px`,transform:'none',borderRadius:getComputedStyle(panel).borderRadius});};
   place();const observer=new ResizeObserver(place);observer.observe(panel);if(outer!==panel)observer.observe(outer);window.addEventListener('resize',place);window.visualViewport?.addEventListener('resize',place);window.visualViewport?.addEventListener('scroll',place);
   return()=>{observer.disconnect();window.removeEventListener('resize',place);window.visualViewport?.removeEventListener('resize',place);window.visualViewport?.removeEventListener('scroll',place);};
  },[active,anchor]);

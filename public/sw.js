@@ -1,4 +1,5 @@
-/* Push only. No request interception or offline cache. */
+/* Push plus a bounded, account-scoped cache for explicitly marked Log photos. */
+if (typeof importScripts === 'function') importScripts('/log-image-cache.js');
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 function messagePath(value) {

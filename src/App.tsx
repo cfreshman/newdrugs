@@ -1,3 +1,4 @@
+import {bindLogImageCache} from './logImageCache';
 import {PreferencesPanel} from './PreferencesPanel';
 import {useAppearance,useFont} from './useAppearance';
 import {defaultPreferences,initialDestination as landingDestination} from '../shared/preferences';
@@ -93,6 +94,7 @@ export function App() {
   const [media,setMedia]=useState<{items:MediaItem[];index:number}|null>(null);
   const workspaceRef=useRef<HTMLElement>(null);
   const [data, setData] = useState<Bootstrap | null>(null);
+  useLayoutEffect(()=>{if(data)bindLogImageCache(data.user.handle?data.user.id:null);},[data?.user.id,data?.user.handle]);
   useFont(data?(data.preferences?.font||'mono'):undefined);
   useAppearance(data?(data.preferences||defaultPreferences).appearance:undefined);
   const chatHistory = useChatHistory(() => scroll.preparePrepend());
