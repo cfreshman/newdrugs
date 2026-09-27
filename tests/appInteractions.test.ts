@@ -188,7 +188,7 @@ describe('chat interaction integration', () => {
   it('shows invite photos before login and restores the invite after the account identity changes',async()=>{
     const code='a'.repeat(32);history.replaceState(null,'',`/log/join/${code}`);await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,id:'guest',handle:undefined}}));
     expect(dom.container.querySelector('.log-join .log-photo-strip img')).not.toBeNull();
-    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.log-join button')].find(button=>button.textContent==='Create account or sign in')!.click());
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-join button.solid')!.click());
     expect(sessionStorage.getItem('nd-auth-return')).toContain(code);
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.switch-account')!.click());
     const form=dom.container.querySelector<HTMLFormElement>('dialog[open] form')!;form.querySelector<HTMLInputElement>('[name="handle"]')!.value='test';form.querySelector<HTMLInputElement>('[name="password"]')!.value='password8';

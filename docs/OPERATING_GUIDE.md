@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.26.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.26.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.26.1, release `20260927152055905` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927151558752`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.26.2, release `20260927162436678` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927162548927`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -551,3 +551,5 @@ Following Logcal’s `Profile.tsx` and `HangoutView.tsx` sequential navigation, 
 This navigation/separator update is deployed to cloud dev `20260927151558752`; the build and database-backed health check passed. Production is unchanged.
 
 The user subsequently requested production. Source-list hangout navigation and the hyphen separator shipped as **v0.26.1**, release `20260927152055905`. Production service and public API health passed; the live page references the built release assets.
+
+Mobile/touch invite previews now shorten the account button to “Sign in”; desktop keeps the longer label. The entry save pending state is exactly `One sec...` with three ordinary periods. Existing auth/join behavior is unchanged. TypeScript and 83 app interaction checks passed. Both changes are live on production v0.26.2 (`20260927162436678`) and dev (`20260927162548927`), with successful health checks and production asset verification.
