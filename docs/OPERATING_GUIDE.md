@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.29.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.29.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.29.1, release `20260927172820480` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927172924146`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.29.2, release `20260927173600978` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927173448958`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -522,7 +522,7 @@ The mobile date/crop/spinner follow-up is live on dev `20260927135311617`, with 
 
 Page previews are rendered on the server from a deliberately anonymous projection in `server/pagePreviews.ts`. No session or account context enriches a preview. `shared/pagePreview.ts` replaces only title/description/Open Graph/Twitter/canonical tags, preserving PWA metadata, viewport settings, icons and app assets, and escapes user-authored text.
 
-Ordinary private Log entry/code links always say `View hangout (New Drugs)` and use the existing gradient, without reading the entry's title, notes, place, date or media. A current `/log/join/:code` capability may preview the first eligible image in display order, using the saved hangout title when present, without notes or attendee details. Invite images are resolved by code on each request; reset codes, deleted entries/files, moderated files and suspended participants stop future retrieval. Invite/private pages are noindex/nofollow. External preview services can retain previously fetched previews beyond our control.
+Ordinary private Log entry/code links always say `View hangout (New Drugs)` and use the existing gradient, without reading the entry's title, notes, place, date or media. A current `/log/join/:code` capability may preview the first eligible image in display order, using the saved hangout title when present, without notes, with the attendee list used as its description. Invite images are resolved by code on each request; reset codes, deleted entries/files, moderated files and suspended participants stop future retrieval. Invite/private pages are noindex/nofollow. External preview services can retain previously fetched previews beyond our control.
 
 Public posts may expose their public text/author and first photo. Only discoverable, unsuspended profiles expose their name/handle/bio/first photo. Non-public/removed records fall back to generic branding. `/api/share-images/:kind/:id` serves only these reauthorized projections; it does not make `/api/files` public. Both HTML/metadata and preview images use no-store. Staging still requires the trusted development key or valid bearer authentication. The Vite index transform fetches the cloud-dev metadata through its server-side key, so local HTML reflects the same rules without putting the key in client code. Production renders the built template at request time, so compare served HTML to `renderPagePreview` output rather than hashing it against the unrendered `dist/web/index.html`.
 
@@ -558,7 +558,7 @@ Mobile/touch invite previews now shorten the account button to “Sign in”; de
 
 The user explicitly expanded invite previews to the full hangout information. Valid code holders now see current members’ complete notes, links, recurrence marker, imported participant names and code-scoped photo/audio/video attachments before signing in or joining. `log.join_preview` exposes the same projection to CLI/MCP. It never changes attendance or unlocks unrelated profile data. `src/LogMedia.tsx` shares the existing media rendering with regular hangouts; notes retain Markdown and author labels.
 
-`server/logInvites.ts` resolves every attachment from the current code, current membership, file ownership and live file state. Anonymous media supports range requests for playback, stays no-store/noindex, and is revoked on code rotation, removal, deletion or suspension. Ordinary private links remain generic; website share metadata still uses only the saved title and first eligible photo, without notes.
+`server/logInvites.ts` resolves every attachment from the current code, current membership, file ownership and live file state. Anonymous media supports range requests for playback, stays no-store/noindex, and is revoked on code rotation, removal, deletion or suspension. Ordinary private links remain generic; website share metadata uses the saved title, attendee-list description and first eligible photo, without notes.
 
 The full invite-content change passed TypeScript and 150 targeted backend/UI/privacy tests, including full notes through CLI previews, no implicit joining, Markdown rendering, audio/video ranges, forged/nonmember attachment rejection, moderation/removal/suspension/code-reset revocation, and unchanged private-link/share-metadata boundaries.
 
@@ -595,3 +595,7 @@ Validation: 119 image/cache/app checks, 96 billing/image/app checks, and 111 fin
 This image/billing/link-card batch is on cloud dev `20260927172405413`. Build and database health passed; live CLI discovery/schema and read-only `wallet.activity` verified its three-charge limit and valid ranges. Production remains v0.27.3.
 
 The image/billing/native-link batch shipped on explicit production request, followed by the user’s in-flight naming correction: grouped rows are labeled **Agent usage rollup**, while individual charges retain their labels. Final production is **v0.29.1**, `20260927172820480`; dev is `20260927172924146`. The five billing checks passed again. Live production activity verified the exact rollup label and latest-three behavior; assets and API health passed.
+
+Invite share descriptions now list attendees in hangout order, using @handles and falling back to names, followed by imported participant names. This is shared by Open Graph, Twitter card metadata and native link cards. It reads only current member name/handle fields, omits former attendees, and falls back to generic branding after code revocation. Ordinary private hangout links remain generic and notes/bios stay out of share metadata.
+
+Attendee-list invite descriptions passed nine preview/privacy checks and TypeScript, then shipped to dev `20260927173448958` and explicitly requested production **v0.29.2**, `20260927173600978`. The user-supplied invite’s live metadata API and rendered Open Graph description were verified, along with API health.

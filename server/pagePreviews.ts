@@ -1,4 +1,4 @@
-import {inviteEntry,invitePhotos} from './logInvites';
+import {inviteEntry,invitePhotos,invitePeople} from './logInvites';
 import {rows} from './db';import {users} from './auth';import {uploads,readUpload} from './uploads';
 import {parseDestination,destinationPath,type Destination} from '../shared/navigation';
 import type {PagePreview} from '../shared/pagePreview';import {AppError} from './errors';
@@ -31,7 +31,7 @@ export async function pagePreview(path:string):Promise<PagePreview>{
  const clean:Destination={view:destination.view,...(destination.resourceId?{resourceId:destination.resourceId}:{}),...(destination.mode?{mode:destination.mode}:{})};
  const preview={...base,path:destinationPath(clean)},id=destination.resourceId;
  const image=async(kind:ImageKind)=>{const file=id&&await previewImageFile(kind,id);if(file){preview.imagePath=`/api/share-images/${kind}/${encodeURIComponent(id!)}${file.sha256?`?v=${file.sha256.slice(0,16)}`:''}`;delete preview.imageWidth;delete preview.imageHeight;}};
- if(destination.view==='log_join'){preview.title='View hangout (New Drugs)';preview.private=true;const entry=id&&await inviteEntry(id);if(entry&&text(entry.title))preview.title=`${text(entry.title)} (New Drugs)`;await image('log-invite');return preview;}
+ if(destination.view==='log_join'){preview.title='View hangout (New Drugs)';preview.private=true;const entry=id&&await inviteEntry(id);if(entry){if(text(entry.title))preview.title=`${text(entry.title)} (New Drugs)`;const people=await invitePeople(entry);preview.description=text([...people.map(person=>person.handle?`@${person.handle}`:person.name),...(entry.historicalPeople||[])].join(', '))||base.description;}await image('log-invite');return preview;}
  if(destination.view==='log'&&id||destination.view==='log_code'){preview.title='View hangout (New Drugs)';preview.private=true;return preview;}
  if(destination.view==='person'&&id){
   preview.title='View profile (New Drugs)';preview.private=true;const owner=await profile(id);

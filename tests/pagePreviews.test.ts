@@ -82,3 +82,14 @@ it('previews full contributions and links while authorizing every media request 
  await rows('logEntries').updateOne({_id:'full-invite'},{$set:{joinKey:'e'.repeat(32)}});expect((await fetch(`${origin}/api/log-invites/${code}/media/${video}`)).status).toBe(404);
  expect(JSON.stringify(await pagePreview('/log/full-invite'))).not.toContain('Full hangout');expect(JSON.stringify(await pagePreview(`/log/join/${'e'.repeat(32)}`))).not.toContain(note);
 });
+
+
+it('uses the current attendee list as an invite description without enriching ordinary private links',async()=>{
+ await users().updateOne({_id:otherId},{$unset:{handle:''},$set:{name:'Guest Name'}});
+ await rows('logEntries').insertOne({_id:'names',title:'Dinner',joinKey:code,members:[otherId,userId],historicalPeople:['Historical friend'],contributions:[{userId:otherId,note:'DO NOT PUT NOTES IN METADATA',fileIds:[]}],coverFileId:null});
+ const preview=await pagePreview(`/log/join/${code}`);expect(preview.description).toBe('Guest Name, @public_person, Historical friend');expect(preview.title).toBe('Dinner (New Drugs)');expect(JSON.stringify(preview)).not.toMatch(/PRIVATE BIO|DO NOT PUT NOTES/);
+ const template=await fs.readFile('index.html','utf8'),html=renderPagePreview(template,preview,'https://druggie.org');expect(html).toContain('property="og:description" content="Guest Name, @public_person, Historical friend"');expect(html).toContain('name="twitter:description" content="Guest Name, @public_person, Historical friend"');
+ expect((await pagePreview('/log/names')).description).toBe('Made in New England');
+ await rows('logEntries').updateOne({_id:'names'},{$set:{members:[userId],historicalPeople:[]}});expect((await pagePreview(`/log/join/${code}`)).description).toBe('@public_person');
+ await rows('logEntries').updateOne({_id:'names'},{$set:{joinKey:'f'.repeat(32)}});expect((await pagePreview(`/log/join/${code}`)).description).toBe('Made in New England');
+});

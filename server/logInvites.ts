@@ -13,9 +13,12 @@ async function inviteFiles(entry:InviteEntry,session?:ClientSession,photosOnly=f
  return references.flatMap(ref=>{const file=found.find(file=>file._id===ref.id&&file.userId===ref.owner);return file?[file]:[];});
 }
 export async function invitePhotos(entry:InviteEntry,session?:ClientSession){return inviteFiles(entry,session,true);}
+export async function invitePeople(entry:InviteEntry,session?:ClientSession){
+ const people=await users().find({_id:{$in:entry.members}},{session,projection:{name:1,handle:1}}).toArray();
+ return entry.members.flatMap(id=>{const person=people.find(person=>person._id===id);return person?[{id:person._id,name:person.name||person.handle||'Member',...(person.handle?{handle:person.handle}:{})}]:[];});
+}
 export async function projectInvite(entry:InviteEntry,code:string,viewerId?:string,session?:ClientSession):Promise<LogJoinPreview>{
- const people=await users().find({_id:{$in:entry.members}},{session,projection:{name:1,handle:1}}).toArray(),files=await inviteFiles(entry,session);
- const names=people.map(person=>({id:person._id,name:person.name||person.handle||'Member',...(person.handle?{handle:person.handle}:{})}));
+ const names=await invitePeople(entry,session),files=await inviteFiles(entry,session);
  return {entryId:entry._id,title:entry.title,date:entry.date,place:entry.place,links:entry.links||[],recurrence:entry.recurrence||'none',historicalPeople:entry.historicalPeople||[],joined:Boolean(viewerId&&entry.members.includes(viewerId)),people:names,
   photos:files.filter(file=>file.mime.startsWith('image/')).map(file=>({id:file._id,name:'Hangout photo',url:`/api/log-invites/${code}/photos/${file._id}`})),
   contributors:entry.contributions.filter(person=>entry.members.includes(person.userId)).map(person=>{const identity=names.find(item=>item.id===person.userId);return {userId:person.userId,name:identity?.name||'Member',...(identity?.handle?{handle:identity.handle}:{}),note:person.note||'',files:person.fileIds.flatMap(id=>{const file=files.find(file=>file._id===id&&file.userId===person.userId);return file?[{id:file._id,name:file.name,mime:file.mime,bytes:file.bytes,url:`/api/log-invites/${code}/${file.mime.startsWith('image/')?'photos':'media'}/${file._id}`}]:[];})};})};
