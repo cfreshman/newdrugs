@@ -306,7 +306,7 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe(mode.toLowerCase());
     expect(dom.container.querySelector<HTMLElement>('.workspace')?.hidden).toBe(true);
     expect(page.querySelector('.agent-update')?.textContent).toContain('An update');
-    expect(dom.container.querySelector('dialog')).toBeNull();
+    expect(dom.container.querySelector('dialog[open]')).toBeNull();
     await act(async()=>page.querySelector<HTMLButtonElement>('.mode-content-header [aria-label="Back"]')!.click());
     expect(page.querySelector('h1')?.textContent).toBe('Profile');
     expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe(`${mode} draft`);
@@ -449,6 +449,31 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(false);expect(input.value).toBe('Keep this draft');
     expect(location.pathname).toBe(mode==='Posts'?'/selected-posts':'/friends/selected-posts');
   });
+  it.each(['/storage','/posts/storage','/friends/storage','/log/storage'])('opens a Storage attachment and dismisses Settings from %s',async(path)=>{
+    const original=transport.operation.getMockImplementation()!;
+    transport.operation.mockImplementation((name,...args)=>name==='storage.list'?Promise.resolve({usedBytes:100,limitBytes:1000,nextCursor:null,items:[{id:'photo',name:'Photo',mime:'image/webp',bytes:100,ready:true,attached:true,attachments:[{label:'Hangout: Test memory',url:'/log/resource',destination:{view:'log',resourceId:'resource'}}]}]}):original(name,...args));
+    history.replaceState(null,'',path);await mount();await load();
+    expect(dom.container.querySelector('dialog[open] .storage-list')).not.toBeNull();
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.storage-attachments a')!.click());
+    expect(dom.container.querySelector('dialog[open] .storage-list')).toBeNull();
+    expect(dom.container.querySelector('.log-modal[data-open=true] .log-detail h2')?.textContent).toBe('Test memory');
+  });
+  it('keeps Storage mounted with both filters, expanded attachments and scroll after following a link',async()=>{
+    const original=transport.operation.getMockImplementation()!;
+    transport.operation.mockImplementation((name,...args)=>name==='storage.list'?Promise.resolve({usedBytes:100,limitBytes:1000,nextCursor:null,items:[{id:'photo',name:'Photo',mime:'image/webp',bytes:100,ready:true,attached:true,attachments:[{label:'Hangout: Test memory',url:'/log/resource',destination:{view:'log',resourceId:'resource'}},{label:'Post: a memory',url:'/posts/post',destination:{view:'post',resourceId:'post'}}]}]}):original(name,...args));
+    history.replaceState(null,'','/posts/storage');await mount();await load();
+    const choose=async(label:string,group:string)=>act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>(`[aria-label="${group}"] button`)].find(button=>button.textContent===label)!.click());
+    await choose('Hangouts','Attachment locations');await choose('Images','File types');
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.storage-attachments>button')!.click());
+    const list=dom.container.querySelector('.storage-list'),dialog=dom.container.querySelector<HTMLDialogElement>('dialog.settings-sheet')!;dialog.scrollTop=250;
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.storage-places a')!.click());
+    expect(dialog.open).toBe(false);expect(list?.isConnected).toBe(true);
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
+    expect(dom.container.querySelector('.storage-list')).toBe(list);expect(dialog.open).toBe(true);expect(dialog.scrollTop).toBe(250);
+    expect(dom.container.querySelector('[aria-label="Attachment locations"] [aria-pressed=true]')?.textContent).toBe('Hangouts');
+    expect(dom.container.querySelector('[aria-label="File types"] [aria-pressed=true]')?.textContent).toBe('Images');expect(dom.container.querySelector('.storage-attachments>button')?.getAttribute('aria-expanded')).toBe('true');
+    expect(dom.container.querySelector('.storage-places')).not.toBeNull();
+  });
   it('puts Notifications first in Settings',async()=>{
     await mount();await load();await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
     expect(dom.container.querySelector('.settings-menu button')?.textContent).toBe('Notifications');
@@ -463,7 +488,7 @@ describe('chat interaction integration', () => {
     const original = dom.container.querySelector('.post-composer');
     act(() => dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
     await act(async () => dom.container.querySelector<HTMLButtonElement>('.notification-list button')!.click());
-    expect(dom.container.querySelector('dialog')).toBeNull();
+    expect(dom.container.querySelector('dialog[open]')).toBeNull();
     expect(dom.container.querySelector('.composer-switcher')?.classList.contains('launcher-open')).toBe(true);
     expect(dom.container.querySelector('.composer-view:not([hidden]) .message-view')).not.toBeNull();
     act(() => dom.container.querySelector<HTMLButtonElement>('.composer-view:not([hidden]) .composer-surface-footer button')!.click());

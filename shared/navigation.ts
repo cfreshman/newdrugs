@@ -100,7 +100,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'locations.resolve': [{ route: '/location?area=[cell]', targetKind: 'exact', resourceType: 'area' }],
   'conversation.list': [{ route: '/', targetKind: 'surface', resourceType: 'chat' }],
   'conversation.append': [{ route: '/', targetKind: 'surface', resourceType: 'chat' }],
-  'storage.list': [{ route: '/storage', targetKind: 'surface', resourceType: 'storage' }],
+  'storage.list': [{ route: '/storage', targetKind: 'surface', resourceType: 'storage' },{route:'/log/[id]',targetKind:'exact',resourceType:'log'},{route:'/people/[id]',targetKind:'exact',resourceType:'person'},{route:'/posts/[id]',targetKind:'exact',resourceType:'post'},{route:'/chat/[id]',targetKind:'exact',resourceType:'chat'}],
   'files.delete': [{ route: '/storage', targetKind: 'surface', resourceType: 'storage' }],
   'files.get': [{ route: '/api/files/[id]', targetKind: 'exact', resourceType: 'file' }],
   'files.list': [{ route: '/api/files/[id]', targetKind: 'exact', resourceType: 'file' }],

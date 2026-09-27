@@ -49,7 +49,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     const connectionId=String(input.connectionId || data.connectionId);
     add({ view: 'messages', resourceId: connectionId }, 'Open conversation', name === 'messages.list' ? 'exact' : 'surface', 'conversation', connectionId);
   } else if (name === 'people.blocked' || name === 'people.block') add({ view: 'blocked' }, 'Manage blocked people', 'surface', 'blocked');
-  else if (name === 'storage.list' || name === 'files.delete') add({ view: 'storage' }, 'Manage storage', 'surface', 'storage');
+  else if (name === 'storage.list' || name === 'files.delete') {for(const row of rows)for(const attachment of row.attachments||[])if(attachment.destination)add(attachment.destination,attachment.label,'exact',attachment.destination.view,attachment.destination.resourceId);add({ view: 'storage' }, 'Manage storage', 'surface', 'storage');}
   else if (name === 'wallet.get') add({ view: 'credits' }, 'View credit and usage', 'surface', 'wallet');
   else if (name === 'locations.resolve') add({ view: 'location', areaCell: data.cell }, 'Choose this area', 'exact', 'area', data.cell);
   else if (name === 'locations.search') add({ view: 'location' }, 'Choose an area', 'surface', 'location');

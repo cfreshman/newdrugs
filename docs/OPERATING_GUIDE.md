@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.22.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.23.4.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.22.2, release `20260927125744979` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927125622874`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.23.4, release `20260927132706715` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927132543335`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -472,3 +472,18 @@ Voice-note follow-up restores Logcal’s dedicated controls below the written no
 Voice-note/editor corrections are on cloud dev `20260927125404160`, with a successful build and database health check. The editor no longer repeats other attendees’ photos or offers that extra shared-photo section. Production remains v0.22.1 on its prior release; these subsequent voice UI corrections have only been deployed to dev.
 
 The voice-note corrections, including the fixed Stop icon beyond the arrow’s 15-second endpoint, shipped to production **v0.22.2**, release `20260927125744979`. Dev is `20260927125622874`. Production health passed and served HTML matched the built artifact. The four recorder lifecycle checks passed again before release.
+
+
+### Storage attachment navigation
+
+Storage has two horizontally scrolling pill rows: attachment location first (All, Hangouts, Profile, Posts, Chat), then file kind (All, Images, Audio, Video, Documents). Both filters are applied before server pagination and can be combined; the quota meter remains the total account usage. `storage.list` exposes the same optional `attachedTo` and `type` filters to CLI/MCP, and validated attachment destinations plus exact resource links.
+
+A file used once gets a direct destination link. Multiple uses get a compact attachment-count toggle that expands a list of recognizable titles/excerpts. The filename still opens the raw file separately. Choosing a destination closes Settings and navigates the active primary panel, including private chat context. Source lookups use actual current references, caller-owned uploads/posts/chat, current profile photos and authorized Log membership, with deletion/moderation/block gates. Files without a currently accessible destination retain their raw-file and delete controls. The message attachment lookup has an account/file index.
+
+The backend/filter/privacy/navigation/editor regression run passed 121 tests. Storage-to-Log navigation was covered from all four modes; no real-account writes or paid model calls were used.
+
+Settings navigation follow-up: following an in-app destination retains the current Settings dialog mounted but closed/inert, along with its filters, expanded attachment chooser, history and scroll. The top-right control restores it on reopening. Normal dismissal still resets the menu, and account changes discard the retained content. `Dialog` now supports visibility separately from mounting and gives each heading a unique ID.
+
+Attachment links remain compact pills with one-line CSS ellipses inside the actual anchor. Storage no longer repeats the image-downscaling explanation. Settings clips horizontal overflow while both filter rows retain their own horizontal scrolling. An isolated browser fixture verified panel client/scroll widths of 376/376 at a 390px viewport and 306/306 at 320px, including long labels and expanded multi-attachment links. Fixture files/tab were removed and the viewport reset. The subsequent dialog/navigation regression suite passed 87 tests, including preserving the exact Storage DOM, filters, expanded chooser and scroll through a destination link.
+
+Final Storage release: production **v0.23.4**, `20260927132706715`; dev `20260927132543335`. The account-wide usage total/bar sits above the filters with an explicit 6px gap. Summary and filters remain visible during all file-list reads; pending filter results retain their old geometry but stay hidden/inert behind a small spinner until the current response arrives. The final UI suite passed 88 tests. Production health passed, served HTML matched the built artifact, and live CLI description confirmed both filters and attachment output schemas. Native CSS ellipsis remains clickable; the browser does not underline its generated marker, and the user accepted leaving it standard.

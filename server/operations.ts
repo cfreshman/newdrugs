@@ -1,3 +1,5 @@
+import {listStorage} from './storage';
+import type {StorageType,StorageLocation} from '../shared/storage';
 import {defaultPreferences} from '../shared/preferences';
 import {logOperation,logEntryFor} from './log';
 import {activitySince} from './activityUtilities';
@@ -131,10 +133,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'files.discard':return discardUpload(actor,String(d.fileId),session);
     case 'files.delete':return deleteUpload(actor,String(d.fileId),session);
     case 'files.list':return {items:(await uploads().find({userId,deletedAt:{$exists:false},moderatedAt:{$exists:false}}).sort({createdAt:-1}).limit(30).toArray()).map(uploadRef)};
-    case 'storage.list': {
-      const files=await uploads().find({userId,deletedAt:{$exists:false},moderatedAt:{$exists:false},...pageFilter},options).sort({_id:-1}).limit(limit+1).toArray();
-      return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items:files.slice(0,limit).map(file=>({...uploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id))})),nextCursor:files.length>limit?files[limit-1]._id:null};
-    }
+    case 'storage.list': return listStorage(user,{type:d.type as StorageType|undefined,attachedTo:d.attachedTo as StorageLocation|undefined,before:d.before as string|undefined,limit},session);
     case 'account.preferences':return {...defaultPreferences,...user.preferences};
     case 'account.preferences_update':{if(!d.font&&!d.appearance&&!d.landingPage)throw new AppError(422,'preferences','Choose a preference to change.');const prior={...defaultPreferences,...user.preferences};const updated=requireValue(await users().findOneAndUpdate({_id:userId},{$set:{'preferences.font':d.font||prior.font,'preferences.appearance':d.appearance||prior.appearance,'preferences.landingPage':d.landingPage||prior.landingPage},$inc:{'preferences.revision':1}},{...options,returnDocument:'after'}));return {...defaultPreferences,...updated.preferences};}
     case 'identity.get': return profile(user);

@@ -48,6 +48,7 @@ export async function connectDatabase(name?: string) {
     rows('tokens').createIndex({ userId: 1, createdAt: -1 }),
     rows('tokens').createIndex({ hash: 1 }, { unique: true }),
     rows('messages').createIndex({ userId: 1, createdAt: -1, _id: -1 }),
+    rows('messages').createIndex({userId:1,'files.id':1}),
     rows('ledger').createIndex({ userId: 1, createdAt: -1 }),
     rows('runs').createIndex({ userId: 1, status: 1 }),
     rows('runs').createIndex({ status: 1, nextAttempt: 1, updatedAt: 1 }),

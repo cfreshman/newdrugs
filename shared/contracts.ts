@@ -1,3 +1,4 @@
+import {storageAttachmentSchema} from './storage';
 import {accountPreferencesSchema} from './preferences';
 import {logOutputs} from './log';
 import {timeResolveOutput,timeConvertOutput,timeOverlapOutput} from './utilitySchemas';
@@ -37,7 +38,7 @@ export const outputs: Record<string, z.ZodType> = {
   'files.prepare':upload,'files.get':upload,'files.list':z.object({items:z.array(upload)}),
   'files.discard':z.object({discarded:z.literal(true),id}),
   'files.delete':z.object({deleted:z.literal(true),id,bytesFreed:z.number()}),
-  'storage.list':z.object({usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean()})),nextCursor:z.string().nullable()}),
+  'storage.list':z.object({usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean(),attachments:z.array(storageAttachmentSchema)})),nextCursor:z.string().nullable()}),
   'locations.search':z.object({items:z.array(z.object({id:z.string(),label:z.string(),cell:z.string()})),attribution:z.string()}),
   'locations.resolve':areaOutput,
   'locations.meeting_area':z.object({participants:z.array(z.object({personId:id,name:z.string(),handle:z.string().optional(),area:areaOutput})),candidates:z.array(z.object({area:areaOutput,distances:z.array(z.object({personId:id,sameArea:z.boolean(),distanceLabel:z.string(),approximateMiles:z.number().optional()}))})),method:z.string(),notice:z.string()}),

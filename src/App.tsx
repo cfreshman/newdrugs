@@ -114,6 +114,8 @@ export function App() {
   const [resumeChat, setResumeChat] = useState<string | null>(null);
   const [accountMode, setAccountMode] = useState<'register' | 'login'>('register');
   const [panelHistory, setPanelHistory] = useState<{ panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]>([]);
+  const rememberedSettings=useRef<{userId:string;panel:Exclude<Panel,null>;context:Omit<Destination,'view'>;history:typeof panelHistory;title:string;content:ReactNode}|null>(null),resumeSettings=useRef(false);
+  if(rememberedSettings.current&&rememberedSettings.current.userId!==data?.user.id){rememberedSettings.current=null;resumeSettings.current=false;}
   const [underlay, setUnderlay] = useState<ComposerScreen | null>(null);
   const lastComposer = useRef<ComposerScreen | null>(null);
   const [surface, setSurface] = useState<{ runId: string; id: string; view: string } | null>(null);
@@ -271,6 +273,11 @@ export function App() {
     setPanelSpace(space); if (space === 'composer') setLauncherOpen(true);
     setPanelHistory(next === 'notifications' ? [{ panel: 'settings', context: {} }] : []); setPanelContext(context); setPanel(next);
   };
+  const reopenSettings=()=>{
+    const saved=resumeSettings.current?rememberedSettings.current:null;
+    if(saved&&saved.userId===data?.user.id){resumeSettings.current=false;open(saved.panel,saved.context,'modal');setPanelHistory(saved.history);}
+    else open(data?.notifications?.unread&&panel!=='notifications'?'notifications':'settings',{},'modal');
+  };
   const navigatePanel = (next: Exclude<Panel, null>, context: Omit<Destination, 'view'> = {}) => {
     if (data?.user.id !== identity.current) return;
     if (accountViews.has(next) && !data?.user.handle) { setAfterAccount({ panel: next, context, space: panelSpace }); next = 'account'; context = {}; setAccountMode('register'); }
@@ -279,6 +286,7 @@ export function App() {
   };
   const backPanel = () => { const previous = panelHistory.at(-1); if (previous) { setPanel(previous.panel); setPanelContext(previous.context); setPanelHistory(history => history.slice(0, -1)); } else if (panelSpace === 'composer') setPanel(null); };
   const navigate = (destination: Destination) => {
+    if(panel&&panelSpace==='modal'&&settingsViews.has(panel)&&!settingsViews.has(destination.view==='profile'?'account':destination.view))resumeSettings.current=true;
     if(mode==='agent'&&['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
     if(destination.mode&&destination.mode!==mode){pendingRoute.current={destination};changeMode(destination.mode);return;}
     const {mode:_mode,...local}=destination;destination=local;
@@ -499,13 +507,16 @@ export function App() {
                   : panel === 'post' ? <PostPanel user={data.user} postId={panelContext.resourceId || ''} navigate={navigate} />
                     : (panel === 'messages' || panel === 'connections') ? <MessagesPanel userId={data.user.id} connectionId={panelContext.resourceId} navigate={navigate} />
                       : panel === 'blocked' ? <BlockedPanel />
-                      : panel === 'storage' ? <StoragePanel />
+                      : panel === 'storage' ? <StoragePanel navigate={destination=>{resumeSettings.current=true;void closePanel().then(()=>navigate(destination));}} />
                       : panel === 'inbox' ? <InboxPanel itemId={panelContext.resourceId} navigate={navigate} discuss={discussUpdate} />
                       : panel === 'automations' ? <AutomationsPanel automationId={panelContext.resourceId} navigate={navigate} chatBusy={sendBusy} example={sendExample} />
                       : panel === 'chat_history' ? <ChatSearchPanel initialQuery={panelContext.query} initialRole={panelContext.role} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} openMessage={openChatMessage} />
                       : panel === 'notifications' ? <NotificationsPanel userId={data.user.id} state={data.notifications} navigate={navigate} />
                         : panel === 'uploads' ? <UploadPanel requestId={surface?.view === 'uploads' ? surface.id : undefined} submit={async files => { if (surface?.view === 'uploads') await closePanel(true, files.map(file => file.id)); else { setAttachments(files); await closePanel(); } }} />
                         : panel === 'agents' ? <Connections registered={Boolean(data.user.handle)} onAccount={() => navigatePanel('account')} /> : null) : null;
+  const settingsVisible=Boolean(panel&&panelSpace==='modal'&&settingsViews.has(panel));
+  if(settingsVisible&&panel&&data)rememberedSettings.current={userId:data.user.id,panel,context:panelContext,history:panelHistory,title:panelTitle,content:panelContent};
+  const settingsSnapshot=settingsVisible||resumeSettings.current?rememberedSettings.current:null;
   if (panelSpace === 'composer') lastComposer.current = { panel, context: panelContext, history: panelHistory, title: panelTitle, content: panelContent, open: launcherOpen, reset: panelReset };
   const composerScreen = panelSpace === 'composer' ? lastComposer.current : underlay || lastComposer.current;
   const screenKey=(screen:{panel:Panel;context:Omit<Destination,'view'>})=>JSON.stringify([screen.panel,screen.context.resourceId,screen.context.postIds]);
@@ -542,9 +553,8 @@ export function App() {
       </div>
       {mode!=='agent'&&<footer className="agent-dock-footer"><button onClick={()=>changeMode('agent')} title="Open Agent mode"><Robot size={21}/>Agent</button><div className="agent-dock-actions">{dictationControl}<button className="agent-dock-close" aria-label="Close agent" onClick={closeAgent}><X size={21}/></button></div></footer>}
     </main>
-    <div className="settings-controls"><span className="app-version">v{data.config.version || release.version}</span><button className="settings-button" aria-label={`${data.notifications?.unread && panel !== 'notifications' ? `Notifications, ${data.notifications.unread} updates` : 'Settings'}, ${balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))} ${!data.user.handle && data.wallet.starterAvailableNanos ? 'starter credit available after signup' : 'credit balance'}`} onClick={() => open(data.notifications?.unread && panel !== 'notifications' ? 'notifications' : 'settings', {}, 'modal')}><span>{balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))}</span>{data.notifications?.unread && panel !== 'notifications' ? <><Bell size={22} /><span className="notification-count" aria-hidden="true">{data.notifications.unread > 9 ? '9+' : data.notifications.unread}</span></> : <GearSix size={22} />}</button></div></>}
-    {panel && panelSpace === 'modal' && <Dialog placement={settingsViews.has(panel) ? 'settings' : 'task'} title={panelTitle} close={() => void closePanel()} back={panelHistory.length ? backPanel : undefined}>
-      {panelContent}
-    </Dialog>}
+    <div className="settings-controls"><span className="app-version">v{data.config.version || release.version}</span><button className="settings-button" aria-label={`${data.notifications?.unread && panel !== 'notifications' ? `Notifications, ${data.notifications.unread} updates` : 'Settings'}, ${balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))} ${!data.user.handle && data.wallet.starterAvailableNanos ? 'starter credit available after signup' : 'credit balance'}`} onClick={reopenSettings}><span>{balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))}</span>{data.notifications?.unread && panel !== 'notifications' ? <><Bell size={22} /><span className="notification-count" aria-hidden="true">{data.notifications.unread > 9 ? '9+' : data.notifications.unread}</span></> : <GearSix size={22} />}</button></div></>}
+    {settingsSnapshot&&<Dialog key={`settings:${settingsSnapshot.userId}`} visible={settingsVisible} title={settingsSnapshot.title} close={()=>{resumeSettings.current=false;void closePanel();}} back={settingsSnapshot.history.length?backPanel:undefined}>{settingsSnapshot.content}</Dialog>}
+    {panel && panelSpace === 'modal' && !settingsViews.has(panel) && <Dialog placement="task" title={panelTitle} close={() => void closePanel()} back={panelHistory.length ? backPanel : undefined}>{panelContent}</Dialog>}
   </div>{media&&<ImageViewer items={media.items} index={media.index} close={()=>setMedia(null)}/>}</NavigationContext.Provider></ExperienceContext.Provider>;
 }
