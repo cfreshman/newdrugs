@@ -1,4 +1,4 @@
-import {publicInvitePreview,readInvitePhoto} from './logInvites';
+import {publicInvitePreview,readInvitePhoto,readInviteMedia} from './logInvites';
 import {pagePreview,readPagePreviewImage} from './pagePreviews';
 import {renderPagePreview} from '../shared/pagePreview';
 import {readFile} from 'node:fs/promises';
@@ -77,6 +77,18 @@ export function createApp() {
   };
   app.get('/api/log-invites/:code',previewGate,limiter(180),async(req,res)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}).json(await publicInvitePreview(String(req.params.code)));});
   app.get('/api/log-invites/:code/photos/:fileId',previewGate,limiter(300),async(req,res)=>{const {file,bytes}=await readInvitePhoto(String(req.params.code),String(req.params.fileId));res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'}).send(bytes);});
+  app.get('/api/log-invites/:code/media/:fileId',previewGate,limiter(300),async(req,res)=>{
+    const {file,bytes}=await readInviteMedia(String(req.params.code),String(req.params.fileId));
+    res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline','Accept-Ranges':'bytes'});
+    const range=req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
+    if(req.headers.range){
+      if(!range||(!range[1]&&!range[2])){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
+      const start=range[1]?Number(range[1]):Math.max(0,bytes.length-Number(range[2])),end=range[1]&&range[2]?Math.min(Number(range[2]),bytes.length-1):bytes.length-1;
+      if(start>end||start>=bytes.length){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
+      res.status(206).set('Content-Range',`bytes ${start}-${end}/${bytes.length}`).send(bytes.subarray(start,end+1));return;
+    }
+    res.send(bytes);
+  });
   app.get('/api/page-preview',previewGate,limiter(180),async(req,res)=>{
     const path=z.string().max(2048).parse(req.query.path||'/');res.set('Cache-Control','no-store').json(await pagePreview(path));
   });

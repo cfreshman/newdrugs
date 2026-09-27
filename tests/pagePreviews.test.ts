@@ -39,10 +39,10 @@ it('exposes only public projections without login in production while keeping de
  const photo=await fetch(`${origin}/api/share-images/person/${userId}`);expect(photo.status).toBe(200);expect(photo.headers.get('cache-control')).toBe('no-store');expect(Buffer.from(await photo.arrayBuffer())).toEqual(bytes);
  expect((await fetch(`${origin}/api/share-images/person/${otherId}`)).status).toBe(404);
 });
-it('shows invite facts and photos before sign-in without exposing notes, and scopes every photo to that code',async()=>{
+it('shows invite notes, facts and photos before sign-in, and scopes every photo to that code',async()=>{
  await rows('logEntries').insertOne({_id:'invite',title:'A shared walk',date:'2026-09-27',place:'Park',joinKey:code,members:[otherId],coverFileId:privateImageId,contributions:[{userId:otherId,note:'SECRET DIARY NOTE',fileIds:[privateImageId]}]});
  config.APP_ENV='production';const response=await fetch(`${origin}/api/log-invites/${code}`);expect(response.status).toBe(200);const preview=await response.json();
- expect(preview).toMatchObject({title:'A shared walk',date:'2026-09-27',place:'Park',joined:false,photos:[{id:privateImageId,url:`/api/log-invites/${code}/photos/${privateImageId}`}],people:[{id:otherId}]});expect(JSON.stringify(preview)).not.toContain('SECRET DIARY NOTE');expect(JSON.stringify(preview)).not.toContain('PRIVATE BIO');
+ expect(preview).toMatchObject({title:'A shared walk',date:'2026-09-27',place:'Park',joined:false,photos:[{id:privateImageId,url:`/api/log-invites/${code}/photos/${privateImageId}`}],people:[{id:otherId}]});expect(preview.contributors).toEqual([expect.objectContaining({userId:otherId,note:'SECRET DIARY NOTE'})]);expect(JSON.stringify(preview)).not.toContain('PRIVATE BIO');
  const photo=await fetch(origin+preview.photos[0].url);expect(photo.status).toBe(200);expect(Buffer.from(await photo.arrayBuffer())).toEqual(bytes);
  expect((await fetch(`${origin}/api/log-invites/${code}/photos/${imageId}`)).status).toBe(404);
  await rows('logEntries').updateOne({_id:'invite'},{$set:{joinKey:'c'.repeat(32)}});expect((await fetch(origin+preview.photos[0].url)).status).toBe(404);expect((await fetch(`${origin}/api/log-invites/${code}`)).status).toBe(404);expect(await users().countDocuments()).toBe(2);
@@ -56,4 +56,29 @@ it('keeps first-party link cards fresh and never serves older cached invite phot
  await expect(previewImage(cacheId)).rejects.toMatchObject({status:404});
  await rows('logEntries').updateOne({_id:'live-invite'},{$set:{joinKey:'d'.repeat(32)}});expect(await linkPreview(url,userId)).toMatchObject({title:'View hangout (New Drugs)',imageUrl:'/share.png?v=gradient'});
  const direct=await linkPreview(`${config.APP_ORIGIN}/api/log-invites/${code}/photos/${privateImageId}`,userId);expect(direct.imageUrl).toBe(`/api/log-invites/${code}/photos/${privateImageId}`);
+});
+
+
+it('previews full contributions and links while authorizing every media request against the current code',async()=>{
+ const audio=randomUUID(),video=randomUUID(),gone=randomUUID();
+ for(const [id,mime] of [[audio,'audio/webm'],[video,'video/mp4'],[gone,'audio/webm']]){await fs.writeFile(path.join(folder,'files',id),bytes);await rows('uploads').insertOne({_id:id,userId:otherId,name:id,mime,ready:true,sha256:hash,bytes:bytes.length});}
+ const note='A complete note. '.repeat(500);
+ await rows('logEntries').insertOne({_id:'full-invite',title:'Full hangout',date:'2026-09-27',place:'Park',links:['https://freshman.dev'],recurrence:'anniversary',historicalPeople:['Historical friend'],joinKey:code,members:[otherId],contributions:[{userId:otherId,note,fileIds:[privateImageId,audio,video,imageId]},{userId,note:'REMOVED MEMBER NOTE',fileIds:[gone]}]});
+ config.APP_ENV='production';
+ const preview=await (await fetch(`${origin}/api/log-invites/${code}`)).json();
+ expect(preview).toMatchObject({links:['https://freshman.dev'],recurrence:'anniversary',historicalPeople:['Historical friend'],contributors:[{userId:otherId,note}]});
+ expect(preview.contributors[0].files.map((file:any)=>file.id)).toEqual([privateImageId,audio,video]);expect(JSON.stringify(preview)).not.toContain('REMOVED MEMBER NOTE');
+ const mediaUrl=`${origin}/api/log-invites/${code}/media/${audio}`;
+ const response=await fetch(mediaUrl,{headers:{Range:'bytes=1-4'}});expect(response.status).toBe(206);expect(response.headers.get('content-range')).toBe(`bytes 1-4/${bytes.length}`);expect(response.headers.get('cache-control')).toBe('no-store');expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes.subarray(1,5));
+ expect((await fetch(`${origin}/api/log-invites/${code}/media/${video}`)).status).toBe(200);
+ expect((await fetch(`${origin}/api/log-invites/${code}/photos/${audio}`)).status).toBe(404);
+ for(const id of [gone,imageId])expect((await fetch(`${origin}/api/log-invites/${code}/media/${id}`)).status).toBe(404);
+ expect((await fetch(mediaUrl,{headers:{Range:'bytes=900-'}})).status).toBe(416);
+ await rows('uploads').updateOne({_id:audio},{$set:{moderatedAt:'now'}});expect((await fetch(mediaUrl)).status).toBe(404);
+ await rows('uploads').updateOne({_id:audio},{$unset:{moderatedAt:''}});
+ await rows('logEntries').updateOne({_id:'full-invite'},{$set:{'contributions.0.fileIds':[privateImageId,video]}});expect((await fetch(mediaUrl)).status).toBe(404);
+ await users().updateOne({_id:otherId},{$set:{suspendedAt:'now'}});expect((await fetch(`${origin}/api/log-invites/${code}`)).status).toBe(404);expect((await fetch(`${origin}/api/log-invites/${code}/media/${video}`)).status).toBe(404);
+ await users().updateOne({_id:otherId},{$unset:{suspendedAt:''}});
+ await rows('logEntries').updateOne({_id:'full-invite'},{$set:{joinKey:'e'.repeat(32)}});expect((await fetch(`${origin}/api/log-invites/${code}/media/${video}`)).status).toBe(404);
+ expect(JSON.stringify(await pagePreview('/log/full-invite'))).not.toContain('Full hangout');expect(JSON.stringify(await pagePreview(`/log/join/${'e'.repeat(32)}`))).not.toContain(note);
 });

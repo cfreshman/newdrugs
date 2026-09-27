@@ -1,3 +1,4 @@
+import {LogMedia} from './LogMedia';
 import {useOpenLogList} from './logSequence';
 import {useLogNeighbors} from './useLogNeighbors';
 import {logImageUrl} from './logImageCache';
@@ -45,10 +46,6 @@ function LogTile({entry,open,compact=false,anniversary=false}:{entry:LogEntry;op
   <span className="log-tile-caption">{anniversary?'↻ ':''}{entry.title||entry.place||'Untitled'}</span>
   {entry.contributors.length>1&&<span className="log-tile-shared"><Users size={12}/>{entry.contributors.length}</span>}
  </button>;
-}
-function LogVideo({src}:{src:string}){const visible=usePanelVisible(),ref=useRef<HTMLVideoElement>(null);useEffect(()=>{if(!visible)ref.current?.pause();},[visible]);return <video ref={ref} className="log-video" src={src} controls playsInline preload="metadata" controlsList="nodownload"/>;}
-function LogMedia({files}:{files:LogEntry['contributors'][number]['files']}){
- const visible=usePanelVisible();return <div className="log-media"><PostPhotos log photos={files.filter(f=>f.mime.startsWith('image/'))}/>{files.filter(f=>f.mime.startsWith('audio/')).map(file=><AudioPlayer key={file.id} src={file.url} active={visible} voiceNote/>)}{files.filter(f=>f.mime.startsWith('video/')).map(file=><LogVideo key={file.id} src={file.url}/>)}</div>;
 }
 
 export function LogEditor({user,entry,date,onSaved,cancel,onRemoved}:{user:Profile;entry?:LogEntry;date?:string;onSaved(entry:LogEntry):void;cancel():void;onRemoved?():void}){

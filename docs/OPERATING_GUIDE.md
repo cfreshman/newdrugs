@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.26.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.27.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.26.2, release `20260927162436678` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927162548927`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.27.1, release `20260927163601831` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927163450735`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -530,7 +530,7 @@ Public posts may expose their public text/author and first photo. Only discovera
 
 The explicitly requested `ancatdubh2` production migration is complete: six memberships added, one existing membership retained, seven entries verified, no new entries/uploads/storage, with Cyrus/Laura's contents preserved. See `docs/log-integration/MIGRATION.md`. This data migration did not itself deploy app code.
 
-Invite UI and authentication follow-up: valid invite-code holders can see the hangout's title/date/place/attendees and photos before creating an account, using the normal Log title/photo-strip/facts layout. Notes, audio and video remain unavailable before attendance. Photos use code-scoped URLs and are checked against the current code and attachment membership on every fetch; ordinary file URLs remain protected. Signed-in previews use `log.join_preview`, whose output now includes the same photo references. Existing attendees open the normal hangout directly, replacing the join screen; other visitors explicitly Join after authentication.
+Invite UI and authentication follow-up: valid invite-code holders can see the hangout's title/date/place/attendees and photos before creating an account, using the normal Log title/photo-strip/facts layout. This initial restriction was later superseded: valid invite holders can read notes, links and audio/video too, as described below. Photos use code-scoped URLs and are checked against the current code and attachment membership on every fetch; ordinary file URLs remain protected. Signed-in previews use `log.join_preview`, whose output now includes the same photo references. Existing attendees open the normal hangout directly, replacing the join screen; other visitors explicitly Join after authentication.
 
 `src/authReturn.ts` keeps only a validated native return destination, in memory and in per-tab session storage for up to an hour. Login identity changes still clear the prior account's private UI state, but preserve this explicit return intent. Login completes the return flow instead of merely closing the form. Account creation retains profile setup and resumes afterward. Cancel clears the pending route. Invite previews refresh when reopened and on Log changes. The app resets the browser title to `New Drugs` on mount while server-rendered share metadata stays descriptive.
 
@@ -553,3 +553,13 @@ This navigation/separator update is deployed to cloud dev `20260927151558752`; t
 The user subsequently requested production. Source-list hangout navigation and the hyphen separator shipped as **v0.26.1**, release `20260927152055905`. Production service and public API health passed; the live page references the built release assets.
 
 Mobile/touch invite previews now shorten the account button to “Sign in”; desktop keeps the longer label. The entry save pending state is exactly `One sec...` with three ordinary periods. Existing auth/join behavior is unchanged. TypeScript and 83 app interaction checks passed. Both changes are live on production v0.26.2 (`20260927162436678`) and dev (`20260927162548927`), with successful health checks and production asset verification.
+
+### Full invite-code hangout view
+
+The user explicitly expanded invite previews to the full hangout information. Valid code holders now see current members’ complete notes, links, recurrence marker, imported participant names and code-scoped photo/audio/video attachments before signing in or joining. `log.join_preview` exposes the same projection to CLI/MCP. It never changes attendance or unlocks unrelated profile data. `src/LogMedia.tsx` shares the existing media rendering with regular hangouts; notes retain Markdown and author labels.
+
+`server/logInvites.ts` resolves every attachment from the current code, current membership, file ownership and live file state. Anonymous media supports range requests for playback, stays no-store/noindex, and is revoked on code rotation, removal, deletion or suspension. Ordinary private links remain generic; website share metadata still uses only the saved title and first eligible photo, without notes.
+
+The full invite-content change passed TypeScript and 150 targeted backend/UI/privacy tests, including full notes through CLI previews, no implicit joining, Markdown rendering, audio/video ranges, forged/nonmember attachment rejection, moderation/removal/suspension/code-reset revocation, and unchanged private-link/share-metadata boundaries.
+
+Full invite views are deployed to dev `20260927163450735` and, after the explicit production request, **v0.27.1**, production `20260927163601831`. Both deployment health checks passed. Live production assets and the CLI `log.join_preview` output schema were verified without writing social data or spending credits.
