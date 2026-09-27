@@ -244,3 +244,6 @@ agent-written rules (you are allowed to edit below this line)
 - Image detail opens in its own native top-layer dialog above the still-open hangout. Keep the source popover/DOM/scroll intact during loading, viewing and dismissal; do not hide it just to put PhotoSwipe above the page.
 
 - Transient spinners appear only after 500ms, while retaining their layout space and immediate busy/disabled behavior. Scroller-boundary pagination indicators stay immediate. Use shared spinner styling and the explicit `spinner-immediate` exception; PhotoSwipe’s internal preloader follows the same 500ms delay.
+
+- Billing Activity keeps the latest three actual agent charges separate, then totals older consecutive agent/automation usage between credits or adjustments with real date ranges. Aggregate complete ledger periods on the server before limiting display rows; never sum only the last thirty raw receipts. Preserve raw receipts and balances.
+- Image-viewer controls initialize before image dimensions or network reads finish. Reuse bounded decoded thumbnail pixels for the opening preview, while regular Log photos retain the account-scoped cache and invite images retain live code authorization.

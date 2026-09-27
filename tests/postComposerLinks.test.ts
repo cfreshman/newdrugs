@@ -1,3 +1,4 @@
+import {NavigationContext} from '../src/NavigationContext';
 // @vitest-environment jsdom
 import {act,createElement} from 'react';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
@@ -31,4 +32,21 @@ it('does not expose raw MUSE or CIF links before their manifests load',async()=>
  await act(async()=>dom.root.render(createElement(LinkPreviews,{text:'',links:urls})));
  expect(dom.container.querySelector('.muse-pending')).not.toBeNull();expect(dom.container.querySelector('.cif-pending')).not.toBeNull();
  for(const url of urls)expect(dom.container.querySelector(`a[href="${url}"]`)).toBeNull();
+});
+
+
+it('adds links with an explicit Add action, clears the field, deduplicates and removes their cards',async()=>{
+ await act(async()=>dom.root.render(createElement(PostComposer,{user:{id:'me',handle:'me',name:'Me',bio:'',city:'',interests:[],discoverable:false},navigate:vi.fn(),submitted:vi.fn()})));
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('[aria-label="Add URL"]')!.click());const input=dom.container.querySelector<HTMLInputElement>('input[inputmode="url"]')!;
+ const type=(text:string)=>act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));});
+ type('freshman.dev');await act(async()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})));expect(input.value).toBe('');expect(dom.container.querySelectorAll('.log-link-card')).toHaveLength(1);expect(transport.operation.mock.calls.some(call=>call[0]==='posts.create')).toBe(false);
+ type('https://freshman.dev/');await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-link-add button')!.click());expect(dom.container.querySelectorAll('.log-link-card')).toHaveLength(1);
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-link-card-actions button')!.click());expect(dom.container.querySelectorAll('.log-link-card')).toHaveLength(0);
+});
+it('renders native invite previews as cards and opens their exact route inside the app',async()=>{
+ const code='b'.repeat(32),url=`https://dev.druggie.org/log/join/${code}`,navigate=vi.fn();transport.operation.mockResolvedValue({url,hostname:'dev.druggie.org',title:'A shared hangout',description:'Made in New England',imageUrl:`/api/share-images/log-invite/${code}`});
+ await act(async()=>dom.root.render(createElement(NavigationContext.Provider,{value:navigate},createElement(LinkPreviews,{text:url,links:[url]}))));
+ await act(async()=>{await new Promise(resolve=>setTimeout(resolve,20));});
+ const card=dom.container.querySelector<HTMLAnchorElement>('.website-card')!;expect(card).not.toBeNull();expect(dom.container.querySelectorAll('.website-card')).toHaveLength(1);expect(card.textContent).toContain('A shared hangout');expect(card.querySelector('img')?.getAttribute('src')).toContain('/api/share-images/log-invite/');expect(card.hasAttribute('target')).toBe(false);
+ const click=new MouseEvent('click',{bubbles:true,cancelable:true});await act(async()=>card.dispatchEvent(click));expect(click.defaultPrevented).toBe(true);expect(navigate).toHaveBeenCalledWith({view:'log_join',resourceId:code});
 });

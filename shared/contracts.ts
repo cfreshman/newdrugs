@@ -1,3 +1,4 @@
+import {billingActivityOutput} from './billingActivity';
 import {storageAttachmentSchema} from './storage';
 import {accountPreferencesSchema} from './preferences';
 import {logOutputs} from './log';
@@ -67,7 +68,7 @@ export const outputs: Record<string, z.ZodType> = {
   'push.revoke': z.object({ enabled: z.literal(false) }),
   'conversation.search': z.object({ items: z.array(z.object({ id, role: z.enum(['user', 'assistant']), text: z.string(), createdAt: z.string(), score: z.number() })), nextCursor: z.string().nullable(), mode: z.enum(['hybrid', 'keyword']), indexing: z.boolean(), notices: z.array(z.string()) }),
   'conversation.window': z.object({ items: z.array(chatMessage), targetId: id, olderCursor: z.string().nullable(), newerCursor: z.string().nullable() }),
-  'wallet.get': wallet, 'conversation.list': z.object({ items: z.array(chatMessage), nextCursor: z.string().nullable() }), 'conversation.append': chatMessage,
+  'wallet.activity':billingActivityOutput,'wallet.get': wallet, 'conversation.list': z.object({ items: z.array(chatMessage), nextCursor: z.string().nullable() }), 'conversation.append': chatMessage,
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {

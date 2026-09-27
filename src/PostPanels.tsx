@@ -1,3 +1,4 @@
+import {compactUrlLabel} from '../shared/links';
 import {ProfileHangouts} from './ProfileHangouts';
 import {DeleteConfirmation} from './DeleteConfirmation';
 import {normalizedPostLinks} from '../shared/postLinks';
@@ -67,7 +68,7 @@ export function SelectedPostsPanel({postIds,user,navigate}:{postIds:string[];use
   return <>{posts&&<PostList posts={posts} user={user} navigate={navigate} changed={next=>setPosts(previous=>previous?.map(post=>post.id===next.id?next:post)||null)} deleted={id=>setPosts(previous=>previous?.filter(post=>post.id!==id)||null)}/>} {posts&&!posts.length&&<p className="quiet">These posts are no longer available.</p>}{error&&<p className="error" role="alert">{error}</p>}</>;
 }
 export function PostComposer({ user, target, submitted, navigate }: { user: Profile; target?: Post; submitted(post: Post): void; navigate: Navigate }) {
-  const [links,setLinks]=useState<string[]>([]),urlInputs=useRef<(HTMLInputElement|null)[]>([]),composerId=useId();
+  const [links,setLinks]=useState<string[]>([]),[link,setLink]=useState(''),[showLinkEditor,setShowLinkEditor]=useState(false),urlInput=useRef<HTMLInputElement>(null),composerId=useId();
   const [text, setText] = useState(''), [tagArea, setTagArea] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [photos, setPhotos] = useState<UploadRef[]>([]), [uploading, setUploading] = useState(false);
   const picker = useRef<HTMLInputElement>(null), uploadController = useRef<AbortController | null>(null);
@@ -85,15 +86,17 @@ export function PostComposer({ user, target, submitted, navigate }: { user: Prof
   };
   const input = useRef<HTMLTextAreaElement>(null), intent = useRef<{ fingerprint: string; key: string } | null>(null);
   useLayoutEffect(() => { if (input.current) { input.current.style.height = 'auto'; input.current.style.height = `${Math.min(180, Math.max(64, input.current.scrollHeight))}px`; } }, [text]);
+  const collectLinks=()=>{const urls=normalizedPostLinks([...links,...(link.trim()?[link]:[])]);if(urls.length>3)throw new Error('Attach up to three links.');return urls;};
+  const addLink=()=>{try{setLinks(collectLinks());setLink('');setError('');urlInput.current?.focus();}catch(reason){setError(errorText(reason));}};
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (busy || uploading) return;
-    let urls:string[];try{urls=normalizedPostLinks(links.filter(link=>link.trim()));}catch(error){setError(errorText(error));return;}
+    let urls:string[];try{urls=collectLinks();}catch(error){setError(errorText(error));return;}
     if(!text.trim()&&!photos.length&&!urls.length)return;
     const attachments={fileIds:photos.map(photo=>photo.id),...(urls.length?{links:urls}:{})};
     const data=target?{postId:target.id,text:text.trim(),...attachments}:{text:text.trim(),...attachments,...(tagArea&&user.area?{areaCell:user.area.cell}:{})};
     const fingerprint = JSON.stringify(data); if (intent.current?.fingerprint !== fingerprint) intent.current = { fingerprint, key: crypto.randomUUID() };
     setBusy(true); setError('');
-    try { const result = await operation<Post>(target ? 'posts.reply' : 'posts.create', data, { confirmed: true, key: intent.current.key }); setText(''); setPhotos([]);setLinks([]); intent.current = null; submitted(result); }
+    try { const result = await operation<Post>(target ? 'posts.reply' : 'posts.create', data, { confirmed: true, key: intent.current.key }); setText(''); setPhotos([]);setLinks([]);setLink('');setShowLinkEditor(false); intent.current = null; submitted(result); }
     catch (error) { setError(errorText(error)); } finally { setBusy(false); }
   };
   if (!user.handle) return <button className="text-link" onClick={() => navigate({ view: 'profile' })}>Create an account to {target ? 'reply' : 'post'}</button>;
@@ -103,10 +106,10 @@ export function PostComposer({ user, target, submitted, navigate }: { user: Prof
     <textarea id={target?'reply-text':'post-text'} ref={input} value={text} maxLength={280} rows={2} placeholder={target?'Write a reply':'What’s happening?'} onChange={event=>setText(event.target.value)}/>
     <input type="file" ref={picker} className="sr-only" tabIndex={-1} aria-label="Choose post photos" multiple accept="image/jpeg,image/png,image/webp" disabled={busy||uploading} onChange={event=>{const selected=Array.from(event.target.files||[]);event.target.value='';void choosePhotos(selected);}}/>
     {photos.length>0&&<div className="post-draft-photos">{photos.map(photo=><div key={photo.id}><img src={photo.url} alt={photo.name}/><button type="button" aria-label={`Remove ${photo.name}`} disabled={busy} onClick={()=>void removePhoto(photo)}><X size={16}/></button></div>)}</div>}
-    {links.length>0&&<div className="post-url-inputs">{links.map((link,index)=><div className="post-url-row" key={index}><LinkSimple size={18} aria-hidden="true"/><label className="sr-only" htmlFor={`${composerId}-url-${index}`}>URL attachment {index+1}</label><input id={`${composerId}-url-${index}`} ref={node=>{urlInputs.current[index]=node;}} type="text" inputMode="url" autoCapitalize="none" autoComplete="off" spellCheck={false} placeholder="https://…" value={link} maxLength={2048} disabled={busy} onChange={event=>setLinks(previous=>previous.map((value,i)=>i===index?event.target.value:value))}/><button type="button" aria-label={`Remove URL ${index+1}`} disabled={busy} onClick={()=>setLinks(previous=>previous.filter((_,i)=>i!==index))}><X size={18}/></button></div>)}</div>}
-    <LinkPreviews text={text} links={links} draft/>
+    {(showLinkEditor||links.length>0)&&<section className="log-links-editor" aria-label="Links"><div className="log-link-add"><LinkSimple size={20} aria-hidden="true"/><input ref={urlInput} id={`${composerId}-url`} aria-label="Link" type="text" inputMode="url" autoCapitalize="none" autoComplete="off" spellCheck={false} placeholder="Paste a link" maxLength={2048} disabled={busy} value={link} onChange={event=>setLink(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();if(link.trim())addLink();}}}/><button type="button" className="solid" disabled={busy||!link.trim()||links.length>=3} onClick={addLink}>Add</button></div>{links.map(url=><div className="log-link-card" key={url}><div className="log-link-card-actions"><a href={url} target="_blank" rel="noreferrer">{compactUrlLabel(url)}</a><button type="button" aria-label={`Remove ${compactUrlLabel(url)}`} disabled={busy} onClick={()=>setLinks(previous=>previous.filter(value=>value!==url))}><X size={18}/></button></div><LinkPreviews text="" links={[url]} draft/></div>)}</section>}
+    <LinkPreviews text={text} exclude={links} draft/>
     {!target&&<div className="post-compose-context">{user.area?<label className="check-label small"><input type="checkbox" checked={tagArea} onChange={event=>setTagArea(event.target.checked)}/><LocationLabel label={user.area.label}/></label>:<span className="quiet small">Public post</span>}</div>}
-    <div className="post-compose-actions"><div className="post-compose-tools"><button type="button" className="post-photo-add" aria-label="Add photos" title="Add up to four photos" disabled={busy||uploading||photos.length>=4} onClick={()=>picker.current?.click()}><ImageSquare size={21}/></button><button type="button" className="post-url-add" aria-label="Add URL" title="Attach a URL" disabled={busy||links.length>=3} onClick={()=>{setLinks(previous=>[...previous,'']);requestAnimationFrame(()=>urlInputs.current[links.length]?.focus({preventScroll:true}));}}><LinkSimple size={21}/></button></div><span className="quiet small post-count" aria-label={`${280-text.length} characters remaining`}>{text.length}/280</span><button className="solid" disabled={busy||uploading||!text.trim()&&!photos.length&&!links.some(link=>link.trim())}>{uploading?'Uploading…':busy?'Publishing…':target?'Reply':'Post'}</button></div>
+    <div className="post-compose-actions"><div className="post-compose-tools"><button type="button" className="post-photo-add" aria-label="Add photos" title="Add up to four photos" disabled={busy||uploading||photos.length>=4} onClick={()=>picker.current?.click()}><ImageSquare size={21}/></button><button type="button" className="post-url-add" aria-label="Add URL" title="Attach a URL" disabled={busy||links.length>=3} onClick={()=>{setShowLinkEditor(true);requestAnimationFrame(()=>urlInput.current?.focus({preventScroll:true}));}}><LinkSimple size={21}/></button></div><span className="quiet small post-count" aria-label={`${280-text.length} characters remaining`}>{text.length}/280</span><button className="solid" disabled={busy||uploading||!text.trim()&&!photos.length&&!links.length&&!link.trim()}>{uploading?'Uploading…':busy?'Publishing…':target?'Reply':'Post'}</button></div>
     {error&&<p className="error" role="alert">{error}</p>}
   </form>;
 }

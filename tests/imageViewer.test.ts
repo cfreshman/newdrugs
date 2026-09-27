@@ -2,7 +2,7 @@
 import {act,createElement} from 'react';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {ImageViewer,imageDimensions,fittedImageZoom} from '../src/ImageViewer';
-import {PostPhotos} from '../src/PostPhotos';
+import {PostPhotos,loadedPhotoPreview} from '../src/PostPhotos';
 import {ExperienceContext} from '../src/ExperienceContext';
 import {setupDOM} from './dom';
 const library=vi.hoisted(()=>({options:null as any,instance:null as any}));
@@ -15,7 +15,7 @@ vi.mock('photoswipe',()=>({default:class{
  close(){this.destroy();}
  destroy(){this.element.remove();this.events.get('destroy')?.();}
  updateSize(){}
- refreshSlideContent(){}
+ refreshSlideContent=vi.fn();
 }}));
 let dom:ReturnType<typeof setupDOM>;
 beforeEach(()=>{dom=setupDOM();library.options=null;library.instance=null;Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:vi.fn(function(this:HTMLDialogElement){this.setAttribute('open','');})});Object.defineProperty(HTMLDialogElement.prototype,'close',{configurable:true,value:vi.fn(function(this:HTMLDialogElement){this.removeAttribute('open');})});});afterEach(()=>dom.cleanup());
@@ -27,9 +27,9 @@ it('opens the selected post photo with actual dimensions and retains the source 
  expect(click.defaultPrevented).toBe(true);expect(media).toHaveBeenCalledWith([expect.objectContaining({id:'a',width:512,height:768,element:anchors[0]}),expect.objectContaining({id:'b',width:512,height:768,element:anchors[1]})],1);
 });
 it('delegates focal zoom and pan to PhotoSwipe without closing or switching photos mid-pinch',async()=>{
- const close=vi.fn();await act(async()=>dom.root.render(createElement(ImageViewer,{items:[{id:'a',url:'/a.webp',name:'Plant',width:512,height:768}],index:0,close})));
+ const close=vi.fn();await act(async()=>dom.root.render(createElement(ImageViewer,{items:[{id:'a',url:'/a.webp',name:'Plant',width:512,height:768,previewUrl:'data:image/webp;base64,preview'}],index:0,close})));
  expect(library.options).toMatchObject({showHideAnimationType:'fade',zoomAnimationDuration:240,allowPanToNext:false,pinchToClose:false,closeOnVerticalDrag:false,bgClickAction:'close',trapFocus:true,preloaderDelay:500});
- expect(library.options.dataSource[0]).toMatchObject({width:512,height:768});expect(library.options.secondaryZoomLevel({panAreaSize:{x:256,y:512},elementSize:{x:512,y:768}})).toBe(1.25);
+ expect(library.options.dataSource[0]).toMatchObject({width:512,height:768,msrc:'data:image/webp;base64,preview'});expect(library.instance.refreshSlideContent).not.toHaveBeenCalled();expect(library.options.secondaryZoomLevel({panAreaSize:{x:256,y:512},elementSize:{x:512,y:768}})).toBe(1.25);
  const layer=dom.container.querySelector('dialog[open]')!;expect(library.options.appendToEl).toBe(layer);expect(layer.contains(library.instance.element)).toBe(true);expect(library.instance.element.hasAttribute('role')).toBe(false);
  act(()=>library.instance.events.get('destroy')());expect(close).toHaveBeenCalledOnce();
 });
@@ -48,9 +48,22 @@ it('fits even our downscaled images to the full viewport without cropping',()=>{
 });
 
 
-it('opens its top layer immediately while dimensions load and cancellation prevents a late viewer',async()=>{
+it('opens the complete viewer immediately while dimensions load and allows cancellation',async()=>{
  const close=vi.fn();await act(async()=>dom.root.render(createElement(ImageViewer,{items:[{id:'loading',url:'/pending.webp',name:'Photo'}],index:0,close})));
- const layer=dom.container.querySelector<HTMLDialogElement>('dialog')!;expect(layer.open).toBe(true);expect(layer.querySelector('.image-viewer-loading')).not.toBeNull();expect(library.instance).toBeNull();
+ const layer=dom.container.querySelector<HTMLDialogElement>('dialog')!;expect(layer.open).toBe(true);expect(layer.contains(library.instance.element)).toBe(true);expect(library.options.dataSource[0].html).toContain('Loading photo');
  const cancel=new Event('cancel',{cancelable:true});await act(async()=>layer.dispatchEvent(cancel));expect(cancel.defaultPrevented).toBe(true);expect(close).toHaveBeenCalledOnce();
- await act(async()=>dom.root.render(null));expect(layer.close).toHaveBeenCalled();expect(library.instance).toBeNull();
+ await act(async()=>dom.root.render(null));expect(layer.close).toHaveBeenCalled();expect(library.instance.refreshSlideContent).not.toHaveBeenCalled();
+});
+
+
+it('fills the already-open viewer when image dimensions arrive, without reopening it',async()=>{
+ const images:any[]=[];vi.stubGlobal('Image',class{naturalWidth=400;naturalHeight=800;onload:(()=>void)|null=null;onerror:(()=>void)|null=null;src='';constructor(){images.push(this);}});
+ await act(async()=>dom.root.render(createElement(ImageViewer,{items:[{id:'slow',url:'/slow.webp',name:'Slow photo'}],index:0,close:vi.fn()})));
+ const viewer=library.instance,layer=dom.container.querySelector('dialog[open]');expect(viewer).toBeTruthy();expect(viewer.options.dataSource[0].html).toContain('Loading photo');
+ await act(async()=>images[0].onload());expect(library.instance).toBe(viewer);expect(dom.container.querySelector('dialog[open]')).toBe(layer);expect(viewer.options.dataSource[0]).toMatchObject({src:'/slow.webp',width:400,height:800});expect(viewer.refreshSlideContent).toHaveBeenCalledExactlyOnceWith(0);
+});
+it('reuses bounded decoded thumbnail pixels without storing or refetching an invite photo',()=>{
+ const image=document.createElement('img');Object.defineProperties(image,{complete:{value:true},naturalWidth:{value:2400},naturalHeight:{value:1200}});
+ const drawImage=vi.fn();vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue({drawImage} as any);vi.spyOn(HTMLCanvasElement.prototype,'toDataURL').mockImplementation(function(this:HTMLCanvasElement){expect([this.width,this.height]).toEqual([1024,512]);return 'data:image/webp;base64,preview';});
+ expect(loadedPhotoPreview(image)).toBe('data:image/webp;base64,preview');expect(drawImage).toHaveBeenCalledWith(image,0,0,1024,512);
 });

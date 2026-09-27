@@ -1,8 +1,9 @@
-import {useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import {CircleNotch,X} from '@phosphor-icons/react';
-import type PhotoSwipe from 'photoswipe';
+import PhotoSwipe from 'photoswipe';
 import type {SlideData} from 'photoswipe';
 import type {MediaItem} from './ExperienceContext';
+import loadingIcon from '@phosphor-icons/core/assets/regular/circle-notch.svg?raw';
 import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw';
 import previousIcon from '@phosphor-icons/core/assets/regular/arrow-left.svg?raw';
 import nextIcon from '@phosphor-icons/core/assets/regular/arrow-right.svg?raw';
@@ -38,19 +39,17 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
  // Enter the top layer before any async image/library loading. Keep the source
  // hangout's popover in place below this dialog throughout open and close.
  useLayoutEffect(()=>{const dialog=layer.current;if(!dialog)return;dialog.showModal();return()=>dialog.close();},[]);
- useEffect(()=>{
+ useLayoutEffect(()=>{
   const controller=new AbortController();let viewer:PhotoSwipe|undefined;
   const sourceFocus=items[index]?.element;
   dismiss.current?.focus({preventScroll:true});
   const resize=()=>viewer?.updateSize(true);
   const dimensions:Array<{width:number;height:number}|null|undefined>=items.map(item=>item.width&&item.height?{width:item.width,height:item.height}:undefined);
   let dataSource:SlideData[]=[];
-  const slide=(i:number):SlideData=>dimensions[i]?{src:items[i].url,msrc:items[i].url,alt:items[i].name,...dimensions[i],element:items[i].element}:{html:`<p class="image-viewer-error">${dimensions[i]===null?'Photo unavailable':'Loading photo…'}</p>`};
-  const dimensionTasks=items.map(async(item,i)=>{dimensions[i]=await imageDimensions(item,controller.signal);if(viewer&&!controller.signal.aborted){dataSource[i]=slide(i);viewer.refreshSlideContent(i);}});
-  const load=async()=>{
+  const viewport=()=>({x:window.visualViewport?.width||document.documentElement.clientWidth,y:window.visualViewport?.height||window.innerHeight});
+  const slide=(i:number):SlideData=>dimensions[i]?{src:items[i].url,msrc:items[i].previewUrl||items[i].url,alt:items[i].name,...dimensions[i],element:items[i].element}:{width:viewport().x,height:viewport().y,html:dimensions[i]===null?'<p class="image-viewer-error">Photo unavailable</p>':`<div class="image-viewer-pending"><span class="image-viewer-spinner" role="status" aria-label="Loading photo">${icon(loadingIcon)}</span></div>`};
+  const load=()=>{
    try{
-    const [{default:PhotoSwipe}]=await Promise.all([import('photoswipe'),dimensionTasks[index]]);
-    if(controller.signal.aborted)return;
     dataSource=items.map((_,i)=>slide(i));
     viewer=new PhotoSwipe({
      dataSource,appendToEl:layer.current!,
@@ -64,7 +63,7 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
      closeSVG:icon(closeIcon),arrowPrevSVG:icon(previousIcon),arrowNextSVG:icon(nextIcon),
      zoomSVG:`<span class="viewer-zoom-in">${icon(zoomIcon)}</span><span class="viewer-zoom-out">${icon(zoomOutIcon)}</span>`,
      errorMsg:'Photo unavailable',
-     getViewportSizeFn:()=>({x:window.visualViewport?.width||document.documentElement.clientWidth,y:window.visualViewport?.height||window.innerHeight}),
+     getViewportSizeFn:viewport,
     });
     // Keep New Drugs animation settings after the library prepares its defaults.
     viewer.options.showHideAnimationType='fade';
@@ -74,9 +73,12 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
     viewer.on('afterInit',()=>{viewer?.element?.removeAttribute('role');setLoading(false);});
     viewerRef.current=viewer;
     viewer.init();
+    // Populate unfinished images afterward. Known dimensions/decoded previews
+    // already render immediately and must not be refreshed during the opening.
+    items.forEach((item,i)=>{if(dimensions[i])return;void imageDimensions(item,controller.signal).then(value=>{if(controller.signal.aborted||!viewer)return;dimensions[i]=value;dataSource[i]=slide(i);viewer.refreshSlideContent(i);});});
    }catch(error){if(!controller.signal.aborted){console.error('Image viewer:',error);viewerRef.current=null;setFailed(true);setLoading(false);}}
   };
-  void load();window.visualViewport?.addEventListener('resize',resize);
+  load();window.visualViewport?.addEventListener('resize',resize);
   return()=>{controller.abort();window.visualViewport?.removeEventListener('resize',resize);viewerRef.current=null;viewer?.destroy();requestAnimationFrame(()=>{if(sourceFocus?.isConnected&&!sourceFocus.closest('[inert]'))sourceFocus.focus({preventScroll:true});});};
  },[items,index]);
  return <dialog ref={layer} className="image-viewer-layer" aria-label="Photos" onCancel={event=>{event.preventDefault();requestClose();}}>{(loading||failed)&&<div className="image-viewer-loading"><button ref={dismiss} aria-label="Close image viewer" onClick={requestClose}><X size={23}/></button>{failed?<a href={items[index]?.url} target="_blank" rel="noopener noreferrer">Open photo</a>:<CircleNotch size={28} className="image-viewer-spinner" aria-label="Loading photo"/>}</div>}</dialog>;

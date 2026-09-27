@@ -21,3 +21,5 @@
 .image-viewer-error {color:#fff;align-self:center;margin:auto;text-align:center;}
 .image-viewer-spinner {--spinner-period:900ms;}
 @media(pointer:coarse){.newdrugs-image-viewer .pswp__button--arrow {top:auto;bottom:max(var(--viewer-gutter),env(safe-area-inset-bottom));margin:0;}}
+
+.image-viewer-pending{display:grid;place-items:center;width:100%;height:100%;color:var(--viewer-control);}

@@ -97,6 +97,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'connections.respond': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
   'messages.list': [{ route: '/messages/[connectionId]', targetKind: 'exact', resourceType: 'conversation' }],
   'messages.send': [{ route: '/messages/[connectionId]', targetKind: 'surface', resourceType: 'message' }],
+  'wallet.activity': [{ route: '/billing', targetKind: 'surface', resourceType: 'wallet' }],
   'wallet.get': [{ route: '/billing', targetKind: 'surface', resourceType: 'wallet' }],
   'locations.search': [{ route: '/location', targetKind: 'surface', resourceType: 'location' }],
   'locations.resolve': [{ route: '/location?area=[cell]', targetKind: 'exact', resourceType: 'area' }],

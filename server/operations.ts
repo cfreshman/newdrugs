@@ -1,3 +1,4 @@
+import {walletActivity} from './walletActivity';
 import {listStorage} from './storage';
 import type {StorageType,StorageLocation} from '../shared/storage';
 import {defaultPreferences} from '../shared/preferences';
@@ -440,6 +441,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       await rows('reports').insertOne(report, options);
       return { id: report._id, status: 'unreviewed' };
     }
+    case 'wallet.activity': return walletActivity(userId,Number(d.limit));
     case 'wallet.get': return wallet(userId);
     case 'conversation.search': return searchChat(d as unknown as import('../shared/chatSearch').ChatSearchInput, actor);
     case 'conversation.window': return conversationWindow(userId, String(d.messageId), session);

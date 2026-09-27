@@ -1,3 +1,4 @@
+import {BillingActivity} from './BillingActivity';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Bootstrap, Profile } from '../shared/types';
 import { api, post, operation, money, balanceLabel, errorText } from './api';
@@ -35,14 +36,7 @@ export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAcc
     <p className="quiet small">Or use your own <button type="button" className="text-link" onClick={onConnect}>Codex, Claude Code, or other agent</button> for <strong>free</strong>.</p>
     {data.wallet.reservedNanos > 0 && <p className="quiet small">{money(data.wallet.reservedNanos)} is held for your current reply. Any unused amount returns when it finishes.</p>}
     {error && <p className="error" role="alert">{error}</p>}
-    <details className="details"><summary>Activity</summary>
-      <p className="small quiet">Charges follow reported AI usage and may arrive after a reply. Balances are shown in cents; smaller charges appear below. Hosting is paid by us.</p>
-      <ul className="ledger">{data.wallet.entries.map(entry => <li key={entry.id}>
-        <div><span>{entry.label}</span><time>{new Date(entry.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time></div>
-        <span>{entry.amountNanos > 0 ? '+' : '−'}{money(Math.abs(entry.amountNanos), entry.amountNanos < 0)}</span>
-      </li>)}</ul>
-      {!data.wallet.entries.length && <p className="quiet">No charges yet.</p>}
-    </details>
+    <BillingActivity key={data.user.id} wallet={data.wallet}/>
     {data.config.development && <p className="local-note">Development environment.</p>}
   </>;
 }

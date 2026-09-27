@@ -14,7 +14,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.27.3, release `20260927170616543` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927165748529`; local frontend at `http://localhost:7330/log` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927172405413`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -581,3 +581,15 @@ Transient spinners now use `src/spinner.css`: hide the indicator for the first 5
 The complete image-layer/transparent-loading/spinner-delay follow-up is on cloud dev `20260927165748529`, with a successful build and database health check. The additional pagination/viewer suites passed 39 and 8 checks (overlapping earlier coverage). Production remains v0.27.2 pending an explicit request for this follow-up.
 
 The image-layer, transparent-loading and 500ms transient-spinner fixes subsequently shipped on explicit request as **v0.27.3**, production `20260927170616543`. Build, deployment health, public API health and live release assets passed verification.
+
+### Immediate photo viewing, grouped billing, and native link cards
+
+ImageViewer initializes PhotoSwipe synchronously inside the top-layer dialog, before image dimensions finish loading. Pending slides fill in afterward without recreating the viewer. Known slides are not refreshed unnecessarily during the opening transition. PostPhotos supplies a bounded (1024px longest edge) in-memory snapshot of the selected decoded thumbnail as the opening preview; it is not persisted. Normal Log photos use the same marked URL and existing account-scoped IndexedDB cache in both places. Invite photos remain code-checked/no-store, with the decoded snapshot only covering the current opening.
+
+Billing Activity reads `wallet.activity` only while open and refreshes with live wallet receipts. It keeps the three most recent nonzero agent charges individually, including automations, then totals older contiguous usage between credit/adjustment records. Date ranges use actual oldest/newest receipt times; same-day ranges include times. The server streams the caller’s ledger and finishes each group before applying the visible-row limit, avoiding the former last-30-receipt cutoff. Raw `wallet.get` receipts, balances, settlement and credits are unchanged. CLI/MCP share the new read-only operation and its billing surface link.
+
+The reported production invite URL already returned its title/photo from both stage backends. The frontend was suppressing cards for native links. Native URLs now render ordinary metadata cards, with internal route navigation in the current workspace; cross-stage links remain external. Existing anonymous/public preview projections and SSRF boundaries are unchanged. Posts use Log-style paste/Add controls, removable preview cards, Enter-to-add, deduplication and a three-URL limit. A valid unsaved link is included on Post, as with Log’s Save. Inline cards exclude already attached URLs.
+
+Validation: 119 image/cache/app checks, 96 billing/image/app checks, and 111 final UI/preview checks passed (overlapping suites), plus the operation-contract checks. The billing backend regression verifies complete groups over more than 30 receipts, latest-three behavior across credits, refunds, zero-cost receipts, reconciliation and caller isolation without changing balances. The supplied invite preview was checked read-only against prod and dev without printing its content.
+
+This image/billing/link-card batch is on cloud dev `20260927172405413`. Build and database health passed; live CLI discovery/schema and read-only `wallet.activity` verified its three-charge limit and valid ranges. Production remains v0.27.3.
