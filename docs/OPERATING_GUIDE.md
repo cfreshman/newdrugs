@@ -603,3 +603,7 @@ Attendee-list invite descriptions passed nine preview/privacy checks and TypeScr
 ### Planned Log semantics and reports
 
 The researched proposal is [Log semantic search and personal reports](log-integration/SEMANTIC_SEARCH_AND_REPORTS.md). It recommends a private shared evidence index, exact/hybrid retrieval at current scale, free topic browsing, optional cached paid interpretation, and only then opt-in automatic maintenance with estimates and limits. It records current corpus/host aggregates, primary sources, access/revocation requirements, billing and evaluation gates. This is a plan, not a shipped capability or authorization to start paid indexing/report runs.
+
+### Scaling requirement and audit
+
+[Scaling audit](SCALING_AUDIT.md) documents confirmed small-system limits: 128 live connections per process, broad invalidations, the public 10k-document cap/full rebuilds, owner-wide chat scans, read-time billing folds, Log projection/calendar amplification, shared worker/API processes, local whole-file delivery and attachment-history scans. These are not yet fixed. The semantic/report proposal now requires indexed incremental retrieval and bounded reads, with exact scoring only a bounded fast path/oracle, plus scaling groundwork before reports. No capacity claim, infrastructure change or deployment was made by this audit.
