@@ -245,6 +245,7 @@
 .log-voice-player>button{background:transparent;padding:0;color:var(--primary-ink);font:inherit;text-align:left;}
 .log-voice-row .log-voice-player>button{padding:8px 12px;background:var(--surface-soft);color:var(--ink);font-size:12px;}
 .log-note-content>.log-media{margin-top:6px;}.log-note-content>.log-media:empty{margin:0;}
-.log-voice-row .log-voice-progress{color:var(--primary-ink);}
+.log-voice-row .log-voice-progress{display:flex;align-items:center;gap:8px;color:var(--primary-ink);}
+.log-voice-progress>svg{flex:none;}
 .log-voice-track{--voice-arrow:18px;--voice-offset:calc((100% - var(--voice-arrow)) * var(--voice-step) / 15);display:block;position:relative;width:144px;height:20px;}
 .log-voice-track>svg{position:absolute;left:var(--voice-offset);top:1px;}

@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState,type CSSProperties} from 'react';
-import {ArrowRight} from '@phosphor-icons/react';
+import {ArrowRight,Stop} from '@phosphor-icons/react';
 import {usePanelVisible} from './PanelReadiness';
 import {errorText} from './api';
 
@@ -47,6 +47,7 @@ export function LogVoiceRecorder({add,error,disabled,change}:{add(file:File):Pro
   {phase==='recording'?<>
    <button type="button" className="log-voice-progress" aria-label={`Finish voice note, ${Math.floor(seconds)} of 15 seconds`} onClick={()=>recorder.current?.stop()}>
     <span className="log-voice-track" aria-hidden="true" data-step={Math.floor(seconds)} style={{'--voice-step':Math.floor(seconds)} as CSSProperties}><ArrowRight size={18} weight="regular"/></span>
+    <Stop size={18} weight="fill" aria-hidden="true"/>
    </button>
    <button type="button" onClick={()=>{discard.current=true;recorder.current?.stop();}}>Cancel</button>
   </>:<button type="button" disabled={disabled||phase!=='idle'} onClick={()=>void start()}>{phase==='processing'?'Processing…':phase==='starting'?'Opening microphone…':'Record voice note'}</button>}
