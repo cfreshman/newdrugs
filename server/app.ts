@@ -1,3 +1,7 @@
+import {publicInvitePreview,readInvitePhoto} from './logInvites';
+import {pagePreview,readPagePreviewImage} from './pagePreviews';
+import {renderPagePreview} from '../shared/pagePreview';
+import {readFile} from 'node:fs/promises';
 import {apiRequestLimits} from './requestLimits';
 import {pageContextCandidate} from '../shared/pageContext';
 import {listAdminUsers} from './adminUsers';
@@ -35,7 +39,7 @@ import { ensureIntroduction } from './onboarding';
 import {acceptUpload,readUpload} from './uploads';
 import { streamLiveState, readLiveState } from './liveState';
 import { buildResourceLinks } from './resourceLinks';
-import { devApiGate } from './devGate';
+import { devApiGate,trustedDevKey } from './devGate';
 import { previewImage } from './linkPreviews';
 import { replyToReview } from './reviewReply';
 
@@ -65,6 +69,21 @@ export function createApp() {
   });
   app.all('/mcp', (_req, res) => { res.status(405).set('Allow', 'POST').json({ error: 'Use authenticated Streamable HTTP POST.' }); });
   app.use('/api/admin/cli', limiter(90), express.json({ limit: '16kb' }), adminCliRouter());
+  // These projections are deliberately anonymous. Staging still requires its gate.
+  const previewGate:express.RequestHandler=(req,res,next)=>{
+    if(config.APP_ENV!=='staging'||trustedDevKey(req.get('X-NewDrugs-Dev-Key')))return next();
+    if(!req.get('Authorization'))return next(new AppError(404,'not_found','This development endpoint is private.'));
+    void authenticate(req,res,error=>{if(error)return next(error);try{requireActor(req);next();}catch(error){next(error);}});
+  };
+  app.get('/api/log-invites/:code',previewGate,limiter(180),async(req,res)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}).json(await publicInvitePreview(String(req.params.code)));});
+  app.get('/api/log-invites/:code/photos/:fileId',previewGate,limiter(300),async(req,res)=>{const {file,bytes}=await readInvitePhoto(String(req.params.code),String(req.params.fileId));res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'}).send(bytes);});
+  app.get('/api/page-preview',previewGate,limiter(180),async(req,res)=>{
+    const path=z.string().max(2048).parse(req.query.path||'/');res.set('Cache-Control','no-store').json(await pagePreview(path));
+  });
+  app.get('/api/share-images/:kind/:id',previewGate,limiter(300),async(req,res)=>{
+    const {file,bytes}=await readPagePreviewImage(String(req.params.kind),String(req.params.id));
+    res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'}).send(bytes);
+  });
   app.use('/api', devApiGate, apiRequestLimits(), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter(30, 15 * 60000), async (req, res) => {
@@ -225,7 +244,8 @@ export function createApp() {
   if (config.production && config.APP_ENV === 'production') {
     mountAdminFrontend(app);
     app.use(express.static(resolve('dist/web'), { index: false, setHeaders: (res, path) => { if (path.endsWith('/sw.js')) res.setHeader('Cache-Control', 'no-cache'); } }));
-    app.get('/{*path}', (_req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(resolve('dist/web/index.html')); });
+    const template=readFile(resolve('dist/web/index.html'),'utf8');
+    app.get('/{*path}', async (req, res) => { const metadata=await pagePreview(req.originalUrl);res.set('Cache-Control','no-store');if(metadata.private)res.set('X-Robots-Tag','noindex, nofollow');res.type('html').send(renderPagePreview(await template,metadata,config.uiOrigin)); });
   }
   if (config.APP_ENV === 'staging') app.use((_req, res) => { res.status(404).set('Cache-Control', 'no-store').end(); });
   const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {

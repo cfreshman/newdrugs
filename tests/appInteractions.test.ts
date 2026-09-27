@@ -18,7 +18,7 @@ describe('chat interaction integration', () => {
     dom = setupDOM(); history.replaceState(null,'','/'); vi.stubGlobal('innerWidth', 390); vi.stubGlobal('innerHeight', 844); bootstrap = deferred(); chat = deferred(); localStorage.clear(); sessionStorage.clear();
     document.documentElement.style.cssText = '--chat-width:480;--chat-gutter:12;--orb-radius:36';
     transport.api.mockReset(); transport.post.mockReset(); transport.operation.mockReset();
-    transport.api.mockImplementation((path: string) => path === '/tokens' ? Promise.resolve({ tokens: [] }) : path === '/checkout/quotes' ? Promise.resolve({ quotes: [] }) : bootstrap.promise);
+    transport.api.mockImplementation((path: string) => path.startsWith('/log-invites/')?Promise.resolve({entryId:'resource',title:'Invited hangout',date:'2026-09-27',place:'Park',joined:false,people:[{id:'friend',name:'Friend'}],photos:[{id:'photo',name:'Hangout photo',url:'/api/log-invites/'+ 'a'.repeat(32)+'/photos/photo'}]}):path === '/tokens' ? Promise.resolve({ tokens: [] }) : path === '/checkout/quotes' ? Promise.resolve({ quotes: [] }) : bootstrap.promise);
     transport.operation.mockImplementation((name: string) => Promise.resolve(name==='log.birthday_get'?{birthday:null}:name==='log.join_preview'?{entryId:'resource',title:'Hangout',date:'2026-09-27',place:'',joined:false,people:[]}:name==='log.code'?{entryId:'resource',code:'a'.repeat(32),url:'https://druggie.org/log/join/'+ 'a'.repeat(32)}:name==='log.preferences'?{arrangement:'calendar',views:[]}:name==='log.get'?{id:'resource',ownerId:'user',date:'2026-09-26',title:'Test memory',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),membership:'member',contributors:[],invitations:[]}:name === 'inbox.get' ? { id: 'resource', title: 'An update', body: 'Useful info', links: [], producer: { kind: 'external', name: 'Test agent' }, createdAt: new Date().toISOString(), read: false, archived: false, unavailable: false } : name === 'automations.get' ? { id: 'resource', name: 'Morning update', instruction: 'Find something useful', schedule: { kind: 'weekly', timeZone: 'UTC', hour: 7, minute: 0, weekdays: [1] }, maxRunNanos: 50000000, dailyBudgetNanos: 200000000, privateChat: false, webSearch: false, status: 'paused', revision: 1, nextRunAt: null, createdAt: new Date().toISOString() } : name === 'people.get' ? { ...initial.user, id: 'friend', handle: 'friend', name: 'Friend', discoverable: true } : name === 'posts.get' ? { id: 'post', userId: 'friend', text: 'A real post', createdAt: new Date().toISOString(), city: '' } : { items: [], nextCursor: null, people: [] }));
     transport.post.mockImplementation((path: string) => path === '/chat' ? chat.promise : Promise.resolve({ ok: true }));
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) { return this.classList.contains('composer') ? rect(12, 550, 366, 76) : rect(150, 350, 228, 80); });
@@ -185,6 +185,21 @@ describe('chat interaction integration', () => {
     expect(transport.post).toHaveBeenCalledWith('/chat',expect.objectContaining({text:'who is around'}));
     expect(dom.container.querySelector('dialog')).toBeNull();
   });
+  it('shows invite photos before login and restores the invite after the account identity changes',async()=>{
+    const code='a'.repeat(32);history.replaceState(null,'',`/log/join/${code}`);await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,id:'guest',handle:undefined}}));
+    expect(dom.container.querySelector('.log-join .log-photo-strip img')).not.toBeNull();
+    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.log-join button')].find(button=>button.textContent==='Create account or sign in')!.click());
+    expect(sessionStorage.getItem('nd-auth-return')).toContain(code);
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.switch-account')!.click());
+    const form=dom.container.querySelector<HTMLFormElement>('dialog[open] form')!;form.querySelector<HTMLInputElement>('[name="handle"]')!.value='test';form.querySelector<HTMLInputElement>('[name="password"]')!.value='password8';
+    transport.api.mockResolvedValue(initial);transport.post.mockResolvedValue({user:initial.user});
+    await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(dom.container.querySelector('dialog[open] form')).toBeNull();expect(location.pathname).toBe(`/log/join/${code}`);expect(dom.container.querySelector('.log-modal[data-open=true] .log-join')).not.toBeNull();expect(sessionStorage.getItem('nd-auth-return')).toBeNull();expect(transport.operation.mock.calls.some(call=>call[0]==='log.join')).toBe(false);
+  });
+  it('restores an invite after reloading the authentication page while already signed in',async()=>{
+    const code='b'.repeat(32);sessionStorage.setItem('nd-auth-return',JSON.stringify({path:`/log/join/${code}`,expires:Date.now()+60000}));history.replaceState(null,'','/profile');await mount();await load();await act(async()=>dom.frame());expect(location.pathname).toBe(`/log/join/${code}`);expect(dom.container.querySelector('.log-modal[data-open=true] .log-join')).not.toBeNull();expect(sessionStorage.getItem('nd-auth-return')).toBeNull();
+  });
+  it('resets a server-rendered share title when the app opens',async()=>{document.title='View Hangout (New Drugs)';await mount();expect(document.title).toBe('New Drugs');});
   it('shows only the background until chat and settings data are ready', async () => {
     await mount();
     expect(dom.container.querySelector('.atmosphere')).not.toBeNull();

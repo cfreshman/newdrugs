@@ -1,3 +1,4 @@
+import {projectInvite} from './logInvites';
 import {ownBirthdaySchema,type OwnBirthday} from '../shared/logBirthday';
 import {config} from './config';
 import {destinationPath} from '../shared/navigation';
@@ -17,6 +18,7 @@ async function excluded(userId:string,session?:ClientSession){return [...(await 
 async function access(userId:string,session?:ClientSession):Promise<Filter<LogRow>>{const blocked=await excluded(userId,session);return {deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]};}
 export async function logFileVisibleTo(userId:string,ownerId:string,fileId:string){return Boolean(await entries().findOne({$and:[await access(userId),{contributions:{$elemMatch:{userId:ownerId,fileIds:fileId}}}]}));}
 export async function logAttachmentLocations(userId:string,fileIds:string[]|undefined,session?:ClientSession){return entries().find({$and:[await access(userId,session),{members:userId,contributions:{$elemMatch:{userId,...(fileIds?{fileIds:{$in:fileIds}}:{})}}}]},{session,projection:{title:1,date:1,'contributions.userId':1,'contributions.fileIds':1}}).toArray();}
+export async function hasSharedHangouts(userId:string,personId:string,session?:ClientSession){if(userId===personId)return false;return Boolean(await entries().findOne({$and:[await access(userId,session),{members:{$all:[userId,personId]}}]},{session,projection:{_id:1}}));}
 export async function logEntryFor(userId:string,id:string,session?:ClientSession){return requireValue(await entries().findOne({$and:[{_id:id},await access(userId,session)]},{session}),'This Log entry is unavailable.');}
 async function project(row:LogRow,userId:string,session?:ClientSession,preview=false):Promise<LogEntry>{
  const people=await users().find({_id:{$in:[...row.members,...row.invited]}},{session,projection:{name:1,handle:1,photos:1,discoverable:1}}).toArray();
@@ -113,10 +115,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
   if(d.before){try{const cursor=JSON.parse(Buffer.from(String(d.before),'base64url').toString());if(cursor.signature!==signature||!Number.isInteger(cursor.offset)||cursor.offset<0)throw Error();offset=cursor.offset;}catch{throw new AppError(422,'log_cursor','Reload the people picker.');}}
   return {items:all.slice(offset,offset+limit),nextCursor:offset+limit<all.length?Buffer.from(JSON.stringify({signature,offset:offset+limit})).toString('base64url'):null};
  }
- if(name==='log.join_preview'){
-  const row=await byCode(userId,String(d.code),session),people=await users().find({_id:{$in:row.members}},{session,projection:{name:1,handle:1}}).toArray();
-  return {entryId:row._id,title:row.title,date:row.date,place:row.place,joined:row.members.includes(userId),people:people.map(person=>({id:person._id,name:person.name||person.handle||'Member',...(person.handle?{handle:person.handle}:{})}))};
- }
+ if(name==='log.join_preview'){const row=await byCode(userId,String(d.code),session);return projectInvite(row,String(d.code),userId,session);}
  if(name==='log.join'){
   if(Boolean(d.code)===Boolean(d.entryId))throw new AppError(422,'log_code','Use a scanned code or a legacy pending invitation.');
   const row=d.code?await byCode(userId,String(d.code),session):await logEntryFor(userId,String(d.entryId),session);

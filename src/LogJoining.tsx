@@ -1,12 +1,15 @@
+import {useRecordRefresh} from './useRecordRefresh';
+import {PostPhotos} from './PostPhotos';
+import {Temporal} from '@js-temporal/polyfill';
 import {logDateLabel} from './logDate';
-import {useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import QRCode from 'qrcode';
 import QrScanner from 'qr-scanner';
 import {CircleNotch} from '@phosphor-icons/react';
 import type {Destination} from '../shared/navigation';
 import {parseLogCode,type LogCode,type LogJoinPreview} from '../shared/logJoining';
 import type {LogEntry} from '../shared/log';
-import {operation,errorText} from './api';
+import {api,operation,errorText} from './api';
 import {usePanelLoading,usePanelVisible} from './PanelReadiness';
 
 type Props={closeLabel?:string;navigate(destination:Destination):void;close():void};
@@ -36,10 +39,15 @@ export function LogScanPanel({navigate,close}:Props){
  },[visible]);
  return <section className="log-scan log-task"><div className="log-task-content"><div className="log-camera"><video ref={video} muted playsInline/><span aria-hidden="true"/></div>{error?<p className="error" role="alert">{error}</p>:<p>Scan a New Drugs code.</p>}</div><div className="panel-actions log-task-footer"><button onClick={close}>Cancel</button></div></section>;
 }
-export function LogJoinPanel({code,navigate,close}:Props&{code:string}){
+export function LogJoinPanel({code,navigate,close,registered=true,onAccount,onJoined}:Props&{code:string;registered?:boolean;onAccount?():void;onJoined?(entryId:string):void}){
+ const visible=usePanelVisible();
+ const openEntry=(entryId:string)=>onJoined?onJoined(entryId):navigate({view:'log',resourceId:entryId});
  const [preview,setPreview]=useState<LogJoinPreview|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),key=useRef(crypto.randomUUID());
- useEffect(()=>{let alive=true;void operation<LogJoinPreview>('log.join_preview',{code}).then(result=>{if(alive)setPreview(result);}).catch(e=>{if(alive)setError(errorText(e));});return()=>{alive=false;};},[code]);
+ const generation=useRef(0);
+ const load=useCallback(async()=>{if(!visible)return;const request=++generation.current;try{const result=await (registered?operation<LogJoinPreview>('log.join_preview',{code}):api<LogJoinPreview>(`/log-invites/${encodeURIComponent(code)}`));if(request===generation.current){setPreview(result);setError('');}}catch(e){if(request===generation.current){setPreview(null);setError(errorText(e));}}},[code,registered,visible]);
+ useEffect(()=>{void load();return()=>{generation.current++;};},[load]);useRecordRefresh(['log'],load);
  usePanelLoading(!preview&&!error);
- const join=async()=>{if(busy||!preview)return;if(preview.joined){navigate({view:'log',resourceId:preview.entryId});return;}setBusy(true);setError('');try{const entry=await operation<LogEntry>('log.join',{code},{key:key.current,confirmed:true});changed();navigate({view:'log',resourceId:entry.id});}catch(e){setError(errorText(e));}finally{setBusy(false);}};
- return <section className="log-join log-task"><div className="log-task-content">{preview?<><h2>{preview.title||'(untitled)'}</h2><p>{logDateLabel(preview.date)}</p>{preview.place&&<p>{preview.place}</p>}<p>with {preview.people.map(person=>person.handle||person.name).join(', ')}</p><p className="quiet">Join to add your own note and photos.</p></>:!error&&<CircleNotch className="spin" size={24}/>} {error&&<p className="error" role="alert">{error}</p>}</div><div className="panel-actions log-task-footer"><button onClick={close}>Cancel</button><button className="solid" disabled={!preview||busy} onClick={()=>void join()}>{busy?'Joining…':preview?.joined?'Open hangout':'Join'}</button></div></section>;
+ useEffect(()=>{if(visible&&registered&&preview?.joined)openEntry(preview.entryId);},[visible,registered,preview?.joined,preview?.entryId]);
+ const join=async()=>{if(busy||!preview)return;if(!registered){onAccount?.();return;}if(preview.joined){openEntry(preview.entryId);return;}setBusy(true);setError('');try{const entry=await operation<LogEntry>('log.join',{code},{key:key.current,confirmed:true});changed();openEntry(entry.id);}catch(e){setError(errorText(e));}finally{setBusy(false);}};
+ return <section className="log-join log-detail log-task"><div className="log-detail-body">{preview?<><h2>{preview.title||'(untitled)'}</h2><div className="log-photo-strip"><PostPhotos log horizontal photos={preview.photos||[]}/></div><div className="log-entry-facts"><p>{preview.date>Temporal.Now.plainDateISO().toString()?'plan for':'hung out'} {logDateLabel(preview.date)}</p>{preview.place&&<p>at {preview.place}</p>}<p>with {preview.people.map(person=>person.handle||person.name).join(', ')}</p></div></>:!error&&<CircleNotch className="spin" size={24}/>} {error&&<p className="error" role="alert">{error}</p>}</div><footer className="log-detail-footer"><div className="panel-actions log-entry-actions"><button onClick={close}>Cancel</button><button className="solid" disabled={!preview||busy} onClick={()=>void join()}>{busy?'Joining…':!registered?'Create account or sign in':preview?.joined?'Open hangout':'Join'}</button></div></footer></section>;
 }

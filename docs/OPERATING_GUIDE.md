@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.23.4.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.25.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.23.4, release `20260927132706715` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927135311617`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.25.1, release `20260927145719095` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927145610619`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -517,3 +517,27 @@ Read Logcal’s `app/components/LogEntry.tsx`, `ImageCropper.tsx`, and `lib/crop
 39 crop/Log/calendar checks passed, including focal-point preservation, pointer transitions, crop-before-upload, cancellation, retained draft/scroll, capped export size, and no upscale. A disposable browser fixture checked date bounds and square crop dimensions at 390px and 320px, zoom/reset/keyboard movement, actual WebP export and changing spinner transforms. Fixture files/tab were removed and viewport reset. Physical iOS camera/picker behavior still needs device verification. These changes are dev-only; the user explicitly returned to development after v0.23.4.
 
 The mobile date/crop/spinner follow-up is live on dev `20260927135311617`, with a successful build and database health check. Production remains v0.23.4.
+
+### Public link-preview projections and shared profile hangouts
+
+Page previews are rendered on the server from a deliberately anonymous projection in `server/pagePreviews.ts`. No session or account context enriches a preview. `shared/pagePreview.ts` replaces only title/description/Open Graph/Twitter/canonical tags, preserving PWA metadata, viewport settings, icons and app assets, and escapes user-authored text.
+
+Ordinary private Log entry/code links always say `View hangout (New Drugs)` and use the existing gradient, without reading the entry's title, notes, place, date or media. A current `/log/join/:code` capability may preview the first eligible image in display order, using the saved hangout title when present, without notes or attendee details. Invite images are resolved by code on each request; reset codes, deleted entries/files, moderated files and suspended participants stop future retrieval. Invite/private pages are noindex/nofollow. External preview services can retain previously fetched previews beyond our control.
+
+Public posts may expose their public text/author and first photo. Only discoverable, unsuspended profiles expose their name/handle/bio/first photo. Non-public/removed records fall back to generic branding. `/api/share-images/:kind/:id` serves only these reauthorized projections; it does not make `/api/files` public. Both HTML/metadata and preview images use no-store. Staging still requires the trusted development key or valid bearer authentication. The Vite index transform fetches the cloud-dev metadata through its server-side key, so local HTML reflects the same rules without putting the key in client code. Production renders the built template at request time, so compare served HTML to `renderPagePreview` output rather than hashing it against the unrendered `dist/web/index.html`.
+
+`people.get` now returns caller-scoped `hasSharedHangouts`. It is omitted for background agents lacking Log access. Profiles show Hangouts for friends or current co-attendees; `log.list` still returns only the viewer's accessible shared entries. Blocks/deletion/suspension continue to apply, and shared Log attendance does not unlock DMs. The combined preview, profile-hangout and full Log suite passed 46 tests.
+
+The explicitly requested `ancatdubh2` production migration is complete: six memberships added, one existing membership retained, seven entries verified, no new entries/uploads/storage, with Cyrus/Laura's contents preserved. See `docs/log-integration/MIGRATION.md`. This data migration did not itself deploy app code.
+
+Invite UI and authentication follow-up: valid invite-code holders can see the hangout's title/date/place/attendees and photos before creating an account, using the normal Log title/photo-strip/facts layout. Notes, audio and video remain unavailable before attendance. Photos use code-scoped URLs and are checked against the current code and attachment membership on every fetch; ordinary file URLs remain protected. Signed-in previews use `log.join_preview`, whose output now includes the same photo references. Existing attendees open the normal hangout directly, replacing the join screen; other visitors explicitly Join after authentication.
+
+`src/authReturn.ts` keeps only a validated native return destination, in memory and in per-tab session storage for up to an hour. Login identity changes still clear the prior account's private UI state, but preserve this explicit return intent. Login completes the return flow instead of merely closing the form. Account creation retains profile setup and resumes afterward. Cancel clears the pending route. Invite previews refresh when reopened and on Log changes. The app resets the browser title to `New Drugs` on mount while server-rendered share metadata stays descriptive.
+
+The integrated invite/auth/preview/profile suite passed 94 tests, including public invite photo access and revocation, no private note/bio exposure, login under a different account ID, authentication-page reload recovery, and title reset. Three focused auth/title checks passed after the final preview-refresh change. Live dev verification found an invite with two photos and fetched its first image successfully (200, image/webp, 30,236 bytes); no code or private content was printed in diagnostic output.
+
+Title/caching refinement: valid invite share previews use the saved hangout title, preserving its casing, with `View hangout (New Drugs)` as the fallback. Ordinary private links still never look up or expose that title. Profile/post fallback titles use sentence case too. The seven preview privacy tests and eight existing link-preview checks passed.
+
+First-party New Drugs `links.preview` results now come directly from the current anonymous page projection, with direct reauthorized image URLs, rather than the generic 24-hour external-site cache. Code-scoped photo URLs remain direct too. Legacy first-party cached image proxy URLs refuse to serve old bytes, so code resets and profile privacy changes cannot be bypassed by that server cache. External sites retain their existing bounded preview cache.
+
+Final preview/invite release: production **v0.25.1**, `20260927145719095`; dev `20260927145610619`. Production health passed. Ordinary private-link HTML had the generic sentence-case title, gradient and noindex tags, with its body matching the built frontend. A live valid invite used its saved title and returned its photo successfully without authentication. The CLI verified both fresh private-safe `links.preview` output and `hasSharedHangouts:true` for the newly linked account. The earlier mobile date, square crop and loader changes are included in this production release too.

@@ -2,7 +2,7 @@ import {z} from 'zod';
 export const logCodeSchema=z.string().regex(/^[a-f0-9]{32}$/,'Use a New Drugs hangout code.');
 export const logContactSchema=z.object({id:z.string(),name:z.string(),handle:z.string().optional(),photoId:z.string().optional(),sharedHangouts:z.number(),friend:z.boolean().optional()});
 export const logCodeOutput=z.object({entryId:z.string(),code:logCodeSchema,url:z.string()});
-export const logJoinPreview=z.object({entryId:z.string(),title:z.string(),date:z.string(),place:z.string(),joined:z.boolean(),people:z.array(z.object({id:z.string(),name:z.string(),handle:z.string().optional()}))});
+export const logJoinPreview=z.object({entryId:z.string(),title:z.string(),date:z.string(),place:z.string(),joined:z.boolean(),photos:z.array(z.object({id:z.string(),name:z.string(),url:z.string()})).default([]),people:z.array(z.object({id:z.string(),name:z.string(),handle:z.string().optional()}))});
 export type LogContact=z.infer<typeof logContactSchema>;
 export type LogJoinPreview=z.infer<typeof logJoinPreview>;
 export type LogCode=z.infer<typeof logCodeOutput>;

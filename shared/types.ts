@@ -1,4 +1,5 @@
 export interface Profile {
+  hasSharedHangouts?: boolean;
   id: string; handle?: string; name: string; city: string; bio: string;
   interests: string[]; discoverable: boolean;
   area?: import('./geo').CoarseArea | null;

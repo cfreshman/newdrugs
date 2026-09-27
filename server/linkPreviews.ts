@@ -1,3 +1,6 @@
+import {config} from './config';
+import {parseDestination} from '../shared/navigation';
+import {pagePreview} from './pagePreviews';
 import {customMediaKind,parseCustomDocument} from '../shared/customMedia';
 import {providerEmbed} from '../shared/postLinks';
 import { Parser } from 'htmlparser2';
@@ -36,7 +39,19 @@ export function pageMetadata(html: string, finalUrl: string) {
 interface CachedPreview { _id: string; preview: LinkPreview; image?: Binary; expiresAt: Date }
 const cache = () => rows<CachedPreview>('linkPreviews');
 const pending = new Map<string, Promise<LinkPreview>>();
+function ownPreviewUrl(value:string){
+ try{const url=new URL(value),origins=[config.APP_ORIGIN,config.uiOrigin].map(value=>new URL(value).origin);if(value.length>2048||url.username||url.password||!origins.includes(url.origin))return null;
+ const image=/^\/api\/(?:share-images\/(?:post|person|log-invite)\/[^/]+|log-invites\/[a-f0-9]{32}\/photos\/[^/]+)$/.test(url.pathname);
+ return image||parseDestination(url.pathname+url.search,'https://druggie.org')?{url,image}:null;
+ }catch{return null;}
+}
 export async function linkPreview(value: string, userId: string): Promise<LinkPreview> {
+  const own=ownPreviewUrl(value);
+  if(own){
+    if(own.image)return {url:value,hostname:own.url.hostname,title:'Photo',description:'',kind:'image',imageUrl:own.url.pathname+own.url.search};
+    const metadata=await pagePreview(own.url.pathname+own.url.search);return {url:value,hostname:own.url.hostname,title:metadata.title,description:metadata.description,imageUrl:metadata.imagePath};
+  }
+
   let url: URL;
   try { url = publicUrl(value); } catch { throw new AppError(422, 'preview_url', 'Choose a public HTTP or HTTPS link.'); }
   const id = hash(`rich-v3:${url.href}`), existing = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } }, { projection: { image: 0 } });
@@ -88,7 +103,7 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
 export async function previewImage(id: string) {
   if (!/^[a-f0-9]{64}$/.test(id)) throw new AppError(404, 'not_found', 'Preview unavailable.');
   const cached = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } });
-  if (!cached?.image) throw new AppError(404, 'not_found', 'Preview unavailable.');
+  if (!cached?.image || ownPreviewUrl(cached.preview.url)) throw new AppError(404, 'not_found', 'Preview unavailable.');
   return Buffer.from(cached.image.buffer);
 }
 

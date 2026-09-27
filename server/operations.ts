@@ -1,7 +1,7 @@
 import {listStorage} from './storage';
 import type {StorageType,StorageLocation} from '../shared/storage';
 import {defaultPreferences} from '../shared/preferences';
-import {logOperation,logEntryFor} from './log';
+import {logOperation,logEntryFor,hasSharedHangouts} from './log';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
 import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
@@ -190,7 +190,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       await notBlocked(userId, String(d.personId), session);
       const person = requireValue(await users().findOne({ _id: String(d.personId) }, options));
       if (!await profileVisibleTo(userId, person, session)) throw new AppError(404, 'unavailable', 'This profile is not available.');
-      return profile(person);
+      return {...profile(person),...(!actor.background||actor.logAccess?{hasSharedHangouts:await hasSharedHangouts(userId,person._id,session)}:{})};
     }
     case 'search.datasets': return searchStatus();
     case 'search.query': return searchPublic(d as unknown as SearchInput, actor);

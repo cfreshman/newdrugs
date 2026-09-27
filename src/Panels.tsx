@@ -58,7 +58,7 @@ export function Account({ data, refresh, close, saved: onSaved, initialMode = 'r
     try {
       const result = await post<{ user: Profile }>(`/account/${mode}`, { handle: fields.get('handle'), password: fields.get('password') });
       await refresh();
-      if (mode === 'login') close();
+      if (mode === 'login') {if(onboarding)onSaved();else close();}
     }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };

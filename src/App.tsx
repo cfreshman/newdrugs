@@ -1,3 +1,4 @@
+import {rememberAuthReturn,readAuthReturn,clearAuthReturn} from './authReturn';
 import {usePageBoundaryScroll} from './pageBoundaryScroll';
 import {bindLogEntryCache} from './logEntryCache';
 import {bindLogImageCache} from './logImageCache';
@@ -80,6 +81,7 @@ function browserSession() {
   return fallback;
 }
 export function App() {
+  useLayoutEffect(()=>{document.title='New Drugs';},[]);
   const standalone=useStandalone();
   const [clientId] = useState(browserSession);
   const [mode,setMode]=useState<AppMode>('agent'),[agentDockOpen,setAgentDockOpen]=useState(false);
@@ -110,6 +112,8 @@ export function App() {
   const [panelReset, setPanelReset] = useState(0);
   const [panelSpace, setPanelSpace] = useState<'modal' | 'composer'>('modal');
   const [panelContext, setPanelContext] = useState<Omit<Destination, 'view'>>({});
+  const authDestination=useRef<Destination|null>(readAuthReturn());
+  const [authReturn,setAuthReturn]=useState<Destination|null>(null);
   const [afterAccount, setAfterAccount] = useState<{ destination?:Destination; panel?: Exclude<Panel, null>; context?: Omit<Destination, 'view'>; space?: 'modal' | 'composer'; chat?: string } | null>(null);
   const [resumeChat, setResumeChat] = useState<string | null>(null);
   const [accountMode, setAccountMode] = useState<'register' | 'login'>('register');
@@ -190,6 +194,13 @@ export function App() {
         identity.current = initial.user.id;
         const initialDestination=landingDestination(location.href,location.origin,initial.preferences?.landingPage||'agent');
         const initialMode=initialDestination?.mode|| (initialDestination?modeForDestination(initialDestination):'agent');
+        if(authDestination.current){
+          if(initialDestination?.view==='profile'){
+            if(initial.user.handle){setAuthReturn(authDestination.current);authDestination.current=null;clearAuthReturn();}
+            else setAfterAccount({destination:authDestination.current});
+          }else if(initial.user.handle){authDestination.current=null;clearAuthReturn();}
+        }
+
         setMode(initialMode);
         setData(initial); setRun(initial.run ?? null);
         rememberCompleted(initial.messages);
@@ -272,6 +283,10 @@ export function App() {
     else if (space === 'composer') setUnderlay(null);
     setPanelSpace(space); if (space === 'composer') setLauncherOpen(true);
     setPanelHistory(next === 'notifications' ? [{ panel: 'settings', context: {} }] : []); setPanelContext(context); setPanel(next);
+  };
+  const startAccount=(destination?:Destination)=>{
+    if(destination){const target={...destination,mode:destination.mode||mode};authDestination.current=target;rememberAuthReturn(target);setAfterAccount({destination:target});}
+    setAccountMode('register');open('account');
   };
   const reopenSettings=()=>{
     const saved=resumeSettings.current?rememberedSettings.current:null;
@@ -390,6 +405,7 @@ export function App() {
   const closePanel = async (saved = false, fileIds: string[] = []) => {
     if (data?.user.id !== identity.current) return;
     setAfterAccount(null);
+    if(panel==='account'){authDestination.current=null;clearAuthReturn();}
     if (panelSpace === 'modal' && underlay) { setPanel(underlay.panel); setPanelContext(underlay.context); setPanelHistory(underlay.history); setPanelSpace('composer'); setLauncherOpen(underlay.open); setUnderlay(null); return; }
     if (panelSpace === 'modal') { setPanel(null); setPanelHistory([]); }
     setLauncherOpen(false);
@@ -449,20 +465,21 @@ export function App() {
     const text = resumeChat; setResumeChat(null); void send(undefined, text);
   }, [resumeChat, data?.user.handle, inputOccupied, panel, panelSpace]);
   const accountSaved = async () => {
-    const intent = afterAccount; setAfterAccount(null);
+    const intent = afterAccount, destination=authDestination.current||intent?.destination;setAfterAccount(null);
+    if(destination){authDestination.current=null;clearAuthReturn();setAuthReturn(destination);return;}
     if (surface) { await closePanel(true); return; }
-    if (intent?.destination) { await closePanel(); navigate(intent.destination); return; }
     if (intent?.panel) { open(intent.panel, intent.context, intent.space); return; }
     if (intent?.chat) { await closePanel(); setResumeChat(intent.chat); return; }
     if (panelHistory.length) backPanel(); else await closePanel(true);
   };
+  useEffect(()=>{if(!authReturn||!data?.user.handle||data.user.id!==identity.current)return;const destination=authReturn;setAuthReturn(null);void closePanel().then(()=>navigate(destination));},[authReturn,data?.user.id,data?.user.handle]);
   const bubble = (message: Message) => <article className={`message ${message.role}`} data-message-id={message.id} data-search-target={chatHistory.windowed && chatHistory.targetId === message.id || undefined} key={message.id}>
     <span className="sr-only">{message.role === 'user' ? 'You' : 'Your agent'}: </span>
     <div className="bubble">{message.text && <NavigationContext.Provider value={message.role==='assistant'?navigateFromAgent:navigate}><CollapsibleMessage reveal={chatHistory.windowed && chatHistory.targetId === message.id} text={message.text} assistant={message.role === 'assistant'} scrollRef={scroll.transcript} /></NavigationContext.Provider>}{message.records?.map(item=><button className="message-file" key={`${item.kind}:${item.id}`} onClick={()=>navigate(item.kind==='log'?{view:'log',resourceId:item.id}:item.kind==='post'?{view:'post',resourceId:item.id}:item.kind==='person'?{view:'person',resourceId:item.id}:{view:'messages'})}>{item.title}</button>)}{message.inbox?.map(item => <button className="message-file inbox-reference" key={item.id} onClick={() => navigate({ view: 'inbox', resourceId: item.id })}>{item.title}</button>)}{message.files?.map(file => <a className="message-file" href={`/api/files/${encodeURIComponent(file.id)}`} target="_blank" rel="noopener noreferrer" key={file.id}>{file.name}</a>)}{message.id === `intro:${data?.user.id}` && !data?.user.handle && <div className="welcome-actions"><button onClick={() => { setAccountMode('register'); open('account'); }}>Create account</button><button onClick={() => { setAccountMode('login'); open('account'); }}>Sign in</button></div>}</div>
     {message.failure && <span className="small">{message.failure}</span>}
     {message.status === 'failed' && !message.failure && <button className="retry-message" disabled={busy} onClick={() => void send(undefined, message.text, message)}>Not sent · retry</button>}
   </article>;
-  const needsAccount = Boolean(data && !data.user.handle && panel && accountViews.has(panel));
+  const needsAccount = Boolean(data && !data.user.handle && panel && panel!=='log_join' && accountViews.has(panel));
   useEffect(() => { if (needsAccount && panel) { setAfterAccount({ panel, context: panelContext, space: panelSpace }); setPanel('account'); setPanelContext({}); setAccountMode('register'); } }, [needsAccount, panel]);
   const panelTitle = needsAccount ? 'Create an account' : panel === 'account' ? data?.user.handle ? 'Profile' : accountMode === 'login' ? 'Sign in' : 'Create an account' : panel ? surfaceTitles[panel] : '';
   const discussUpdate=(item:InboxItem)=>{
@@ -496,7 +513,7 @@ export function App() {
           : panel === 'log_settings' ? <LogSettings closeLabel={panelHistory.length?'Back':'Close'} navigate={navigate} close={backPanel}/>
           : panel === 'log_code' ? <LogCodePanel closeLabel={panelHistory.length?'Back':'Close'} entryId={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
           : panel === 'log_scan' ? <LogScanPanel navigate={navigate} close={backPanel}/>
-          : panel === 'log_join' ? <LogJoinPanel code={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
+          : panel === 'log_join' ? <LogJoinPanel code={panelContext.resourceId||''} registered={Boolean(data.user.handle)} onAccount={()=>startAccount({...panelContext,view:'log_join',mode})} onJoined={entryId=>{setPanel('log');setPanelContext({resourceId:entryId});}} navigate={navigate} close={backPanel}/>
           : panel === 'log_compose' ? <LogEditor user={data.user} date={panelContext.date} cancel={()=>{completeLog();backPanel();}} onSaved={entry=>{completeLog(entry);navigate({view:'log',resourceId:entry.id});}}/>
           : panel === 'person' ? <PersonPanel personId={panelContext.resourceId || ''} user={data.user} navigate={navigate} />
             : panel === 'location' ? <LocationPanel user={data.user} areaCell={panelContext.areaCell} saved={async () => { await refresh(); if (surface) await closePanel(true); else if (panelHistory.length) backPanel(); else await closePanel(); }} />
@@ -526,7 +543,7 @@ export function App() {
           onTap={() => { if (!inputOccupied) dictation.start(); }} onCancel={dictation.cancel} onSend={() => { void dictation.finish().then(text => { void send(undefined, text); }); }} {...effectiveDrag} /></div>;
   return <ExperienceContext.Provider value={{mode,changeMode,ask:askAbout,media:(items,index)=>setMedia({items,index}),navigate}}><NavigationContext.Provider value={navigate}><div className="app" inert={Boolean(media)} data-mode={mode} data-standalone={standalone||undefined} data-agent-dock={agentDockOpen||undefined} style={style} data-keyboard-open={keyboardOpen || undefined} ref={page} onKeyDown={event => { if (event.key === 'Escape' && launcherOpen && !event.defaultPrevented) { event.preventDefault(); void closePanel(); } }}>
     <Atmosphere/><div className="grain" aria-hidden="true" />
-    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockOpen} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockOpen} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={destination=>{if(destination)setAfterAccount({destination});setAccountMode('register');open('account');}}/>)}{mode!=='agent'&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockOpen} inert={mode!=='agent'&&!agentDockOpen}>
+    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockOpen} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockOpen} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={startAccount}/>)}{mode!=='agent'&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockOpen} inert={mode!=='agent'&&!agentDockOpen}>
       <div className="conversation" data-fade-top={mode==='agent'&&scroll.fadedTop || undefined} ref={scroll.transcript} role="log" aria-label="Your conversation" aria-live="polite" aria-relevant="additions text" onScroll={scroll.onScroll}>
         <div className="conversation-content" ref={scroll.content}>
           <OlderMessages hasMore={Boolean(chatHistory.cursor)} loading={chatHistory.loading} error={chatHistory.error} retry={() => void chatHistory.loadOlder()} />
