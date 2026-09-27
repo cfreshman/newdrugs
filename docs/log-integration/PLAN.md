@@ -59,3 +59,7 @@ The initial month-grid layout was replaced following user feedback. The target i
 Backend same-day ordering now uses creation time before the stable ID, with matching pagination and neighbor navigation. Existing old cursors are rejected clearly. UI/date/navigation tests passed 75 tests, and the combined Log backend/UI suite passed 96. Browser verification at 390px confirmed 52 → 104 → 156 weeks through empty history, stable scroll while appending, the four-wide sheet, and photo-first detail/editor layout. Disposable fixture data only; no real user entries were written.
 
 UI correction deployed to cloud dev as `20260927003706998`. Production remains unchanged. The correction keeps New Drugs styling and restores Logcal’s continuous calendar, square mosaics, four-wide contact sheet, Today strip, photo-first details, media-first editor, and bottom entry actions.
+
+The top filter/jump/today/4-wide row was removed at the user’s request. Existing view/filter/export controls remain in the bottom Log options menu, keeping the calendar’s top clear.
+
+Top-control cleanup deployed to dev as `20260927014740493`; TypeScript, 66 existing UI/interaction checks, and deployment health passed.
