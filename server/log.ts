@@ -1,3 +1,4 @@
+import {listLogContacts} from './logContacts';
 import {Temporal} from '@js-temporal/polyfill';
 import {workGate} from './workGate';
 import {searchLog} from './search/log';
@@ -123,15 +124,6 @@ export async function backfillLogCalendar(){
  return batch.length;
 }
 export function startLogCalendarWorker(){let stopped=false,running:Promise<unknown>|undefined;const tick=()=>{if(stopped||running)return;running=backfillLogCalendar().catch(error=>console.error('Calendar indexing:',error.name)).finally(()=>{running=undefined;});};tick();const timer=setInterval(tick,1000);return async()=>{stopped=true;clearInterval(timer);await running;};}
-async function contactRows(actor:Actor,session?:ClientSession):Promise<LogContact[]>{
- const userId=actor.userId,blocked=await excluded(userId,session);
- const shared=await entries().aggregate<{_id:string;count:number}>([{$match:{$and:[await access(userId,session),{members:userId}]}},...activeMemberStages(),{$unwind:'$members'},{$match:{members:{$ne:userId}}},{$group:{_id:'$members',count:{$sum:1}}}],{session}).toArray();
- const canReadFriends=!actor.background||actor.accountActivity;
- const friends=canReadFriends?(await rows('connections').find({members:userId,status:'accepted'},{session,projection:{members:1}}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)):[];
- const ids=[...new Set([...shared.map(row=>row._id),...friends])].filter(id=>!blocked.includes(id));
- const people=await users().find({_id:{$in:ids},handle:{$type:'string'},suspendedAt:null},{session,projection:{name:1,handle:1,photos:1}}).toArray();
- return people.map(person=>({id:person._id,name:person.name||person.handle||'Member',...(person.handle?{handle:person.handle}:{}),...(person.photos?.[0]?{photoId:person.photos[0]}:{}),sharedHangouts:shared.find(row=>row._id===person._id)?.count||0,...(canReadFriends?{friend:friends.includes(person._id)}:{})})).sort((a,b)=>b.sharedHangouts-a.sharedHangouts||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
-}
 async function fencePairs(actorId:string,members:string[],session?:ClientSession){for(const other of [...new Set(members)].filter(id=>id!==actorId).sort())await rows<{_id:string;revision:number}>('contactPairs').updateOne({_id:[actorId,other].sort().join(':')},{$inc:{revision:1}},{session,upsert:true});}
 async function compatible(personId:string,members:string[],session?:ClientSession){
  requireValue(await users().findOne({_id:personId,handle:{$type:'string'},suspendedAt:null},{session,projection:{_id:1}}),'This person is unavailable.');
@@ -165,12 +157,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
   return {items:saved.map(row=>{const person=people.find(person=>person.id===row._id)!;return {personId:row._id,name:person.name,handle:person.handle,month:row.month,day:row.day};})};
  }
 
- if(name==='log.contacts'){
-  const all=(await contactRows(actor,session)).filter(person=>!d.query||`${person.name} ${person.handle||''}`.toLowerCase().includes(String(d.query).toLowerCase()));
-  const limit=Number(d.limit||20),signature=createHash('sha256').update(JSON.stringify([userId,d.query||''])).digest('hex');let offset=0;
-  if(d.before){try{const cursor=JSON.parse(Buffer.from(String(d.before),'base64url').toString());if(cursor.signature!==signature||!Number.isInteger(cursor.offset)||cursor.offset<0)throw Error();offset=cursor.offset;}catch{throw new AppError(422,'log_cursor','Reload the people picker.');}}
-  return {items:all.slice(offset,offset+limit),nextCursor:offset+limit<all.length?Buffer.from(JSON.stringify({signature,offset:offset+limit})).toString('base64url'):null};
- }
+ if(name==='log.contacts')return listLogContacts(actor,d as {query?:string;limit?:number;before?:string},session);
  if(name==='log.join_preview'){const row=await byCode(userId,String(d.code),session);return projectInvite(row,String(d.code),userId,session);}
  if(name==='log.join'){
   if(Boolean(d.code)===Boolean(d.entryId))throw new AppError(422,'log_code','Use a scanned code or a legacy pending invitation.');
@@ -188,8 +175,9 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
   const row:LogRow={...fields,calendarMonthDay:fields.recurrence==='none'?'':fields.date.slice(5),liveEventVersion:1,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});await publishLogChange(null,row,session);return project(row,userId,session);
  }
  if(name==='log.people'){
-  const ids=(await entries().aggregate<{_id:string}>([{$match:{$and:[await access(userId,session),{members:userId}]}},...activeMemberStages(),{$unwind:'$members'},{$group:{_id:'$members'}}],{session}).toArray()).map(row=>row._id);
-  const people=await users().find({_id:{$in:ids}},{session,projection:{name:1,handle:1}}).sort({name:1,_id:1}).toArray();return {items:people.map(person=>({userId:person._id,name:person.name||person.handle||'Member',...(person.handle?{handle:person.handle}:{})}))};
+  const result=await listLogContacts({...actor,background:true,accountActivity:false},d as {limit?:number;before?:string},session);
+  const own=!d.before&&(await visibleEntries({$and:[await access(userId,session),{members:userId}]},session,undefined,1,{_id:1})).length?await users().findOne({_id:userId},{session,projection:{name:1,handle:1}}):null;
+  return {...result,items:[...(own?[{userId:own._id,name:own.name||own.handle||'Member',...(own.handle?{handle:own.handle}:{})}]:[]),...result.items.map(person=>({userId:person.id,name:person.name,...(person.handle?{handle:person.handle}:{})}))]};
  }
  const row=['log.delete','log.leave'].includes(name)?requireValue(await entries().findOne({_id:String(d.entryId),members:userId,deletedAt:{$exists:false}},{session}),'This Log entry is unavailable.'):await logEntryFor(userId,String(d.entryId),session);
  if(name==='log.neighbors'){
@@ -229,7 +217,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  if(name==='log.add_person'){
   const personId=String(d.personId);if(row.members.includes(personId))return project(row,userId,session);
   if(row.members.length>=20)throw new AppError(422,'log_members','A hangout can include up to 20 people.');
-  if(!(await contactRows(actor,session)).some(person=>person.id===personId))throw new AppError(403,'log_contact','Choose someone from a previous hangout or your New Drugs friends. New people can scan the hangout code.');
+  if(!((!actor.background||actor.accountActivity)&&await rows('connections').findOne({members:{$all:[userId,personId]},status:'accepted'},{session,projection:{_id:1}}))&&!await hasSharedHangouts(userId,personId,session))throw new AppError(403,'log_contact','Choose someone from a previous hangout or your New Drugs friends. New people can scan the hangout code.');
   await fencePairs(personId,row.members,session);await compatible(personId,row.members,session);
   row.members.push(personId);row.invited=row.invited.filter(id=>id!==personId);row.contributions.push({userId:personId,note:'',fileIds:[],hasContributed:false});
   const result=await save(row,Number(d.revision),actor,session);

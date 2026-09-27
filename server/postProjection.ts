@@ -1,3 +1,4 @@
+import {unsuspendedActors} from './scopedModeration';
 import { profileVisibleTo } from './profileVisibility';
 import type { ClientSession } from 'mongodb';
 import { rows, type Row } from './db';
@@ -15,14 +16,14 @@ export async function postCards(records: Row[], userId: string, blocked: string[
   const visibleAuthors=new Set((await Promise.all(authors.map(async author=>await profileVisibleTo(userId,author,session)?author._id:null))).filter(Boolean));
   const likes = await rows('postLikes').aggregate<{ _id: string; count: number; liked: number }>([
     { $match: { postId: { $in: ids }, userId: { $nin: blocked } } },
-    { $group: { _id: '$postId', count: { $sum: 1 }, liked: { $max: { $cond: [{ $eq: ['$userId', userId] }, 1, 0] } } } },
+    ...unsuspendedActors('userId'),{ $group: { _id: '$postId', count: { $sum: 1 }, liked: { $max: { $cond: [{ $eq: ['$userId', userId] }, 1, 0] } } } },
   ], options).toArray();
   const replies = await rows('posts').aggregate<{ _id: string; count: number }>([
-    { $match: { parentId: { $in: ids }, userId: { $nin: blocked }, deletedAt: { $exists: false }, moderatedAt: { $exists: false } } }, { $group: { _id: '$parentId', count: { $sum: 1 } } },
+    { $match: { parentId: { $in: ids }, userId: { $nin: blocked }, deletedAt: { $exists: false }, moderatedAt: { $exists: false } } }, ...unsuspendedActors('userId'),{ $group: { _id: '$parentId', count: { $sum: 1 } } },
   ], options).toArray();
-  return records.map(record => {
+  return records.filter(record=>!authors.find(author=>author._id===record.userId)?.suspendedAt).map(record => {
     const post:Row={...record,deletedAt:record.deletedAt || record.moderatedAt};
-    const rawParent=parents.find(parent=>parent._id===post.parentId),parent:Row|undefined=rawParent?{...rawParent,deletedAt:rawParent.deletedAt||rawParent.moderatedAt}:undefined,parentAuthor=authors.find(author=>author._id===parent?.userId);
+    const rawParent=parents.find(parent=>parent._id===post.parentId&&!authors.find(author=>author._id===parent.userId)?.suspendedAt),parent:Row|undefined=rawParent?{...rawParent,deletedAt:rawParent.deletedAt||rawParent.moderatedAt}:undefined,parentAuthor=authors.find(author=>author._id===parent?.userId);
     const author = authors.find(user => user._id === post.userId), like = likes.find(row => row._id === post._id);
     return { id: post._id, saved:savedPosts.has(post._id), userId: String(post.userId), text: post.deletedAt ? '' : String(post.text),links:post.deletedAt?[]:Array.isArray(post.links)?post.links:[], city: post.deletedAt ? '' : String(post.city || ''), area: post.deletedAt ? null : post.area,
       photos: post.deletedAt ? [] : (Array.isArray(post.fileIds) ? post.fileIds as string[] : []).flatMap(id => { const file = photos.find(file => file._id === id && file.userId === post.userId); return file ? [{ id, name: file.name, url: `/api/files/${id}` }] : []; }),

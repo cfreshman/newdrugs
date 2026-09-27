@@ -12,9 +12,13 @@ import {queueRetrieval} from './replication';
 import type {LogSearchInput,LogSearchResult} from '../../shared/logSearch';
 export const LOG_INDEX_VERSION=`private-log-v1:${EMBEDDING_MODEL}:${DIMENSIONS}`;
 export interface LogSearchChunk {_id:string;entryId:string;date:string;ownerId:string;viewerIds:string[];memberCount:number;invitedCount:number;indexVersion:string;sourceHash:string;sourceRevision:string;text:string;snippet:string;vector:number[]}
-interface Job {_id:string;revision:string;availableAt:number;attempts:number;lease?:string}
+interface Job {_id:string;viewerIds?:string[];revision:string;availableAt:number;attempts:number;lease?:string}
 const jobs=()=>rows<Job>('logSearchJobs'),chunks=()=>rows<LogSearchChunk>('logSearchChunks');
-export async function queueLogSearch(entryId:string,session?:ClientSession){await jobs().updateOne({_id:entryId},{$set:{revision:randomUUID(),availableAt:Date.now(),attempts:0},$unset:{lease:''}},{session,upsert:true});}
+export async function queueLogSearch(entryId:string,session?:ClientSession,viewers?:string[]){
+ const previous=await jobs().findOne({_id:entryId},{session,projection:{viewerIds:1}}),source=viewers?null:await rows('logEntries').findOne({_id:entryId},{session,projection:{members:1}});
+ const viewerIds=[...new Set([...(previous?.viewerIds||[]),...(viewers||source?.members as string[]||[])])];
+ await jobs().updateOne({_id:entryId},{$set:{viewerIds,revision:randomUUID(),availableAt:Date.now(),attempts:0},$unset:{lease:''}},{session,upsert:true});
+}
 export function logPassages(row:Row){
  const metadata=[row.title,row.place,...(row.links as string[]||[])].filter(Boolean).join('\n').slice(0,1200),passages:{key:string;text:string;snippet:string}[]=[];
  if(metadata.trim())passages.push({key:'details',text:metadata,snippet:metadata});
@@ -42,7 +46,7 @@ export async function indexLogEntry(embedding=embed){
    if(String(current?.revision||0)!==revision){await queueLogSearch(job._id,session);return;}
    await chunks().deleteMany({entryId:job._id},{session});if(next.length)await chunks().insertMany(next,{session});
    await rows('logSearchSources').updateOne({_id:job._id},{$set:{revision,indexVersion:LOG_INDEX_VERSION,chunks:next.length}},{session,upsert:true});
-   await queueRetrieval('log',job._id,session);
+   await queueRetrieval('log',job._id,session,{viewerIds:[...new Set([...(job.viewerIds||[]),...(source?.members as string[]||[])])]});
   });
  }catch(error){await jobs().updateOne({_id:job._id,revision:job.revision,lease},{$set:{availableAt:Date.now()+Math.min(3600000,2000*2**Math.min(job.attempts,11)),error:error instanceof Error&&/^embedding_/.test(error.message)?error.message:'index_failure'},$unset:{lease:''}});}
  return true;
@@ -74,7 +78,7 @@ export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed
   const metadata=new Map([...lanes.lexical,...dense].map(item=>[item.id,item]));
   // One best matching passage per entry, for variety without hiding the source.
   const seen=new Set<string>(),selected:Rank[]=[];for(const rank of ranked){const item=metadata.get(rank.id)!;if(seen.has(item.sourceKey))continue;seen.add(item.sourceKey);selected.push({id:item.id,sourceHash:item.sourceHash,sourceRevision:item.sourceRevision,entryId:item.sourceKey,score:rank.score});if(selected.length===100)break;}
-  snapshot={_id:randomUUID(),userId,identity,ranked:selected,input,mode:vector?'hybrid':'keyword',notices,expiresAt:new Date(Date.now()+600000)};await rows<Snapshot>('logSearchResults').insertOne(snapshot);
+  snapshot={_id:randomUUID(),userId,identity,ranked:selected,input,mode:vector?'hybrid':'keyword',notices,expiresAt:new Date(Date.now()+600000)};await rows<Snapshot>('logSearchResults').insertOne(snapshot);const expired=await rows<Snapshot>('logSearchResults').find({userId}).sort({expiresAt:-1,_id:-1}).skip(20).limit(100).project({_id:1}).toArray();if(expired.length)await rows('logSearchResults').deleteMany({_id:{$in:expired.map(row=>row._id)}});
  }
  const items:LogSearchResult['items']=[],{logEntryFor}=await import('../log');
  while(offset<snapshot.ranked.length&&items.length<input.limit){
@@ -85,6 +89,6 @@ export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed
    const shared=row.members.length>1||row.invited.length>0;if(input.scope==='shared'&&!shared||input.scope==='private'&&shared)return null;
    return {entryId:row._id,title:row.title,date:row.date,place:row.place,snippet:chunk.snippet.slice(0,500),score:rank.score};}));items.push(...results.filter((value):value is LogSearchResult['items'][number]=>Boolean(value)));
  }
- const indexing=Boolean(await jobs().findOne({},{projection:{_id:1}}))||Boolean(await rows('retrievalJobs').findOne({kind:'log'},{projection:{_id:1}}))||!(await rows('logSearchMeta').findOne({_id:LOG_INDEX_VERSION}))?.done;
+ const indexing=Boolean(await jobs().findOne({viewerIds:userId},{projection:{_id:1}}))||Boolean(await rows('retrievalJobs').findOne({kind:'log',viewerIds:userId},{projection:{_id:1}}))||!(await rows('logSearchMeta').findOne({_id:LOG_INDEX_VERSION}))?.done;
  return {items,nextCursor:offset<snapshot.ranked.length?`${snapshot._id}.${offset}`:null,mode:snapshot.mode,indexing,notices:[...snapshot.notices,...(indexing?['Recent or older Log entries are still being indexed.']:[])]};
 }

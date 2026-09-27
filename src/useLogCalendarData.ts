@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {Temporal} from '@js-temporal/polyfill';
 import type {LogCalendarPage} from '../shared/log';
 import {operation,errorText} from './api';
@@ -23,7 +23,7 @@ export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filter
     cache.current.delete(index);cache.current.set(index,page);
     while(cache.current.size>CALENDAR_CACHE_CHUNKS){const old=[...cache.current.keys()].find(key=>!targets.current.includes(key));if(old===undefined)break;cache.current.delete(old);dirty.current.delete(old);}
     setError('');
-   }).catch(reason=>{if(!controller.signal.aborted&&alive.current){dirty.current.add(index);setError(errorText(reason));targets.current=targets.current.filter(key=>key!==index);}}).finally(()=>{
+   }).catch(reason=>{if(!controller.signal.aborted&&alive.current){if(cache.current.has(index))dirty.current.add(index);setError(errorText(reason));targets.current=targets.current.filter(key=>key!==index);}}).finally(()=>{
     if(requests.current.get(index)===controller)requests.current.delete(index);
     if(alive.current){changed(value=>value+1);pump.current();}
    });
@@ -33,7 +33,7 @@ export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filter
  const wantedKey=wanted.join(',');
  useEffect(()=>{
   targets.current=visible?wanted.slice(0,CALENDAR_CACHE_CHUNKS):[];
-  for(const [index,request] of requests.current)if(!targets.current.includes(index)){request.abort();requests.current.delete(index);dirty.current.add(index);}
+  for(const [index,request] of requests.current)if(!targets.current.includes(index)){request.abort();requests.current.delete(index);if(cache.current.has(index))dirty.current.add(index);else dirty.current.delete(index);}
   for(const index of targets.current){const page=cache.current.get(index);if(page){cache.current.delete(index);cache.current.set(index,page);}}
   pump.current();
  },[wantedKey,visible]);
@@ -52,6 +52,6 @@ export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filter
  });
  // A backfill can finish without changing an entry. Poll only visible incomplete windows.
  useEffect(()=>{if(!visible||!targets.current.some(index=>cache.current.get(index)?.indexing))return;const timer=setTimeout(()=>{for(const index of targets.current)if(cache.current.get(index)?.indexing)dirty.current.add(index);pump.current();},3000);return()=>clearTimeout(timer);},[revision,visible]);
- const days=new Map([...cache.current.values()].flatMap(page=>(page.days||[]).map(day=>[day.date,day] as const)));
+ const days=useMemo(()=>new Map([...cache.current.values()].flatMap(page=>(page.days||[]).map(day=>[day.date,day] as const))),[revision]);
  return {days,busy:requests.current.size>0,error,retry:()=>{setError('');targets.current=wanted.slice(0,CALENDAR_CACHE_CHUNKS);pump.current();changed(value=>value+1);},cachedChunks:cache.current.size};
 }

@@ -1,3 +1,5 @@
+import {unsuspendedActors} from './scopedModeration';
+import {invalidateLogContacts} from './logContacts';
 import {randomUUID} from 'node:crypto';
 import {memoryOperation} from './agentMemory';
 import {walletActivity} from './walletActivity';
@@ -47,7 +49,7 @@ const publicRow = (r: Row) => { const { _id, ...rest } = r; return { id: _id, ..
 async function blockedIds(userId: string, session?: ClientSession) {
   const blocks = await rows('blocks').find({ members: userId }, { session }).limit(1001).toArray();
   if (blocks.length > 1000) throw new AppError(422, 'block_limit', 'Please contact support about your block list.');
-  return [...blocks.flatMap(b => (b.members as string[]).filter(id => id !== userId)), ...(await users().find({suspendedAt:{$type:'string'}},{session,projection:{_id:1}}).toArray()).map(user=>user._id)];
+  return blocks.flatMap(b => (b.members as string[]).filter(id => id !== userId));
 }
 async function notBlocked(a: string, b: string, session?: ClientSession) {
   if (await rows('blocks').findOne({ pairId: pairId(a, b) }, { session }) || await users().findOne({_id:b,suspendedAt:{$type:'string'}},{session,projection:{_id:1}})) throw new AppError(404, 'unavailable', 'This person is unavailable.');
@@ -124,8 +126,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         {$addFields:{thread:{$ifNull:['$rootId','$parentId']}}},
         {$lookup:{from:'posts',let:{thread:'$thread'},pipeline:[{$match:{userId,deletedAt:{$exists:false},moderatedAt:{$exists:false},$expr:{$or:[{$eq:['$_id','$$thread']},{$eq:['$rootId','$$thread']}]}}},{$limit:1},{$project:{_id:1}}],as:'participation'}},
         {$match:{'participation.0':{$exists:true}}},
-        {$lookup:{from:'posts',localField:'thread',foreignField:'_id',as:'threadRoot'}},{$match:{'threadRoot.0':{$exists:true},'threadRoot.userId':{$nin:blocked}}},
-        {$lookup:{from:'users',localField:'userId',foreignField:'_id',as:'replyAuthor'}},{$match:{'replyAuthor.0':{$exists:true}}},
+        {$lookup:{from:'posts',localField:'thread',foreignField:'_id',as:'threadRoot'}},{$match:{'threadRoot.0':{$exists:true},'threadRoot.userId':{$nin:blocked}}},...unsuspendedActors('threadRoot.userId'),
+        {$lookup:{from:'users',localField:'userId',foreignField:'_id',as:'replyAuthor'}},{$match:{'replyAuthor.0':{$exists:true},'replyAuthor.suspendedAt':{$not:{$type:'string'}}}},
         {$limit:limit+1},{$project:{thread:0,participation:0,threadRoot:0,replyAuthor:0}},
       ],{...options,maxTimeMS:10000}).toArray();
       return {items:await postCards(found.slice(0,limit),userId,blocked,session),nextCursor:found.length>limit?found[limit-1]._id:null};
@@ -211,14 +213,14 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if (d.query && d.scope !== 'all' && !d.near && !user.area?.cell) throw new AppError(422,'location_required','Choose an approximate area to find nearby people.');
       if (d.query) { const result = await searchPublic({ ...d, scope:undefined, near: d.scope === 'all' ? undefined : d.near || user.area?.cell, query: d.query, mode: d.mode || 'hybrid', datasets: ['profiles'], cursor: d.before } as unknown as SearchInput, actor); return { items: result.matches.map(match => match.record), ...result }; }
       const blocked = await blockedIds(userId, session);
-      if (d.scope === 'all') { const people = await users().find({discoverable:true,handle:{$type:'string'},_id:{$ne:userId,$nin:blocked,...(d.before?{$lt:String(d.before)}:{})},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})},options).sort({_id:-1}).limit(limit+1).toArray(); return {items:people.slice(0,limit).map(profile),nextCursor:people.length>limit?people[limit-1]._id:null}; }
+      if (d.scope === 'all') { const people = await users().find({discoverable:true,suspendedAt:null,handle:{$type:'string'},_id:{$ne:userId,$nin:blocked,...(d.before?{$lt:String(d.before)}:{})},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})},options).sort({_id:-1}).limit(limit+1).toArray(); return {items:people.slice(0,limit).map(profile),nextCursor:people.length>limit?people[limit-1]._id:null}; }
       const cell=String(d.near||user.area?.cell||'');
       if(!cell)throw new AppError(422,'location_required','Choose an approximate area to find nearby people.');
       const radiusMiles=Number(d.radiusMiles||25);
       const paging=geoPage({cell,radiusMiles,interest:d.interest as string|undefined,before:d.before as string|undefined},userId);
       const people=await users().aggregate<User & {distanceMeters:number}>([
         {$geoNear:{near:coarsePoint(cell),key:'area.point',distanceField:'distanceMeters',spherical:true,maxDistance:radiusMiles*METERS_PER_MILE,
-          query:{discoverable:true,_id:{$ne:userId,$nin:blocked},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})}}},
+          query:{discoverable:true,suspendedAt:null,_id:{$ne:userId,$nin:blocked},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})}}},
         {$sort:{distanceMeters:1,_id:1}},...paging.stages,{$limit:limit+1},
       ],options).toArray();
       return {items:people.slice(0,limit).map(p=>({...profile(p),...sharedAreaDistance(cell,p.area!.cell,p.distanceMeters)})),nextCursor:people.length>limit?paging.cursor(people[limit-1]):null};
@@ -233,7 +235,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         const postFilter={'post.userId':d.authorId?{$eq:String(d.authorId),$nin:blocked}:{$nin:blocked},'post.deletedAt':{$exists:false},'post.moderatedAt':{$exists:false},
           ...(kind==='posts'?{'post.parentId':{$exists:false}}:kind==='replies'?{'post.parentId':{$exists:true}}:{}),
           ...(point?{'post.area.point':{$geoWithin:{$centerSphere:[point.coordinates,Number(d.radiusMiles||25)*METERS_PER_MILE/6371008.8]}}}:{})};
-        const saved=await rows('postSaves').aggregate<Row>([{$match:paging.filter},{$sort:{createdAt:-1,_id:-1}},{$lookup:{from:'posts',localField:'targetId',foreignField:'_id',as:'post'}},{$unwind:'$post'},{$match:postFilter},{$limit:limit+1}],options).toArray();
+        const saved=await rows('postSaves').aggregate<Row>([{$match:paging.filter},{$sort:{createdAt:-1,_id:-1}},{$lookup:{from:'posts',localField:'targetId',foreignField:'_id',as:'post'}},{$unwind:'$post'},{$match:postFilter},...unsuspendedActors('post.userId'),{$limit:limit+1}],options).toArray();
         const records=saved.slice(0,limit).map(row=>row.post as Row),items=await postCards(records,userId,blocked,session);
         return {items:items.map(item=>{const area=records.find(record=>record._id===item.id)?.area as CoarseArea|undefined;return point&&cell&&area?{...item,...sharedAreaDistance(cell,area.cell,distanceMeters([point.coordinates[1],point.coordinates[0]],[area.point.coordinates[1],area.point.coordinates[0]]))}:item;}),nextCursor:saved.length>limit?paging.cursor(saved[limit-1]):null};
       }
@@ -248,12 +250,12 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const posts = await rows('posts').aggregate<Row & {distanceMeters:number}>([
         ...start,
         { $lookup: { from: 'users', localField: 'userId', foreignField: '_id', as: 'author' } },
-        { $unwind: '$author' },
+        { $unwind: '$author' },{$match:{'author.suspendedAt':{$not:{$type:'string'}}}},
         { $limit: limit + 1 },
         { $project: { _id: 1, text: 1, links:1, fileIds: 1, city: 1, area:1,distanceMeters:1,userId: 1, createdAt: 1, parentId:1,rootId:1 } },
       ], options).toArray();
       const projected=await postCards(posts.slice(0,limit),userId,blocked,session);
-      return {items:projected.map((post,index)=>({...post,...(cell?sharedAreaDistance(cell,(posts[index].area as CoarseArea).cell,posts[index].distanceMeters):{})})),nextCursor:posts.length>limit?(paging?paging.cursor(posts[limit-1]):posts[limit-1]._id):null};
+      return {items:projected.map((post,index)=>({...post,...(cell?sharedAreaDistance(cell,(posts.find(record=>record._id===post.id)!.area as CoarseArea).cell,posts.find(record=>record._id===post.id)!.distanceMeters):{})})),nextCursor:posts.length>limit?(paging?paging.cursor(posts[limit-1]):posts[limit-1]._id):null};
     }
     case 'posts.get': {
       const post = requireValue(await rows('posts').findOne({ _id: String(d.postId) }, options));
@@ -269,7 +271,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         {$lookup:{from:'posts',localField:'parentId',foreignField:'_id',as:'ownedParent'}},
         {$match:{'ownedParent.userId':userId}},
         {$lookup:{from:'users',localField:'userId',foreignField:'_id',as:'replyAuthor'}},
-        {$match:{'replyAuthor.0':{$exists:true}}},
+        {$match:{'replyAuthor.0':{$exists:true},'replyAuthor.suspendedAt':{$not:{$type:'string'}}}},
         {$limit:limit+1},{$project:{ownedParent:0,replyAuthor:0}},
       ],{...options,maxTimeMS:10000}).toArray();
       return {items:await postCards(replies.slice(0,limit),userId,blocked,session),nextCursor:replies.length>limit?replies[limit-1]._id:null};
@@ -277,7 +279,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'posts.replies': {
       const parent=requireValue(await rows('posts').findOne({_id:String(d.postId)},options));await notBlocked(userId,String(parent.userId),session);
       const blocked=await blockedIds(userId,session);
-      const replies=await rows('posts').find({parentId:d.postId,deletedAt:{$exists:false},moderatedAt:{$exists:false},userId:{$nin:blocked},...pageFilter},options).sort({_id:-1}).limit(limit+1).toArray();
+      const replies=await rows('posts').aggregate<Row>([{$match:{parentId:d.postId,deletedAt:{$exists:false},moderatedAt:{$exists:false},userId:{$nin:blocked},...pageFilter}},{$sort:{_id:-1}},...unsuspendedActors('userId'),{$limit:limit+1}],options).toArray();
       return {items:await postCards(replies.slice(0,limit),userId,blocked,session),nextCursor:replies.length>limit?replies[limit-1]._id:null};
     }
     case 'posts.like': {
@@ -319,7 +321,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const cursor = d.before ? requireValue(await rows('connections').findOne({ _id: String(d.before), members: userId }, options)) : null;
       const updatedAt = cursor?.updatedAt || cursor?.createdAt;
       const visible = await rows('connections').aggregate<Row>([
-        { $match: { $and: [{ members: userId }, { members: { $nin: blocked } }] } },
+        { $match: { $and: [{ members: userId }, { members: { $nin: blocked } }] } },...unsuspendedActors('members'),
         ...(d.lastMessageFrom&&d.lastMessageFrom!=='any'?[
           {$match:{$or:[{status:'accepted'},{initialInvitation:{$exists:true}}]}},
           {$lookup:{from:'directMessages',localField:'_id',foreignField:'connectionId',pipeline:[{$sort:{_id:-1}},{$limit:1}],as:'latestMessage'}},{$unwind:'$latestMessage'},
@@ -426,6 +428,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         if (count >= 1000) throw new AppError(422, 'limit', 'Your block list is full.');
         await rows('blocks').updateOne({ _id: id }, { $setOnInsert: { ownerId: userId, members: [userId, other], pairId: pairId(userId, other), createdAt: now } }, { ...options, upsert: true });
       } else await rows('blocks').deleteOne({ _id: id, ownerId: userId }, options);
+      if(session)await invalidateLogContacts([userId,other],session);
       return { personId: other, blocked: d.blocked };
     }
     case 'people.blocked': {

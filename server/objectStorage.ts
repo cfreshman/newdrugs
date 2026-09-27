@@ -10,7 +10,7 @@ let client:S3Client|undefined,identity='';
 function storageClient(){
  if(!config.OBJECT_ENDPOINT.startsWith('https://')||!config.OBJECT_BUCKET||!config.OBJECT_ACCESS_KEY_ID||!config.OBJECT_SECRET_ACCESS_KEY)throw new AppError(503,'storage_unavailable','File storage is temporarily unavailable.');
  const next=createHash('sha256').update(JSON.stringify([config.OBJECT_ENDPOINT,config.OBJECT_REGION,config.OBJECT_ACCESS_KEY_ID,config.OBJECT_SECRET_ACCESS_KEY])).digest('hex');
- if(!client||identity!==next){client?.destroy();client=new S3Client({endpoint:config.OBJECT_ENDPOINT,region:config.OBJECT_REGION,forcePathStyle:false,credentials:{accessKeyId:config.OBJECT_ACCESS_KEY_ID,secretAccessKey:config.OBJECT_SECRET_ACCESS_KEY},requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED',maxAttempts:2});identity=next;}
+ if(!client||identity!==next){client?.destroy();client=new S3Client({endpoint:config.OBJECT_ENDPOINT,region:config.OBJECT_REGION,forcePathStyle:false,credentials:{accessKeyId:config.OBJECT_ACCESS_KEY_ID,secretAccessKey:config.OBJECT_SECRET_ACCESS_KEY},requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED',requestHandler:{connectionTimeout:5000},maxAttempts:2});identity=next;}
  return client;
 }
 export function objectLocation(fileId:string):ObjectLocation{

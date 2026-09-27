@@ -274,3 +274,4 @@
 .log-day-people{display:block;min-height:1.4em;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .log-people-placeholder{display:flex;align-items:center;gap:4px;height:1.4em;}
 .log-people-placeholder>span{display:block;width:4em;height:.75em;border-radius:999px;background:color-mix(in srgb,var(--muted) 22%,transparent);}
+.log-retained-calendar[hidden]{display:none;}

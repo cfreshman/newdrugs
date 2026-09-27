@@ -7,7 +7,7 @@ if (!['prod', 'dev'].includes(instance)) throw new Error('Choose prod or dev.');
 const sshKey = process.env.NEWDRUGS_SSH_KEY || '/Users/work/.ssh/newdrugs_do';
 const target = process.env.NEWDRUGS_SSH_HOST || 'root@24.144.121.19';
 if (!/^[\w@.:-]+$/.test(target)) throw new Error('Invalid SSH host.');
-const sshOptions = ['-i',sshKey,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes'];
+const sshOptions = ['-i',sshKey,'-o','IdentitiesOnly=yes','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=15','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=3'];
 const run = (command,args,options={}) => new Promise((resolveRun,reject) => { const child=spawn(command,args,{stdio:options.input ? ['pipe','inherit','inherit'] : 'inherit',...options}); if(options.input)child.stdin.end(options.input); child.on('error',reject); child.on('exit',code=>code===0?resolveRun():reject(new Error(`${command} exited ${code}`))); });
 await mkdir('.data/releases',{recursive:true});
 const lockPath = '.data/deploy.lock';
@@ -38,17 +38,24 @@ cd ${remote}
 tar -xzf release.tgz
 rm release.tgz
 npm ci --omit=dev --no-audit --no-fund
+worker_enabled=false
+if systemctl is-enabled --quiet newdrugs-worker@${instance}; then worker_enabled=true; systemctl stop newdrugs-worker@${instance}; fi
 previous=$(readlink /srv/newdrugs/${instance}/current || true)
 if test -n "$previous"; then ln -sfn "$previous" /srv/newdrugs/${instance}/previous; fi
 ln -sfn ${remote} /srv/newdrugs/${instance}/current.next
 mv -Tf /srv/newdrugs/${instance}/current.next /srv/newdrugs/${instance}/current
 systemctl enable newdrugs@${instance} >/dev/null
 systemctl restart newdrugs@${instance}
+if $worker_enabled; then systemctl start newdrugs-worker@${instance}; fi
 for attempt in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:${port}/api/health; then exit 0; fi
+  if curl -fsS http://127.0.0.1:${port}/api/health; then
+    if ! $worker_enabled; then exit 0; fi
+    worker_pid=$(systemctl show newdrugs-worker@${instance} -p MainPID --value)
+    if node --env-file=/etc/newdrugs/${instance}.env ${remote}/dist/server/workerStatus.js --require-worker "$worker_pid"; then exit 0; fi
+  fi
   sleep 1
 done
-if test -n "$previous"; then ln -sfn "$previous" /srv/newdrugs/${instance}/current; systemctl restart newdrugs@${instance}; fi
+if test -n "$previous"; then ln -sfn "$previous" /srv/newdrugs/${instance}/current; systemctl restart newdrugs@${instance}; if $worker_enabled; then systemctl restart newdrugs-worker@${instance}; fi; fi
 exit 1`;
 await writeFile(`.data/releases/${instance}-activate.sh`,activate);
 await run('ssh',[...sshOptions,target,activate]);

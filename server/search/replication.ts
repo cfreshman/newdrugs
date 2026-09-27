@@ -2,12 +2,13 @@ import {randomUUID} from 'node:crypto';
 import type {ClientSession} from 'mongodb';
 import {rows,transaction} from '../db';
 import {hash} from '../auth';
-import {purgeRetrievalChat,replaceRetrievalSource,retrievalEnabled,retrievalRevisions,type RetrievalDocument} from './backend';
+import {purgeRetrievalChat,replaceRetrievalSource,retrievalEnabled,retrievalRevisions,retrievalPage,type RetrievalDocument} from './backend';
 import type {SearchDocument} from './model';
-interface Job {_id:string;kind:'public'|'chat'|'log'|'chat_purge';sourceKey:string;userId?:string;generation?:number;revision:string;availableAt:number;attempts:number;lease?:string}
+interface Job {_id:string;kind:'public'|'chat'|'log'|'chat_purge';sourceKey:string;userId?:string;viewerIds?:string[];generation?:number;revision:string;availableAt:number;attempts:number;lease?:string}
 const jobs=()=>rows<Job>('retrievalJobs');
-export async function queueRetrieval(kind:Job['kind'],sourceKey:string,session?:ClientSession,details:{userId?:string;generation?:number}={}){
+export async function queueRetrieval(kind:Job['kind'],sourceKey:string,session?:ClientSession,details:{userId?:string;viewerIds?:string[];generation?:number}={}){
  if(!retrievalEnabled())return;
+ if(kind==='log'&&!details.viewerIds){const source=await rows('logEntries').findOne({_id:sourceKey},{session,projection:{members:1}});details={...details,viewerIds:source?.members as string[]||[]};}
  await jobs().updateOne({_id:hash(`${kind}:${sourceKey}`)},{$set:{kind,sourceKey,...details,revision:randomUUID(),availableAt:Date.now(),attempts:0},$unset:{lease:''}},{session,upsert:true});
 }
 export function publicRetrievalDocument(doc:SearchDocument):RetrievalDocument{
@@ -52,12 +53,26 @@ export async function backfillRetrieval(){
   if(state?.done&&Number(state.againAt)>Date.now())continue;
   const cursor=!state?.done&&state?.cursor?String(state.cursor):undefined;
   const collection=rows(kind==='public'?'searchDocuments':kind==='log'?'logSearchChunks':'chatSearchChunks');
-  const page=await collection.find(cursor?{_id:{$gt:cursor}}:{}).sort({_id:1}).limit(50).project({_id:1,userId:1,messageId:1,entryId:1,sourceHash:1,sourceRevision:1,indexVersion:1}).toArray();
+  const page=await collection.find(cursor?{_id:{$gt:cursor}}:{}).sort({_id:1}).limit(50).project({_id:1,userId:1,messageId:1,entryId:1,sourceHash:1,sourceRevision:1,indexVersion:1,viewerIds:1}).toArray();
   const remote=await retrievalRevisions(kind,page.map(row=>row._id));
   await transaction(async session=>{
-   for(const row of page){const found=remote.get(row._id);if(found?.sourceRevision===(row.sourceRevision||row.sourceHash)&&found?.indexVersion===row.indexVersion)continue;const sourceKey=kind==='public'?row._id:kind==='log'?String(row.entryId):String(row.messageId),id=hash(`${kind}:${sourceKey}`);await jobs().updateOne({_id:id},{$setOnInsert:{kind,sourceKey,...(kind==='chat'?{userId:String(row.userId)}:{}),revision:randomUUID(),availableAt:Date.now(),attempts:0}},{session,upsert:true});}
+   for(const row of page){const found=remote.get(row._id);if(found?.sourceRevision===(row.sourceRevision||row.sourceHash)&&found?.indexVersion===row.indexVersion)continue;const sourceKey=kind==='public'?row._id:kind==='log'?String(row.entryId):String(row.messageId),id=hash(`${kind}:${sourceKey}`);await jobs().updateOne({_id:id},{$setOnInsert:{kind,sourceKey,...(kind==='chat'?{userId:String(row.userId)}:kind==='log'?{viewerIds:row.viewerIds as string[]||[]}:{}),revision:randomUUID(),availableAt:Date.now(),attempts:0}},{session,upsert:true});}
    await rows('retrievalMeta').updateOne({_id:`backfill:${kind}`},{$set:{cursor:page.at(-1)?._id||'',done:page.length<50,againAt:Date.now()+3600000}},{session,upsert:true});
   });
  }
 }
-export function startRetrievalWorker(){let stopped=false,pending:Promise<void>|undefined,cycles=0;const tick=()=>{if(stopped||pending||!retrievalEnabled())return;pending=(async()=>{if(cycles++%30===0)await backfillRetrieval();for(let i=0;i<8&&!stopped&&await replicateRetrievalOne();i++);})().catch(error=>console.error('Retrieval worker',{name:error.name})).finally(()=>{pending=undefined;});};const timer=setInterval(tick,2000);tick();return async()=>{stopped=true;clearInterval(timer);await pending;};}
+export async function reconcileRetrieval(){
+ if(!retrievalEnabled())return;
+ for(const lane of ['public','chat'] as const){
+  const _id=`reconcile:${lane}`,state=await rows('retrievalMeta').findOne({_id});if(state?.done&&Number(state.againAt)>Date.now())continue;
+  const page=await retrievalPage(lane,!state?.done&&state?.cursor?String(state.cursor):undefined);
+  for(const kind of ['public','chat','log'] as const){
+   const points=page.points.filter(point=>point.payload?.kind===kind);if(!points.length)continue;
+   const source=rows(kind==='public'?'searchDocuments':kind==='chat'?'chatSearchChunks':'logSearchChunks');
+   const canonical=await source.find({_id:{$in:points.map(point=>point.payload.id)}}).project({_id:1,sourceRevision:1,sourceHash:1,indexVersion:1}).toArray(),current=new Map(canonical.map(row=>[row._id,row]));
+   await transaction(async session=>{for(const {payload} of points){const row=current.get(payload.id);if(!row||String(row.sourceRevision||row.sourceHash)!==payload.sourceRevision||row.indexVersion!==payload.indexVersion)await queueRetrieval(kind,payload.sourceKey,session,kind==='chat'?{userId:payload.ownerId}:{});}});
+  }
+  await rows('retrievalMeta').updateOne({_id},{$set:{cursor:page.next_page_offset||'',done:!page.next_page_offset,againAt:Date.now()+3600000}},{upsert:true});
+ }
+}
+export function startRetrievalWorker(){let stopped=false,pending:Promise<void>|undefined,cycles=0;const tick=()=>{if(stopped||pending||!retrievalEnabled())return;pending=(async()=>{if(cycles++%30===0){await backfillRetrieval();await reconcileRetrieval();}for(let i=0;i<8&&!stopped&&await replicateRetrievalOne();i++);})().catch(error=>console.error('Retrieval worker',{name:error.name})).finally(()=>{pending=undefined;});};const timer=setInterval(tick,2000);tick();return async()=>{stopped=true;clearInterval(timer);await pending;};}

@@ -1,3 +1,4 @@
+import {syncLogContacts} from './logContacts';
 import {queueLogSearch} from './search/log';
 import {randomUUID} from 'node:crypto';
 import type {ClientSession} from 'mongodb';
@@ -6,7 +7,8 @@ import type {RecordInvalidation} from '../shared/liveState';
 type LogAudience={_id:string;date?:string;members?:string[];invited?:string[];deletedAt?:string};
 /** Mutation-bound invalidations retain the former audience on removal. No source text is published. */
 export async function publishLogChange(previous:LogAudience|null,next:LogAudience,session?:ClientSession){
- await queueLogSearch(next._id,session);
+ await queueLogSearch(next._id,session,[...new Set([...(previous?.members||[]),...(next.members||[])])]);
+ await syncLogContacts(next._id,session);
  const userIds=[...new Set([...(previous?.members||[]),...(previous?.invited||[]),...(next.members||[]),...(next.invited||[])])];
  if(!userIds.length)return;
  const previousUsers=[...new Set([...(previous?.members||[]),...(previous?.invited||[])])],nextUsers=[...new Set([...(next.members||[]),...(next.invited||[])])];

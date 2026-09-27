@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {connectDatabase,db,mongo,rows,transaction} from '../server/db';
 import {users,type User,type Actor} from '../server/auth';
 import {config} from '../server/config';
-import {prepareUpload,acceptUpload,readUpload,deleteUpload,expireUploads,migrateUploadToObject} from '../server/uploads';
+import {prepareUpload,acceptUpload,readUpload,deleteUpload,expireUploads,migrateUploadToObject,restoreUploadLocal} from '../server/uploads';
 import {stageObjectWrite,cleanObjectWriteIntents,objectBody} from '../server/objectStorage';
 const remote=vi.hoisted(()=>({objects:new Map<string,{bytes:Buffer;metadata:Record<string,string>}>(),corrupt:false}));
 vi.mock('@aws-sdk/client-s3',()=>{
@@ -21,7 +21,7 @@ beforeAll(async()=>{await connectDatabase();directory=await mkdtemp(join(tmpdir(
 async function upload(){let prepared:any;await transaction(async session=>{prepared=await prepareUpload({name:'Note.wav',bytes:bytes.length,sha256,purpose:'log_media'},actor,session);});await acceptUpload(actor,prepared.id,bytes);return prepared.id as string;}
 it('writes private objects with verified metadata and reads bounded ranges through the app',async()=>{
  const id=await upload(),file=(await rows('uploads').findOne({_id:id}))!,location=file.storage as any;expect(location.bucket).toBe('fixture-private');expect(location.key).toContain(`/staging/${id}/`);expect(await rows('mediaWriteIntents').countDocuments()).toBe(0);
- expect((await readUpload(actor,id)).bytes).toEqual(bytes);const part=await objectBody(location,bytes.length,sha256,{start:1,end:4});const chunks:Buffer[]=[];for await(const chunk of part.body!)chunks.push(Buffer.from(chunk));expect(Buffer.concat(chunks)).toEqual(bytes.subarray(1,5));
+ await expect(access(join(directory,'files',id))).rejects.toMatchObject({code:'ENOENT'});expect((await readUpload(actor,id)).bytes).toEqual(bytes);expect(await restoreUploadLocal(id)).toEqual({restored:true});expect(await readFile(join(directory,'files',id))).toEqual(bytes);const part=await objectBody(location,bytes.length,sha256,{start:1,end:4});const chunks:Buffer[]=[];for await(const chunk of part.body!)chunks.push(Buffer.from(chunk));expect(Buffer.concat(chunks)).toEqual(bytes.subarray(1,5));
  await transaction(session=>deleteUpload(actor,id,session));await expireUploads();expect(remote.objects.size).toBe(0);await expect(access(join(directory,'files',id))).rejects.toMatchObject({code:'ENOENT'});expect((await users().findOne({_id:'me'}))?.storageBytes).toBe(0);
 });
 it('keeps a winning retry when cleaning a different immutable orphan object',async()=>{

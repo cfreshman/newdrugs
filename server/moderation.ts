@@ -1,3 +1,4 @@
+import {invalidateAllLogContacts} from './logContacts';
 import type { ClientSession } from 'mongodb';
 import { rows } from './db';
 import { users } from './auth';
@@ -22,6 +23,7 @@ export async function suspendUser(userId:string,suspended:boolean,reason:string,
     await rows<{_id:string;revision:number;generation:number}>('automations').updateMany({userId,status:'active'},{$set:{status:'paused',nextRunAt:null,blockedReason:'This account is suspended.'},$inc:{revision:1,generation:1}},{session});
     await rows('runs').updateMany({userId,status:{$nin:['completed','cancelled','failed']}},{$set:{status:'queued',cancelRequested:true,superseded:true,nextAttempt:0,leaseUntil:0}},{session});
   }
+  await invalidateAllLogContacts(session);
   await enqueueSearch('profiles',userId,session);
   for await(const post of rows('posts').find({userId},{session,projection:{_id:1}}))await enqueueSearch('posts',post._id,session);
   return {userId,suspended};

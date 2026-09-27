@@ -1,7 +1,7 @@
 import { MongoClient, type ClientSession, type Db } from 'mongodb';
 import { config } from './config';
 
-export const mongo = new MongoClient(config.MONGODB_URI, { serverSelectionTimeoutMS: 5000, maxPoolSize: config.MONGODB_POOL_SIZE, maxConnecting: 2, waitQueueTimeoutMS: 10000 });
+export const mongo = new MongoClient(config.MONGODB_URI, { serverSelectionTimeoutMS: config.NODE_ENV==='test'?20000:5000, maxPoolSize: config.MONGODB_POOL_SIZE, maxConnecting: 2, waitQueueTimeoutMS: 10000 });
 let database: Db;
 export interface Row { _id: string; [key: string]: unknown }
 export function db() { if (!database) throw new Error('Database is not connected.'); return database; }
@@ -20,6 +20,7 @@ export async function connectDatabase(name?: string) {
     rows('mediaWriteIntents').createIndex({availableAt:1}),
     rows('mediaDeletes').createIndex({availableAt:1}),
     rows('logSearchJobs').createIndex({availableAt:1}),
+    rows('logSearchJobs').createIndex({viewerIds:1}),
     rows('logSearchChunks').createIndex({entryId:1}),
     rows('logSearchChunks').createIndex({viewerIds:1,indexVersion:1}),
     rows('logSearchResults').createIndex({expiresAt:1},{expireAfterSeconds:0}),
@@ -32,6 +33,7 @@ export async function connectDatabase(name?: string) {
     rows('uploads').createIndex({userId:1,attachmentKinds:1,_id:-1}),
     rows('retrievalJobs').createIndex({availableAt:1}),
     rows('retrievalJobs').createIndex({kind:1,userId:1}),
+    rows('retrievalJobs').createIndex({kind:1,viewerIds:1}),
     rows('requestRates').createIndex({resetTime:1},{expireAfterSeconds:0}),
     rows('ledgerActivityReceipts').createIndex({userId:1,kind:1,orderKey:-1}),
     rows('ledgerActivityReceipts').createIndex({periodId:1,kind:1,orderKey:1}),
@@ -43,6 +45,10 @@ export async function connectDatabase(name?: string) {
     rows('recordEvents').createIndex({expiresAt:1},{expireAfterSeconds:0}),
     rows('liveSubscriptions').createIndex({expiresAt:1},{expireAfterSeconds:0}),
     rows('liveSubscriptions').createIndex({userId:1,channel:1}),
+    rows('logContactSources').createIndex({members:1,_id:1}),
+    rows('logContactCounts').createIndex({userId:1,count:-1,personId:1}),
+    rows('logContactStates').createIndex({dirty:1,leaseUntil:1}),
+    rows('logEntries').createIndex({members:1,_id:1}),
     rows('logEntries').createIndex({calendarMonthDay:1,_id:1}),
     rows('logEntries').createIndex({members:1,calendarMonthDay:1,date:-1,createdAt:-1,_id:-1}),
     rows('logEntries').createIndex({joinKey:1},{unique:true,partialFilterExpression:{joinKey:{$type:'string'}}}),
@@ -80,6 +86,8 @@ export async function connectDatabase(name?: string) {
     rows('ledger').createIndex({ userId: 1, createdAt: -1 }),
     rows('ledger').createIndex({ userId: 1, createdAt: -1, _id: -1 }),
     rows('runs').createIndex({ userId: 1, status: 1 }),
+    rows('runs').createIndex({status:1,priority:1,updatedAt:1}),
+    rows('workerHealth').createIndex({expiresAt:1},{expireAfterSeconds:0}),
     rows('runs').createIndex({ status: 1, nextAttempt: 1, updatedAt: 1 }),
     rows('agentCredentials').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     rows('operationEmbeddings').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),

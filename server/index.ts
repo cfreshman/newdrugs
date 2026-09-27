@@ -1,3 +1,5 @@
+import {startWorkerHealth} from './workerHealth';
+import {startLogContactWorker} from './logContacts';
 import {startLogCalendarWorker} from './log';
 import {startLogSearchWorker} from './search/log';
 import {startLedgerActivityWorker} from './ledgerActivity';
@@ -17,11 +19,13 @@ import { expireUploads } from './uploads';
 await connectDatabase();
 await ensureStarterPool();
 const background = config.PROCESS_ROLE !== 'web';
+const stopWorkerHealth = background ? startWorkerHealth() : async () => {};
 const stopWorker = background ? startWorker() : async () => {};
 const stopSearch = background ? startSearchWorker() : async () => {};
 const stopPush = background ? startPushWorker() : async () => {};
 const stopChatSearch = background ? startChatSearchWorker() : async () => {};
 const stopLedgerActivity = background ? startLedgerActivityWorker() : async () => {};
+const stopContacts = background ? startLogContactWorker() : async () => {};
 const stopCalendar = background ? startLogCalendarWorker() : async () => {};
 const stopLogSearch = background ? startLogSearchWorker() : async () => {};
 const stopRetrieval = background ? startRetrievalWorker() : async () => {};
@@ -38,7 +42,7 @@ let stopping = false;
 const shutdown = async () => {
   if (stopping) return; stopping = true;
   setTimeout(() => process.exit(1), 20000).unref(); clearInterval(uploadCleanup);
-  await Promise.all([stopWorker(),stopSearch(),stopPush(),stopChatSearch(),stopLedgerActivity(),stopRetrieval(),stopLogSearch(),stopCalendar(),stopAttachmentReferences(),stopLiveState()]);
+  await Promise.all([stopWorker(),stopWorkerHealth(),stopSearch(),stopPush(),stopChatSearch(),stopLedgerActivity(),stopRetrieval(),stopLogSearch(),stopCalendar(),stopContacts(),stopAttachmentReferences(),stopLiveState()]);
   if (server) await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
   await mongo.close(); process.exit(0);
 };

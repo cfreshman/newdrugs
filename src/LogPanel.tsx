@@ -1,3 +1,4 @@
+import {useLogContacts} from './useLogContacts';
 import {LogMedia} from './LogMedia';
 import {useOpenLogList} from './logSequence';
 import {useLogNeighbors} from './useLogNeighbors';
@@ -12,10 +13,10 @@ import {LogFloaters} from './LogChrome';
 import type {LogContact} from '../shared/logJoining';
 import {logCover as cover} from './logCalendarModel';
 import {LogCalendar} from './LogCalendar';
-import {useEffect,useLayoutEffect,useRef,useState,type FormEvent} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,useMemo,type FormEvent} from 'react';
 import {CalendarDots,SquaresFour,List,Plus,LinkSimple,CaretLeft,CaretRight,LockSimple,Users,Image,Microphone,DownloadSimple,DotsThree,X,CircleNotch} from '@phosphor-icons/react';
 import {Temporal} from '@js-temporal/polyfill';
-import {logFields,logPlainText,rebaseLogDraft,type LogEntry,type LogFields,type LogPreferences,type LogPage} from '../shared/log';
+import {logFields,logPlainText,rebaseLogDraft,type LogEntry,type LogCalendarTile,type LogFields,type LogPreferences,type LogPage} from '../shared/log';
 import type {Profile} from '../shared/types';
 import type {Destination,LogSequence} from '../shared/navigation';
 import {operation,errorText,ApiError} from './api';
@@ -39,12 +40,12 @@ const fields=(entry:LogEntry):LogFields=>({date:entry.date,title:entry.title,pla
 const emit=()=>{window.dispatchEvent(new CustomEvent('newdrugs:records',{detail:['log','storage']}));};
 const emptyPreferences:LogPreferences={arrangement:'calendar',views:[],todayPresentation:'full'};
 
-function LogTile({entry,open,compact=false,anniversary=false}:{entry:LogEntry;open():void;compact?:boolean;anniversary?:boolean}){
- const photo=cover(entry);
- return <button className={`log-tile ${compact?'log-tile-compact':''}`} onClick={()=>{primeLogEntry(entry);open();}} title={entry.title||entry.contributors[0]?.note||'Open entry'}>
-  {photo?<img src={logImageUrl(photo.url)} alt="" loading="lazy"/>:<div className="log-tile-note">{entry.contributors.map(person=>person.note).filter(Boolean).join(' · ')||entry.title||entry.place||'(untitled)'}</div>}
-  <span className="log-tile-caption">{anniversary?'↻ ':''}{entry.title||entry.place||'Untitled'}</span>
-  {entry.contributors.length>1&&<span className="log-tile-shared"><Users size={12}/>{entry.contributors.length}</span>}
+function LogTile({entry,open,compact=false,anniversary=false}:{entry:LogEntry|LogCalendarTile;open():void;compact?:boolean;anniversary?:boolean}){
+ const photo=cover(entry),contributors='contributors' in entry?entry.contributors:[],place='place' in entry?entry.place:'';
+ return <button className={`log-tile ${compact?'log-tile-compact':''}`} onClick={()=>{if("contributors" in entry)primeLogEntry(entry);open();}} title={entry.title||contributors[0]?.note||'Open entry'}>
+  {photo?<img src={logImageUrl(photo.url)} alt="" loading="lazy"/>:<div className="log-tile-note">{contributors.map(person=>person.note).filter(Boolean).join(' · ')||entry.title||place||'(untitled)'}</div>}
+  <span className="log-tile-caption">{anniversary?'↻ ':''}{entry.title||place||'Untitled'}</span>
+  {contributors.length>1&&<span className="log-tile-shared"><Users size={12}/>{contributors.length}</span>}
  </button>;
 }
 
@@ -57,9 +58,9 @@ export function LogEditor({user,entry,date,onSaved,cancel,onRemoved}:{user:Profi
  const [base,setBase]=useState(entry),[conflict,setConflict]=useState<LogEntry|null>(null);
  const own=entry?.contributors.find(p=>p.userId===user.id);
  const [draft,setDraft]=useState<LogFields>(entry?fields(entry):logFields.parse({date:date||today()})),[note,setNote]=useState(own?.note||''),[files,setFiles]=useState<LogEntry['contributors'][number]['files']>(own?.files||[]),[link,setLink]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadingVisual,setUploadingVisual]=useState(false),[recording,setRecording]=useState(false);
- const [contacts,setContacts]=useState<LogContact[]>([]),[selectedPeople,setSelectedPeople]=useState<LogContact[]>([]),[choosingPeople,setChoosingPeople]=useState(false),[contactQuery,setContactQuery]=useState('');
+ const [selectedPeople,setSelectedPeople]=useState<LogContact[]>([]),[choosingPeople,setChoosingPeople]=useState(false),[contactQuery,setContactQuery]=useState('');
  const saveProgress=useRef<{signature:string;entry:LogEntry}|null>(null),addIntents=useRef(new Map<string,string>());
- useEffect(()=>{let alive=true;void (async()=>{let before:string|undefined;const people:LogContact[]=[];do{const page=await operation<{items:LogContact[];nextCursor:string|null}>('log.contacts',{limit:30,...(before?{before}:{})});people.push(...page.items);before=page.nextCursor||undefined;}while(before);if(alive)setContacts(people);})().catch(e=>{if(alive)setError(errorText(e));});return()=>{alive=false;};},[]);
+ const contactPage=useLogContacts(contactQuery,visible),contacts=contactPage.items;
  const fileInput=useRef<HTMLInputElement>(null),intent=useRef<{signature:string;key:string}|null>(null),staged=useRef<string[]>([]),committed=useRef(false),editorAlive=useRef(true);
  useEffect(()=>{editorAlive.current=true;return()=>{editorAlive.current=false;if(!committed.current)for(const fileId of staged.current)void operation('files.discard',{fileId}).catch(()=>{});};},[]);
  const addFile=async(file:File)=>{setUploading(true);setUploadingVisual(!file.type.startsWith('audio/'));setError('');try{if(files.length>=8)throw Error('An entry can hold eight attachments per person.');const saved=await uploadFile(file,'log_media');if(!editorAlive.current){await operation('files.discard',{fileId:saved.id}).catch(()=>{});return;}staged.current.push(saved.id);setFiles(previous=>[...previous,saved as Required<UploadRef>].slice(0,8));}catch(e){if(editorAlive.current)setError(errorText(e));}finally{if(editorAlive.current){setUploading(false);setUploadingVisual(false);}}};
@@ -87,7 +88,7 @@ export function LogEditor({user,entry,date,onSaved,cancel,onRemoved}:{user:Profi
   <input aria-label="Place" placeholder="location" maxLength={160} value={draft.place} onChange={e=>setDraft({...draft,place:e.target.value})}/>
   <label className="log-date-field"><input aria-label="Entry date" type="date" required value={draft.date} onChange={e=>setDraft({...draft,date:e.target.value})}/></label>
   <div className="log-editor-people">{(base?.contributors||[{userId:user.id,name:user.name,handle:user.handle}]).map(person=><span key={person.userId}>{person.handle||person.name}</span>)}{selectedPeople.filter(person=>!base?.contributors.some(p=>p.userId===person.id)).map(person=><button type="button" key={person.id} onClick={()=>setSelectedPeople(previous=>previous.filter(p=>p.id!==person.id))}>{person.handle||person.name}<X size={14}/></button>)}<button type="button" aria-expanded={choosingPeople} onClick={()=>setChoosingPeople(value=>!value)}><Plus size={16}/>people</button></div>
-  {choosingPeople&&<div className="log-contact-picker"><input aria-label="Find people to add" placeholder="find a friend" value={contactQuery} onChange={e=>setContactQuery(e.target.value)}/><div>{contacts.filter(person=>!base?.contributors.some(p=>p.userId===person.id)&&!selectedPeople.some(p=>p.id===person.id)&&`${person.name} ${person.handle||''}`.toLowerCase().includes(contactQuery.toLowerCase())).map(person=><button type="button" key={person.id} onClick={()=>{setSelectedPeople(previous=>[...previous,person]);setChoosingPeople(false);setContactQuery('');}}>{person.photoId&&<img src={`/api/files/${person.photoId}`} alt=""/>}<span>{person.name}{person.handle&&<small>@{person.handle}</small>}</span><Plus size={16}/></button>)}</div>{!contacts.length&&<p className="quiet small">People from past hangouts and your New Drugs friends appear here. For someone new, save the hangout and show its code.</p>}</div>}
+  {choosingPeople&&<div className="log-contact-picker"><input aria-label="Find people to add" placeholder="find a friend" value={contactQuery} onChange={e=>setContactQuery(e.target.value)}/><div>{contacts.filter(person=>!base?.contributors.some(p=>p.userId===person.id)&&!selectedPeople.some(p=>p.id===person.id)&&`${person.name} ${person.handle||''}`.toLowerCase().includes(contactQuery.toLowerCase())).map(person=><button type="button" key={person.id} onClick={()=>{setSelectedPeople(previous=>[...previous,person]);setChoosingPeople(false);setContactQuery('');}}>{person.photoId&&<img src={`/api/files/${person.photoId}`} alt=""/>}<span>{person.name}{person.handle&&<small>@{person.handle}</small>}</span><Plus size={16}/></button>)}</div>{contactPage.nextCursor&&<button type="button" disabled={contactPage.busy} onClick={()=>void contactPage.more()}>More people</button>}{contactPage.error&&<p className="error">{contactPage.error}</p>}{!contacts.length&&!contactPage.busy&&!contactPage.indexing&&<p className="quiet small">People from past hangouts and your New Drugs friends appear here. For someone new, save the hangout and show its code.</p>}</div>}
   <label className="sr-only" htmlFor={`log-note-${entry?.id||'new'}`}>Your note</label><textarea id={`log-note-${entry?.id||'new'}`} aria-label="Your note" className="log-note-input" placeholder="your note" maxLength={10000} value={note} onChange={e=>setNote(e.target.value)}/>
   <section className="log-voice-notes" aria-label="Voice note">{voiceFiles.map(file=><div className="log-voice-row" key={file.id}><AudioPlayer src={file.url} active={visible} voiceNote editor/><button type="button" aria-label={`Remove voice note ${file.name}`} onClick={()=>setFiles(previous=>previous.filter(item=>item.id!==file.id))}>Remove</button></div>)}{!voiceFiles.length&&<LogVoiceRecorder change={setRecording} disabled={uploading||files.length>=8} add={addFile} error={setError}/>}</section>
   <section className="log-links-editor" aria-label="Links"><div className="log-link-add"><LinkSimple size={20} aria-hidden="true"/><input aria-label="Link" type="text" inputMode="url" autoCapitalize="none" autoComplete="off" spellCheck={false} maxLength={2048} placeholder="Paste a link" value={link} onChange={e=>setLink(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();if(link.trim())addLink();}}}/><button type="button" className="solid" disabled={!link.trim()||draft.links.length>=8} onClick={addLink}>Add</button></div>{draft.links.map(url=><div className="log-link-card" key={url}><div className="log-link-card-actions"><a href={url} target="_blank" rel="noreferrer">{compactUrlLabel(url)}</a><button type="button" aria-label={`Remove ${compactUrlLabel(url)}`} onClick={()=>setDraft({...draft,links:draft.links.filter(value=>value!==url)})}><X size={18}/></button></div><LinkPreviews text="" links={[url]} draft/></div>)}</section>
@@ -139,39 +140,47 @@ export function LogDetail({entryId,user,navigate,onSaved,onCancel,onClose,onAdja
 
 export function LogPanel({user,navigate,initialQuery='',logMonth,logScope,personId:initialPerson,onStateChange}:{user:Profile;navigate:Navigate;initialQuery?:string;logMonth?:string;logScope?:Destination['logScope'];personId?:string;onStateChange?(context:Partial<Destination>):void}){
  const openList=useOpenLogList(navigate);
- const [optionsOpen,setOptionsOpen]=useState(false);
+ const [optionsOpen,setOptionsOpen]=useState(false),[previews,setPreviews]=useState<LogCalendarTile[]>([]),[listLoaded,setListLoaded]=useState(false);
+ const browserRoot=useRef<HTMLDivElement>(null),positions=useRef<Record<string,number>>({}),activeArrangement=useRef<LogPreferences['arrangement']>('calendar');
  const [todayEntries,setTodayEntries]=useState<LogEntry[]>([]),[preferences,setPreferences]=useState<LogPreferences>(emptyPreferences),[scope,setScope]=useState<'all'|'private'|'shared'|'invitations'>(logScope||'all'),[applied,setApplied]=useState(initialQuery),[personId,setPersonId]=useState<string|undefined>(initialPerson),[items,setItems]=useState<LogEntry[]>([]),[cursor,setCursor]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const prefsQueue=useRef<Promise<unknown>>(Promise.resolve()),prefsGeneration=useRef(0);
+ const applyPreferences=(value:LogPreferences)=>{if(value.arrangement!==activeArrangement.current){const scroller=browserRoot.current?.closest<HTMLElement>('.composer-view');if(scroller)positions.current[activeArrangement.current]=scroller.scrollTop;activeArrangement.current=value.arrangement;}setPreferences(value);};
+ const prefsQueue=useRef<Promise<unknown>>(Promise.resolve()),prefsGeneration=useRef(0),prefsPending=useRef(0),prefsRead=useRef(0);
  const sequence=useRef(0),listPending=useRef(false),listEdge=useRef<HTMLDivElement>(null),visible=usePanelVisible();
  useEffect(()=>{setApplied(initialQuery||'');},[initialQuery]);
  useEffect(()=>setScope(logScope||'all'),[logScope]);
  useEffect(()=>setPersonId(initialPerson),[initialPerson]);
  const stateChange=(next:Partial<Destination>)=>onStateChange?.({query:applied||undefined,logScope:scope,personId,logMonth,...next});
  const calendar=preferences.arrangement==='calendar'&&scope!=='invitations';
- const load=async(append=false)=>{if(calendar||append&&(listPending.current||!cursor))return;const ticket=++sequence.current;listPending.current=true;setBusy(true);setError('');try{
+ const load=async(append=false)=>{if(calendar||listPending.current||append&&!cursor)return;const ticket=++sequence.current;listPending.current=true;setBusy(true);setError('');try{
   const input={scope,...(applied?{query:applied}:{}),...(personId?{personId}:{}),limit:30,...(append&&cursor?{before:cursor}:{})};
   const page=await operation<LogPage>('log.list',input);
   if(!append)while(page.nextCursor&&page.items.length<items.length){const more=await operation<LogPage>('log.list',{...input,before:page.nextCursor});if(ticket!==sequence.current)return;page.items.push(...more.items);page.nextCursor=more.nextCursor;}
-  if(ticket!==sequence.current)return;setItems(previous=>append?[...previous,...page.items]:page.items);setCursor(page.nextCursor);
+  if(ticket!==sequence.current)return;setItems(previous=>append?[...previous,...page.items]:page.items);setCursor(page.nextCursor);setListLoaded(true);
 
  }catch(e){if(ticket===sequence.current)setError(errorText(e));}finally{if(ticket===sequence.current){listPending.current=false;setBusy(false);}}};
- useEffect(()=>{void operation<LogPreferences>('log.preferences').then(setPreferences).catch(e=>setError(errorText(e)));},[]);
- useEffect(()=>{void load();return()=>{sequence.current++;};},[scope,applied,personId,preferences.arrangement]);
+ const loadPreferences=async()=>{if(prefsPending.current)return;const generation=prefsGeneration.current,ticket=++prefsRead.current;try{const value=await operation<LogPreferences>('log.preferences');if(ticket===prefsRead.current&&generation===prefsGeneration.current&&!prefsPending.current)applyPreferences(value);}catch(error){if(ticket===prefsRead.current&&!prefsPending.current)setError(errorText(error));}};
+ useEffect(()=>{void loadPreferences();},[]);
+ useEffect(()=>{sequence.current++;listPending.current=false;setItems([]);setPreviews([]);setCursor(null);setListLoaded(false);},[scope,applied,personId]);
+ useEffect(()=>{if(!calendar&&!listLoaded)void load();},[calendar,listLoaded,scope,applied,personId]);
+ useEffect(()=>()=>{sequence.current++;},[]);
+ useLayoutEffect(()=>{const scroller=browserRoot.current?.closest<HTMLElement>('.composer-view');if(!scroller)return;const view=preferences.arrangement;scroller.scrollTop=positions.current[view]||0;},[preferences.arrangement]);
  const loadToday=async()=>{try{const entries:LogEntry[]=[];let before:string|undefined;do{const page=await operation<LogPage>('log.list',{from:new Date().getHours()<8?Temporal.Now.plainDateISO().subtract({days:1}).toString():today(),through:today(),scope:'all',limit:30,...(before?{before}:{})});entries.push(...page.items);before=page.nextCursor||undefined;}while(before);setTodayEntries(entries.reverse());}catch{/* Calendar errors are shown in their own view. */}};
  useEffect(()=>{void loadToday();},[]);
  useRecordRefresh(['log'],()=>{void loadToday();void load();});
  useEffect(()=>{const target=listEdge.current,scroller=target?.closest<HTMLElement>('.composer-view');if(calendar||!visible||busy||error||!cursor||!target||!scroller||typeof IntersectionObserver==='undefined')return;const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting))void load(true);},{root:scroller,rootMargin:'0px 0px 150px 0px'});observer.observe(target);return()=>observer.disconnect();},[calendar,visible,busy,error,cursor]);
- useRecordRefresh(['log_preferences'],()=>{void operation<LogPreferences>('log.preferences').then(setPreferences).catch(()=>{});});
- const prefs=async(value:LogPreferences)=>{const generation=++prefsGeneration.current;setPreferences(value);const next=prefsQueue.current.then(()=>operation<LogPreferences>('log.preferences_update',value));prefsQueue.current=next.catch(()=>{});try{const saved=await next;if(generation===prefsGeneration.current)setPreferences(saved);}catch(e){if(generation===prefsGeneration.current)setError(errorText(e));}};
+ useRecordRefresh(['log_preferences'],()=>loadPreferences());
+ const prefs=async(value:LogPreferences)=>{const generation=++prefsGeneration.current;prefsRead.current++;prefsPending.current++;applyPreferences(value);const next=prefsQueue.current.then(()=>operation<LogPreferences>('log.preferences_update',value));prefsQueue.current=next.catch(()=>{});try{const saved=await next;if(generation===prefsGeneration.current)applyPreferences(saved);}catch(e){if(generation===prefsGeneration.current)setError(errorText(e));}finally{prefsPending.current--;if(!prefsPending.current)void loadPreferences();}};
 
- return <div className="log-browser">
+ const displayItems=useMemo(()=>[...new Map([...previews,...items].map(entry=>[entry.id,entry])).values()].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id)),[previews,items]);
+ return <div ref={browserRoot} className="log-browser">
 
   {error&&<p className="error" role="alert">{error}</p>}
-  {calendar?<LogCalendar key={JSON.stringify([logMonth,scope,applied,personId])} month={logMonth} scope={scope as 'all'|'private'|'shared'} query={applied} personId={personId} jump={value=>stateChange({logMonth:value})} create={date=>navigate({view:'log_compose',date})} open={(entry,list,query,cursor)=>list?openList(entry,list,query,cursor):navigate({view:'log',resourceId:entry.id})} openPerson={personId=>navigate({view:'person',resourceId:personId})}/>:preferences.arrangement==='gallery'&&scope!=='invitations'?<div className="log-gallery">{items.map((entry,index)=><div key={entry.id}><LogTile entry={entry} open={()=>openList(entry,items,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>{(!index||items[index-1].date!==entry.date)&&<time>{Number(entry.date.slice(8))}{!index||items[index-1].date.slice(0,7)!==entry.date.slice(0,7)?` - ${new Date(`${entry.date}T12:00:00`).toLocaleDateString(undefined,{month:'short'})}`:''}</time>}</div>)}</div>:<LogList entries={items} open={entry=>openList(entry,items,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>}
-
-  {busy&&!calendar&&<div className="log-loading" role="status" aria-label="Loading entries"><CircleNotch className={items.length?'spin spinner-immediate':'spin'} size={22}/></div>}
-  {!busy&&!items.length&&!calendar&&<div className="log-empty"><p>{scope==='invitations'?'No pending invitations.':applied?'No entries match this view.':'No entries yet.'}</p></div>}
+  {scope!=='invitations'&&<div className="log-retained-calendar" hidden={!calendar}><PanelVisibilityContext.Provider value={visible&&calendar}><LogCalendar key={JSON.stringify([logMonth,scope,applied,personId])} month={logMonth} scope={scope as 'all'|'private'|'shared'} query={applied} personId={personId} jump={value=>stateChange({logMonth:value})} create={date=>navigate({view:'log_compose',date})} onPreviews={setPreviews} seedEntries={items} open={(entry,list,query,cursor)=>list?openList(entry,list,query,cursor):navigate({view:'log',resourceId:entry.id})} openPerson={personId=>navigate({view:'person',resourceId:personId})}/></PanelVisibilityContext.Provider></div>}
+  {!calendar&&(preferences.arrangement==='gallery'&&scope!=='invitations'?<div className="log-gallery">{displayItems.map((entry,index)=><div key={entry.id}><LogTile entry={entry} open={()=>openList(entry,displayItems,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>{(!index||displayItems[index-1].date!==entry.date)&&<time>{Number(entry.date.slice(8))}{!index||displayItems[index-1].date.slice(0,7)!==entry.date.slice(0,7)?` - ${new Date(`${entry.date}T12:00:00`).toLocaleDateString(undefined,{month:'short'})}`:''}</time>}</div>)}</div>:<LogList entries={displayItems} open={entry=>openList(entry,displayItems,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>)}
+  {busy&&!calendar&&!displayItems.length&&<div className="log-loading" role="status" aria-label="Loading entries"><CircleNotch className="spin" size={22}/></div>}
+  {!busy&&!displayItems.length&&!calendar&&listLoaded&&<div className="log-empty"><p>{scope==='invitations'?'No pending invitations.':applied?'No entries match this view.':'No entries yet.'}</p></div>}
   {!calendar&&<div ref={listEdge}>{cursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}</div>}
+
   <LogFloaters><div className="log-home-footer">{todayEntries.length>0&&<LogTodayCards entries={todayEntries} presentation={preferences.todayPresentation||'full'} change={todayPresentation=>void prefs({...preferences,todayPresentation})} open={entry=>openList(entry,todayEntries)}/>}<div className="log-options log-quick-settings" hidden={!optionsOpen}><div className="view-tabs" aria-label="Log view">{([{value:'calendar',label:'Calendar',Icon:CalendarDots},{value:'gallery',label:'Grid',Icon:SquaresFour},{value:'list',label:'List',Icon:List}] as const).map(({value,label,Icon})=><button key={value} type="button" aria-pressed={preferences.arrangement===value} onClick={()=>{void prefs({...preferences,arrangement:value});}}><Icon size={18}/>{label}</button>)}</div><button className="log-more-settings" onClick={()=>{setOptionsOpen(false);navigate({view:'log_settings'});}}>More settings</button></div><div className="log-home-actions"><button className="log-scan-button" onClick={()=>navigate({view:'log_scan'})}>Scan</button><button className="log-outline-button" onClick={()=>navigate({view:'log_compose'})}>Log new event</button><button className="log-options-toggle" aria-label="Log view options" aria-expanded={optionsOpen} onClick={()=>setOptionsOpen(value=>!value)}><DotsThree size={22}/></button></div></div></LogFloaters>
 
  </div>;

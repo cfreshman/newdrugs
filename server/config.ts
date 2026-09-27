@@ -6,6 +6,8 @@ const env = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().default(7331),
   PROCESS_ROLE: z.enum(['all','web','worker']).default('all'),
+  AGENT_GLOBAL_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
+  AGENT_ACCOUNT_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
   AGENT_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
   AGENT_INTERACTIVE_SLOTS: z.coerce.number().int().min(1).max(64).default(1),
   APP_ORIGIN: z.url().default('https://dev.druggie.org'),

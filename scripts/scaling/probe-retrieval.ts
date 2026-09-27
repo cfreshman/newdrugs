@@ -1,12 +1,13 @@
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import dotenv from 'dotenv';
-const stage=process.argv[2];if(stage!=='dev')throw Error('This contract probe is restricted to dev.');
-const environment=dotenv.parse(await readFile('/etc/newdrugs/dev.env')),service=dotenv.parse(await readFile('/etc/newdrugs-search/dev.env'));
-const namespace=`newdrugs_probe_${randomUUID().replaceAll('-','')}`,url='http://127.0.0.1:7336',key=service.QDRANT__SERVICE__API_KEY;
-Object.assign(process.env,environment,{QDRANT_URL:url,QDRANT_API_KEY:key,SEARCH_NAMESPACE:namespace,APP_ENV:'staging',MEDIA_STORAGE:'local'});
+const stage=process.argv[2];if(!['dev','prod'].includes(stage))throw Error('Choose dev or prod. This probe uses disposable synthetic collections only.');
+const appEnv=stage==='prod'?'production':'staging';
+const environment=dotenv.parse(await readFile(`/etc/newdrugs/${stage}.env`)),service=dotenv.parse(await readFile(`/etc/newdrugs-search/${stage}.env`));
+const namespace=`newdrugs_probe_${randomUUID().replaceAll('-','')}`,url=`http://127.0.0.1:${stage==='prod'?7337:7336}`,key=service.QDRANT__SERVICE__API_KEY;
+Object.assign(process.env,environment,{QDRANT_URL:url,QDRANT_API_KEY:key,SEARCH_NAMESPACE:namespace,APP_ENV:appEnv,MEDIA_STORAGE:'local'});
 const {replaceRetrievalSource,queryRetrieval}=await import('../../server/search/backend');
-const vector=Array(512).fill(0).map((_,i)=>i===0?1:0),names=[`${namespace}_staging_public_v2`,`${namespace}_staging_private_v2`];
+const vector=Array(512).fill(0).map((_,i)=>i===0?1:0),names=[`${namespace}_${appEnv}_public_v2`,`${namespace}_${appEnv}_private_v2`];
 try{
  const base={ownerId:'probe-a',sourceHash:'fixture',sourceRevision:'1',indexVersion:'fixture',text:'tennis in the park',vector,createdAt:'2026-09-27T00:00:00Z'};
  await replaceRetrievalSource('public','public-a',[{...base,id:'public-a',sourceKey:'public-a',kind:'public',dataset:'posts'}]);

@@ -44,3 +44,8 @@ it('assigns pre-migration chunks their current chat generation and repairs a cle
  await replicateRetrievalOne(async(_kind,_source,documents)=>{expect(documents[0].generation).toBe(3);await rows('chatSearchChunks').deleteMany({userId:'me'});await rows('users').updateOne({_id:'me'},{$set:{chatGeneration:4}});await queueRetrieval('chat','message',undefined,{userId:'me'});});
  const replace=vi.fn(async()=>{});await replicateRetrievalOne(replace);expect(replace).toHaveBeenCalledWith('chat','message',[]);
 });
+it('pages index metadata to remove orphaned chat and Log sources without retrieving vectors or text',async()=>{
+ const {reconcileRetrieval}=await import('../server/search/replication');
+ const page=vi.spyOn(backend,'retrievalPage').mockImplementation(async(kind)=>({points:kind==='public'?[]:[{id:'a',payload:{id:'gone-chat',kind:'chat',sourceKey:'old-message',ownerId:'me',sourceRevision:'old',indexVersion:'fixture'}},{id:'b',payload:{id:'gone-log',kind:'log',sourceKey:'old-entry',ownerId:'me',sourceRevision:'old',indexVersion:'fixture'}}],next_page_offset:null}));
+ try{await reconcileRetrieval();expect(await rows('retrievalJobs').countDocuments()).toBe(2);const replace=vi.fn(async()=>{});await replicateRetrievalOne(replace);await replicateRetrievalOne(replace);expect(replace).toHaveBeenCalledWith('chat','old-message',[]);expect(replace).toHaveBeenCalledWith('log','old-entry',[]);expect((await rows('retrievalMeta').findOne({_id:'reconcile:chat'}))?.done).toBe(true);}finally{page.mockRestore();}
+});

@@ -1,6 +1,7 @@
+import {unsuspendedActors} from './scopedModeration';
 import { enqueuePush } from './push';
-import type { ClientSession } from 'mongodb';
-import { rows } from './db';
+import type { ClientSession,Document,Filter } from 'mongodb';
+import { rows,type Row } from './db';
 import { hash, users } from './auth';
 import { config } from './config';
 import { destinationPath, type ResourceLink } from '../shared/navigation';
@@ -12,24 +13,28 @@ export async function notifyConnection(userId: string, actorId: string, connecti
   if (kind === 'message' && messageId) await enqueuePush(userId, actorId, connectionId, 'message', messageId, session);
 }
 export async function notificationState(userId: string, session?: ClientSession): Promise<NotificationState> {
-  const blocked = [...(await users().find({suspendedAt:{$type:'string'}},{session,projection:{_id:1}}).toArray()).map(user=>user._id), ...(await rows('blocks').find({ members: userId }, { session }).toArray()).flatMap(row => (row.members as string[]).filter(id => id !== userId))];
+  const blocked = (await rows('blocks').find({ members: userId }, { session }).toArray()).flatMap(row => (row.members as string[]).filter(id => id !== userId));
   const invitationFilter = { toId: userId, fromId: { $nin: blocked } };
   const unreadInvitations = { ...invitationFilter, status: 'pending', notificationReadAt: null };
   const recordFilter = { userId, actorId: { $nin: blocked } };
   const unreadRecords = { ...recordFilter, readAt: null };
+  const logKinds=['log_invitation','log_update','log_added'];
+  const eligibleRecords:Document[]=[...unsuspendedActors('actorId'),{$lookup:{from:'logEntries',localField:'entryId',foreignField:'_id',pipeline:[{$match:{deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]}},...unsuspendedActors('members'),{$project:{title:1}}],as:'logEntry'}},{$match:{$or:[{kind:{$nin:logKinds}},{'logEntry.0':{$exists:true}}]}}];
+  const read=(collection:string,filter:Filter<Row>,stages:Document[])=>rows(collection).aggregate<Row>([{$match:filter},{$sort:{createdAt:-1}},...stages,{$limit:100}],{session,maxTimeMS:5000}).toArray();
+  const total=async(collection:string,filter:Filter<Row>,stages:Document[])=>Number((await rows(collection).aggregate<{count:number}>([{$match:filter},...stages,{$count:'count'}],{session,maxTimeMS:5000}).toArray())[0]?.count||0);
   // Keep unread actions reachable even when newer read entries fill the history.
-  const invitations = await rows('connections').find(unreadInvitations, { session }).sort({ createdAt: -1 }).limit(100).toArray();
-  invitations.push(...await rows('connections').find({ ...invitationFilter, $or: [{ status: { $ne: 'pending' } }, { notificationReadAt: { $ne: null } }] }, { session }).sort({ createdAt: -1 }).limit(100).toArray());
-  const stored = await rows('notifications').find(unreadRecords, { session }).sort({ createdAt: -1 }).limit(100).toArray();
-  stored.push(...await rows('notifications').find({ ...recordFilter, readAt: { $ne: null } }, { session }).sort({ createdAt: -1 }).limit(100).toArray());
-  let count = await rows('connections').countDocuments(unreadInvitations, { session }) + await rows('notifications').countDocuments(unreadRecords, { session });
+  const invitations=await read('connections',unreadInvitations,unsuspendedActors('fromId'));
+  invitations.push(...await read('connections',{...invitationFilter,$or:[{status:{$ne:'pending'}},{notificationReadAt:{$ne:null}}]},unsuspendedActors('fromId')));
+  const stored=await read('notifications',unreadRecords,eligibleRecords);
+  stored.push(...await read('notifications',{...recordFilter,readAt:{$ne:null}},eligibleRecords));
+  const count=await total('connections',unreadInvitations,unsuspendedActors('fromId'))+await total('notifications',unreadRecords,eligibleRecords);
   const people = await users().find({ _id: { $in: [...invitations.map(row => String(row.fromId)), ...stored.map(row => String(row.actorId))] } }, { session, projection: { name: 1, handle: 1 } }).toArray();
   const label = (id: string) => notificationActor(people.find(person => person._id === id));
   const link = (connectionId: string): ResourceLink => ({ rel: 'open_in_newdrugs', targetKind: 'exact', title: 'Open conversation', url: new URL(destinationPath({ view: 'messages', resourceId: connectionId }), config.uiOrigin).href, resourceType: 'conversation', resourceId: connectionId });
   const items: Notification[] = invitations.map(row => ({ id: `invite:${row._id}`, kind: 'invitation', title: `Invitation from ${label(String(row.fromId))}`, text: String(row.note), createdAt: String(row.createdAt), read: row.status !== 'pending' || Boolean(row.notificationReadAt), connectionId: row._id, link: link(row._id) }));
   for (const row of stored) {
     if(row.kind==='log_invitation'||row.kind==='log_update'||row.kind==='log_added'){
-      const entry=await rows('logEntries').findOne({_id:String(row.entryId),deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]},{session,projection:{_id:1,title:1}});if(!entry){if(!row.readAt)count--;continue;}
+      const entry=(row.logEntry as Row[])[0];if(!entry)continue;
       items.push({id:row._id,kind:row.kind,title:logNotificationText(row.kind,label(String(row.actorId)),entry.title),text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open Log entry',url:new URL(destinationPath({view:'log',resourceId:entry._id}),config.uiOrigin).href,resourceType:'log_entry',resourceId:entry._id}});continue;
     }
 

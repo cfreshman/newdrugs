@@ -1,3 +1,4 @@
+import {uploadAdmission} from './uploadAdmission';
 import {sendMedia} from './mediaDelivery';
 import {updateLiveInterests} from './liveSubscriptions';
 import {publicInvitePreview,inviteMediaMetadata} from './logInvites';
@@ -128,7 +129,7 @@ export function createApp() {
     requireActor(req);
     res.set({ 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' }).send(await previewImage(String(req.params.id)));
   });
-  app.put('/api/uploads/:id',limiter('/api/uploads/:id', 20),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
+  app.put('/api/uploads/:id',limiter('/api/uploads/:id', 20),(req,_res,next)=>{requireActor(req);next();},uploadAdmission(),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
   app.get('/api/files/:id',async(req,res)=>{
     const file=await uploadMetadata(requireActor(req),String(req.params.id),true);
     res.set('Content-Disposition',`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`);

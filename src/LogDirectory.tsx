@@ -1,3 +1,4 @@
+import {useLogContacts} from './useLogContacts';
 import {useOpenLogList} from './logSequence';
 import {useEffect,useState} from 'react';
 import {CircleNotch,UserCircle} from '@phosphor-icons/react';
@@ -11,11 +12,9 @@ import {useRecordRefresh} from './useRecordRefresh';
 import {usePanelLoading,usePanelVisible} from './PanelReadiness';
 type Props={closeLabel?:string;navigate(destination:Destination):void;close():void};
 export function LogPeople({navigate,close,closeLabel='Close'}:Props){
- const [people,setPeople]=useState<LogContact[]|null>(null),[error,setError]=useState(''),visible=usePanelVisible();
- const load=async()=>{try{const result:LogContact[]=[];let before:string|undefined;do{const page=await operation<{items:LogContact[];nextCursor:string|null}>('log.contacts',{limit:30,...(before?{before}:{})});result.push(...page.items);before=page.nextCursor||undefined;}while(before);setPeople(result);setError('');}catch(e){setError(errorText(e));}};
- useEffect(()=>{if(visible)void load();},[visible]);useRecordRefresh(['log','people','connections'],()=>{if(visible)void load();});
+ const visible=usePanelVisible(),contacts=useLogContacts('',visible),people=contacts.loaded?contacts.items:null,error=contacts.error;
  usePanelLoading(!people&&!error);
- return <section className="log-task"><div className="log-directory-body"><h2>People</h2>{people?.map(person=><button className="log-person-row" key={person.id} onClick={()=>navigate({view:'person',resourceId:person.id})}>{person.photoId?<img src={`/api/files/${person.photoId}`} alt=""/>:<UserCircle size={38}/>}<span><strong>{person.name}</strong>{person.handle&&<span className="quiet"> @{person.handle}</span>}<small>{person.sharedHangouts?`${person.sharedHangouts} shared ${person.sharedHangouts===1?'hangout':'hangouts'}`:'No hangouts yet'}</small></span></button>)}{people&&!people.length&&<p className="quiet">Friends and people you’ve logged with appear here.</p>}{!people&&!error&&<CircleNotch className="spin" size={22}/>} {error&&<p className="error" role="alert">{error}</p>}</div><footer className="panel-actions log-task-footer"><button onClick={close}>{closeLabel}</button></footer></section>;
+ return <section className="log-task"><div className="log-directory-body"><h2>People</h2>{people?.map(person=><button className="log-person-row" key={person.id} onClick={()=>navigate({view:'person',resourceId:person.id})}>{person.photoId?<img src={`/api/files/${person.photoId}`} alt=""/>:<UserCircle size={38}/>}<span><strong>{person.name}</strong>{person.handle&&<span className="quiet"> @{person.handle}</span>}<small>{person.sharedHangouts?`${person.sharedHangouts} shared ${person.sharedHangouts===1?'hangout':'hangouts'}`:'No hangouts yet'}</small></span></button>)}{contacts.nextCursor&&<button disabled={contacts.busy} onClick={()=>void contacts.more()}>More people</button>}{people&&!people.length&&!contacts.indexing&&<p className="quiet">Friends and people you’ve logged with appear here.</p>}{contacts.indexing&&<span className="quiet small">Updating shared hangouts...</span>}{!people&&!error&&<CircleNotch className="spin" size={22}/>} {error&&<p className="error" role="alert">{error}</p>}</div><footer className="panel-actions log-task-footer"><button onClick={close}>{closeLabel}</button></footer></section>;
 }
 function nextBirthday(month:number,day:number){const today=Temporal.Now.plainDateISO();let date=Temporal.PlainDate.from({year:today.year,month,day},{overflow:'constrain'});if(Temporal.PlainDate.compare(date,today)<0)date=Temporal.PlainDate.from({year:today.year+1,month,day},{overflow:'constrain'});return date.toString();}
 export function LogDates({kind,navigate,close,closeLabel='Close'}:Props&{kind:'birthdays'|'anniversaries'}){

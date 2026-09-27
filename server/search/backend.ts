@@ -72,3 +72,9 @@ export async function queryRetrieval(kind:RetrievalKind,userId:string|undefined,
  const [lexical,dense]=await Promise.all([lane('lexical',{text:input.query,model:'qdrant/bm25'}),input.vector?lane('dense',input.vector):Promise.resolve([])]);
  return {lexical,dense};
 }
+
+/** Metadata-only pages for bounded orphan/version reconciliation. */
+export async function retrievalPage(kind:'public'|'chat',offset?:string){
+ await ensureRetrievalCollection(kind);
+ return request<{points:{id:string;payload:{id:string;kind:RetrievalKind;sourceKey:string;ownerId:string;sourceRevision:string;indexVersion:string}}[];next_page_offset:string|null}>(`/collections/${collection(kind)}/points/scroll`,'POST',{limit:50,...(offset?{offset}:{}),with_vector:false,with_payload:['id','kind','sourceKey','ownerId','sourceRevision','indexVersion']});
+}

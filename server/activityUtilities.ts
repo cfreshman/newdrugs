@@ -14,7 +14,7 @@ export async function activitySince(raw:unknown,actor:Actor,blocked:string[],ses
   if(since>until)throw new AppError(422,'activity_range','The starting time must not be after the ending time.');
   const dates={$gt:since,$lte:until},other={$nin:[actor.userId,...blocked]},options={session,maxTimeMS:10000};
   const collect=async(collection:string,pipeline:Document[])=>rows(collection).aggregate<Record<string,any>>([...pipeline,
-    {$lookup:{from:'users',localField:'actorId',foreignField:'_id',as:'actorRecord'}},{$unwind:'$actorRecord'},
+    {$lookup:{from:'users',localField:'actorId',foreignField:'_id',as:'actorRecord'}},{$unwind:'$actorRecord'},{$match:{'actorRecord.suspendedAt':{$not:{$type:'string'}}}},
     ...(boundary?[{$match:{$or:[{createdAt:{$lt:boundary.at}},{createdAt:boundary.at,_id:{$lt:boundary.id}}]}}]:[]),
     {$sort:{createdAt:-1,_id:-1}},{$limit:input.limit+1},
     {$project:{_id:1,kind:1,actorId:1,createdAt:1,text:1,sourceId:1,postId:1,connectionId:1,'actorRecord.name':1,'actorRecord.handle':1}},

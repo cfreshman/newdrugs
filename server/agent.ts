@@ -1,3 +1,4 @@
+import {claimAgentRun} from './agentAdmission';
 import {resolvePageContext,pageContextText} from './pageContext';
 import {logOperation} from './log';
 import { resolveRecordContexts } from './recordContext';
@@ -505,8 +506,7 @@ export function startWorker() {
     if (stopped || claiming || active.size >= config.AGENT_CONCURRENCY) return; claiming = true;
     try {
       await runs().updateMany({ status: { $in: ['waiting_for_approval', 'waiting_for_input'] }, approvals: { $elemMatch: { status: 'pending', expiresAt: { $lte: Date.now() } } } }, { $set: { status: 'queued', nextAttempt: 0 } });
-      const run = await runs().findOneAndUpdate({ ...(active.size >= Math.max(1,config.AGENT_CONCURRENCY-config.AGENT_INTERACTIVE_SLOTS) ? { purpose: { $ne: 'automation' } } : {}), _id: { $nin: [...active.keys()] }, $or: [{ status: 'queued', nextAttempt: { $not: { $gt: Date.now() } } }, { status: 'running', leaseUntil: { $lt: Date.now() } }] },
-        { $set: { status: 'running', lease: randomUUID(), leaseUntil: Date.now() + 60000 }, $inc: { attempts: 1 } }, { sort: { priority: 1, updatedAt: 1 }, returnDocument: 'after' });
+      const run = await claimAgentRun([...active.keys()]);
       if (run) { active.set(run._id, run); for (const a of run.approvals) if (a.status === 'pending' && a.expiresAt <= Date.now()) a.status = 'rejected'; void processRun(run).catch(error => console.error('Agent task error', { name: error instanceof Error ? error.name : 'Error' })).finally(() => active.delete(run._id)); }
     } catch (error) { console.error('Agent worker unavailable', { name: error instanceof Error ? error.name : 'Error' }); }
     finally { claiming = false; }
