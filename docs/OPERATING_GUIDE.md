@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.27.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.27.3.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,7 +13,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.27.2, release `20260927164455996` |
+| Production | `https://druggie.org`, v0.27.3, release `20260927170616543` |
 | Cloud dev | `https://dev.druggie.org`, release `20260927165748529`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
@@ -579,3 +579,5 @@ The image-loading layer must stay transparent. An opaque black loader followed b
 Transient spinners now use `src/spinner.css`: hide the indicator for the first 500ms without delaying requests, content, busy state or control disabling. A short load ends without ever showing it. Once shown, it stays visible for the ongoing load and is removed as soon as ready; rerenders do not restart the wait. Scroll-boundary pagination spinners explicitly use `spinner-immediate`, and PhotoSwipe’s own preloader waits 500ms too. Native-browser timing verification confirmed a 200ms load never appeared, a long load was hidden at 100ms and visible after 500ms, immediate pagination stayed visible, and rotation continued. Temporary timing fixtures were removed.
 
 The complete image-layer/transparent-loading/spinner-delay follow-up is on cloud dev `20260927165748529`, with a successful build and database health check. The additional pagination/viewer suites passed 39 and 8 checks (overlapping earlier coverage). Production remains v0.27.2 pending an explicit request for this follow-up.
+
+The image-layer, transparent-loading and 500ms transient-spinner fixes subsequently shipped on explicit request as **v0.27.3**, production `20260927170616543`. Build, deployment health, public API health and live release assets passed verification.
