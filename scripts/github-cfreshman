@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Run a command as cfreshman, then restore whichever GitHub account was active.
+set -euo pipefail
+
+if [[ ${1:-} == --help || ${1:-} == -h || $# == 0 ]]; then
+  cat <<'USAGE'
+Usage: github-cfreshman [--] COMMAND [ARGUMENTS...]
+
+Examples:
+  ./scripts/github-cfreshman gh repo create cfreshman/newdrugs --private --source=. --remote=origin
+  ./scripts/github-cfreshman git push -u origin HEAD
+  ./scripts/github-cfreshman gh api user --jq .login
+
+Uses the saved cfreshman login and restores the previous active account,
+including when the command fails. Run from the repository you want to use.
+USAGE
+  exit 0
+fi
+if [[ $1 == -- ]]; then shift; fi
+if [[ $# == 0 ]]; then printf '%s\n' 'Supply a command to run.' >&2; exit 2; fi
+command -v gh >/dev/null || { printf '%s\n' 'GitHub CLI (gh) is required.' >&2; exit 127; }
+
+# Environment tokens override saved logins. Ignore them only inside this wrapper.
+unset GH_TOKEN GITHUB_TOKEN
+export GH_HOST=github.com
+previous_user=$(gh auth status --hostname github.com --json hosts \
+  --jq '.hosts["github.com"][] | select(.active) | .login')
+if [[ -z $previous_user || $previous_user == *$'\n'* ]]; then
+  printf '%s\n' 'Could not determine one active GitHub account. Run gh auth login first.' >&2
+  exit 1
+fi
+
+restore_account() {
+  local status=$?
+  trap - EXIT HUP INT TERM
+  if ! gh auth switch --hostname github.com --user "$previous_user" >/dev/null; then
+    printf 'Could not restore GitHub account %s. Run: gh auth switch --hostname github.com --user %s\n' "$previous_user" "$previous_user" >&2
+    if [[ $status == 0 ]]; then status=1; fi
+  fi
+  exit "$status"
+}
+trap restore_account EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if ! gh auth switch --hostname github.com --user cfreshman >/dev/null; then
+  printf '%s\n' 'Save the cfreshman login first: gh auth login --hostname github.com --git-protocol https --web' >&2
+  exit 1
+fi
+
+# Apply Git authentication only to this command and its children, not gitconfig.
+# Convert GitHub SSH URLs as well, so an unrelated SSH key cannot select an account.
+config_count=${GIT_CONFIG_COUNT:-0}
+if [[ ! $config_count =~ ^[0-9]+$ ]]; then
+  printf '%s\n' 'GIT_CONFIG_COUNT must be a nonnegative integer.' >&2
+  exit 1
+fi
+config_count=$((10#$config_count))
+add_git_config() {
+  export "GIT_CONFIG_KEY_${config_count}=$1" "GIT_CONFIG_VALUE_${config_count}=$2"
+  config_count=$((config_count + 1))
+  export GIT_CONFIG_COUNT=$config_count
+}
+add_git_config credential.https://github.com.helper ''
+add_git_config credential.https://github.com.helper '!gh auth git-credential'
+add_git_config credential.https://github.com.username cfreshman
+add_git_config url.https://github.com/.insteadOf 'git@github.com:'
+add_git_config url.https://github.com/.insteadOf 'ssh://git@github.com/'
+
+status=0
+"$@" || status=$?
+exit "$status"

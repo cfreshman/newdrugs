@@ -487,3 +487,20 @@ Settings navigation follow-up: following an in-app destination retains the curre
 Attachment links remain compact pills with one-line CSS ellipses inside the actual anchor. Storage no longer repeats the image-downscaling explanation. Settings clips horizontal overflow while both filter rows retain their own horizontal scrolling. An isolated browser fixture verified panel client/scroll widths of 376/376 at a 390px viewport and 306/306 at 320px, including long labels and expanded multi-attachment links. Fixture files/tab were removed and the viewport reset. The subsequent dialog/navigation regression suite passed 87 tests, including preserving the exact Storage DOM, filters, expanded chooser and scroll through a destination link.
 
 Final Storage release: production **v0.23.4**, `20260927132706715`; dev `20260927132543335`. The account-wide usage total/bar sits above the filters with an explicit 6px gap. Summary and filters remain visible during all file-list reads; pending filter results retain their old geometry but stay hidden/inert behind a small spinner until the current response arrives. The final UI suite passed 88 tests. Production health passed, served HTML matched the built artifact, and live CLI description confirmed both filters and attachment output schemas. Native CSS ellipsis remains clickable; the browser does not underline its generated marker, and the user accepted leaving it standard.
+
+### Switching GitHub accounts for one command
+
+`scripts/github-cfreshman` remembers the current active github.com account, selects the saved `cfreshman` login, runs its arguments in the caller's working directory, and restores the previous login on exit, failures or handled interruption. It preserves the wrapped command's exit status; a failed restoration is reported explicitly. Both accounts are currently saved in GitHub CLI's keyring.
+
+```sh
+./scripts/github-cfreshman gh api user --jq .login
+./scripts/github-cfreshman git push -u origin HEAD
+```
+
+For initial repository creation when explicitly requested:
+
+```sh
+./scripts/github-cfreshman gh repo create cfreshman/newdrugs --private --source=. --remote=origin --push
+```
+
+The helper supplies GitHub CLI credentials and GitHub SSH-to-HTTPS URL rewrites only through the wrapped process's Git configuration environment. Existing process-level Git configuration is preserved. It ignores inherited GH_TOKEN/GITHUB_TOKEN only inside the wrapper so they cannot override the requested saved account. It does not rewrite persistent Git configuration, remote URLs or commit identity. Eight isolated wrapper tests passed; a real read-only identity call returned cfreshman and restored the previously active account. No repository was created or pushed during validation.
