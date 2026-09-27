@@ -1,4 +1,4 @@
-import {birthdaySchema,birthdayPersonSchema} from './logBirthday';
+import {ownBirthdaySchema,birthdayPersonSchema} from './logBirthday';
 import {logContactSchema,logCodeOutput,logJoinPreview} from './logJoining';
 import {z} from 'zod';
 import {Temporal} from '@js-temporal/polyfill';
@@ -18,8 +18,8 @@ export type LogView=z.infer<typeof logViewSchema>;
 export type LogList=z.infer<z.ZodObject<typeof logListInput>>;
 export interface LogPage {items:LogEntry[];nextCursor:string|null}
 export const logOutputs={
- 'log.birthday_get':z.object({birthday:birthdaySchema.nullable()}),
- 'log.birthday_update':z.object({birthday:birthdaySchema.nullable()}),
+ 'log.birthday_get':z.object({birthday:ownBirthdaySchema.nullable()}),
+ 'log.birthday_update':z.object({birthday:ownBirthdaySchema.nullable()}),
  'log.birthdays':z.object({items:z.array(birthdayPersonSchema)}),
  'log.contacts':z.object({items:z.array(logContactSchema),nextCursor:z.string().nullable()}),
  'log.code':logCodeOutput,'log.join_preview':logJoinPreview,'log.join':logEntrySchema,'log.add_person':logEntrySchema,

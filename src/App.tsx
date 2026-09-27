@@ -1,3 +1,5 @@
+import {usePageBoundaryScroll} from './pageBoundaryScroll';
+import {bindLogEntryCache} from './logEntryCache';
 import {bindLogImageCache} from './logImageCache';
 import {PreferencesPanel} from './PreferencesPanel';
 import {useAppearance,useFont} from './useAppearance';
@@ -94,7 +96,7 @@ export function App() {
   const [media,setMedia]=useState<{items:MediaItem[];index:number}|null>(null);
   const workspaceRef=useRef<HTMLElement>(null);
   const [data, setData] = useState<Bootstrap | null>(null);
-  useLayoutEffect(()=>{if(data)bindLogImageCache(data.user.handle?data.user.id:null);},[data?.user.id,data?.user.handle]);
+  useLayoutEffect(()=>{if(data){const account=data.user.handle?data.user.id:null;bindLogImageCache(account);bindLogEntryCache(account);}},[data?.user.id,data?.user.handle]);
   useFont(data?(data.preferences?.font||'mono'):undefined);
   useAppearance(data?(data.preferences||defaultPreferences).appearance:undefined);
   const chatHistory = useChatHistory(() => scroll.preparePrepend());
@@ -134,6 +136,7 @@ export function App() {
     attachments:UploadRef[];inboxAttachments:InboxAttachment[];recordAttachments:RecordContext[];scroll:ReturnType<typeof scroll.capture>;
   }>>>({});
   useTopPagination(scroll.transcript, { enabled: Boolean(data) && (mode==='agent'||agentDockOpen) && !inputOccupied && !(panel && panelSpace === 'modal') && !chatHistory.error, hasMore: Boolean(chatHistory.cursor), count: messages.length, scope: data?.user.id, load: chatHistory.loadOlder });
+  usePageBoundaryScroll(page,Boolean(data));
   usePageChatScroll(page, scroll.transcript, Boolean(data)&&mode==='agent', Boolean(panel && panelSpace === 'modal') || inputOccupied, scroll.onScroll);
   const seenSurfaces = useRef(new Set<string>());
   const dictation = useDictation(draft, setDraft, logError);

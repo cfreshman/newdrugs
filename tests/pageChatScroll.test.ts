@@ -94,19 +94,3 @@ describe('social-mode background scrolling',()=>{
   const modal=document.createElement('div');modal.setAttribute('aria-modal','true');page.append(modal);expect(wheel(background).defaultPrevented).toBe(false);expect(content.scrollTop).toBe(100);
  });
 });
-
-describe('macOS scroll boundary shortcuts',()=>{
- let dom:ReturnType<typeof setupDOM>;
- beforeEach(()=>{dom=setupDOM();});afterEach(()=>dom.cleanup());
- it.each(['chat','content'] as const)('routes Command arrows to the %s scroller and preserves text editing',surface=>{
-  const page=document.createElement('div'),scroller=document.createElement('div'),button=document.createElement('button'),input=document.createElement('textarea');page.append(scroller,button,input);document.body.append(page);
-  Object.defineProperties(scroller,{clientHeight:{value:200},scrollHeight:{value:2000}});scroller.scrollTop=500;
-  const cleanup=bindPageChatScroll(page,scroller,{surface,blocked:()=>false,onScroll:vi.fn()});
-  const press=(key:string)=>{const event=new KeyboardEvent('keydown',{key,metaKey:true,bubbles:true,cancelable:true});window.dispatchEvent(event);return event;};
-  button.focus();expect(press('ArrowDown').defaultPrevented).toBe(true);expect(scroller.scrollTop).toBe(1800);
-  expect(press('ArrowUp').defaultPrevented).toBe(true);expect(scroller.scrollTop).toBe(0);
-  input.focus();expect(press('ArrowDown').defaultPrevented).toBe(false);expect(scroller.scrollTop).toBe(0);
-  input.blur();const modal=document.createElement('div');modal.setAttribute('aria-modal','true');page.append(modal);expect(press('ArrowDown').defaultPrevented).toBe(false);
-  cleanup();
- });
-});

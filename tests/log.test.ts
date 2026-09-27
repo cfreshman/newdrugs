@@ -107,3 +107,33 @@ it('exposes historical names only to attendees and preserves private original Lo
  row=await call('log.get',{entryId:row.id});expect(row.historicalPeople).toEqual(['Old friend']);expect(row.migration).toBeUndefined();await expect(call('log.get',{entryId:row.id},'stranger')).rejects.toMatchObject({status:404});
  row=await call('log.update',{...change(row),entry:{date:row.date,title:'Updated'}});expect(row.historicalPeople).toEqual(['Old friend']);expect((await rows('logEntries').findOne({_id:row.id}))?.migration).toMatchObject({sourceId:'original-hangout'});
 });
+it('keeps birth years owner-only, preserves omitted years, and supports clearing just the year',async()=>{
+ await call('log.birthday_update',{birthday:{month:9,day:27,year:1996}});
+ expect(await call('log.birthday_get')).toEqual({birthday:{month:9,day:27,year:1996}});
+ const friend=await call('log.birthdays',{},'friend'),ownList=await call('log.birthdays');expect(friend.items).toContainEqual({personId:'me',name:'Me',handle:'me',month:9,day:27});expect(JSON.stringify(friend)).not.toContain('year');expect(JSON.stringify(ownList)).not.toContain('year');
+ expect(await call('log.birthday_get',{},'friend')).toEqual({birthday:null});await expect(call('log.birthday_get',{personId:'me'},'friend')).rejects.toBeTruthy();
+ expect((await call('people.get',{personId:'me'},'friend')).birthday).toBeUndefined();
+ expect(await call('log.birthday_update',{birthday:{month:9,day:28}})).toEqual({birthday:{month:9,day:28,year:1996}});
+ expect(await call('log.birthday_update',{birthday:{month:9,day:28,year:null}})).toEqual({birthday:{month:9,day:28}});expect((await rows('logBirthdays').findOne({_id:'me'}))?.year).toBeUndefined();
+});
+it('notifies first contributions only, leaving metadata, edits, removals, and QR joins silent',async()=>{
+ let row=await create({}, {note:''});row=await call('log.add_person',{...change(row),personId:'friend'},'me',true);
+ await rows('notifications').updateMany({},{$set:{readAt:'already-read'}});
+ row=await call('log.update',{...change(row),entry:{date:row.date,title:'New title'},contribution:{note:'Creator adds a note'}});
+ expect((await rows('notifications').findOne({userId:'friend'}))?.readAt).toBe('already-read');expect(await rows('notifications').countDocuments()).toBe(1);
+ row=await call('log.update',{...change(row),entry:{date:row.date,title:'Another title'}},'friend');expect(await rows('notifications').countDocuments({userId:'me'})).toBe(0);
+ row=await call('log.contribute',{...change(row),contribution:{note:'First note'}},'friend');expect(await rows('notifications').countDocuments({userId:'me',kind:'log_update'})).toBe(1);
+ await rows('notifications').updateMany({},{$set:{readAt:'already-read'}});
+ for(const note of ['Edited note','','Added again'])row=await call('log.contribute',{...change(row),contribution:{note}},'friend');expect((await rows('notifications').findOne({userId:'me'}))?.readAt).toBe('already-read');
+ const code=await call('log.code',{entryId:row.id});row=await call('log.join',{code:code.code},'stranger',true);expect(await rows('notifications').countDocuments({readAt:null})).toBe(0);
+ row=await call('log.contribute',{...change(row),contribution:{note:'A first contribution'}},'stranger');expect(await rows('notifications').countDocuments({actorId:'stranger',kind:'log_update',readAt:null})).toBe(2);
+ await rows('notifications').updateMany({},{$set:{readAt:'already-read'}});await call('log.leave',change(row),'stranger',true);expect(await rows('notifications').countDocuments({readAt:null})).toBe(0);
+});
+it('treats existing content as already contributed and alerts on a new member’s first media',async()=>{
+ let row=await create();row=await call('log.add_person',{...change(row),personId:'friend'},'me',true);const fileId=await testAudio('friend');row=await call('log.contribute',{...change(row),contribution:{fileIds:[fileId]}},'friend');expect(await rows('notifications').countDocuments({userId:'me',kind:'log_update'})).toBe(1);
+ await rows('notifications').updateMany({},{$set:{readAt:'already-read'}});await rows('logEntries').updateOne({_id:row.id},{$unset:{'contributions.1.hasContributed':''}});row=await call('log.contribute',{...change(row),contribution:{fileIds:[],note:'Updated older contribution'}},'friend');expect((await rows('notifications').findOne({userId:'me'}))?.readAt).toBe('already-read');
+});
+it('pushes a generic first-contribution notice, and later edits leave it read',async()=>{
+ const {pushStillRelevant,deliverPush}=await import('../server/push');let row=await create();row=await call('log.add_person',{...change(row),personId:'friend'},'me',true);await rows('sessions').insertOne({_id:'contribution-session',userId:'me',expiresAt:new Date(Date.now()+60000)});await rows('pushSubscriptions').insertOne({_id:'contribution-device',deviceId:randomUUID(),userId:'me',sessionId:'contribution-session',revokedAt:null,endpoint:'https://fcm.googleapis.com/fixture',keys:{}});
+ const publicKey=config.VAPID_PUBLIC_KEY,privateKey=config.VAPID_PRIVATE_KEY,packets:string[]=[];try{config.VAPID_PUBLIC_KEY='fixture';config.VAPID_PRIVATE_KEY='fixture';row=await call('log.contribute',{...change(row),contribution:{note:'Private memory'}},'friend');const event=await rows('pushOutbox').findOne({kind:'log_update',userId:'me'});expect(event).toBeTruthy();expect(await pushStillRelevant(event as any)).toBe(true);await rows('pushOutbox').updateMany({},{$set:{availableAt:0}});await deliverPush((async(_subscription:any,payload:any)=>{packets.push(String(payload));return {statusCode:201};}) as any);expect(JSON.parse(packets[0])).toMatchObject({body:'Someone added to a hangout.',url:`/log/${row.id}`});expect(packets[0]).not.toContain('Private memory');await rows('notifications').updateMany({userId:'me'},{$set:{readAt:'read'}});row=await call('log.contribute',{...change(row),contribution:{note:'A correction'}},'friend');expect(await pushStillRelevant(event as any)).toBe(false);expect(await rows('pushOutbox').countDocuments({kind:'log_update'})).toBe(1);}finally{config.VAPID_PUBLIC_KEY=publicKey;config.VAPID_PRIVATE_KEY=privateKey;}
+});

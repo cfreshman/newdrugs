@@ -7,10 +7,10 @@ export function bindPageChatScroll(page: HTMLElement, chat: HTMLElement, options
   let momentum = 0;
   let gesture: { x: number; y: number; lastY: number; lastTime: number; speed: number; scrolling: boolean } | null = null;
   const stop = () => { cancelAnimationFrame(momentum); momentum = 0; gesture = null; };
-  const blocked = (navigationKey = false) => {
+  const blocked = () => {
     const focused = document.activeElement;
     const chatControl = focused instanceof Element && Boolean(focused.closest('.composer-input-layer, .dictation-slot, .launcher-controls'));
-    const focusOwnsScroll=navigationKey||options.surface==='content'?focused instanceof Element&&Boolean(focused.closest(scrollOwner)):Boolean(focused && focused !== document.body && focused !== page && !chat.contains(focused) && !chatControl);
+    const focusOwnsScroll=options.surface==='content'?focused instanceof Element&&Boolean(focused.closest(scrollOwner)):Boolean(focused && focused !== document.body && focused !== page && !chat.contains(focused) && !chatControl);
     return options.blocked() || Boolean(document.querySelector('dialog[open], [aria-modal="true"], [data-page-scroll-lock]')) ||
       focusOwnsScroll;
   };
@@ -76,14 +76,14 @@ export function bindPageChatScroll(page: HTMLElement, chat: HTMLElement, options
     momentum = requestAnimationFrame(coast);
   };
   const keydown = (event: KeyboardEvent) => {
-    const boundary=event.metaKey&&!event.shiftKey&&(event.key==='ArrowUp'||event.key==='ArrowDown');
+    if(event.defaultPrevented){stop();return;}
+    if(event.metaKey)return;
     const focused=document.activeElement;
-    if(focused instanceof Element&&focused.closest(boundary?scrollOwner:touchControl))return;
-    if(blocked(boundary)||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey&&!boundary)return;
+    if(focused instanceof Element&&focused.closest(touchControl))return;
+    if(blocked()||event.defaultPrevented||event.altKey||event.ctrlKey)return;
     if(options.surface==='content'&&focused instanceof Element&&focused.closest('.workspace'))return;
-    if(!boundary&&focused&&chat.contains(focused))return;
-    const amount=boundary?(event.key==='ArrowDown'?chat.scrollHeight:-chat.scrollHeight)
-      :event.key==='PageDown'||event.key===' '&&!event.shiftKey?chat.clientHeight*.85
+    if(focused&&chat.contains(focused))return;
+    const amount=event.key==='PageDown'||event.key===' '&&!event.shiftKey?chat.clientHeight*.85
       :event.key==='PageUp'||event.key===' '&&event.shiftKey?-chat.clientHeight*.85
       :event.key==='ArrowDown'?40:event.key==='ArrowUp'?-40:0;
     if(!amount||chat.scrollHeight<=chat.clientHeight)return;

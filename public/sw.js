@@ -14,7 +14,7 @@ self.addEventListener('push', event => {
     try { data = event.data?.json() || {}; } catch { /* Still display a visible notification. */ }
     const path = messagePath(data.url);
     await self.registration.showNotification('Notification', {
-      body: ['You have an agent update.','You have an automation update.','You have a new invitation.','You were added to a hangout.','You have a Log invitation.'].includes(data.body) ? data.body : 'You have a new message.',
+      body: ['You have an agent update.','You have an automation update.','You have a new invitation.','You were added to a hangout.','You have a Log invitation.','Someone added to a hangout.'].includes(data.body) ? data.body : 'You have a new message.',
       icon: '/icons/icon-192.png', tag: typeof data.tag === 'string' ? data.tag : 'newdrugs',
       data: { path },
     });

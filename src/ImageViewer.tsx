@@ -62,6 +62,9 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
      errorMsg:'Photo unavailable',
      getViewportSizeFn:()=>({x:window.visualViewport?.width||document.documentElement.clientWidth,y:window.visualViewport?.height||window.innerHeight}),
     });
+    // Keep New Drugs animation settings after the library prepares its defaults.
+    viewer.options.showHideAnimationType='fade';
+    viewer.options.zoomAnimationDuration=240;
     viewer.on('zoomLevelsUpdate',({zoomLevels})=>{zoomLevels.min=zoomLevels.initial;});
     viewer.on('destroy',()=>{if(!controller.signal.aborted)closeRef.current();});
     viewer.on('afterInit',()=>{viewer?.element?.setAttribute('aria-label','Post photos');viewer?.element?.setAttribute('aria-modal','true');setLoading(false);});

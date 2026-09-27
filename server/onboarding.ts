@@ -7,7 +7,7 @@ export async function ensureIntroduction(userId: string) {
   const join = others ? `Join ${others.toLocaleString('en-US')} ${others === 1 ? 'other person' : 'others'} on New Drugs.` : 'Be the first to join New Drugs.';
   const text = `New Drugs, made in New England, is a social experiment that aims to make your life better. Its like Twitter X Bumble BFF X ChatGPT. Share what you’re up to and make plans. Use responsibly.
 
-New Drugs takes no profit. Credits pay for AI at cost. Or use your own [Codex, Claude Code, or other agent](/agents) for **free**.
+New Drugs takes no profit. Credits pay for AI at cost. Or use your own [Codex, Claude Code, or other agent](/agents) for **free**. Or skip the AI entirely.
 
 ${join}`;
   if (introduction) {

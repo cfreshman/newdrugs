@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.21.3.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.22.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.21.3, release `20260927112944660` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927112737233`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.22.1, release `20260927123847175` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927125404160`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -421,7 +421,7 @@ Follow the later user corrections over the original Logcal parity notes: Grid is
 Wayfinder page-context references were verified read-only: `../wayfinder/src/components/agent/AgentProvider.tsx` (`pageContextForPath`), `../wayfinder/convex/agentRuntime/pageContext.ts` (server authorization), and `agentRuntime/agentTools.ts` (lookup-only guidance). New Drugs now captures its recognized route per outgoing message, derives and authorizes the referenced resource server-side, and rechecks it in model input. This covers ordinary turns, reused sessions and review corrections. It is advisory context, never action authorization, and is not injected into background automations. Paths use the stage's canonical origin; local frontend routes therefore link through cloud dev. No separate CLI operation is needed for browser-owned current-page context.
 
 
-Log now has actual People, Birthdays, Anniversaries and Log settings sidenav pages, with mobile links inside Log settings. Generic filter/saved-view UI has been removed; its operations remain. A compact in-page picker changes Calendar/Grid/List; More settings opens layout, birthday, directory shortcuts and export. Birthdays use `log.birthday_get`, `log.birthday_update`, `log.birthdays` and the separate `logBirthdays` collection, storing month/day only. They are visible only to accepted New Drugs friends, with block/suspension checks and explicit background Log scope. Calendar markers and the Birthdays page link to profiles; they never create synthetic hangouts. Live birthday changes invalidate the calendar. `src/LogSettings.tsx`, `LogDirectory.tsx`, `ProfileHangouts.tsx` and shared `LogList.tsx` implement these surfaces. Accepted friends’ profiles show a Hangouts tab, containing only viewer-authorized shared entries. Opening one preserves the current mode and returns to the same profile tab when closed.
+Log now has actual People, Birthdays, Anniversaries and Log settings sidenav pages, with mobile links inside Log settings. Generic filter/saved-view UI has been removed; its operations remain. A compact in-page picker changes Calendar/Grid/List; More settings opens layout, birthday, directory shortcuts and export. Birthdays use `log.birthday_get`, `log.birthday_update`, `log.birthdays` and the separate `logBirthdays` collection. An optional birth year is owner-only; shared results contain month/day only. They are visible only to accepted New Drugs friends, with block/suspension checks and explicit background Log scope. Calendar markers and the Birthdays page link to profiles; they never create synthetic hangouts. Live birthday changes invalidate the calendar. `src/LogSettings.tsx`, `LogDirectory.tsx`, `ProfileHangouts.tsx` and shared `LogList.tsx` implement these surfaces. Accepted friends’ profiles show a Hangouts tab, containing only viewer-authorized shared entries. Opening one preserves the current mode and returns to the same profile tab when closed.
 
 
 ### First production Log release and migration
@@ -443,3 +443,30 @@ The subsequent Log photo-cache/safe-area follow-up is documented in [IMAGE_CACHE
 
 
 The cache/safe-area follow-up shipped to dev `20260927112737233` and production **v0.21.3**, `20260927112944660`. The production HTML, service worker and cache script match their built artifacts; health checks pass. The UI/cache/calendar/modal regression suite passed 109 tests, followed by 19 cache/layout checks and 76 app/identity checks after final adjustments; counts overlap. Browser verification confirmed an IndexedDB hit across reload without an extra network request and simulated 34px bottom safe area in browser/standalone/keyboard layouts. Physical iPhone verification remains user/device testing. No semantic Log index was added: Log search remains private text/Boolean matching with date/person/scope filters.
+
+
+### Initial hangout snapshots, render performance and private ages
+
+The follow-up keeps recent full hangout snapshots in account-scoped IndexedDB: 200 entries, 4 MiB, seven days, with quota-error fallback and logout/account-switch cleanup. `src/logSnapshotStore.ts` owns storage; `src/logEntryCache.ts` provides synchronous memory seeds and async disk reads. Calendar/list clicks prime the already available entry immediately. A detail panel always starts a fresh `log.get`; the result immediately wins over memory/disk, late old requests cannot overwrite it, and revoked/deleted entries are evicted. Truncated list previews cannot replace full snapshots of the same revision. Editing waits for current full details, avoiding a save from a truncated preview. No API responses are intercepted or returned to agents from this presentation cache.
+
+The calendar was staying mounted but rebuilding its date grid on overlay visibility changes. The grid now memoizes data-dependent rendering, uses stable event callbacks and reuses a date formatter. Calendar padding, header height and bottom clearance stay stable behind overlays. Regression tests verify the same calendar/week DOM, preserved scroll and no week regeneration during open/close. A synthetic 500-entry browser fixture measured the old visibility updates at 36.8–52.3 ms and the new ones at 0.4 ms; these are development-browser render timings, not physical-iPhone guarantees. Fixture files/tab were removed.
+
+The no-reduced-motion rule is explicit in AGENTS.md. App code has no OS-motion-dependent branches; PhotoSwipe’s internally altered animation options are explicitly restored before initialization. The unused motion toggle in the test harness was removed.
+
+The user also restored Logcal’s age margin. Log settings accepts an optional private year. The owner’s calendar displays full age on birthday weeks and quarter-year markers, including leap-day/month-end clamping. `log.birthday_get` reads only the caller’s private value; `log.birthday_update` preserves the year when omitted and removes it with year:null. `log.birthdays` remains month/day-only, including its own-user row, and profiles never expose the birth year or age. Historical source birth years have not been imported automatically.
+
+
+Command+Up/Down is routed once at the application boundary and works from focused inputs/buttons. It targets the containing foreground panel: Log overlays or Settings first, the focused Agent dock when applicable, otherwise the active main panel. A DM’s transcript owns the jump rather than the composer. Shift-modified selection shortcuts and ordinary editing keys remain native. `src/pageBoundaryScroll.ts` owns this, separately from wheel/touch routing. The welcome paragraph now ends with “Or skip the AI entirely.”
+
+Calendar month labels mark the week containing the first day of the new month, using the new month/year when a week straddles a boundary. Do not repeat the current month at the top of the visible calendar. Personal age/quarter markers are right-aligned, mirroring the left-aligned date labels.
+
+Hangout photos are a single non-wrapping strip with fixed, non-shrinking photo widths, overriding the post grid’s half-width cap. Desktop mouse grabbing scrolls it without opening a photo after a drag; normal clicks still open the viewer. Wheel axes use a continuous signed projection (`deltaX + deltaY`), avoiding dominant-axis direction jumps. Unconsumed vertical motion at strip boundaries transfers to the nearest vertical scroll parent, respecting modal boundaries. Touch stays native, zoom gestures pass through, scrollbars remain hidden, and forced snapping is disabled. `src/horizontalMediaScroll.ts` owns the behavior; ordinary post grids are unaffected.
+
+Log notification behavior now follows Logcal’s `sendHangoutNotifications` and `anyMediaOld` rules in `backend/src/routes/hangouts.js`: alert a newly added person, and alert existing attendees once when another attendee first adds a note/media. Creation counts as the creator’s contribution. A persisted `hasContributed` flag survives clearing/re-adding content; current content and creator identity cover legacy records without that flag. Later edits, metadata changes, QR joins, and leaving do not create alerts or reset read state. Live record updates still happen for every change. First-contribution pushes use generic text and recheck membership/read status. No old notification history was deleted.
+
+
+The snapshot/age/scroll/notification batch shipped to production **v0.22.1**, release `20260927123847175`; production health and service status passed. All 37 Log backend checks passed, alongside the focused UI suites described above.
+
+Voice-note follow-up restores Logcal’s dedicated controls below the written note. Photos and audio no longer trigger a shared attachment grid or duplicate the photo. Recording uses a Phosphor right arrow without a trailing line, advancing in discrete one-second steps, and a 15-second limit, then compact play/interrupt/remove controls. The user replaced the literal character bar with this icon treatment and removed the trailing line; do not restore the text bar or import Logcal’s font. Existing multiple audio attachments are preserved. Saved audio appears under its contributor’s note, without filenames or a generic media scrubber. The shared non-Log audio player is unchanged. Thirty focused editor/recorder/playback tests passed; microphone capture on physical iOS still needs device verification.
+
+Voice-note/editor corrections are on cloud dev `20260927125404160`, with a successful build and database health check. The editor no longer repeats other attendees’ photos or offers that extra shared-photo section. Production remains v0.22.1 on its prior release; these subsequent voice UI corrections have only been deployed to dev.

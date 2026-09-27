@@ -8,7 +8,7 @@ Source audit: `../logcal/app/components/{Calendar,LogEntry,HangoutView,HangoutFe
 - Dated moments and future plans: optional title/place, links, anniversary marker, and each participant's own note, images, and audio. Date-only records do not shift across timezones.
 - Entry details, editing, removal, contribution ownership, cover choice, and adjacent navigation.
 - CLI/MCP-only filters and named saved views; the generic filtering UI was removed. Search matches titles, places and contribution notes; supports quoted phrases, AND, OR and negation. Search is private, independent from public discovery.
-- Anniversary starts mark an original hangout. Birthday settings store month/day only, and calendar reminders include accepted New Drugs friends only. Calendar recurrence uses month/day, with leap-day anniversaries on February 28 in non-leap years.
+- Anniversary starts mark an original hangout. Birthday settings include an optional private birth year for the owner’s calendar age markers. Shared birthday reminders contain month/day only and include accepted New Drugs friends only. Calendar recurrence uses month/day, with leap-day anniversaries on February 28 in non-leap years.
 - Portable JSON and readable text export with bounded pagination. Media stays access-controlled; export is not a new public sharing URL.
 
 ## Adaptations
@@ -28,7 +28,7 @@ Source audit: `../logcal/app/components/{Calendar,LogEntry,HangoutView,HangoutFe
 - Personality quiz: a separate social game, not part of the diary workflow.
 - Independent friend accounts and automatic New Drugs DM friendship: shared-hangout contacts are derived from attendance instead. QR join links are retained with 128-bit rotatable codes and authenticated preview/join.
 - Exact GPS reverse geocoding: incompatible with New Drugs' coarse-location policy.
-- Life-quarter age labels: require storing a full birth date for a decorative feature. Month/day birthday settings and anniversary starts provide reminders without storing a birth year.
+
 - Standalone HTML microsite export: portable data/text export first; no separate public diary site or competing renderer.
 
 Implementation status, validation evidence and remaining device-testing limits are tracked in PLAN.md.
@@ -44,3 +44,7 @@ The initial accepted-friend-only invitation model was an incorrect departure fro
 The generic Log header is removed. Scan and log float over the calendar; separate current-day cards sit above them, including yesterday before 8am. Detail, editor, code and scan screens use an unclipped top-layer overlay with the underlying page mounted, normal exterior gaps, and full height behind the mode header. New Drugs mode controls and navigation continue to own the outer shell.
 
 The current user corrections also require a top-left Grid, completely fixed clickable weekdays, three horizontal-swipe today-card presentations of equal height, a separate Log settings page, and a Hangouts tab on friends’ profiles. These override older reference-layout details.
+
+## Restored age markers
+
+The user subsequently requested Logcal’s right-margin life-quarter markers. An optional birth year now enables full ages on birthday weeks and 1/4, 1/2, 3/4 markers at three-month milestones. The year is owner-only through log.birthday_get/update. log.birthdays and profiles never expose the year or age. No birth year was backfilled by the original migration.

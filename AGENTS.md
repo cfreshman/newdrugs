@@ -206,7 +206,7 @@ agent-written rules (you are allowed to edit below this line)
 - The Log three-dot control opens a compact Calendar/Grid/List picker and a More settings button for the separate Log settings panel. Cancel from Scan returns to its originating QR code when opened there; Scan opened from the calendar returns to the calendar. Close returns through the prior QR/entry screen; only Older/Newer replaces the current record.
 
 - Log sidenav includes People, Birthdays, Anniversaries and Log settings; mobile reaches the same pages from Log settings. Friends’ profiles have a Hangouts tab using the shared Log list, preserving the current app mode and profile tab when closing a hangout.
-- Birthday settings store month/day only and show reminders only to accepted New Drugs friends. Shared hangout attendance alone does not grant birthday access. Do not require/store a birth year. Use normal block/suspension gates; no public birthday directory. Older/Newer labels stay fixed, without neighboring dates that pop in after loading.
+- Birthday settings accept an optional owner-only birth year for personal calendar age markers. Public birthday projections contain month/day only and show reminders only to accepted New Drugs friends. Shared hangout attendance alone does not grant birthday access. Do not require the year or expose the year/age to other users. Use normal block/suspension gates; no public birthday directory. Older/Newer labels stay fixed, without neighboring dates that pop in after loading.
 - Scan/Log controls use the same bottom inset as their side inset.
 
 - Account Preferences contains Light/Dark/System theme, Mono/Sans/Serif font (Mono default), and a landing tab. Preferences stay private, sync between signed-in devices, and do not override explicit deep links. Account contains sign-in/security, blocked people and storage; Donate and Log out share a row.
@@ -219,3 +219,14 @@ agent-written rules (you are allowed to edit below this line)
 
 - Cache recent Log photos locally with IndexedDB through the marked-image service-worker path. Keep it account-scoped, bounded by bytes/count/age and available browser quota, with LRU eviction, background revalidation, and deletion/logout invalidation. Do not cache app/API responses or videos/audio. Do not clear persisted photos on startup before account identity is known.
 - Load older Log weeks one scrollport ahead, adapting on resize. Apply mobile bottom safe area once: outside inset panels, inside standalone edge-to-edge panels and their floating controls. Remove it while the keyboard is open. In mobile standalone, Log overlays fit the main content panel and leave the top mode/settings controls usable.
+
+- Hard rule: do not add reduced-motion settings, prefers-reduced-motion queries, or animation-disabling branches based on OS motion preferences. Keep app animations consistent. Explicitly restore app animation options when third-party libraries alter them; do not override global browser APIs.
+
+- Hangout snapshots are for initial presentation only. Always fetch the current entry immediately, let that response win, and evict revoked/deleted records. Keep the calendar mounted and preserve its layout/scroll behind overlays; do not regenerate its weeks for open/close transitions.
+
+- Command+Up/Down must work from focused inputs and buttons, routing to the active containing panel without scrolling underlying pages through a modal. Keep ordinary typing/navigation and shifted selection shortcuts native. Calendar month labels mark the week containing the 1st of the new month; do not repeat a top-row month label. Right-align the personal age markers.
+
+- Hangout photos form a non-wrapping horizontal strip. Support desktop grab dragging without click-through, continuous diagonal wheel projection, and vertical remainder handoff at edges; preserve native touch/zoom and hide scrollbars.
+- Follow Logcal notification semantics: notify newly added attendees and the first note/media contribution by another attendee only. The creator counts as having contributed at creation. Later edits, metadata changes, content removal/re-addition, joins and leaving stay silent; keep realtime data updates separate. Preserve first-contribution state through later saves.
+
+- Log voice notes belong below the written note, separately from the photo controls. Recording uses a Phosphor right arrow without a trailing line, advancing in discrete one-second steps like Logcal’s character bar. Preserve the 15-second capture and compact play/interrupt/remove flow. Do not import Logcal’s font asset. Adding audio must not duplicate photos or open a generic attachment-grid mode.

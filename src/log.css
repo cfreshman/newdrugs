@@ -116,7 +116,7 @@
 .log-editor-footer{position:sticky;bottom:0;justify-content:flex-end;background:var(--panel-surface-bottom);padding-block:8px;z-index:2;}
 .mode-page-log:has(>.log-detail){height:100%;}.log-detail{min-height:100%;gap:8px;}
 .log-detail h2{font:600 20px/1.3 var(--font-ui);color:var(--primary);}
-.log-photo-strip .post-photos{display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0;}
+.log-photo-strip .post-photos{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:none;overscroll-behavior-x:contain;margin:0;}
 .log-photo-strip .post-photos>a{flex:0 0 min(100%,380px);scroll-snap-align:start;max-height:460px;}
 .log-photo-strip .post-photos img{max-height:460px;width:100%;object-fit:contain;}
 .log-photo-strip:has(.post-photos):empty{display:none;}
@@ -138,7 +138,7 @@
 .log-today-summary img{width:40px;height:40px;border-radius:3px;object-fit:cover;}.log-today-summary span{display:flex;flex-direction:column;gap:3px;}.log-today-summary small{color:var(--muted);font-size:11px;}
 .log-today-choices{max-height:180px;overflow:auto;display:flex;flex-direction:column;gap:4px;}.log-home-footer .log-today-choices button{background:var(--surface);color:var(--ink);border-radius:var(--radius-control);text-align:left;padding:8px;font-size:13px;font-weight:400;}
 .log-photo-strip{--log-photo-size:240px;}
-.log-photo-strip .post-photos>a{flex:0 0 min(100%,var(--log-photo-size));height:var(--log-photo-size);max-height:var(--log-photo-size);}
+.log-photo-strip .post-photos>a{flex:0 0 min(100%,var(--log-photo-size));max-width:none;height:var(--log-photo-size);max-height:var(--log-photo-size);}
 .log-photo-strip .post-photos img{height:100%;max-height:var(--log-photo-size);object-fit:cover;}
 .mode-page-log:has(>.log-browser){height:100%;}.log-browser{min-height:100%;}.log-home-footer{margin-top:auto;}
 .log-empty p{font:14px/1.5 var(--font-ui);color:var(--muted);}
@@ -148,7 +148,7 @@
 
 /* Logcal composition: a headerless calendar under floating day cards and actions. */
 .log-native{position:relative;}
-.log-native .mode-pages>.composer-view:not(.composer-underlay)>.mode-page{padding:var(--panel-inset);}
+.log-native .mode-pages>.composer-view>.mode-page{padding:var(--panel-inset);}
 .log-native .mode-page-log:has(>.log-browser){padding-bottom:var(--panel-inset)!important;}
 .log-chrome-host{position:absolute;inset:0;pointer-events:none;z-index:4;}
 .log-floating{position:absolute;inset:auto var(--panel-inset) calc(var(--panel-inset) + var(--panel-safe-bottom,0px));pointer-events:none;}
@@ -165,8 +165,8 @@
 .log-today-card span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .log-today-card small{display:block;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:11px;margin-top:3px;}
 .log-today-floaters:not([data-presentation=full]){width:var(--log-today-item-size);max-height:141px;}.log-today-floaters:not([data-presentation=full]) .log-today-card{height:var(--log-today-item-size);padding:6px;}.log-today-floaters:not([data-presentation=full]) img{width:calc(var(--log-today-item-size) - 14px);height:calc(var(--log-today-item-size) - 14px);}.log-today-floaters:not([data-presentation=full]) .log-today-card:has(img) span{display:none;}
-.log-overlay-open .composer-underlay{position:absolute;inset:0;}
-.log-overlay-open .mode-page{height:100%;min-height:0;}
+.log-overlay-open .log-header-host{height:var(--log-header-height,0px);flex:none;}
+.log-overlay-open .log-modal .mode-page{height:100%;min-height:0;}
 .log-overlay-open .log-detail,.log-overlay-open .log-editor,.log-task{height:100%;min-height:0;display:flex;flex-direction:column;gap:8px;}
 .log-detail-body,.log-editor-body,.log-task-content{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;}
 .log-detail-body{display:flex;flex-direction:column;gap:10px;}
@@ -231,3 +231,20 @@
 .log-detail-footer .log-adjacent button:last-child{justify-content:flex-end;}
 .log-modal[data-loading=true]>.composer-view{visibility:hidden;pointer-events:none;}
 .log-loading-footer{position:absolute;inset:auto var(--panel-inset) calc(var(--panel-inset) + var(--panel-safe-bottom,0px));margin:0;}
+
+.log-week-right{font-family:var(--font-ui);font-size:12px;color:var(--ink);text-align:right;padding-right:2px;}
+.log-birthday-fields label{flex:1;}.log-birthday-fields label:first-child{flex:1.5;}.log-birthday-fields input{width:100%;min-width:0;}
+
+.log-photo-strip .post-photos[data-grab-scroll=true]{cursor:grab;user-select:none;}.log-photo-strip .post-photos[data-grab-scroll=true] a{cursor:inherit;}.log-photo-strip .post-photos[data-dragging=true]{cursor:grabbing;}
+
+/* Voice notes retain Logcal's own place below the note, separate from photos. */
+.log-voice-notes{display:flex;flex-direction:column;gap:6px;}
+.log-voice-row{display:flex;align-items:center;gap:8px;min-height:36px;}
+.log-voice-row button{min-height:36px;padding:8px 12px;border-radius:999px;background:var(--surface-soft);color:var(--ink);font-size:12px;}
+.log-voice-player{display:inline-flex;align-self:flex-start;}
+.log-voice-player>button{background:transparent;padding:0;color:var(--primary-ink);font:inherit;text-align:left;}
+.log-voice-row .log-voice-player>button{padding:8px 12px;background:var(--surface-soft);color:var(--ink);font-size:12px;}
+.log-note-content>.log-media{margin-top:6px;}.log-note-content>.log-media:empty{margin:0;}
+.log-voice-row .log-voice-progress{color:var(--primary-ink);}
+.log-voice-track{--voice-arrow:18px;--voice-offset:calc((100% - var(--voice-arrow)) * var(--voice-step) / 15);display:block;position:relative;width:144px;height:20px;}
+.log-voice-track>svg{position:absolute;left:var(--voice-offset);top:1px;}

@@ -37,3 +37,12 @@ it('does not let a delayed play request restart audio in a hidden tab',async()=>
  await render();await act(async()=>dom.container.querySelector<HTMLButtonElement>('[aria-label="Play audio"]')!.click());await render(false);
  vi.mocked(HTMLMediaElement.prototype.pause).mockClear();await act(async()=>finish());expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
 });
+
+it('keeps Log voice playback compact and interruption restarts from the beginning',async()=>{
+ await act(async()=>dom.root.render(createElement(AudioPlayer,{src:'/voice.m4a',voiceNote:true,editor:true})));
+ const audio=dom.container.querySelector('audio')!;
+ expect(dom.container.textContent).toBe('Play voice note');expect(dom.container.querySelector('input')).toBeNull();
+ await act(async()=>dom.container.querySelector('button')!.click());
+ act(()=>{audio.currentTime=4;audio.dispatchEvent(new Event('timeupdate'));});expect(dom.container.textContent).toBe('Interrupt 4s');
+ await act(async()=>dom.container.querySelector('button')!.click());expect(audio.paused).toBe(true);expect(audio.currentTime).toBe(0);expect(dom.container.textContent).toBe('Play voice note');
+});

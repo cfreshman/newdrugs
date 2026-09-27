@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProgressiveText } from '../src/useProgressiveText';
 import { AgentLiveMessage } from '../src/AgentLiveMessage';
 import type { RunView } from '../shared/types';
@@ -46,8 +46,8 @@ describe('progressive thinking text', () => {
     dom.frame(300);
     expect(dom.container.textContent).toBe(text);
   });
-  it('keeps progressive appearance enabled regardless of system motion preference', () => {
-    dom.reduced(true); render('Checking people nearby'); dom.frame(100);
+  it('keeps progressive appearance enabled regardless of matching media queries', () => {
+    vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}})); render('Checking people nearby'); dom.frame(100);
     expect(dom.container.textContent!.length).toBe(9);
     dom.frame(300); expect(dom.container.textContent).toBe('Checking people nearby');
   });

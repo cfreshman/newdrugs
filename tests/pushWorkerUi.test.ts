@@ -20,3 +20,6 @@ it('keeps Log destinations and generic hangout notices in push',async()=>{
  let work:Promise<void>|undefined;events.push({data:{json:()=>({url:'/log/hangout-id',body:'You were added to a hangout.'})},waitUntil:(promise:Promise<void>)=>{work=promise;}});await work;
  expect(showNotification).toHaveBeenCalledWith('Notification',expect.objectContaining({body:'You were added to a hangout.',data:{path:'/log/hangout-id'}}));
 });
+it('keeps the generic first-contribution push text without revealing the note',async()=>{
+ const events:Record<string,(event:any)=>void>={},showNotification=vi.fn().mockResolvedValue(undefined);runInNewContext(code,{URL,self:{location:{origin:'https://druggie.org'},addEventListener:(name:string,fn:(event:any)=>void)=>{events[name]=fn;},registration:{showNotification}}});let work:Promise<void>|undefined;events.push({data:{json:()=>({url:'/log/hangout-id',body:'Someone added to a hangout.'})},waitUntil:(p:Promise<void>)=>{work=p;}});await work;expect(showNotification).toHaveBeenCalledWith('Notification',expect.objectContaining({body:'Someone added to a hangout.',data:{path:'/log/hangout-id'}}));
+});

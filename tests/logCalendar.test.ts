@@ -3,7 +3,7 @@ import {act,createElement} from 'react';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {Temporal} from '@js-temporal/polyfill';
 import {LogCalendar} from '../src/LogCalendar';
-import {logWeekStart,logCalendarRange,logCalendarWeeks} from '../src/logCalendarModel';
+import {logWeekStart,logCalendarRange,logCalendarWeeks,logWeekMonth} from '../src/logCalendarModel';
 import {PanelVisibilityContext} from '../src/PanelReadiness';
 import {setupDOM} from './dom';
 const api=vi.hoisted(()=>({operation:vi.fn()}));
@@ -23,4 +23,11 @@ it('shows a birthday marker and opens that person without creating a synthetic h
 
 it('prefetches older weeks a viewport ahead and updates the threshold on resize',async()=>{
  await mount();const scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;Object.defineProperty(scroller,'clientHeight',{value:800,configurable:true});dom.resize(scroller);expect(edge().rootMargin).toBe('0px 0px 800px 0px');Object.defineProperty(scroller,'clientHeight',{value:500,configurable:true});dom.resize(scroller);expect(edge().rootMargin).toBe('0px 0px 500px 0px');
+});
+it('uses only the owner birthday year for the Logcal age margin',async()=>{
+ api.operation.mockImplementation(async(name)=>name==='log.birthday_get'?{birthday:{month:5,day:31,year:2000}}:{items:[],nextCursor:null});await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogCalendar,{...props,month:'2026-05'}))));expect(dom.container.querySelector('.log-week-right[aria-label="26 years"]')?.textContent).toBe('26');expect(dom.container.querySelector('.log-week-right[aria-label="25 years, 9 months"]')?.textContent).toBe('3/4');
+});
+
+it('labels the new month on its first-day week instead of the last-day week',()=>{
+ const day=(value:string)=>Temporal.PlainDate.from(value);expect(logWeekMonth(day('2026-09-27'))?.toString()).toBe('2026-10-01');expect(logWeekMonth(day('2026-02-22'))).toBeNull();expect(logWeekMonth(day('2026-03-01'))?.month).toBe(3);expect(logWeekMonth(day('2026-12-27'))?.toString()).toBe('2027-01-01');expect(logWeekMonth(day('2026-10-11'))).toBeNull();
 });

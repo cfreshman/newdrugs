@@ -7,8 +7,9 @@ import {ExperienceContext} from '../src/ExperienceContext';
 import {setupDOM} from './dom';
 const library=vi.hoisted(()=>({options:null as any,instance:null as any}));
 vi.mock('photoswipe',()=>({default:class{
+ options:any;
  element=document.createElement('div');events=new Map<string,()=>void>();
- constructor(options:unknown){library.options=options;library.instance=this;}
+ constructor(options:any){this.options=options;options.showHideAnimationType='none';options.zoomAnimationDuration=0;library.options=options;library.instance=this;}
  on(name:string,fn:()=>void){this.events.set(name,fn);}
  init(){this.events.get('afterInit')?.();}
  destroy(){this.events.get('destroy')?.();}
@@ -26,7 +27,7 @@ it('opens the selected post photo with actual dimensions and retains the source 
 });
 it('delegates focal zoom and pan to PhotoSwipe without closing or switching photos mid-pinch',async()=>{
  const close=vi.fn();await act(async()=>dom.root.render(createElement(ImageViewer,{items:[{id:'a',url:'/a.webp',name:'Plant',width:512,height:768}],index:0,close})));
- expect(library.options).toMatchObject({allowPanToNext:false,pinchToClose:false,closeOnVerticalDrag:false,bgClickAction:'close',trapFocus:true});
+ expect(library.options).toMatchObject({showHideAnimationType:'fade',zoomAnimationDuration:240,allowPanToNext:false,pinchToClose:false,closeOnVerticalDrag:false,bgClickAction:'close',trapFocus:true});
  expect(library.options.dataSource[0]).toMatchObject({width:512,height:768});expect(library.options.secondaryZoomLevel({panAreaSize:{x:256,y:512},elementSize:{x:512,y:768}})).toBe(1.25);
  expect(library.instance.element.getAttribute('aria-modal')).toBe('true');
  act(()=>library.instance.events.get('destroy')());expect(close).toHaveBeenCalledOnce();
