@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.22.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.22.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.22.1, release `20260927123847175` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927125404160`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.22.2, release `20260927125744979` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927125622874`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -470,3 +470,5 @@ The snapshot/age/scroll/notification batch shipped to production **v0.22.1**, re
 Voice-note follow-up restores Logcal’s dedicated controls below the written note. Photos and audio no longer trigger a shared attachment grid or duplicate the photo. Recording uses a Phosphor right arrow without a trailing line, advancing in discrete one-second steps, and a 15-second limit, then compact play/interrupt/remove controls. The user replaced the literal character bar with this icon treatment and removed the trailing line; do not restore the text bar or import Logcal’s font. Existing multiple audio attachments are preserved. Saved audio appears under its contributor’s note, without filenames or a generic media scrubber. The shared non-Log audio player is unchanged. Thirty focused editor/recorder/playback tests passed; microphone capture on physical iOS still needs device verification.
 
 Voice-note/editor corrections are on cloud dev `20260927125404160`, with a successful build and database health check. The editor no longer repeats other attendees’ photos or offers that extra shared-photo section. Production remains v0.22.1 on its prior release; these subsequent voice UI corrections have only been deployed to dev.
+
+The voice-note corrections, including the fixed Stop icon beyond the arrow’s 15-second endpoint, shipped to production **v0.22.2**, release `20260927125744979`. Dev is `20260927125622874`. Production health passed and served HTML matched the built artifact. The four recorder lifecycle checks passed again before release.
