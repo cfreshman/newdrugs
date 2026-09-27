@@ -1,4 +1,5 @@
 import {publishLogChange} from './recordEvents';
+import {stageObjectWrite,readObjectFile,deleteObjectFile,cleanObjectWriteIntents,type ObjectLocation} from './objectStorage';
 import { profileVisibleTo } from './profileVisibility';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
@@ -12,7 +13,7 @@ import { AppError, requireValue } from './errors';
 import { MAX_UPLOAD_BYTES, MAX_ACCOUNT_UPLOAD_BYTES, type UploadPurpose, type UploadRef } from '../shared/uploads';
 import type { InputContentParam } from 'openai/resources/beta/agents/agents';
 
-export interface Upload { _id:string; userId:string; name:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string }
+export interface Upload { _id:string; userId:string; name:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string;storage?:ObjectLocation }
 export const uploads=()=>rows<Upload>('uploads');
 const digest=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const filePath=(id:string)=>{if(!/^[0-9a-f-]{36}$/.test(id))throw new Error('Invalid file identity.');return resolve(config.DATA_DIR,'files',id);};
@@ -61,11 +62,13 @@ export async function acceptUpload(actor:Actor,id:string,body:Buffer){
   const target=filePath(id),temporary=`${target}.${randomUUID()}.tmp`;
   await writeFile(temporary,bytes,{mode:0o600,flag:'wx'});await rename(temporary,target);
   const sha256=digest(bytes);
+  const object=config.MEDIA_STORAGE==='s3'?await stageObjectWrite(id,bytes,mime,sha256):undefined;
   await transaction(async session=>{
-      const latest=await ownUpload(actor.userId,id,session);if(latest.ready)return;
+      const latest=await ownUpload(actor.userId,id,session);if(latest.ready){if(object&&latest.storage?.bucket===object.location.bucket&&latest.storage.key===object.location.key)await rows('mediaWriteIntents').deleteOne({_id:object.intentId},{session});return;}
       const adjusted=await users().updateOne({_id:actor.userId,$expr:{$lte:[{$add:[{$ifNull:['$storageBytes',0]},bytes.length-file.expectedBytes]},MAX_ACCOUNT_UPLOAD_BYTES]}},{$inc:{storageBytes:bytes.length-file.expectedBytes}},{session});
       if(!adjusted.matchedCount)throw new AppError(422,'storage_limit','Your uploads have reached the storage limit.');
-      await uploads().updateOne({_id:id,userId:actor.userId,ready:false},{$set:{ready:true,bytes:bytes.length,mime,name,sha256}},{session});
+      await uploads().updateOne({_id:id,userId:actor.userId,ready:false},{$set:{ready:true,bytes:bytes.length,mime,name,sha256,...(object?{storage:object.location}:{})}},{session});
+      if(object)await rows('mediaWriteIntents').deleteOne({_id:object.intentId},{session});
   });
   // Concurrent retries write the same verified bytes. A failed metadata
   // transaction must not delete a file another successful retry now owns.
@@ -86,7 +89,7 @@ export async function uploadMetadata(actor:Actor,id:string,allowPublicPhoto=fals
 }
 export async function readUpload(actor:Actor,id:string,allowPublicPhoto=false){
   const file=await uploadMetadata(actor,id,allowPublicPhoto);
-  const bytes=await readFile(filePath(id));
+  const bytes=file.storage?await readObjectFile(file.storage,file.bytes,file.sha256):await readFile(filePath(id));
   if(bytes.length!==file.bytes||digest(bytes)!==file.sha256)throw new AppError(503,'file_unverified','The stored file could not be verified.');
   return {file,bytes};
 }
@@ -118,6 +121,7 @@ export async function discardUpload(actor:Actor,id:string,session?:ClientSession
 export async function deleteUpload(actor:Actor,id:string,session?:ClientSession){
   const file=await ownUpload(actor.userId,id,session);
   if(file.purpose==='profile_photo'&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile photos are managed by the person in Settings.');
+  await rows('attachmentReferences').deleteMany({ownerId:actor.userId,fileId:id},{session});
   await uploads().updateOne({_id:id,userId:actor.userId},{$set:{deletedAt:new Date().toISOString(),ready:false,retained:false,bytes:0,expiresAt:new Date()}},{session});
   await users().updateOne({_id:actor.userId},{$inc:{storageBytes:-file.bytes},$pull:{photos:id}},{session});
   const affectedLogs=await rows('logEntries').find({'contributions.fileIds':id},{session,projection:{date:1,members:1,invited:1}}).toArray();
@@ -128,16 +132,39 @@ export async function deleteUpload(actor:Actor,id:string,session?:ClientSession)
   for(const entry of affectedLogs)await publishLogChange(entry as any,entry as any,session);
   return {deleted:true,id,bytesFreed:file.bytes};
 }
-export async function expireUploads(){
+export async function expireUploads({remote=true}:{remote?:boolean}={}){
   const expired=await uploads().find({retained:{$ne:true},expiresAt:{$lte:new Date()}}).limit(30).toArray();
   for(const candidate of expired){
     const removed=await transaction(async session=>{
       const file=await uploads().findOneAndDelete({_id:candidate._id,retained:{$ne:true},expiresAt:{$lte:new Date()}},{session});
       if(file)await users().updateOne({_id:file.userId},{$inc:{storageBytes:-file.bytes}},{session});
+      if(file)await rows('mediaDeletes').updateOne({_id:file._id},{$setOnInsert:{...(file.storage?{storage:file.storage}:{}),availableAt:Date.now(),attempts:0}},{session,upsert:true});
       return Boolean(file);
     });
-    if(removed)await unlink(filePath(candidate._id)).catch(error=>{if(error.code!=='ENOENT')throw error;});
+    void removed;
   }
+  await deleteMediaFiles(remote);
+  if(remote)await cleanObjectWriteIntents();
+}
+export async function deleteMediaFiles(remote=true){
+  const pending=await rows('mediaDeletes').find({availableAt:{$lte:Date.now()}}).limit(30).toArray();
+  for(const job of pending){if(job.storage&&!remote)continue;try{
+    if(job.storage)await deleteObjectFile(job.storage as ObjectLocation);
+    await unlink(filePath(job._id)).catch(error=>{if(error.code!=='ENOENT')throw error;});
+    await rows('mediaDeletes').deleteOne({_id:job._id});
+  }catch{await rows<{_id:string;attempts:number;availableAt:number}>('mediaDeletes').updateOne({_id:job._id},{$inc:{attempts:1},$set:{availableAt:Date.now()+Math.min(3600000,1000*2**Math.min(Number(job.attempts||0),12))}});}}
+}
+/** Verify the remote copy before changing its canonical storage pointer. Keep local rollback data. */
+export async function migrateUploadToObject(id:string){
+ const file=requireValue(await uploads().findOne({_id:id,ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}}));if(file.storage)return {migrated:false};
+ const bytes=await readFile(filePath(id));if(bytes.length!==file.bytes||digest(bytes)!==file.sha256)throw new AppError(503,'file_unverified','The stored file could not be verified.');
+ const object=await stageObjectWrite(id,bytes,file.mime,file.sha256);await readObjectFile(object.location,file.bytes,file.sha256);
+ const migrated=await transaction(async session=>{
+  const result=await uploads().updateOne({_id:id,ready:true,sha256:file.sha256,storage:{$exists:false},deletedAt:{$exists:false},moderatedAt:{$exists:false}},{$set:{storage:object.location}},{session});
+  const current=await uploads().findOne({_id:id,ready:true,'storage.bucket':object.location.bucket,'storage.key':object.location.key},{session,projection:{_id:1}});
+  if(current)await rows('mediaWriteIntents').deleteOne({_id:object.intentId},{session});
+  return Boolean(result.modifiedCount);
+ });return {migrated};
 }
 export async function fileInput(userId:string,id:string,offset=0,entryId?:string):Promise<InputContentParam[]>{
   if(entryId){const {logEntryFor}=await import('./log');const entry=await logEntryFor(userId,entryId);if(!entry.contributions.some(person=>person.fileIds.includes(id)))throw new AppError(404,'log_file','This file is not attached to this entry.');}

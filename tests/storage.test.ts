@@ -1,3 +1,6 @@
+import {backfillAttachmentReferences,syncSourceAttachments} from '../server/attachmentReferences';
+import {storageAttachments} from '../server/storage';
+import {randomUUID} from 'node:crypto';
 import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {users,type User,type Actor} from '../server/auth';
@@ -16,6 +19,7 @@ it('links each owned file to all live authorized attachments, including multiple
  await rows('posts').insertMany([{_id:'post',userId:'me',fileIds:['photo']},{_id:'removed',userId:'me',fileIds:['photo'],deletedAt:'now'},{_id:'moderated',userId:'me',fileIds:['photo'],moderatedAt:'now'},{_id:'foreign',userId:'other',fileIds:['photo']}]);
  await rows('messages').insertMany([{_id:'message',userId:'me',files:[{id:'photo'}],createdAt:'2026-09-27'},{_id:'private-message',userId:'other',files:[{id:'photo'}]}]);
  await rows('logEntries').insertMany([{_id:'hangout',title:'Walk',date:'2026-09-27',members:['me','other'],invited:[],contributions:[{userId:'me',fileIds:['voice']}]},{_id:'removed-log',members:['me'],deletedAt:'now',contributions:[{userId:'me',fileIds:['voice']}]},{_id:'private-log',members:['other'],contributions:[{userId:'me',fileIds:['voice']}]}]);
+ await backfillAttachmentReferences();
  const page=await list(),photo=page.items.find(item=>item.id==='photo')!,voice=page.items.find(item=>item.id==='voice')!;
  expect(photo.attachments.map(item=>item.destination.view)).toEqual(['person','post','chat']);expect(voice.attachments).toEqual([{label:'Hangout: Walk',destination:{view:'log',resourceId:'hangout'},url:'/log/hangout'}]);expect(page.items.find(item=>item.id==='unattached')?.attachments).toEqual([]);
  expect(buildResourceLinks('storage.list',{},page,actor)).toContainEqual(expect.objectContaining({targetKind:'exact',resourceId:'hangout'}));
@@ -30,4 +34,15 @@ it('filters before pagination, keeps global quota totals, and never returns anot
  const next=await list({type:'images',limit:1,before:first.nextCursor});expect(next.items.map(item=>item.id)).toEqual(['x']);expect(next.nextCursor).toBeNull();
  expect((await list({type:'audio'})).items.map(item=>item.id)).toEqual(['y']);expect((await list({type:'video'})).items.map(item=>item.id)).toEqual(['w']);expect((await list({type:'documents'})).items.map(item=>item.id)).toEqual(['v']);
  await expect(list({type:'invalid'})).rejects.toBeDefined();
+});
+
+it('bounds initial attachment links and pages subsequent uses without scanning source history',async()=>{
+ const id=randomUUID();await file(id);await rows('posts').insertMany(Array.from({length:45},(_,i)=>({_id:`post-${i}`,userId:'me',fileIds:[id],text:`Post ${i}`})));
+ await backfillAttachmentReferences();await backfillAttachmentReferences();
+ const page=await list(),item=page.items[0];expect(item.attachments).toHaveLength(6);expect(item.attachmentCursor).toBeTruthy();
+ const user=(await users().findOne({_id:'me'}))!;const next=await storageAttachments(user,id,item.attachmentCursor!,20);expect(next.items).toHaveLength(20);expect(next.nextCursor).toBeTruthy();
+ const last=await storageAttachments(user,id,next.nextCursor!,20);expect(last.items).toHaveLength(19);expect(last.nextCursor).toBeNull();
+ const links=[...item.attachments,...next.items,...last.items];expect(new Set(links.map(value=>value.url)).size).toBe(45);
+ await rows('posts').updateMany({userId:'me'},{$set:{deletedAt:'now'}});for(let i=0;i<45;i++)await syncSourceAttachments('posts',`post-${i}`);
+ expect((await list({attachedTo:'posts'})).items).toHaveLength(0);
 });

@@ -10,12 +10,15 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   const add = (destination: Destination, title: string, targetKind: ResourceLink['targetKind'], resourceType: string, resourceId?: string) => {
     links.push({ rel: 'open_in_newdrugs', targetKind, title: title.slice(0, 160), url: new URL(destinationPath(destination), config.uiOrigin).href, resourceType, ...(resourceId ? { resourceId } : {}) });
   };
+  if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){add({view:'agent_memory'},'Your agent','surface','agent_memory');return links;}
   if(name==='account.preferences'||name==='account.preferences_update'){add({view:'preferences'},'Preferences','surface','preferences');return links;}
   if(name==='log.birthday_get'||name==='log.birthday_update'){add({view:'log_settings'},'Log settings','surface','log_settings');return links;}
   if(name==='log.birthdays'){for(const item of data.items||[])add({view:'person',resourceId:item.personId},item.name,'exact','person',item.personId);return links;}
   if(name==='log.code'){add({view:'log_join',resourceId:data.code},'Join hangout','exact','log_join',data.entryId);return links;}
   if(name==='log.contacts'){for(const person of rows)if(person.id)add({view:'person',resourceId:person.id},person.name||'View person','exact','person',person.id);return links;}
   if(name==='log.join_preview'){add({view:'log_join',resourceId:String(input.code)},'Join hangout','exact','log_join',data.entryId);return links;}
+  if(name==='log.calendar'){for(const day of data.days||[])for(const row of day.items||[])if(!links.some(link=>link.resourceId===row.id))add({view:'log',resourceId:row.id},row.title||'Open Log entry','exact','log_entry',row.id);return links;}
+  if(name==='log.search'){for(const row of rows)if(row.entryId)add({view:'log',resourceId:row.entryId},row.title||'Open Log entry','exact','log_entry',row.entryId);return links;}
   if(name.startsWith('log.')){for(const row of name==='log.neighbors'?[data.previous,data.next].filter(Boolean):rows)if(typeof row.id==='string')add({view:'log',resourceId:row.id},row.title||'Open Log entry','exact','log_entry',row.id);if(!links.length)add({view:'log'},'Open Log','surface','log');return links;}
   if(name==='people.context'){
     if(data.person?.id)links.push(...buildResourceLinks('people.get',{},data.person,actor));
@@ -49,6 +52,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     const connectionId=String(input.connectionId || data.connectionId);
     add({ view: 'messages', resourceId: connectionId }, 'Open conversation', name === 'messages.list' ? 'exact' : 'surface', 'conversation', connectionId);
   } else if (name === 'people.blocked' || name === 'people.block') add({ view: 'blocked' }, 'Manage blocked people', 'surface', 'blocked');
+  else if(name==='storage.attachments'){for(const attachment of rows)if(attachment.destination)add(attachment.destination,attachment.label,'exact',attachment.destination.view,attachment.destination.resourceId);}
   else if (name === 'storage.list' || name === 'files.delete') {for(const row of rows)for(const attachment of row.attachments||[])if(attachment.destination)add(attachment.destination,attachment.label,'exact',attachment.destination.view,attachment.destination.resourceId);add({ view: 'storage' }, 'Manage storage', 'surface', 'storage');}
   else if ((name === 'wallet.get' || name === 'wallet.activity')) add({ view: 'credits' }, 'View credit and usage', 'surface', 'wallet');
   else if (name === 'locations.resolve') add({ view: 'location', areaCell: data.cell }, 'Choose this area', 'exact', 'area', data.cell);

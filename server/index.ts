@@ -1,4 +1,8 @@
+import {startLogCalendarWorker} from './log';
+import {startLogSearchWorker} from './search/log';
 import {startLedgerActivityWorker} from './ledgerActivity';
+import {startAttachmentReferenceWorker} from './attachmentReferences';
+import {startRetrievalWorker} from './search/replication';
 import { startChatSearchWorker } from './search/chat';
 import { startPushWorker } from './push';
 import { createApp } from './app';
@@ -18,8 +22,12 @@ const stopSearch = background ? startSearchWorker() : async () => {};
 const stopPush = background ? startPushWorker() : async () => {};
 const stopChatSearch = background ? startChatSearchWorker() : async () => {};
 const stopLedgerActivity = background ? startLedgerActivityWorker() : async () => {};
+const stopCalendar = background ? startLogCalendarWorker() : async () => {};
+const stopLogSearch = background ? startLogSearchWorker() : async () => {};
+const stopRetrieval = background ? startRetrievalWorker() : async () => {};
+const stopAttachmentReferences = background ? startAttachmentReferenceWorker() : async () => {};
 let cleaning = false;
-const uploadCleanup = background ? setInterval(() => { if (cleaning) return; cleaning = true; void expireUploads().catch(error => console.error('Upload cleanup:', error.name)).finally(() => { cleaning = false; }); }, 60000) : undefined;
+const uploadCleanup = background ? setInterval(() => { if (cleaning) return; cleaning = true; void expireUploads().catch(error => console.error('Upload cleanup:', error.name)).finally(() => { cleaning = false; }); }, 10000) : undefined;
 const server = config.PROCESS_ROLE !== 'worker' ? createApp().listen(config.PORT, '127.0.0.1', () => {
   console.log(`new drugs API · http://127.0.0.1:${config.PORT}`);
   console.log(`Agent: ${config.aiEnabled ? 'connected' : 'waiting for API key'} · payments: ${config.paymentsEnabled ? 'connected' : 'not configured'}`);
@@ -30,7 +38,7 @@ let stopping = false;
 const shutdown = async () => {
   if (stopping) return; stopping = true;
   setTimeout(() => process.exit(1), 20000).unref(); clearInterval(uploadCleanup);
-  await Promise.all([stopWorker(),stopSearch(),stopPush(),stopChatSearch(),stopLedgerActivity(),stopLiveState()]);
+  await Promise.all([stopWorker(),stopSearch(),stopPush(),stopChatSearch(),stopLedgerActivity(),stopRetrieval(),stopLogSearch(),stopCalendar(),stopAttachmentReferences(),stopLiveState()]);
   if (server) await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
   await mongo.close(); process.exit(0);
 };

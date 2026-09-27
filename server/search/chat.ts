@@ -1,4 +1,6 @@
+import {queryRetrieval,retrievalEnabled} from './backend';
 import { semanticCandidate } from './ranking';
+import {queueRetrieval} from './replication';
 import { randomUUID } from 'node:crypto';
 import type { ClientSession } from 'mongodb';
 import { rows, transaction, type Row } from '../db';
@@ -12,7 +14,7 @@ import type { ChatSearchInput, ChatSearchResult } from '../../shared/chatSearch'
 
 export const CHAT_INDEX_VERSION = `private-chat-v1:${EMBEDDING_MODEL}:${DIMENSIONS}`;
 interface Job { _id: string; userId: string; messageId: string; revision: string; attempts: number; availableAt: number; lease?: string; error?: string }
-interface Chunk { _id: string; userId: string; messageId: string; sourceHash: string; offset: number; text: string; role: 'user' | 'assistant'; createdAt: string; vector: number[]; indexVersion: string }
+interface Chunk { _id: string; userId: string; messageId: string; sourceHash: string; offset: number; text: string; role: 'user' | 'assistant'; createdAt: string; vector: number[]; indexVersion: string;generation?:number }
 const jobs = () => rows<Job>('chatSearchJobs');
 const chunks = () => rows<Chunk>('chatSearchChunks');
 export const chatMessageHash = (message: Row) => hashText(JSON.stringify([CHAT_INDEX_VERSION, message.userId, message.role, message.text]));
@@ -46,7 +48,7 @@ export async function indexChatMessage(embedding = embed) {
       const previous = existing.find(chunk => chunk.offset === part.offset && chunk.text === part.text && chunk.indexVersion === CHAT_INDEX_VERSION);
       const vector = previous?.vector || await embedding(part.text, 'document', `chat:${job.userId}`);
       if (vector.length !== DIMENSIONS || !vector.every(Number.isFinite)) throw Error('embedding_invalid');
-      next.push({ _id: hashText(`${job.userId}:${source._id}:${part.offset}`), userId: job.userId, messageId: source._id, sourceHash, ...part, role: source.role as Chunk['role'], createdAt: String(source.createdAt), vector, indexVersion: CHAT_INDEX_VERSION });
+      next.push({ _id: hashText(`${job.userId}:${source._id}:${part.offset}`), userId: job.userId, messageId: source._id, sourceHash, ...part, role: source.role as Chunk['role'], createdAt: String(source.createdAt), vector, indexVersion: CHAT_INDEX_VERSION,generation:Number(owner?.chatGeneration||0) });
       const held = await jobs().updateOne({ _id: job._id, revision: job.revision, lease }, { $set: { availableAt: Date.now() + 300000 } });
       if (!held.matchedCount) return true;
     }
@@ -57,6 +59,7 @@ export async function indexChatMessage(embedding = embed) {
       if ((current ? chatMessageHash(current) : '') !== sourceHash) { await enqueueChatSearch(job.userId, job.messageId, session); return; }
       await chunks().deleteMany({ userId: job.userId, messageId: job.messageId }, { session });
       if (next.length) await chunks().insertMany(next, { session });
+      await queueRetrieval('chat',job.messageId,session,{userId:job.userId});
     });
   } catch (error) {
     const message = error instanceof Error && /^embedding_/.test(error.message) ? error.message : 'index_failure';
@@ -87,7 +90,7 @@ interface Ranked { messageId: string; sourceHash: string; offset: number; score:
 interface Snapshot { _id: string; userId: string; identity: string; ranked: Ranked[]; mode: 'hybrid' | 'keyword'; indexing: boolean; notices: string[]; expiresAt: Date }
 const snapshots = () => rows<Snapshot>('chatSearchResults');
 export async function searchChat(input: ChatSearchInput, actor: Actor, embedding = embed): Promise<ChatSearchResult> {
-  requireValue(await users().findOne({ _id: actor.userId, handle: { $type: 'string' } }), 'Create an account to search your chat.');
+  const owner=requireValue(await users().findOne({ _id: actor.userId, handle: { $type: 'string' } }), 'Create an account to search your chat.');
   const userId = actor.userId, limit = input.limit || 20, identity = hashText(JSON.stringify([input.query.trim(), input.role || 'all']));
   let snapshot: Snapshot, offset = 0;
   if (input.cursor) {
@@ -110,6 +113,13 @@ export async function searchChat(input: ChatSearchInput, actor: Actor, embedding
       if (scores.size > 200) { const best = [...scores.values()].sort((a, b) => b.score - a.score || a.messageId.localeCompare(b.messageId)).slice(0, 100); scores.clear(); best.forEach(rank => scores.set(rank.messageId, rank)); }
     };
     const role = input.role && input.role !== 'all' ? { role: input.role } : {};
+    if(retrievalEnabled()){
+      const filter={must:[{key:'indexVersion',match:{value:CHAT_INDEX_VERSION}},{key:'generation',match:{value:Number(owner.chatGeneration||0)}},...(input.role&&input.role!=='all'?[{key:'role',match:{value:input.role}}]:[])]};
+      let lanes;try{lanes=await queryRetrieval('chat',userId,{query:input.query,vector,filter});}catch{throw new AppError(503,'search_unavailable','Chat search is temporarily unavailable. Try again shortly.');}
+      const lexicalScores=new Map(lanes.lexical.map(item=>[item.id,item.score]));
+      for(const item of lanes.dense){const lex=lexicalScores.get(item.id)||0;if(item.messageId&&semanticCandidate(item.score,lex))offer({messageId:item.messageId,sourceHash:item.sourceHash,offset:item.offset||0,score:.9*Math.max(0,item.score)+.1*lex/(lex+3)});}
+      for(const item of lanes.lexical)if(item.messageId)offer({messageId:item.messageId,sourceHash:item.sourceHash,offset:item.offset||0,score:vector ? .1*item.score/(item.score+3) : item.score});
+    }else{
     // Stream only this owner's vectors. No shared ANN graph can accidentally expose private chat.
     const cursor = chunks().find({ userId, indexVersion: CHAT_INDEX_VERSION, ...role }).batchSize(32).maxTimeMS(15000);
     for await (const chunk of cursor) {
@@ -118,10 +128,11 @@ export async function searchChat(input: ChatSearchInput, actor: Actor, embedding
       if (!semanticCandidate(dense, lex) && !lex) continue;
       offer({ messageId: chunk.messageId, sourceHash: chunk.sourceHash, offset: chunk.offset, score: vector ? .9 * Math.max(0, dense) + .1 * lex : lex });
     }
+    }
     // Fresh text remains findable while its durable embedding job is pending.
     if (terms.length) {
       const pattern = terms.slice(0, 20).map(term => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-      const fresh = await rows('messages').find({ userId, ...role, kind: { $ne: 'introduction' }, text: { $regex: pattern, $options: 'i' } }).sort({ createdAt: -1, _id: -1 }).limit(100).toArray();
+      const fresh = await rows('messages').find({ userId, ...role, kind: { $ne: 'introduction' } }).sort({ createdAt: -1, _id: -1 }).limit(100).toArray();
       for (const message of fresh) {
         if(!searchable(message)||scores.has(message._id))continue;
         const sourceHash=chatMessageHash(message),lex=lexical(String(message.text));
@@ -129,7 +140,7 @@ export async function searchChat(input: ChatSearchInput, actor: Actor, embedding
         offer({messageId:message._id,sourceHash,offset:Math.max(0,String(message.text).toLowerCase().search(new RegExp(pattern,'i'))-100),score:vector ? .1*lex : lex});
       }
     }
-    const indexing = Boolean(await jobs().findOne({ userId })) || !Boolean((await rows('chatSearchMeta').findOne({ _id: CHAT_INDEX_VERSION }))?.done);
+    const indexing = (retrievalEnabled()&&(Boolean(await rows('retrievalJobs').findOne({kind:'chat',userId},{projection:{_id:1}}))||!(await rows('retrievalMeta').findOne({_id:'backfill:chat'}))?.done)) || Boolean(await jobs().findOne({ userId })) || !Boolean((await rows('chatSearchMeta').findOne({ _id: CHAT_INDEX_VERSION }))?.done);
     if (indexing) notices.push('Older or recent messages are still being indexed.');
     snapshot = { _id: randomUUID(), userId, identity, ranked: [...scores.values()].sort((a, b) => b.score - a.score || a.messageId.localeCompare(b.messageId)).slice(0, 100), mode: vector ? 'hybrid' : 'keyword', indexing, notices, expiresAt: new Date(Date.now() + 600000) };
     await snapshots().insertOne(snapshot);

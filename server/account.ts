@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import { hash, checkPassword, passwordHash, users, type User } from './auth';
 import { rows, transaction } from './db';
 import { AppError, requireValue } from './errors';
@@ -25,7 +26,9 @@ export async function changeAccountPassword(user: User, password: string, sessio
 export async function clearAgentChat(userId: string) {
   await transaction(async session => {
     const now = new Date().toISOString();
-    requireValue(await users().findOneAndUpdate({ _id: userId }, { $set: { chatClearedAt: now }, $inc: { chatGeneration: 1 }, $unset: { activeRun: '' } }, { session }));
+    const owner=requireValue(await users().findOneAndUpdate({ _id: userId }, { $set: { chatClearedAt: now }, $inc: { chatGeneration: 1 }, $unset: { activeRun: '' } }, { session,returnDocument:'after' }));
+    const {queueRetrieval}=await import('./search/replication');await queueRetrieval('chat_purge',userId,session,{userId,generation:Number(owner.chatGeneration||0)});
+    await rows('retrievalJobs').updateMany({kind:'chat',userId},{$set:{revision:randomUUID(),availableAt:Date.now()},$unset:{lease:''}},{session});
     const target = { userId, $or: [{ purpose: { $ne: 'automation' } }, { privateChat: true }] };
     const affected = await rows('runs').find(target, { session, projection: { providerSessionId: 1, reservedNanos: 1, status: 1 } }).toArray();
     const held = affected.filter(run => !['completed','failed','cancelled'].includes(String(run.status))).reduce((total, run) => total + Number(run.reservedNanos || 0), 0);
@@ -35,11 +38,12 @@ export async function clearAgentChat(userId: string) {
     const sessions = [...new Set([...affected.map(run => run.providerSessionId), ...savedSessions.map(record => record.sessionId)].filter((id): id is string => typeof id === 'string'))];
     for (const id of sessions) await rows('agentSessionCleanup').updateOne({ _id: id }, { $setOnInsert: { userId, requestedAt: now, availableAt: Date.now(), attempts: 0 } }, { session, upsert: true });
     await rows('runs').updateMany({ ...target, status: { $nin: ['completed','cancelled','failed'] } }, { $set: { status: 'queued', cancelRequested: true, superseded: true, reservedNanos: 0, nextAttempt: 0, leaseUntil: 0 } }, { session });
-    await rows('runs').updateMany(target, { $set: { text: '', draft: '', progress: [], approvals: [], fileIds: [], inboxIds: [], recordRefs:[], reviewReplies: [], recentDeliveries: [], completedSleeps: {}, error: '' }, $unset: { sleep: '', delivery: '' } }, { session });
+    await rows('runs').updateMany(target, { $set: { text: '', draft: '', progress: [], approvals: [], fileIds: [], inboxIds: [], recordRefs:[], reviewReplies: [], recentDeliveries: [], completedSleeps: {}, error: '' }, $unset: { sleep: '', delivery: '', memorySnapshot: '' } }, { session });
     await rows('agentCredentials').updateMany({ userId, $or: [{ runId: { $in: affected.map(run => run._id) } }, { runId: { $exists: false } }] }, { $set: { revokedAt: now } }, { session });
     await rows('agentSessions').deleteMany({ _id: { $in: keys } }, { session });
     await rows('receipts').updateMany({ userId, operation: 'conversation.append' }, { $set: { 'result.text': '' } }, { session });
     await rows('messages').deleteMany({ userId }, { session });
+    const {clearChatAttachmentReferences}=await import('./attachmentReferences');await clearChatAttachmentReferences(userId,session);
     await rows('chatSearchChunks').deleteMany({ userId }, { session });
     await rows('chatSearchJobs').deleteMany({ userId }, { session });
     await rows('chatSearchResults').deleteMany({ userId }, { session });

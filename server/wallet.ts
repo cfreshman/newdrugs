@@ -1,4 +1,5 @@
 import {queueLedgerActivity} from './ledgerActivity';
+import {syncSourceAttachments} from './attachmentReferences';
 import {resolvePageContext} from './pageContext';
 import { resolveRecordContexts } from './recordContext';
 import { automationNotice } from './automationNotices';
@@ -111,6 +112,7 @@ export async function reserveRun(userId: string, runId: string, text: string, op
     const files = await retainUploads(userId, options.fileIds, 'agent_input', session);
     await runs().insertOne(run, { session });
     await rows('messages').insertOne({ _id: `${runId}:user`, userId, role: 'user', text, files, ...(records.attachments.length?{records:records.attachments}:{}), ...(inbox.length ? { inbox: inbox.map(item => ({ id: item.id, title: item.title })) } : {}), source: 'app', createdAt: now }, { session });
+    if(files.length)await syncSourceAttachments('chat',`${runId}:user`,session);
     if (text.trim()) await enqueueChatSearch(userId, `${runId}:user`, session);
     return run;
   });

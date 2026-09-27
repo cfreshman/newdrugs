@@ -13,8 +13,18 @@ const env = z.object({
   MONGODB_URI: z.string().min(1, 'Set the cloud database connection. A local database is not used.'),
   MONGODB_POOL_SIZE: z.coerce.number().int().min(4).max(200).default(24),
   SEARCH_DAILY_BUDGET_NANOS: z.coerce.number().int().min(0).default(250000000),
+  QDRANT_URL: z.string().default(''),
+  QDRANT_API_KEY: z.string().default(''),
+  SEARCH_NAMESPACE: z.string().regex(/^[a-zA-Z0-9_-]+$/).default('newdrugs'),
   LIVE_MAX_CONNECTIONS:z.coerce.number().int().min(1).default(2048),
   DATA_DIR: z.string().default('.data/private'),
+  MEDIA_STORAGE: z.enum(['local','s3']).default('local'),
+  OBJECT_ENDPOINT: z.string().default(''),
+  OBJECT_REGION: z.string().default('us-east-1'),
+  OBJECT_BUCKET: z.string().default(''),
+  OBJECT_ACCESS_KEY_ID: z.string().default(''),
+  OBJECT_SECRET_ACCESS_KEY: z.string().default(''),
+  OBJECT_PREFIX: z.string().regex(/^[a-zA-Z0-9_-]+$/).default('newdrugs'),
   MCP_ORIGIN: z.string().default(''),
   DEV_ACCESS_KEY: z.string().default(''),
   SESSION_COOKIE: z.string().default('nd_session'),
@@ -42,3 +52,4 @@ export const config = {
 if (config.production && !config.APP_ORIGIN.startsWith('https://')) {
   throw new Error('APP_ORIGIN must use HTTPS in production.');
 }
+if(config.MEDIA_STORAGE==='s3'&&(!config.OBJECT_ENDPOINT.startsWith('https://')||!config.OBJECT_BUCKET||!config.OBJECT_ACCESS_KEY_ID||!config.OBJECT_SECRET_ACCESS_KEY))throw Error('Private object storage configuration is incomplete.');

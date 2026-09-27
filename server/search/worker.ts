@@ -4,6 +4,8 @@ import { users } from '../auth';
 import { sourceDocument } from './sources';
 import { embed } from './embeddings';
 import { enqueueSearch } from './queue';
+import {queueRetrieval} from './replication';
+import {retrievalEnabled} from './backend';
 import { INDEX_VERSION, MAX_DOCUMENTS, type SearchDocument, type SearchJob } from './model';
 
 export async function indexOne(embedding = embed) {
@@ -15,7 +17,7 @@ export async function indexOne(embedding = embed) {
   try {
     const source = await sourceDocument(job.kind, job.entityId);
     const previous = await rows<SearchDocument>('searchDocuments').findOne({ _id: job._id });
-    if (source && !previous && await rows('searchDocuments').countDocuments({}, { limit: MAX_DOCUMENTS }) >= MAX_DOCUMENTS) throw new Error('index_capacity');
+    if (!retrievalEnabled() && source && !previous && await rows('searchDocuments').countDocuments({}, { limit: MAX_DOCUMENTS }) >= MAX_DOCUMENTS) throw new Error('index_capacity');
     const vector = source ? previous?.sourceHash === source.sourceHash && previous.indexVersion === INDEX_VERSION && previous.vector ? previous.vector : await embedding(source.text, 'document') : undefined;
     await transaction(async session => {
       // This write conflicts with a simultaneous source edit/enqueue, even at snapshot isolation.
@@ -25,6 +27,7 @@ export async function indexOne(embedding = embed) {
       if (current?.sourceRevision !== source?.sourceRevision) { await enqueueSearch(job.kind, job.entityId, session); return; }
       if (source) await rows<SearchDocument>('searchDocuments').replaceOne({ _id: job._id }, { ...source, vector, indexedAt: new Date().toISOString() }, { session, upsert: true });
       else await rows('searchDocuments').deleteOne({ _id: job._id }, { session });
+      await queueRetrieval('public',job._id,session);
       await rows('searchMeta').updateOne({ _id: 'generation' }, { $set: { revision: randomUUID() } }, { session, upsert: true });
     });
   } catch (error) {

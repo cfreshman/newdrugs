@@ -14,13 +14,14 @@
     "dev:admin": "vite --config admin/vite.config.ts --host 127.0.0.1",
     "deploy:dev": "node scripts/deploy.mjs dev",
     "deploy:prod": "node scripts/deploy.mjs prod",
-    "build": "node scripts/version.mjs && tsc --noEmit && vite build && vite build --config admin/vite.config.ts && tsup server/index.ts --target node22 --format esm --out-dir dist/server --external vite && tsup cli/index.ts --format esm --out-dir dist/cli && node scripts/package-cli.mjs",
+    "build": "node scripts/version.mjs && tsc --noEmit && vite build && vite build --config admin/vite.config.ts && tsup server/index.ts server/mediaMigration.ts --target node22 --format esm --out-dir dist/server --external vite && tsup cli/index.ts --format esm --out-dir dist/cli && node scripts/package-cli.mjs",
     "start": "NODE_ENV=production node dist/server/index.js",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "cli": "tsx cli/index.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1141.0",
     "@js-temporal/polyfill": "0.5.1",
     "@modelcontextprotocol/sdk": "1.30.1",
     "@phosphor-icons/react": "2.1.10",

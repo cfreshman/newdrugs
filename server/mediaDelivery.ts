@@ -7,6 +7,7 @@ import type {Upload} from './uploads';
 import {config} from './config';
 import {AppError} from './errors';
 import {workGate} from './workGate';
+import {objectBody} from './objectStorage';
 
 // Cache verification metadata, never authorization or file bytes. Stat changes
 // force re-verification; concurrent requests for the same inode share that work.
@@ -25,6 +26,16 @@ export async function sendMedia(file:Upload,req:Request,res:Response){
  const range=mediaRange(req.headers.range,file.bytes);
  res.set({'Content-Type':file.mime,'Accept-Ranges':'bytes','Cache-Control':String(res.getHeader('Cache-Control')||'private, no-store'),'X-Content-Type-Options':'nosniff'});
  if(range===false){res.status(416).set('Content-Range',`bytes */${file.bytes}`).end();return;}
+ if(file.storage){
+  const controller=new AbortController(),cancel=()=>controller.abort();res.once('close',cancel);
+  try{
+   const {body,length}=await objectBody(file.storage,file.bytes,file.sha256,range||undefined,req.method==='HEAD',AbortSignal.any([controller.signal,AbortSignal.timeout(60000)]));
+   res.set('Content-Length',String(length));if(range)res.status(206).set('Content-Range',`bytes ${range.start}-${range.end}/${file.bytes}`);
+   if(req.method==='HEAD'||!length){body?.destroy();res.end();return;}
+   await pipeline(body!,res);
+  }catch(error){if(!res.destroyed&&!controller.signal.aborted)throw error;}finally{res.off('close',cancel);}
+  return;
+ }
  const handle=await open(resolve(config.DATA_DIR,'files',file._id),'r').catch(()=>{throw new AppError(404,'not_found','This file is unavailable.');});
  try{
   const stat=await handle.stat({bigint:true});

@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {logListInput,type LogEntry} from '../shared/log';
+import {logListInput,type LogEntry,type LogCalendarTile} from '../shared/log';
 import type {Destination,LogSequence} from '../shared/navigation';
 import {useExperience} from './ExperienceContext';
 import {primeLogEntry} from './logEntryCache';
@@ -7,8 +7,8 @@ const sequenceSchema=z.object({key:z.string().min(1).max(100),ids:z.array(z.stri
 export function readLogSequence(value:unknown):LogSequence|undefined{const parsed=sequenceSchema.safeParse(value);return parsed.success?{...parsed.data,ids:[...new Set(parsed.data.ids)]}:undefined;}
 export function useOpenLogList(navigate:(destination:Destination)=>void){
  const experience=useExperience();
- return (entry:LogEntry,entries:LogEntry[],query?:LogSequence['query'],nextCursor?:string|null)=>{
-  const index=entries.findIndex(item=>item.id===entry.id);for(const item of entries.slice(Math.max(0,index-1),index+2))primeLogEntry(item);
-  navigate({view:'log',resourceId:entry.id,...(experience?{mode:experience.mode}:{}),logSequence:{key:crypto.randomUUID(),ids:[...new Set(entries.map(item=>item.id))],...(query?{query,nextCursor:nextCursor||null}:{})}});
+ return (entry:LogEntry|LogCalendarTile,entries:(LogEntry|LogCalendarTile)[],query?:LogSequence['query'],nextCursor?:string|null)=>{
+  const index=entries.findIndex(item=>item.id===entry.id);for(const item of entries.slice(Math.max(0,index-1),index+2))if("contributors" in item)primeLogEntry(item);
+  navigate({view:'log',resourceId:entry.id,...(experience?{mode:experience.mode}:{}),logSequence:{key:crypto.randomUUID(),ids:[...new Set(entries.map(item=>item.id))],...(query?{query,...(nextCursor!==undefined?{nextCursor}:{})}:{})}});
  };
 }

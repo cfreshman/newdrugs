@@ -110,6 +110,7 @@ export async function completeSurface(userId: string, runId: string, surfaceId: 
       const files = await retainUploads(userId, fileIds, 'agent_input', session);
       run.fileIds = [...new Set([...run.fileIds, ...fileIds])]; result = { saved: true, files };
       await rows('messages').updateOne({ _id: `${runId}:upload:${surfaceId}` }, { $setOnInsert: { userId, role: 'user', text: '', files, source: 'app', createdAt: new Date().toISOString() } }, { session, upsert: true });
+      const {syncSourceAttachments}=await import('./attachmentReferences');await syncSourceAttachments('chat',`${runId}:upload:${surfaceId}`,session);
     } else if(saved&&['log','log_compose'].includes(run.surface?.view||'')){
       if(!resourceId||run.surface?.resourceId&&run.surface.resourceId!==resourceId)throw new AppError(422,'log_surface','Save the requested Log entry.');
       const entry=await logOperation('log.get',{entryId:resourceId},{userId,source:'browser',scope:'read'},session) as import('../shared/log').LogEntry;

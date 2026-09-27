@@ -1,3 +1,7 @@
+import {Temporal} from '@js-temporal/polyfill';
+import {workGate} from './workGate';
+import {searchLog} from './search/log';
+import type {LogSearchInput} from '../shared/logSearch';
 import {publishLogChange} from './recordEvents';
 import {projectInvite} from './logInvites';
 import {ownBirthdaySchema,type OwnBirthday} from '../shared/logBirthday';
@@ -11,15 +15,15 @@ import {rows} from './db';
 import {users,type Actor} from './auth';
 import {AppError,requireValue} from './errors';
 import {uploads,ownUpload,retainUploads,deleteUpload} from './uploads';
-import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogList} from '../shared/log';
-interface LogRow extends LogFields {_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
+import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogList,type LogCalendarPage} from '../shared/log';
+interface LogRow extends LogFields {calendarMonthDay?:string;_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
 const entries=()=>rows<LogRow>('logEntries');
 async function excluded(userId:string,session?:ClientSession){return (await rows('blocks').find({members:userId},{session}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId));}
 async function access(userId:string,session?:ClientSession):Promise<Filter<LogRow>>{const blocked=await excluded(userId,session);return {deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]};}
 const activeMemberStages=()=>[{$lookup:{from:'users',localField:'members',foreignField:'_id',pipeline:[{$match:{suspendedAt:{$type:'string'}}},{$project:{_id:1}},{$limit:1}],as:'_suspendedMembers'}},{$match:{'_suspendedMembers.0':{$exists:false}}},{$unset:'_suspendedMembers'}];
 async function visibleEntries(filter:Filter<LogRow>,session?:ClientSession,sort?:Record<string,1|-1>,limit?:number,projection?:Record<string,1>){return entries().aggregate<LogRow>([{$match:filter},...(sort?[{$sort:sort}]:[]),...activeMemberStages(),...(limit?[{$limit:limit}]:[]),...(projection?[{$project:projection}]:[])],{session,maxTimeMS:10000}).toArray();}
 export async function logFileVisibleTo(userId:string,ownerId:string,fileId:string){return Boolean((await visibleEntries({$and:[await access(userId),{contributions:{$elemMatch:{userId:ownerId,fileIds:fileId}}}]},undefined,undefined,1))[0]);}
-export async function logAttachmentLocations(userId:string,fileIds:string[]|undefined,session?:ClientSession){return visibleEntries({$and:[await access(userId,session),{members:userId,contributions:{$elemMatch:{userId,...(fileIds?{fileIds:{$in:fileIds}}:{})}}}]},session,undefined,undefined,{title:1,date:1,'contributions.userId':1,'contributions.fileIds':1});}
+export async function logAttachmentLocations(userId:string,fileIds:string[]|undefined,session?:ClientSession,entryIds?:string[]){return visibleEntries({$and:[await access(userId,session),{...(entryIds?{_id:{$in:entryIds}}:{}),members:userId,contributions:{$elemMatch:{userId,...(fileIds?{fileIds:{$in:fileIds}}:{})}}}]},session,undefined,undefined,{title:1,date:1,'contributions.userId':1,'contributions.fileIds':1});}
 export async function hasSharedHangouts(userId:string,personId:string,session?:ClientSession){if(userId===personId)return false;return Boolean((await visibleEntries({$and:[await access(userId,session),{members:{$all:[userId,personId]}}]},session,undefined,1,{_id:1}))[0]);}
 export async function logEntryFor(userId:string,id:string,session?:ClientSession){return requireValue((await visibleEntries({$and:[{_id:id},await access(userId,session)]},session,undefined,1))[0],'This Log entry is unavailable.');}
 export async function projectLogEntries(records:LogRow[],userId:string,session?:ClientSession,preview=false):Promise<LogEntry[]>{
@@ -56,7 +60,7 @@ async function notification(row:LogRow,actorId:string,userId:string,kind:'log_in
 async function save(row:LogRow,revision:number,actor:Actor,session?:ClientSession){
  if(row.revision!==revision)throw new AppError(409,'log_changed','This entry changed. Reload it before saving.');
  const previous=await entries().findOne({_id:row._id,revision},{session,projection:{members:1,invited:1,date:1}});
- row.updatedAt=new Date().toISOString();row.revision++;row.liveEventVersion=1;
+ row.updatedAt=new Date().toISOString();row.revision++;row.liveEventVersion=1;row.calendarMonthDay=row.recurrence==='none'?'':row.date.slice(5);
  const result=await entries().replaceOne({_id:row._id,revision},{...row},{session});if(!result.matchedCount)throw new AppError(409,'log_changed','This entry changed. Reload it before saving.');
  await publishLogChange(previous,row,session);
  return project(row,actor.userId,session);
@@ -72,18 +76,53 @@ function contribution(row:LogRow,userId:string,value:LogContribution){
 async function notifyFirstContribution(row:LogRow,actorId:string,session?:ClientSession){for(const member of row.members)if(member!==actorId)await notification(row,actorId,member,'log_update',session);}
 function queryFilter(query:string){return logQueryGroups(query).map(group=>({$and:group.map(term=>{const regex=new RegExp(term.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),match={$or:[{title:regex},{place:regex},{'contributions.note':regex}]};return term.exclude?{$nor:[match]}:match;})}));}
 async function list(userId:string,d:LogList,session?:ClientSession,full=false){
+ if(d.calendarDay&&(d.from||d.through||d.recurring))throw new AppError(422,'log_dates','Use calendarDay without from, through or recurring.');
  if(d.from&&d.through&&d.from>d.through)throw new AppError(422,'log_dates','The end date must follow the start date.');
  const filter:Filter<LogRow>[]=[await access(userId,session),d.scope==='invitations'?{invited:userId}:{members:userId}];
  if(d.scope==='private')filter.push({members:{$size:1},invited:{$size:0}});if(d.scope==='shared')filter.push({$or:[{'members.1':{$exists:true}},{'invited.0':{$exists:true}}]});
+ if(d.calendarDay)filter.push(calendarDateFilter(d.calendarDay,d.includeAnniversaries));
  if(d.personId)filter.push({members:d.personId});if(d.recurring)filter.push({recurrence:{$ne:'none'}});
  if(d.from||d.through)filter.push({date:{...(d.from?{$gte:d.from}:{}),...(d.through?{$lte:d.through}:{})}});
  const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
- const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring])).digest('hex');
+ const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring,...(d.calendarDay?[d.calendarDay,d.includeAnniversaries]:[])])).digest('hex');
  if(d.before){try{const cursor=JSON.parse(Buffer.from(d.before,'base64url').toString());if(cursor.signature!==signature||typeof cursor.id!=='string'||typeof cursor.date!=='string'||typeof cursor.createdAt!=='string')throw Error();filter.push({$or:[{date:{$lt:cursor.date}},{date:cursor.date,createdAt:{$lt:cursor.createdAt}},{date:cursor.date,createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]});}catch{throw new AppError(422,'log_cursor','Reload this Log view.');}}
  const found=await visibleEntries({$and:filter},session,{date:-1,createdAt:-1,_id:-1},d.limit+1),page=found.slice(0,d.limit),last=page.at(-1);
  const items=await projectLogEntries(page,userId,session,!full);
  return {items,nextCursor:found.length>d.limit&&last?Buffer.from(JSON.stringify({date:last.date,createdAt:last.createdAt,id:last._id,signature})).toString('base64url'):null};
 }
+const calendarReads=workGate(4,256);
+function calendarDateFilter(day:string,anniversaries:boolean):Filter<LogRow>{
+ if(!anniversaries)return {date:day};
+ const date=Temporal.PlainDate.from(day),monthDays=[day.slice(5)];
+ if(date.month===2&&date.day===28&&!date.inLeapYear)monthDays.push('02-29');
+ return {$or:[{date:day},{calendarMonthDay:{$in:monthDays},date:{$lt:day}}]};
+}
+async function calendar(userId:string,d:{from:string;through:string;today:string;scope:string;query?:string;personId?:string},session?:ClientSession):Promise<LogCalendarPage>{
+ const first=Temporal.PlainDate.from(d.from),count=first.until(Temporal.PlainDate.from(d.through)).days+1;
+ if(count<1||count>42)throw new AppError(422,'log_dates','Choose a calendar range of at most 42 days.');
+ const filter:Filter<LogRow>[]=[await access(userId,session),{members:userId}];
+ if(d.scope==='private')filter.push({members:{$size:1},invited:{$size:0}});
+ if(d.scope==='shared')filter.push({$or:[{'members.1':{$exists:true}},{'invited.0':{$exists:true}}]});
+ if(d.personId)filter.push({members:d.personId});const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
+ // Each indexed day stops at ten authorized rows. Dense days never load their full history.
+ const result=await Promise.all(Array.from({length:count},(_,offset)=>calendarReads.run(async()=>{
+  const date=first.add({days:offset}).toString();
+  const found=await visibleEntries({$and:[...filter,calendarDateFilter(date,date>d.today)]},session,{date:-1,createdAt:-1,_id:-1},10,{_id:1,date:1,title:1,createdAt:1,coverFileId:1,'contributions.userId':1,'contributions.fileIds':1,members:1});
+  return {date,found:found.slice(0,9),more:found.length>9};
+ })));
+ const source=[...new Map(result.flatMap(day=>day.found).map(row=>[row._id,row])).values()];
+ const ids=[...new Set(source.flatMap(row=>row.contributions.filter(c=>row.members.includes(c.userId)).flatMap(c=>c.fileIds)))];
+ const files=await uploads().find({_id:{$in:ids},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false},mime:{$regex:'^image/'}},{session,projection:{userId:1,name:1,mime:1,bytes:1}}).toArray();
+ const byFile=new Map(files.map(file=>[file._id,file]));
+ const tiles=new Map(source.map(row=>{const photos=row.contributions.filter(c=>row.members.includes(c.userId)).flatMap(c=>c.fileIds.flatMap(id=>{const file=byFile.get(id);return file?.userId===c.userId?[file]:[];})),cover=photos.find(file=>file._id===row.coverFileId)||photos[0];return [row._id,{id:row._id,date:row.date,title:row.title,createdAt:row.createdAt,cover:cover?{id:cover._id,name:cover.name,mime:cover.mime,bytes:cover.bytes,url:`/api/files/${cover._id}`}:null}];}));
+ return {days:result.map(day=>({date:day.date,more:day.more,items:day.found.map(row=>tiles.get(row._id)!)})),indexing:Boolean(await entries().findOne({members:userId,calendarMonthDay:{$exists:false},deletedAt:{$exists:false}},{session,projection:{_id:1}}))};
+}
+export async function backfillLogCalendar(){
+ const batch=await entries().find({calendarMonthDay:{$exists:false}},{projection:{_id:1}}).limit(100).toArray();
+ if(batch.length)await entries().updateMany({_id:{$in:batch.map(row=>row._id)},calendarMonthDay:{$exists:false}},[{$set:{calendarMonthDay:{$cond:[{$eq:['$recurrence','none']},'',{$substrBytes:['$date',5,5]}]}}}]);
+ return batch.length;
+}
+export function startLogCalendarWorker(){let stopped=false,running:Promise<unknown>|undefined;const tick=()=>{if(stopped||running)return;running=backfillLogCalendar().catch(error=>console.error('Calendar indexing:',error.name)).finally(()=>{running=undefined;});};tick();const timer=setInterval(tick,1000);return async()=>{stopped=true;clearInterval(timer);await running;};}
 async function contactRows(actor:Actor,session?:ClientSession):Promise<LogContact[]>{
  const userId=actor.userId,blocked=await excluded(userId,session);
  const shared=await entries().aggregate<{_id:string;count:number}>([{$match:{$and:[await access(userId,session),{members:userId}]}},...activeMemberStages(),{$unwind:'$members'},{$match:{members:{$ne:userId}}},{$group:{_id:'$members',count:{$sum:1}}}],{session}).toArray();
@@ -110,6 +149,8 @@ async function joinRow(row:LogRow,actor:Actor,session?:ClientSession){
 
 export async function logOperation(name:string,d:Record<string,unknown>,actor:Actor,session?:ClientSession):Promise<unknown>{
  const userId=actor.userId,now=new Date().toISOString();
+ if(name==='log.calendar')return calendar(userId,d as any,session);
+ if(name==='log.search')return searchLog(d as unknown as LogSearchInput,actor);
  if(name==='log.birthday_get'){const row=await rows('logBirthdays').findOne({_id:userId},{session});return {birthday:row?{month:row.month,day:row.day,...(typeof row.year==='number'?{year:row.year}:{})}:null};}
  if(name==='log.birthday_update'){
   if(!d.birthday){await rows('logBirthdays').deleteOne({_id:userId},{session});return {birthday:null};}
@@ -144,7 +185,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  if(name==='log.create'){
   const fields=d.entry as LogFields,contribution=d.contribution as LogContribution,entryId=randomUUID();await media(userId,contribution.fileIds,entryId,session);
   if(fields.coverFileId&&(!contribution.fileIds.includes(fields.coverFileId)||!await uploads().findOne({_id:fields.coverFileId,ready:true,mime:{$regex:'^image/'}},{session})))throw new AppError(422,'log_cover','Choose a cover from this entry’s attachments.');
-  const row:LogRow={...fields,liveEventVersion:1,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});await publishLogChange(null,row,session);return project(row,userId,session);
+  const row:LogRow={...fields,calendarMonthDay:fields.recurrence==='none'?'':fields.date.slice(5),liveEventVersion:1,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});await publishLogChange(null,row,session);return project(row,userId,session);
  }
  if(name==='log.people'){
   const ids=(await entries().aggregate<{_id:string}>([{$match:{$and:[await access(userId,session),{members:userId}]}},...activeMemberStages(),{$unwind:'$members'},{$group:{_id:'$members'}}],{session}).toArray()).map(row=>row._id);

@@ -146,3 +146,22 @@ it('exposes only currently accessible shared hangouts on nonfriend profiles',asy
  const row=await call('log.get',{entryId:own.id});await call('log.leave',change(row),'stranger',true);
  await expect(call('people.get',{personId:'stranger'})).rejects.toMatchObject({status:404});await users().updateOne({_id:'stranger'},{$set:{discoverable:true}});expect(await call('people.get',{personId:'stranger'})).toMatchObject({hasSharedHangouts:false});
 });
+
+it('bounds calendar previews, pages dense days, and never includes private notes in tiles',async()=>{
+ const date='2026-09-26';for(let i=0;i<12;i++)await create({date,title:`Entry ${i}`},{note:'private full note'});
+ const calendar=await call('log.calendar',{from:date,through:date,today:date});expect(calendar.days).toHaveLength(1);expect(calendar.days[0].items).toHaveLength(9);expect(calendar.days[0].more).toBe(true);expect(JSON.stringify(calendar)).not.toContain('private full note');expect(calendar.days[0].items[0].contributors).toBeUndefined();
+ const first=await call('log.list',{calendarDay:date,limit:7}),second=await call('log.list',{calendarDay:date,limit:7,before:first.nextCursor});expect(first.items.length+second.items.length).toBe(12);expect(new Set([...first.items,...second.items].map(row=>row.id)).size).toBe(12);
+ expect((await call('log.calendar',{from:date,through:date,today:date},'stranger')).days[0].items).toEqual([]);
+ await expect(call('log.calendar',{from:'2026-01-01',through:'2026-12-31',today:date})).rejects.toMatchObject({code:'log_dates'});
+ await expect(call('log.list',{calendarDay:date,from:date})).rejects.toMatchObject({code:'log_dates'});
+});
+it('indexes anniversary month/day and handles leap-day reminders without reading all recurrences',async()=>{
+ const row=await create({date:'2024-02-29',title:'Leap anniversary',recurrence:'anniversary'});
+ const future=await call('log.calendar',{from:'2027-02-28',through:'2027-02-28',today:'2027-02-01'});expect(future.days[0].items.map((item:any)=>item.id)).toEqual([row.id]);
+ expect((await call('log.list',{calendarDay:'2027-02-28',includeAnniversaries:true})).items.map((item:any)=>item.id)).toEqual([row.id]);
+ expect((await call('log.calendar',{from:'2027-02-28',through:'2027-02-28',today:'2027-03-01'})).days[0].items).toEqual([]);
+ await call('log.update',{...change(row),entry:{date:'2024-03-01',recurrence:'anniversary'}});
+ expect((await call('log.list',{calendarDay:'2027-02-28',includeAnniversaries:true})).items).toEqual([]);
+ await rows('logEntries').updateOne({_id:row.id},{$unset:{calendarMonthDay:''}});const {backfillLogCalendar}=await import('../server/log');expect(await backfillLogCalendar()).toBe(1);expect(await backfillLogCalendar()).toBe(0);
+ expect((await call('log.calendar',{from:'2027-03-01',through:'2027-03-01',today:'2027-02-01'})).days[0].items.map((item:any)=>item.id)).toEqual([row.id]);
+});

@@ -1,3 +1,5 @@
+import {logSearchResult} from './logSearch';
+import {memoryOutputs} from './agentMemory';
 import {billingActivityOutput} from './billingActivity';
 import {storageAttachmentSchema} from './storage';
 import {accountPreferencesSchema} from './preferences';
@@ -39,7 +41,10 @@ export const outputs: Record<string, z.ZodType> = {
   'files.prepare':upload,'files.get':upload,'files.list':z.object({items:z.array(upload)}),
   'files.discard':z.object({discarded:z.literal(true),id}),
   'files.delete':z.object({deleted:z.literal(true),id,bytesFreed:z.number()}),
-  'storage.list':z.object({usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean(),attachments:z.array(storageAttachmentSchema)})),nextCursor:z.string().nullable()}),
+  ...memoryOutputs,
+  'log.search':logSearchResult,
+  'storage.attachments':z.object({items:z.array(storageAttachmentSchema),nextCursor:z.string().nullable()}),
+  'storage.list':z.object({indexing:z.boolean().optional(),usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean(),attachments:z.array(storageAttachmentSchema),attachmentCursor:z.string().nullable().optional()})),nextCursor:z.string().nullable()}),
   'locations.search':z.object({items:z.array(z.object({id:z.string(),label:z.string(),cell:z.string()})),attribution:z.string()}),
   'locations.resolve':areaOutput,
   'locations.meeting_area':z.object({participants:z.array(z.object({personId:id,name:z.string(),handle:z.string().optional(),area:areaOutput})),candidates:z.array(z.object({area:areaOutput,distances:z.array(z.object({personId:id,sameArea:z.boolean(),distanceLabel:z.string(),approximateMiles:z.number().optional()}))})),method:z.string(),notice:z.string()}),
@@ -50,7 +55,7 @@ export const outputs: Record<string, z.ZodType> = {
   'app.open': z.object({ open: z.string(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
   'search.query':searchResult, 'posts.search':searchResult, 'search.similar':searchResult, 'search.refine':searchResult,
   'search.explain':z.object({match:searchMatch,retrieval:searchRetrieval}),
-  'search.datasets':z.object({datasets:z.array(z.object({dataset:z.string(),count:z.number()})),pending:z.number(),failed:z.number(),model:z.string(),dimensions:z.number(),indexVersion:z.string(),capacity:z.number(),notice:z.string()}),
+  'search.datasets':z.object({datasets:z.array(z.object({dataset:z.string(),count:z.number()})),pending:z.number(),failed:z.number(),model:z.string(),dimensions:z.number(),indexVersion:z.string(),capacity:z.number().nullable().describe("Fixed fallback capacity, or null for provisioned persistent retrieval."),notice:z.string()}),
   'people.search': page(profileOutput).extend({retrieval:searchRetrieval.optional(),matches:z.array(searchMatch).optional()}), 'posts.list': page(post), 'posts.get': post, 'posts.create': post,
   'posts.incoming_replies':page(post),'posts.thread_updates':page(post),
   'posts.save':post, 'posts.replies': page(post), 'posts.reply': post, 'posts.like': post,
@@ -72,6 +77,7 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'agent.instructions.update':'Replace your personal instructions used by future agent runs.',
   'log.add_person':'Add this person to the shared hangout. They can see it and add their own note/photos. Other attendees keep their contributions.',
   'log.join':'Join this shared hangout as yourself. Its attendees can see your participation, and you can log future hangouts together.',
   'log.delete':'Remove your own participation and contribution, permanently deleting your attached media and freeing its storage. Other attendees keep the hangout. The final attendee removes the empty hangout.',

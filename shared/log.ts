@@ -5,8 +5,13 @@ import {Temporal} from '@js-temporal/polyfill';
 export const logDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value=>{try{return Temporal.PlainDate.from(value).toString()===value;}catch{return false;}},'Choose a valid calendar date.');
 export const logFields=z.strictObject({date:logDate,title:z.string().trim().max(160).default(''),place:z.string().trim().max(160).default(''),links:z.array(z.url().refine(url=>/^https?:\/\//i.test(url),'Use an HTTP or HTTPS link.')).max(8).default([]),recurrence:z.enum(['none','anniversary','birthday']).default('none').describe('A calendar reminder of this original date, such as an anniversary start. Never repeats the hangout or creates another entry. Birthday is retained for earlier records.'),coverFileId:z.uuid().nullable().default(null)});
 export const logContribution=z.strictObject({note:z.string().max(10000).default(''),fileIds:z.array(z.uuid()).max(8).default([])});
-export const logListInput={from:logDate.optional(),through:logDate.optional(),query:z.string().trim().max(300).optional(),personId:z.string().max(100).optional(),scope:z.enum(['all','private','shared','invitations']).default('all'),recurring:z.boolean().default(false),limit:z.number().int().min(1).max(30).default(30),before:z.string().max(1500).optional()};
+export const logListInput={calendarDay:logDate.optional().describe('One calendar day, including anniversary reminders when includeAnniversaries is true. Do not combine with from/through or recurring.'),includeAnniversaries:z.boolean().default(false),from:logDate.optional(),through:logDate.optional(),query:z.string().trim().max(300).optional(),personId:z.string().max(100).optional(),scope:z.enum(['all','private','shared','invitations']).default('all'),recurring:z.boolean().default(false),limit:z.number().int().min(1).max(30).default(30),before:z.string().max(1500).optional()};
 export const logMedia=z.object({id:z.string(),name:z.string(),mime:z.string(),url:z.string(),bytes:z.number()});
+export const logCalendarTileSchema=z.object({id:z.string(),date:logDate,title:z.string(),createdAt:z.string(),cover:logMedia.nullable()});
+export const logCalendarDaySchema=z.object({date:logDate,items:z.array(logCalendarTileSchema).max(9),more:z.boolean()});
+export const logCalendarPageSchema=z.object({days:z.array(logCalendarDaySchema).max(42),indexing:z.boolean()});
+export type LogCalendarTile=z.infer<typeof logCalendarTileSchema>;
+export type LogCalendarPage=z.infer<typeof logCalendarPageSchema>;
 export const logEntrySchema=logFields.extend({id:z.string(),ownerId:z.string(),historicalPeople:z.array(z.string()).optional().describe('Names from imported history without linked New Drugs accounts. These are not members and grant no access.'),revision:z.number(),createdAt:z.string(),updatedAt:z.string(),membership:z.enum(['member','invited','declined']),contributors:z.array(z.object({userId:z.string(),name:z.string(),handle:z.string().optional(),profileVisible:z.boolean().optional(),photoId:z.string().optional(),note:z.string(),noteTruncated:z.boolean().optional(),files:z.array(logMedia)})),invitations:z.array(z.object({userId:z.string(),name:z.string(),handle:z.string().optional()}))});
 export const logViewSchema=z.strictObject({id:z.uuid(),name:z.string().trim().min(1).max(40),query:z.string().max(300).default(''),scope:z.enum(['all','private','shared']).default('all'),personId:z.string().max(100).optional()});
 export const logPreferencesSchema=z.strictObject({todayPresentation:z.enum(['full','left','right']).default('full'),arrangement:z.enum(['calendar','gallery','list']).default('calendar'),views:z.array(logViewSchema).max(20).default([])});
@@ -25,6 +30,7 @@ export const logOutputs={
  'log.code':logCodeOutput,'log.join_preview':logJoinPreview,'log.join':logEntrySchema,'log.add_person':logEntrySchema,
  'log.people':z.object({items:z.array(z.object({userId:z.string(),name:z.string(),handle:z.string().optional()}))}),
  'log.neighbors':z.object({previous:logEntrySchema.nullable(),next:logEntrySchema.nullable()}),
+ 'log.calendar':logCalendarPageSchema,
  'log.list':z.object({items:z.array(logEntrySchema),nextCursor:z.string().nullable()}),
  ...Object.fromEntries(['get','create','update','contribute','respond','revoke'].map(name=>[`log.${name}`,logEntrySchema])),
  'log.leave':z.object({left:z.literal(true)}),'log.delete':z.object({deleted:z.literal(true)}),

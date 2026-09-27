@@ -25,6 +25,7 @@ export function useLogNeighbors({entryId,userId,visible,context}:{entryId:string
    if(!context){const result=await operation<{previous:LogEntry|null;next:LogEntry|null}>('log.neighbors',{entryId},{signal:abort.signal});if(ticket!==generation.current)return;for(const entry of [result.previous,result.next])if(entry)remember(entry);setNeighbors(result);return;}
    if(!initial||index<0)return;
    let current={...initial,ids:[...initial.ids]};const unavailable=new Set<string>(),cursors=new Set<string>();
+   if(current.query?.calendarDay&&current.nextCursor===undefined){const page=await operation<LogPage>('log.list',{...current.query,limit:30},{signal:abort.signal});if(ticket!==generation.current)return;current={...current,ids:[...new Set([...page.items.map(item=>item.id),...current.ids])],nextCursor:page.nextCursor};for(const item of page.items)cacheLogEntry(userId,item,{persist:false});}
    const resolve=async(direction:-1|1)=>{
     let position=current.ids.indexOf(entryId)+direction;
     while(!abort.signal.aborted){

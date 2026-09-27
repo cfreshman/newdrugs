@@ -1,5 +1,8 @@
+import {randomUUID} from 'node:crypto';
+import {memoryOperation} from './agentMemory';
 import {walletActivity} from './walletActivity';
-import {listStorage} from './storage';
+import {syncSourceAttachments} from './attachmentReferences';
+import {listStorage,storageAttachments} from './storage';
 import type {StorageType,StorageLocation} from '../shared/storage';
 import {defaultPreferences} from '../shared/preferences';
 import {logOperation,logEntryFor,hasSharedHangouts} from './log';
@@ -87,6 +90,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   const options = { session };
   const user = requireValue(await users().findOne({ _id: userId }, options));
   if (/^(people\.|posts\.|connections\.|messages\.|notifications\.|storage\.|search\.|links\.)/.test(name)) registered(user);
+  if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){registered(user);return memoryOperation(name,d,actor,session);}
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
   if (name.startsWith('automations.')) { registered(user); return automationOperation(name, d, actor, session); }
   if (name === 'runs.wake') return wakeRun(actor.userId, String(d.runId), true, session);
@@ -134,6 +138,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'files.discard':return discardUpload(actor,String(d.fileId),session);
     case 'files.delete':return deleteUpload(actor,String(d.fileId),session);
     case 'files.list':return {items:(await uploads().find({userId,deletedAt:{$exists:false},moderatedAt:{$exists:false}}).sort({createdAt:-1}).limit(30).toArray()).map(uploadRef)};
+    case 'storage.attachments': return storageAttachments(user,String(d.fileId),d.before as string|undefined,Number(d.limit||20),session,d.attachedTo as StorageLocation|undefined);
     case 'storage.list': return listStorage(user,{type:d.type as StorageType|undefined,attachedTo:d.attachedTo as StorageLocation|undefined,before:d.before as string|undefined,limit},session);
     case 'account.preferences':return {...defaultPreferences,...user.preferences};
     case 'account.preferences_update':{if(!d.font&&!d.appearance&&!d.landingPage)throw new AppError(422,'preferences','Choose a preference to change.');const prior={...defaultPreferences,...user.preferences};const updated=requireValue(await users().findOneAndUpdate({_id:userId},{$set:{'preferences.font':d.font||prior.font,'preferences.appearance':d.appearance||prior.appearance,'preferences.landingPage':d.landingPage||prior.landingPage},$inc:{'preferences.revision':1}},{...options,returnDocument:'after'}));return {...defaultPreferences,...updated.preferences};}
@@ -515,9 +520,13 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
     // Store the same JSON shape that the HTTP/MCP client receives. BSON would
     // otherwise turn nested undefined optional fields into null on a retry.
     const result = JSON.parse(JSON.stringify(op.outputSchema.parse(await run(name, parsed, actor, session))));
+    if((name.startsWith('agent.memory.')||name==='agent.instructions.update')&&result.saved!==false)await rows('recordEvents').insertOne({_id:randomUUID(),userIds:[actor.userId],payload:{keys:['agent_memory']},expiresAt:new Date(Date.now()+3600000)},{session});
+    if(name==='profile.update')await syncSourceAttachments('profile',actor.userId,session);
+    if(['posts.create','posts.reply','posts.delete'].includes(name))await syncSourceAttachments('posts',name==='posts.delete'?String(parsed.postId):String(result.id),session);
+    if(name.startsWith('log.')&&(parsed.entryId||result.id)&&!['log.birthday_update','log.preferences_update'].includes(name))await syncSourceAttachments('hangouts',String(parsed.entryId||result.id),session);
     await rows('receipts').insertOne({ _id: receiptId, userId: actor.userId, operation: name, source: actor.source, fingerprint, fingerprintVersion: 2, result, createdAt: new Date().toISOString() }, { session });
     return result;
   });
-  if(['files.delete','log.leave','log.delete','log.update','log.contribute'].includes(name)||name==='profile.update'&&parsed.photos)await expireUploads().catch(error=>console.error('Upload deletion cleanup:',error.name));
+  if(['files.delete','log.leave','log.delete','log.update','log.contribute'].includes(name)||name==='profile.update'&&parsed.photos)await expireUploads({remote:false}).catch(error=>console.error('Upload deletion cleanup:',error.name));
   return committed;
 }
