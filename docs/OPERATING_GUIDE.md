@@ -14,7 +14,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.25.1, release `20260927145719095` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927145610619`; local frontend at `http://localhost:7330/log` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927151558752`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -541,3 +541,11 @@ Title/caching refinement: valid invite share previews use the saved hangout titl
 First-party New Drugs `links.preview` results now come directly from the current anonymous page projection, with direct reauthorized image URLs, rather than the generic 24-hour external-site cache. Code-scoped photo URLs remain direct too. Legacy first-party cached image proxy URLs refuse to serve old bytes, so code resets and profile privacy changes cannot be bypassed by that server cache. External sites retain their existing bounded preview cache.
 
 Final preview/invite release: production **v0.25.1**, `20260927145719095`; dev `20260927145610619`. Production health passed. Ordinary private-link HTML had the generic sentence-case title, gradient and noindex tags, with its body matching the built frontend. A live valid invite used its saved title and returned its photo successfully without authentication. The CLI verified both fresh private-safe `links.preview` output and `hasSharedHangouts:true` for the newly linked account. The earlier mobile date, square crop and loader changes are included in this production release too.
+
+### Source-list hangout navigation
+
+Following Logcal’s `Profile.tsx` and `HangoutView.tsx` sequential navigation, profile Hangouts, Log Grid/List, day choosers, Today cards and Anniversaries now carry their displayed collection into the detail view. Previous/Next walks that order without wrapping or escaping into the whole calendar. Paginated collections retain their source query and cursor; adjacent details/photos are prefetched, and inaccessible entries are skipped. Direct calendar and bare-link openings retain Older/Newer.
+
+`src/logSequence.ts` creates browser-only collection context; `src/useLogNeighbors.ts` resolves authorized adjacent records using existing operations. No new CLI/MCP contract is needed. Collection IDs are not encoded in share URLs or treated as authorization. Adjacent transitions replace the current hangout/history entry; Back restores the source profile/list, selected tab and scroll. Browser Back/Forward preserves validated collection context, including inside Agent. List date/place text uses ` - `. TypeScript and 162 targeted UI/navigation tests pass. Production remains v0.25.1 until separately requested.
+
+This navigation/separator update is deployed to cloud dev `20260927151558752`; the build and database-backed health check passed. Production is unchanged.

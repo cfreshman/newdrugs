@@ -18,3 +18,18 @@ it('uses explicit /agent when the root URL belongs to another landing page',asyn
  await act(async()=>dom.root.render(createElement(Harness,{mode:'agent',state:{destination:{view:'chat'}},landingPage:'log'})));dom.frame();expect(location.pathname).toBe('/agent');
  await act(async()=>dom.root.render(createElement(Harness,{mode:'agent',state:{destination:{view:'chat'}},landingPage:'agent'})));dom.frame();expect(location.pathname).toBe('/');
 });
+
+it('replaces Agent list navigation and restores its source context from browser history',async()=>{
+ const restore=vi.fn(),push=vi.spyOn(history,'pushState'),context={key:'profile-list',ids:['one','two'],query:{scope:'shared' as const,personId:'friend'}};
+ function Agent({state}:{state:PrimaryRouteState}){usePrimaryRoute(true,'agent',state,restore);return null;}
+ const show=async(state:PrimaryRouteState)=>{await act(async()=>dom.root.render(createElement(Agent,{state})));dom.frame();};
+ await show({destination:{view:'person',resourceId:'friend'}});
+ await show({destination:{view:'log',resourceId:'one',logSequence:context}});
+ await show({destination:{view:'log',resourceId:'two',logSequence:context}});
+ expect(location.pathname).toBe('/agent/log/two');expect(push).toHaveBeenCalledTimes(1);
+ const saved=history.state;
+ await act(async()=>window.dispatchEvent(new PopStateEvent('popstate',{state:saved})));
+ expect(restore.mock.lastCall![0].destination).toMatchObject({view:'log',mode:'agent',resourceId:'two',logSequence:{key:'profile-list',ids:['one','two']}});
+ await show({destination:{view:'chat'}});expect(push).toHaveBeenCalledTimes(1);
+ await show({destination:{view:'log',resourceId:'two',logSequence:context}});expect(push).toHaveBeenCalledTimes(2);
+});
