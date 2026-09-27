@@ -1,3 +1,4 @@
+import {queueLedgerActivity} from './ledgerActivity';
 import {resolvePageContext} from './pageContext';
 import { resolveRecordContexts } from './recordContext';
 import { automationNotice } from './automationNotices';
@@ -65,7 +66,7 @@ export async function recordTurnUsage(runId: string, turnId: string, usage: Toke
     if (delta || reserveDelta) await users().updateOne({ _id: run.userId }, { $inc: { balanceNanos: -delta, reservedNanos: reserveDelta } }, { session });
     await rows('usage').updateOne({ _id: turnId }, { $set: { userId: run.userId, runId, usage: recorded, searches: searchCount, costNanos, rate, status: recorded ? 'reported' : 'pending', updatedAt: now } }, { session, upsert: true });
     await runs().updateOne({ _id: runId }, { $set: { costNanos: nextCost, chargedNanos, reservedNanos: remainingReserve, billingRate: rate, usagePending: !recorded, ...(run.purpose === 'automation' && nextCost >= (run.budgetNanos || Infinity) ? { cancelRequested: true } : {}) }, $addToSet: { responseIds: turnId } }, { session });
-    if (chargedNanos || ledger) await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: run.purpose === 'automation' ? `Automation: ${run.automationName}` : 'Agent usage', details: { model: rate.model, rateVersion: rate.version, status: recorded ? 'reported' : 'pending', providerTurnId: turnId }, updatedAt: now }, $setOnInsert: { createdAt: now } }, { session, upsert: true });
+    if (chargedNanos || ledger) {await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: run.purpose === 'automation' ? `Automation: ${run.automationName}` : 'Agent usage', details: { model: rate.model, rateVersion: rate.version, status: recorded ? 'reported' : 'pending', providerTurnId: turnId }, updatedAt: now }, $setOnInsert: { createdAt: now } }, { session, upsert: true });await queueLedgerActivity(run.userId,`usage:${runId}`,session);}
   });
 }
 export async function wallet(userId: string, session?: ClientSession, owner?: User): Promise<Wallet> {
@@ -166,8 +167,8 @@ export async function finishRun(runId: string, lease: string, text: string, stat
       if (run.superseded) message = '';
     }
     await runs().updateOne({ _id: runId }, { $set: { status, draft: text, error, chargedNanos, reservedNanos: 0, usageCheckAt: Date.now() + 1000, updatedAt: now }, $unset: { lease: '', leaseUntil: '' }, $inc: { revision: 1 } }, { session });
-    if (cost) await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: 'Agent usage',
-      details: { model: RATE.model, responseIds: run.responseIds, rateVersion: RATE.version, status: 'reported' } }, $setOnInsert: { createdAt: now } }, { session, upsert: true });
+    if (cost) {await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: 'Agent usage',
+      details: { model: RATE.model, responseIds: run.responseIds, rateVersion: RATE.version, status: 'reported' } }, $setOnInsert: { createdAt: now } }, { session, upsert: true });await queueLedgerActivity(run.userId,`usage:${runId}`,session);}
     if (message) await rows('messages').insertOne({ _id: `${runId}:assistant`, userId: run.userId, role: 'assistant', text: message,
       source: 'app', status: status === 'completed' ? 'complete' : 'interrupted', createdAt: now }, { session });
     if (message) await enqueueChatSearch(run.userId, `${runId}:assistant`, session);

@@ -607,3 +607,9 @@ The researched proposal is [Log semantic search and personal reports](log-integr
 ### Scaling requirement and audit
 
 [Scaling audit](SCALING_AUDIT.md) documents confirmed small-system limits: 128 live connections per process, broad invalidations, the public 10k-document cap/full rebuilds, owner-wide chat scans, read-time billing folds, Log projection/calendar amplification, shared worker/API processes, local whole-file delivery and attachment-history scans. These are not yet fixed. The semantic/report proposal now requires indexed incremental retrieval and bounded reads, with exact scoring only a bounded fast path/oracle, plus scaling groundwork before reports. No capacity claim, infrastructure change or deployment was made by this audit.
+
+### Scaling work in progress
+
+The active implementation is tracked in [Scaling implementation](scaling/IMPLEMENTATION.md). Live invalidation/projection sharing, bounded billing summaries, scoped Log hydration, shared request limits, process roles, media streaming and calendar virtualization are implemented to differing rollout stages documented there. The full audit is not complete. The user authorized production only once the complete batch is ready, explicitly requesting no premature production deployment.
+
+Log notification titles now identify the actor and current hangout title, e.g. “@user added to Tennis.” Push still uses the subject “Notification” and does not include note or DM text. Pending/resolved invitation actions use the shared pill button treatment. Below 640px the primary chat fills the available width inside its normal gutters.

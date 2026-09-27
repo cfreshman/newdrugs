@@ -14,12 +14,14 @@ import {uploads,ownUpload,retainUploads,deleteUpload} from './uploads';
 import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogList} from '../shared/log';
 interface LogRow extends LogFields {_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
 const entries=()=>rows<LogRow>('logEntries');
-async function excluded(userId:string,session?:ClientSession){return [...(await rows('blocks').find({members:userId},{session}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)),...(await users().find({suspendedAt:{$type:'string'}},{session,projection:{_id:1}}).toArray()).map(row=>row._id)];}
+async function excluded(userId:string,session?:ClientSession){return (await rows('blocks').find({members:userId},{session}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId));}
 async function access(userId:string,session?:ClientSession):Promise<Filter<LogRow>>{const blocked=await excluded(userId,session);return {deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]};}
-export async function logFileVisibleTo(userId:string,ownerId:string,fileId:string){return Boolean(await entries().findOne({$and:[await access(userId),{contributions:{$elemMatch:{userId:ownerId,fileIds:fileId}}}]}));}
-export async function logAttachmentLocations(userId:string,fileIds:string[]|undefined,session?:ClientSession){return entries().find({$and:[await access(userId,session),{members:userId,contributions:{$elemMatch:{userId,...(fileIds?{fileIds:{$in:fileIds}}:{})}}}]},{session,projection:{title:1,date:1,'contributions.userId':1,'contributions.fileIds':1}}).toArray();}
-export async function hasSharedHangouts(userId:string,personId:string,session?:ClientSession){if(userId===personId)return false;return Boolean(await entries().findOne({$and:[await access(userId,session),{members:{$all:[userId,personId]}}]},{session,projection:{_id:1}}));}
-export async function logEntryFor(userId:string,id:string,session?:ClientSession){return requireValue(await entries().findOne({$and:[{_id:id},await access(userId,session)]},{session}),'This Log entry is unavailable.');}
+const activeMemberStages=()=>[{$lookup:{from:'users',localField:'members',foreignField:'_id',pipeline:[{$match:{suspendedAt:{$type:'string'}}},{$project:{_id:1}},{$limit:1}],as:'_suspendedMembers'}},{$match:{'_suspendedMembers.0':{$exists:false}}},{$unset:'_suspendedMembers'}];
+async function visibleEntries(filter:Filter<LogRow>,session?:ClientSession,sort?:Record<string,1|-1>,limit?:number,projection?:Record<string,1>){return entries().aggregate<LogRow>([{$match:filter},...(sort?[{$sort:sort}]:[]),...activeMemberStages(),...(limit?[{$limit:limit}]:[]),...(projection?[{$project:projection}]:[])],{session,maxTimeMS:10000}).toArray();}
+export async function logFileVisibleTo(userId:string,ownerId:string,fileId:string){return Boolean((await visibleEntries({$and:[await access(userId),{contributions:{$elemMatch:{userId:ownerId,fileIds:fileId}}}]},undefined,undefined,1))[0]);}
+export async function logAttachmentLocations(userId:string,fileIds:string[]|undefined,session?:ClientSession){return visibleEntries({$and:[await access(userId,session),{members:userId,contributions:{$elemMatch:{userId,...(fileIds?{fileIds:{$in:fileIds}}:{})}}}]},session,undefined,undefined,{title:1,date:1,'contributions.userId':1,'contributions.fileIds':1});}
+export async function hasSharedHangouts(userId:string,personId:string,session?:ClientSession){if(userId===personId)return false;return Boolean((await visibleEntries({$and:[await access(userId,session),{members:{$all:[userId,personId]}}]},session,undefined,1,{_id:1}))[0]);}
+export async function logEntryFor(userId:string,id:string,session?:ClientSession){return requireValue((await visibleEntries({$and:[{_id:id},await access(userId,session)]},session,undefined,1))[0],'This Log entry is unavailable.');}
 export async function projectLogEntries(records:LogRow[],userId:string,session?:ClientSession,preview=false):Promise<LogEntry[]>{
  if(!records.length)return [];
  const ids=[...new Set(records.flatMap(row=>[...row.members,...row.invited]))],fileIds=[...new Set(records.flatMap(row=>row.contributions.flatMap(person=>person.fileIds)))];
@@ -78,13 +80,13 @@ async function list(userId:string,d:LogList,session?:ClientSession,full=false){
  const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
  const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring])).digest('hex');
  if(d.before){try{const cursor=JSON.parse(Buffer.from(d.before,'base64url').toString());if(cursor.signature!==signature||typeof cursor.id!=='string'||typeof cursor.date!=='string'||typeof cursor.createdAt!=='string')throw Error();filter.push({$or:[{date:{$lt:cursor.date}},{date:cursor.date,createdAt:{$lt:cursor.createdAt}},{date:cursor.date,createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]});}catch{throw new AppError(422,'log_cursor','Reload this Log view.');}}
- const found=await entries().find({$and:filter},{session}).sort({date:-1,createdAt:-1,_id:-1}).limit(d.limit+1).toArray(),page=found.slice(0,d.limit),last=page.at(-1);
+ const found=await visibleEntries({$and:filter},session,{date:-1,createdAt:-1,_id:-1},d.limit+1),page=found.slice(0,d.limit),last=page.at(-1);
  const items=await projectLogEntries(page,userId,session,!full);
  return {items,nextCursor:found.length>d.limit&&last?Buffer.from(JSON.stringify({date:last.date,createdAt:last.createdAt,id:last._id,signature})).toString('base64url'):null};
 }
 async function contactRows(actor:Actor,session?:ClientSession):Promise<LogContact[]>{
  const userId=actor.userId,blocked=await excluded(userId,session);
- const shared=await entries().aggregate<{_id:string;count:number}>([{$match:{$and:[await access(userId,session),{members:userId}]}},{$unwind:'$members'},{$match:{members:{$ne:userId}}},{$group:{_id:'$members',count:{$sum:1}}}],{session}).toArray();
+ const shared=await entries().aggregate<{_id:string;count:number}>([{$match:{$and:[await access(userId,session),{members:userId}]}},...activeMemberStages(),{$unwind:'$members'},{$match:{members:{$ne:userId}}},{$group:{_id:'$members',count:{$sum:1}}}],{session}).toArray();
  const canReadFriends=!actor.background||actor.accountActivity;
  const friends=canReadFriends?(await rows('connections').find({members:userId,status:'accepted'},{session,projection:{members:1}}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)):[];
  const ids=[...new Set([...shared.map(row=>row._id),...friends])].filter(id=>!blocked.includes(id));
@@ -94,7 +96,7 @@ async function contactRows(actor:Actor,session?:ClientSession):Promise<LogContac
 async function fencePairs(actorId:string,members:string[],session?:ClientSession){for(const other of [...new Set(members)].filter(id=>id!==actorId).sort())await rows<{_id:string;revision:number}>('contactPairs').updateOne({_id:[actorId,other].sort().join(':')},{$inc:{revision:1}},{session,upsert:true});}
 async function compatible(personId:string,members:string[],session?:ClientSession){
  requireValue(await users().findOne({_id:personId,handle:{$type:'string'},suspendedAt:null},{session,projection:{_id:1}}),'This person is unavailable.');
- const blocked=await excluded(personId,session);if(members.some(id=>blocked.includes(id)))throw new AppError(404,'unavailable','This hangout is unavailable.');
+ const blocked=await excluded(personId,session);if(members.some(id=>blocked.includes(id))||await users().findOne({_id:{$in:members},suspendedAt:{$type:'string'}},{session,projection:{_id:1}}))throw new AppError(404,'unavailable','This hangout is unavailable.');
 }
 async function byCode(userId:string,code:string,session?:ClientSession){requireValue(/^[a-f0-9]{32}$/.test(code),'This hangout code is unavailable.');const row=requireValue(await entries().findOne({joinKey:code,deletedAt:{$exists:false}},{session}),'This hangout code is unavailable.');await compatible(userId,row.members,session);return row;}
 async function joinRow(row:LogRow,actor:Actor,session?:ClientSession){
@@ -145,14 +147,14 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
   const row:LogRow={...fields,liveEventVersion:1,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});await publishLogChange(null,row,session);return project(row,userId,session);
  }
  if(name==='log.people'){
-  const ids=await entries().distinct('members',{$and:[await access(userId,session),{members:userId}]},{session});
+  const ids=(await entries().aggregate<{_id:string}>([{$match:{$and:[await access(userId,session),{members:userId}]}},...activeMemberStages(),{$unwind:'$members'},{$group:{_id:'$members'}}],{session}).toArray()).map(row=>row._id);
   const people=await users().find({_id:{$in:ids}},{session,projection:{name:1,handle:1}}).sort({name:1,_id:1}).toArray();return {items:people.map(person=>({userId:person._id,name:person.name||person.handle||'Member',...(person.handle?{handle:person.handle}:{})}))};
  }
  const row=['log.delete','log.leave'].includes(name)?requireValue(await entries().findOne({_id:String(d.entryId),members:userId,deletedAt:{$exists:false}},{session}),'This Log entry is unavailable.'):await logEntryFor(userId,String(d.entryId),session);
  if(name==='log.neighbors'){
   const allowed=await access(userId,session),result:{previous:LogEntry|null;next:LogEntry|null}={previous:null,next:null};
   for(const direction of ['previous','next'] as const){const comparison=direction==='previous'?'$lt':'$gt',order=direction==='previous'?-1:1;
-   const adjacent=await entries().findOne({$and:[allowed,{members:userId},{$or:[{date:{[comparison]:row.date}},{date:row.date,createdAt:{[comparison]:row.createdAt}},{date:row.date,createdAt:row.createdAt,_id:{[comparison]:row._id}}]}]},{session,sort:{date:order,createdAt:order,_id:order}});if(adjacent)result[direction]=await project(adjacent,userId,session);
+   const adjacent=(await visibleEntries({$and:[allowed,{members:userId},{$or:[{date:{[comparison]:row.date}},{date:row.date,createdAt:{[comparison]:row.createdAt}},{date:row.date,createdAt:row.createdAt,_id:{[comparison]:row._id}}]}]},session,{date:order,createdAt:order,_id:order},1))[0];if(adjacent)result[direction]=await project(adjacent,userId,session);
   }return result;
  }
 

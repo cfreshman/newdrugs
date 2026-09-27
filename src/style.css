@@ -53,7 +53,7 @@
   --text-chat: 14px;
   --text-user: 12px;
   --text-input: 16px;
-  --chat-width: 480px;
+  --chat-width: 100vw;
   --chat-gutter: 12px;
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);

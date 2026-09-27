@@ -1,4 +1,4 @@
-import type {ClientSession} from 'mongodb';import {rows} from './db';import {users} from './auth';import {uploads,readUpload} from './uploads';import {AppError} from './errors';
+import type {ClientSession} from 'mongodb';import {rows} from './db';import {users} from './auth';import {uploads,readUpload,uploadMetadata} from './uploads';import {AppError} from './errors';
 import type {LogJoinPreview} from '../shared/logJoining';
 export interface InviteEntry {_id:string;title:string;date:string;place:string;links?:string[];recurrence?:'none'|'anniversary'|'birthday';historicalPeople?:string[];members:string[];coverFileId:string|null;contributions:{userId:string;note?:string;fileIds:string[]}[]}
 export async function inviteEntry(code:string,session?:ClientSession){
@@ -24,5 +24,6 @@ export async function projectInvite(entry:InviteEntry,code:string,viewerId?:stri
   contributors:entry.contributions.filter(person=>entry.members.includes(person.userId)).map(person=>{const identity=names.find(item=>item.id===person.userId);return {userId:person.userId,name:identity?.name||'Member',...(identity?.handle?{handle:identity.handle}:{}),note:person.note||'',files:person.fileIds.flatMap(id=>{const file=files.find(file=>file._id===id&&file.userId===person.userId);return file?[{id:file._id,name:file.name,mime:file.mime,bytes:file.bytes,url:`/api/log-invites/${code}/${file.mime.startsWith('image/')?'photos':'media'}/${file._id}`}]:[];})};})};
 }
 export async function publicInvitePreview(code:string){const entry=await inviteEntry(code);if(!entry)throw new AppError(404,'not_found','This hangout code is unavailable.');return projectInvite(entry,code);}
-export async function readInviteMedia(code:string,fileId:string,photosOnly=false){const entry=await inviteEntry(code),file=entry&&(await inviteFiles(entry,undefined,photosOnly)).find(file=>file._id===fileId);if(!file)throw new AppError(404,'not_found','This attachment is unavailable.');return readUpload({userId:file.userId,source:'external',scope:'read'},file._id);}
+export async function inviteMediaMetadata(code:string,fileId:string,photosOnly=false){const entry=await inviteEntry(code),file=entry&&(await inviteFiles(entry,undefined,photosOnly)).find(file=>file._id===fileId);if(!file)throw new AppError(404,'not_found','This attachment is unavailable.');return uploadMetadata({userId:file.userId,source:'external',scope:'read'},file._id);}
+export async function readInviteMedia(code:string,fileId:string,photosOnly=false){const file=await inviteMediaMetadata(code,fileId,photosOnly);return readUpload({userId:file.userId,source:'external',scope:'read'},file._id);}
 export async function readInvitePhoto(code:string,fileId:string){return readInviteMedia(code,fileId,true);}

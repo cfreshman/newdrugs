@@ -12,7 +12,7 @@ import { AppError, requireValue } from './errors';
 import { MAX_UPLOAD_BYTES, MAX_ACCOUNT_UPLOAD_BYTES, type UploadPurpose, type UploadRef } from '../shared/uploads';
 import type { InputContentParam } from 'openai/resources/beta/agents/agents';
 
-interface Upload { _id:string; userId:string; name:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string }
+export interface Upload { _id:string; userId:string; name:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string }
 export const uploads=()=>rows<Upload>('uploads');
 const digest=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const filePath=(id:string)=>{if(!/^[0-9a-f-]{36}$/.test(id))throw new Error('Invalid file identity.');return resolve(config.DATA_DIR,'files',id);};
@@ -71,8 +71,8 @@ export async function acceptUpload(actor:Actor,id:string,body:Buffer){
   // transaction must not delete a file another successful retry now owns.
   return uploadRef(await ownUpload(actor.userId,id));
 }
-export async function readUpload(actor:Actor,id:string,allowPublicPhoto=false){
-  const file=requireValue(await uploads().findOne({_id:id,ready:true}),'This file is unavailable.');
+export async function uploadMetadata(actor:Actor,id:string,allowPublicPhoto=false){
+  const file=requireValue(await uploads().findOne({_id:id,ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}}),'This file is unavailable.');
   if(file.userId!==actor.userId){
     if(await users().findOne({_id:file.userId,suspendedAt:{$type:'string'}}))throw new AppError(404,'not_found','This file is unavailable.');
     const owner=allowPublicPhoto&&file.purpose==='profile_photo'&&await users().findOne({_id:file.userId,photos:id});
@@ -82,6 +82,10 @@ export async function readUpload(actor:Actor,id:string,allowPublicPhoto=false){
     const sharedLog=allowPublicPhoto&&await logFileVisibleTo(actor.userId,file.userId,id);
     if((!publicProfile&&!publicPost&&!sharedLog)||await rows('blocks').findOne({members:{$all:[file.userId,actor.userId]}}))throw new AppError(404,'not_found','This file is unavailable.');
   }
+  return file;
+}
+export async function readUpload(actor:Actor,id:string,allowPublicPhoto=false){
+  const file=await uploadMetadata(actor,id,allowPublicPhoto);
   const bytes=await readFile(filePath(id));
   if(bytes.length!==file.bytes||digest(bytes)!==file.sha256)throw new AppError(503,'file_unverified','The stored file could not be verified.');
   return {file,bytes};

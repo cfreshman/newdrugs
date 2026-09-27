@@ -1,5 +1,6 @@
+import {sendMedia} from './mediaDelivery';
 import {updateLiveInterests} from './liveSubscriptions';
-import {publicInvitePreview,readInvitePhoto,readInviteMedia} from './logInvites';
+import {publicInvitePreview,inviteMediaMetadata} from './logInvites';
 import {pagePreview,readPagePreviewImage} from './pagePreviews';
 import {renderPagePreview} from '../shared/pagePreview';
 import {readFile} from 'node:fs/promises';
@@ -18,6 +19,7 @@ import express, { type ErrorRequestHandler } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
+import { MongoRateLimitStore } from './rateLimitStore';
 import { z, ZodError } from 'zod';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -37,7 +39,7 @@ import { searchOperations, searchSchema } from './operationSearch';
 import release from '../release.json';
 import { checkout, stripeWebhook, topupQuote } from './payments';
 import { ensureIntroduction } from './onboarding';
-import {acceptUpload,readUpload} from './uploads';
+import {acceptUpload,uploadMetadata} from './uploads';
 import { streamLiveState, readLiveState } from './liveState';
 import { buildResourceLinks } from './resourceLinks';
 import { devApiGate,trustedDevKey } from './devGate';
@@ -45,7 +47,7 @@ import { previewImage } from './linkPreviews';
 import { replyToReview } from './reviewReply';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
-const limiter = (limit: number, windowMs = 60000) => rateLimit({ windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
+const limiter = (scope: string, limit: number, windowMs = 60000) => rateLimit({ store: new MongoRateLimitStore(scope), windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
   message: { error: { code: 'rate_limit', message: 'Please slow down and try again shortly.' } } });
 
 export function createApp() {
@@ -60,7 +62,7 @@ export function createApp() {
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '128kb' }), async (req, res) => {
     await stripeWebhook(req.body, req.get('stripe-signature') || ''); res.json({ received: true });
   });
-  app.post('/mcp', limiter(300), express.json({ limit: '128kb' }), authenticate, async (req, res) => {
+  app.post('/mcp', limiter('/mcp', 300), express.json({ limit: '128kb' }), authenticate, async (req, res) => {
     const actor = requireActor(req);
     if (actor.source === 'browser') throw new AppError(403, 'token_required', 'Connect MCP using an access token.');
     const server = createMcpServer(actor);
@@ -69,37 +71,32 @@ export function createApp() {
     await server.connect(transport); await transport.handleRequest(req, res, req.body);
   });
   app.all('/mcp', (_req, res) => { res.status(405).set('Allow', 'POST').json({ error: 'Use authenticated Streamable HTTP POST.' }); });
-  app.use('/api/admin/cli', limiter(90), express.json({ limit: '16kb' }), adminCliRouter());
+  app.use('/api/admin/cli', limiter('/api/admin/cli', 90), express.json({ limit: '16kb' }), adminCliRouter());
   // These projections are deliberately anonymous. Staging still requires its gate.
   const previewGate:express.RequestHandler=(req,res,next)=>{
     if(config.APP_ENV!=='staging'||trustedDevKey(req.get('X-NewDrugs-Dev-Key')))return next();
     if(!req.get('Authorization'))return next(new AppError(404,'not_found','This development endpoint is private.'));
     void authenticate(req,res,error=>{if(error)return next(error);try{requireActor(req);next();}catch(error){next(error);}});
   };
-  app.get('/api/log-invites/:code',previewGate,limiter(180),async(req,res)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}).json(await publicInvitePreview(String(req.params.code)));});
-  app.get('/api/log-invites/:code/photos/:fileId',previewGate,limiter(300),async(req,res)=>{const {file,bytes}=await readInvitePhoto(String(req.params.code),String(req.params.fileId));res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'}).send(bytes);});
-  app.get('/api/log-invites/:code/media/:fileId',previewGate,limiter(300),async(req,res)=>{
-    const {file,bytes}=await readInviteMedia(String(req.params.code),String(req.params.fileId));
-    res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline','Accept-Ranges':'bytes'});
-    const range=req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
-    if(req.headers.range){
-      if(!range||(!range[1]&&!range[2])){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
-      const start=range[1]?Number(range[1]):Math.max(0,bytes.length-Number(range[2])),end=range[1]&&range[2]?Math.min(Number(range[2]),bytes.length-1):bytes.length-1;
-      if(start>end||start>=bytes.length){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
-      res.status(206).set('Content-Range',`bytes ${start}-${end}/${bytes.length}`).send(bytes.subarray(start,end+1));return;
-    }
-    res.send(bytes);
+  app.get('/api/log-invites/:code',previewGate,limiter('/api/log-invites/:code', 180),async(req,res)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}).json(await publicInvitePreview(String(req.params.code)));});
+  app.get('/api/log-invites/:code/photos/:fileId',previewGate,limiter('/api/log-invites/:code/photos/:fileId', 300),async(req,res)=>{
+    const file=await inviteMediaMetadata(String(req.params.code),String(req.params.fileId),true);
+    res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'});await sendMedia(file,req,res);
   });
-  app.get('/api/page-preview',previewGate,limiter(180),async(req,res)=>{
+  app.get('/api/log-invites/:code/media/:fileId',previewGate,limiter('/api/log-invites/:code/media/:fileId', 300),async(req,res)=>{
+    const file=await inviteMediaMetadata(String(req.params.code),String(req.params.fileId));
+    res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'});await sendMedia(file,req,res);
+  });
+  app.get('/api/page-preview',previewGate,limiter('/api/page-preview', 180),async(req,res)=>{
     const path=z.string().max(2048).parse(req.query.path||'/');res.set('Cache-Control','no-store').json(await pagePreview(path));
   });
-  app.get('/api/share-images/:kind/:id',previewGate,limiter(300),async(req,res)=>{
+  app.get('/api/share-images/:kind/:id',previewGate,limiter('/api/share-images/:kind/:id', 300),async(req,res)=>{
     const {file,bytes}=await readPagePreviewImage(String(req.params.kind),String(req.params.id));
     res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'}).send(bytes);
   });
   app.use('/api', devApiGate, apiRequestLimits(), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  app.post('/api/session', limiter(30, 15 * 60000), async (req, res) => {
+  app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
     if (!req.actor) {
       const user = await createGuest(req.ip);
       await newSession(res, user._id);
@@ -131,21 +128,14 @@ export function createApp() {
     requireActor(req);
     res.set({ 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' }).send(await previewImage(String(req.params.id)));
   });
-  app.put('/api/uploads/:id',limiter(20),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
+  app.put('/api/uploads/:id',limiter('/api/uploads/:id', 20),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
   app.get('/api/files/:id',async(req,res)=>{
-    const {file,bytes}=await readUpload(requireActor(req),String(req.params.id),true);
-    res.set({'Content-Type':file.mime,'Content-Disposition':`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`,'Cache-Control':'private, no-store','Accept-Ranges':'bytes'});
-    const range=req.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
-    if(req.headers.range){
-      if(!range||(!range[1]&&!range[2])){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
-      const start=range[1]?Number(range[1]):Math.max(0,bytes.length-Number(range[2])),end=range[1]&&range[2]?Math.min(Number(range[2]),bytes.length-1):bytes.length-1;
-      if(start>end||start>=bytes.length){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
-      res.status(206).set('Content-Range',`bytes ${start}-${end}/${bytes.length}`).send(bytes.subarray(start,end+1));return;
-    }
-    res.send(bytes);
+    const file=await uploadMetadata(requireActor(req),String(req.params.id),true);
+    res.set('Content-Disposition',`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`);
+    await sendMedia(file,req,res);
   });
   app.get('/api/admin/session', async (req, res) => { res.json(await adminStatus(req)); });
-  app.post('/api/admin/login', limiter(10, 15 * 60000), async (req, res) => {
+  app.post('/api/admin/login', limiter('/api/admin/login', 10, 15 * 60000), async (req, res) => {
     const data = z.strictObject({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/), password: z.string().min(8).max(128) }).parse(req.body);
     res.json(await signInAdmin(req, res, data.username, data.password));
   });
@@ -160,7 +150,7 @@ export function createApp() {
     const { budgetDollars } = z.strictObject({ budgetDollars: z.number().min(0).max(100000).multipleOf(.01) }).parse(req.body);
     res.json(await setStarterBudget(owner.id, Math.round(budgetDollars * 1e9)));
   });
-  app.post('/api/account/register', limiter(15, 15 * 60000), async (req, res) => {
+  app.post('/api/account/register', limiter('/api/account/register', 15, 15 * 60000), async (req, res) => {
     const actor = browserActor(req);
     const data = credentials.parse(req.body);
     const user = await currentUser(actor.userId);
@@ -171,7 +161,7 @@ export function createApp() {
     await ensureIntroduction(saved._id);
     res.json({ user: profile(saved) });
   });
-  app.post('/api/account/login', limiter(15, 15 * 60000), async (req, res) => {
+  app.post('/api/account/login', limiter('/api/account/login', 15, 15 * 60000), async (req, res) => {
     const data = credentials.parse(req.body);
     const user = await users().findOne({ handle: data.handle });
     if (!await checkPassword(data.password, user?.passwordHash)) throw new AppError(401, 'credentials', 'That handle and password did not match.');
@@ -180,15 +170,15 @@ export function createApp() {
     await ensureIntroduction(user!._id);
     res.json({ user: profile(user!) });
   });
-  app.post('/api/account/username', limiter(10, 15 * 60000), async (req, res) => {
+  app.post('/api/account/username', limiter('/api/account/username', 10, 15 * 60000), async (req, res) => {
     const actor = browserActor(req), data = z.strictObject({ handle: credentials.shape.handle, currentPassword: z.string().min(1).max(128) }).parse(req.body);
     const user = await verifyAccountPassword(actor.userId, data.currentPassword); res.json({ user: profile(await changeUsername(user, data.handle)) });
   });
-  app.post('/api/account/password', limiter(10, 15 * 60000), async (req, res) => {
+  app.post('/api/account/password', limiter('/api/account/password', 10, 15 * 60000), async (req, res) => {
     const actor = browserActor(req), data = z.strictObject({ password: credentials.shape.password, currentPassword: z.string().min(1).max(128) }).parse(req.body);
     const user = await verifyAccountPassword(actor.userId, data.currentPassword); await changeAccountPassword(user, data.password, req.cookies[config.SESSION_COOKIE]); res.json({ ok: true });
   });
-  app.post('/api/account/clear-chat', limiter(5, 15 * 60000), async (req, res) => {
+  app.post('/api/account/clear-chat', limiter('/api/account/clear-chat', 5, 15 * 60000), async (req, res) => {
     const actor = browserActor(req); z.strictObject({ confirmed: z.literal(true) }).parse(req.body); await clearAgentChat(actor.userId); res.json({ ok: true });
   });
   app.post('/api/account/logout', async (req, res) => { browserActor(req); await logout(req, res); res.json({ ok: true }); });
@@ -202,7 +192,7 @@ export function createApp() {
     const result = await executeOperation(String(req.params.name), req.body, actor, req.get('Idempotency-Key'), { confirmed: req.get('X-NewDrugs-Confirmed') === 'true' });
     res.json({ ok: true, data: result, links: buildResourceLinks(String(req.params.name), req.body, result, actor) });
   });
-  app.post('/api/chat', limiter(12), async (req, res) => {
+  app.post('/api/chat', limiter('/api/chat', 12), async (req, res) => {
     const actor = browserActor(req);
     if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Create an account to use your agent.');
     const data = z.strictObject({ pageContext:pageContextCandidate.optional(), text: z.string().trim().max(6000), fileIds:z.array(z.uuid()).max(5).default([]), inboxIds: z.array(z.uuid()).max(3).default([]), recordRefs:z.array(recordReferenceSchema).max(3).default([]), requestId: z.uuid(), clientId: z.uuid(), timezone: z.string().max(100).default('America/New_York'), review: z.strictObject({ runId: z.string().max(200), revision: z.number().int().min(0) }).optional() }).refine(value=>value.text||value.fileIds.length||value.inboxIds.length||value.recordRefs.length,'Add a message or a file.').parse(req.body);
@@ -225,7 +215,7 @@ export function createApp() {
   });
   app.post('/api/runs/:id/cancel', async (req, res) => { res.json(await cancelRun(browserActor(req).userId, String(req.params.id))); });
   app.get('/api/checkout/quotes', (req, res) => { requireActor(req); res.json({ quotes: [500,1000,2000].map(topupQuote) }); });
-  app.post('/api/checkout', limiter(10), async (req, res) => {
+  app.post('/api/checkout', limiter('/api/checkout', 10), async (req, res) => {
     const actor = browserActor(req);
     const data = z.strictObject({ cents: z.union([z.literal(500), z.literal(1000), z.literal(2000)]), requestId: z.uuid() }).parse(req.body);
     res.json(await checkout(actor.userId, data.cents, data.requestId));
@@ -235,7 +225,7 @@ export function createApp() {
     const tokens = await rows('tokens').find({ userId: actor.userId, revokedAt: null }, { projection: { hash: 0 } }).sort({ createdAt: -1 }).limit(20).toArray();
     res.json({ tokens: tokens.map(t => ({ id: t._id, name: t.name, scope: t.scope, createdAt: t.createdAt, expiresAt: t.expiresAt })) });
   });
-  app.post('/api/tokens', limiter(10), async (req, res) => {
+  app.post('/api/tokens', limiter('/api/tokens', 10), async (req, res) => {
     const actor = browserActor(req);
     if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Save your account before connecting an agent.');
     const data = z.strictObject({ name: z.string().trim().max(60).default('My AI agent').transform(value => value || 'My AI agent'), scope: z.enum(['read', 'write']), expiresInDays: z.number().int().min(1).max(3650).nullable().default(null) }).parse(req.body);

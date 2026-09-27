@@ -5,9 +5,13 @@ loadEnv({ path: '.env.local', quiet: true });
 const env = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().default(7331),
+  PROCESS_ROLE: z.enum(['all','web','worker']).default('all'),
+  AGENT_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
+  AGENT_INTERACTIVE_SLOTS: z.coerce.number().int().min(1).max(64).default(1),
   APP_ORIGIN: z.url().default('https://dev.druggie.org'),
   UI_ORIGIN: z.string().default(''),
   MONGODB_URI: z.string().min(1, 'Set the cloud database connection. A local database is not used.'),
+  MONGODB_POOL_SIZE: z.coerce.number().int().min(4).max(200).default(24),
   SEARCH_DAILY_BUDGET_NANOS: z.coerce.number().int().min(0).default(250000000),
   LIVE_MAX_CONNECTIONS:z.coerce.number().int().min(1).default(2048),
   DATA_DIR: z.string().default('.data/private'),

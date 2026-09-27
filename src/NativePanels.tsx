@@ -162,7 +162,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
           : connection.status === 'pending' && connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(connection, true)}>Accept invitation</button></div>
             : connection.status === 'pending' ? <div className="inline-actions"><span className="quiet small">Invitation sent</span><button className="text-link small" disabled={busy} onClick={() => void withdraw(connection)}>Withdraw invitation</button></div>
               : <span className="quiet small">{connection.status === 'disconnected' ? 'Connection ended' : connection.status === 'withdrawn' ? 'Invitation withdrawn' : 'Invitation declined'}</span>}
-      {connection.status!=='accepted'&&<button onClick={()=>navigate({view:'messages',resourceId:connection.id})}>{connection.initialInvitation?'View conversation history':'View invitation'}</button>}</article>;
+      {connection.status!=='accepted'&&<button className="text-link" onClick={()=>navigate({view:'messages',resourceId:connection.id})}>{connection.initialInvitation?'View conversation history':'View invitation'}</button>}</article>;
     })}</div>{inbox && !inbox.items.length && <><p className="quiet">No invitations or conversations yet.</p><button className="text-link" onClick={() => navigate({ view: 'people' })}>Find people nearby</button></>}
     {inbox?.nextCursor && <button className="text-link" onClick={() => void moreConnections()}>More conversations</button>}{error && <p className="error" role="alert">{error}</p>}</>;
   const other = current?.people.find(person => person.id !== userId);

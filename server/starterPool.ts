@@ -1,3 +1,4 @@
+import {queueLedgerActivity} from './ledgerActivity';
 import { createHmac } from 'node:crypto';
 import ipaddr from 'ipaddr.js';
 import type { ClientSession } from 'mongodb';
@@ -41,7 +42,7 @@ export async function grantStarter(userId: string, session: ClientSession) {
   const credit = prior ? 0 : 1_000_000_000;
   await users().updateOne({ _id: userId }, { $set: { starterGranted: true }, $inc: { balanceNanos: credit } }, { session });
   await grants().insertOne({ _id: `${stage()}:${userId}`, userId, stage: stage(), amountNanos: 1_000_000_000, createdAt: now }, { session });
-  if (credit) await rows('ledger').insertOne({ _id: `starter:${userId}`, userId, amountNanos: credit, label: 'Starter credit', createdAt: now }, { session });
+  if (credit) {await rows('ledger').insertOne({ _id: `starter:${userId}`, userId, amountNanos: credit, label: 'Starter credit', createdAt: now }, { session });await queueLedgerActivity(userId,`starter:${userId}`,session);}
 }
 export async function ensureStarter(userId: string) { await transaction(session => grantStarter(userId, session)); }
 export async function starterPoolStatus() {

@@ -1,3 +1,4 @@
+import {queueLedgerActivity} from './ledgerActivity';
 import Stripe from 'stripe';
 import { config } from './config';
 import { rows, transaction } from './db';
@@ -48,6 +49,7 @@ export async function applyCharge(input: { id: string; userId: string; amount: n
     await rows('ledger').insertOne({ _id: `payment:${id}:${effectiveRefund}`, userId, amountNanos: delta,
       label: previous ? 'Payment refund' : 'Credit added', createdAt: now,
       details: { paidCents: amount, processingFeeCents: fee, promisedCreditCents: principal, feeAdjustmentCreditCents: principal === undefined ? 0 : Math.max(0, amount - fee - principal), refundedCents: effectiveRefund, receiptUrl: input.receiptUrl } }, { session });
+    await queueLedgerActivity(userId,`payment:${id}:${effectiveRefund}`,session);
   });
 }
 export async function stripeWebhook(body: Buffer, signature: string) {

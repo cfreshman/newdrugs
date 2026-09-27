@@ -61,11 +61,11 @@ async function pushFixture() {
   await rows('pushOutbox').updateMany({}, { $set: { availableAt: 0 } });
   return { recipient, sender, connectionId, token, sessionId, device };
 }
-it('delivers a generic invitation and revokes expired subscriptions without exposing message content', async () => {
+it('names the inviter and revokes expired subscriptions without exposing message content', async () => {
   const fixture = await pushFixture();
   const send = vi.fn().mockResolvedValue({ statusCode: 201 }); await deliverPush(send);
   expect(send).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(send.mock.calls[0][1])).toMatchObject({ body: 'You have a new invitation.', url: `/messages/${encodeURIComponent(fixture.connectionId)}` });
+  expect(JSON.parse(send.mock.calls[0][1])).toMatchObject({ body: `@${fixture.sender.handle} invited you to connect`, url: `/messages/${encodeURIComponent(fixture.connectionId)}` });
   await deliverPush(send); expect(send).toHaveBeenCalledTimes(1);
   await rows('pushOutbox').updateMany({}, { $set: { status: 'pending', availableAt: 0, delivered: [] } });
   send.mockRejectedValue({ statusCode: 410 }); await deliverPush(send);

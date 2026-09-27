@@ -1,7 +1,7 @@
 import { MongoClient, type ClientSession, type Db } from 'mongodb';
 import { config } from './config';
 
-export const mongo = new MongoClient(config.MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+export const mongo = new MongoClient(config.MONGODB_URI, { serverSelectionTimeoutMS: 5000, maxPoolSize: config.MONGODB_POOL_SIZE, maxConnecting: 2, waitQueueTimeoutMS: 10000 });
 let database: Db;
 export interface Row { _id: string; [key: string]: unknown }
 export function db() { if (!database) throw new Error('Database is not connected.'); return database; }
@@ -17,6 +17,7 @@ export async function connectDatabase(name?: string) {
   const hello = await database.admin().command({ hello: 1 });
   if (!hello.setName) throw new Error('The cloud MongoDB connection needs a replica set for atomic credits.');
   await Promise.all([
+    rows('requestRates').createIndex({resetTime:1},{expireAfterSeconds:0}),
     rows('ledgerActivityReceipts').createIndex({userId:1,kind:1,orderKey:-1}),
     rows('ledgerActivityReceipts').createIndex({periodId:1,kind:1,orderKey:1}),
     rows('ledgerActivityPeriods').createIndex({userId:1,orderKey:-1}),

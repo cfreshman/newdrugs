@@ -5,6 +5,7 @@ import { hash, users } from './auth';
 import { config } from './config';
 import { destinationPath, type ResourceLink } from '../shared/navigation';
 import type { Notification, NotificationState } from '../shared/notifications';
+import { logNotificationText, notificationActor } from './notificationText';
 
 export async function notifyConnection(userId: string, actorId: string, connectionId: string, kind: 'message' | 'connection_accepted', text: string, messageId: string | undefined, session?: ClientSession) {
   await rows('notifications').updateOne({ _id: hash(`${kind}:${connectionId}:${userId}`) }, { $set: { userId, actorId, connectionId, kind, text, messageId, readAt: null, createdAt: new Date().toISOString() } }, { session, upsert: true });
@@ -23,13 +24,13 @@ export async function notificationState(userId: string, session?: ClientSession)
   stored.push(...await rows('notifications').find({ ...recordFilter, readAt: { $ne: null } }, { session }).sort({ createdAt: -1 }).limit(100).toArray());
   let count = await rows('connections').countDocuments(unreadInvitations, { session }) + await rows('notifications').countDocuments(unreadRecords, { session });
   const people = await users().find({ _id: { $in: [...invitations.map(row => String(row.fromId)), ...stored.map(row => String(row.actorId))] } }, { session, projection: { name: 1, handle: 1 } }).toArray();
-  const label = (id: string) => { const person = people.find(person => person._id === id); return person?.handle ? `@${person.handle}` : person?.name || 'Someone'; };
+  const label = (id: string) => notificationActor(people.find(person => person._id === id));
   const link = (connectionId: string): ResourceLink => ({ rel: 'open_in_newdrugs', targetKind: 'exact', title: 'Open conversation', url: new URL(destinationPath({ view: 'messages', resourceId: connectionId }), config.uiOrigin).href, resourceType: 'conversation', resourceId: connectionId });
   const items: Notification[] = invitations.map(row => ({ id: `invite:${row._id}`, kind: 'invitation', title: `Invitation from ${label(String(row.fromId))}`, text: String(row.note), createdAt: String(row.createdAt), read: row.status !== 'pending' || Boolean(row.notificationReadAt), connectionId: row._id, link: link(row._id) }));
   for (const row of stored) {
     if(row.kind==='log_invitation'||row.kind==='log_update'||row.kind==='log_added'){
-      const entry=await rows('logEntries').findOne({_id:String(row.entryId),deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]},{session,projection:{_id:1}});if(!entry){if(!row.readAt)count--;continue;}
-      items.push({id:row._id,kind:row.kind,title:String(row.title),text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open Log entry',url:new URL(destinationPath({view:'log',resourceId:entry._id}),config.uiOrigin).href,resourceType:'log_entry',resourceId:entry._id}});continue;
+      const entry=await rows('logEntries').findOne({_id:String(row.entryId),deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]},{session,projection:{_id:1,title:1}});if(!entry){if(!row.readAt)count--;continue;}
+      items.push({id:row._id,kind:row.kind,title:logNotificationText(row.kind,label(String(row.actorId)),entry.title),text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open Log entry',url:new URL(destinationPath({view:'log',resourceId:entry._id}),config.uiOrigin).href,resourceType:'log_entry',resourceId:entry._id}});continue;
     }
 
     if (row.kind === 'automation_status') { items.push({id:row._id,kind:'automation_status',title:String(row.title),text:String(row.text),createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open automation',url:new URL(destinationPath({view:'automations',resourceId:String(row.automationId)}),config.uiOrigin).href,resourceType:'automation',resourceId:String(row.automationId)}}); continue; }
