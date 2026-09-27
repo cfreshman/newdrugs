@@ -173,3 +173,5 @@ agent-written rules (you are allowed to edit below this line)
 - Utility operations may remain agent/CLI/MCP-only. Add manual UI when it serves a useful user workflow, not automatically for every helper. Core social features still need usable direct controls.
 
 - Log is the fourth native mode. Read `docs/log-integration/PLAN.md` and `PARITY.md` before extending it. `../logcal` is a read-only behavior reference. Log entries remain private or explicitly shared, outside public semantic search. Use existing accounts, friendships, storage and notifications. Each member owns their own note/media. Existing automations need explicit `logAccess` to read Log; social account activity or private chat alone never grants diary access.
+
+- Preserve Logcal’s major UI decisions for Log: continuous newest-week-first backward scrolling through empty years, square day mosaics, a four-wide contact sheet, photo-first entries and media-first editing. Skin those structures with New Drugs tokens and controls. Do not substitute month pages or rounded calendar cards when adapting features.

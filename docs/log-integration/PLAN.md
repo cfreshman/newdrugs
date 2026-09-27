@@ -24,7 +24,7 @@ The utility production approval does not imply a production release of this new 
 
 ## Implemented
 
-Calendar/month navigation, empty-day creation, gallery/list arrangements, private and shared scopes, invitation inbox, text/phrase/Boolean filters, participant filters, named account-backed views, URL state, local date handling, anniversaries/birthdays, adjacent-entry navigation, JSON/text export, and preserved drafts/navigation.
+Continuous backward week scrolling with date-jump shortcuts, empty-day creation, gallery/list arrangements, private and shared scopes, invitation inbox, text/phrase/Boolean filters, participant filters, named account-backed views, URL state, local date handling, anniversaries/birthdays, adjacent-entry navigation, JSON/text export, and preserved drafts/navigation.
 
 Entry editing supports common title/date/place/links/cover, per-person notes, eight attachments per contribution, photos, audio upload/recording and bounded video uploads. Images use existing downscaling/quota rules. Media authorization is checked on every request, including range requests. Hidden recordings stop; all media stops when its panel is inactive.
 
@@ -51,3 +51,11 @@ Agent entry attachments reauthorize at submission and use. Log photo reads requi
 See PARITY.md for omissions. This is a web/PWA implementation, not an Expo transplant. There is no Logcal data migration and no production Log release yet. Original Logcal code, services and data remain untouched.
 
 Search is private text/Boolean matching with structured filters, matching the reference's meaningful search capabilities. It is not advertised as semantic retrieval. Photos can be read by the agent; audio/video playback is supported, but automatic transcription or video understanding is not added. Recording and native playback still need a physical iPhone/iPad check. Uploaded files are retained in Storage when detached/deleted from an entry, so a shared file is never silently destroyed for another use. Deleting a file through Storage removes its Log references.
+
+## Logcal UI correction
+
+The initial month-grid layout was replaced following user feedback. The target is New Drugs styling with Logcal structure, not a redesigned diary UI. Calendar weeks extend in 52-week batches even through empty years; old date ranges remain mounted when opening an entry. Square photo mosaics, multi-entry day selection, the right-to-left four-wide contact sheet, Today’s entry strip and bottom create action, photo-first entry details, media-first editing, and bottom older/newer/back/edit actions restore the reference’s main decisions. Touch swipes on entry text navigate between entries without capturing photo-strip gestures.
+
+Backend same-day ordering now uses creation time before the stable ID, with matching pagination and neighbor navigation. Existing old cursors are rejected clearly. UI/date/navigation tests passed 75 tests, and the combined Log backend/UI suite passed 96. Browser verification at 390px confirmed 52 → 104 → 156 weeks through empty history, stable scroll while appending, the four-wide sheet, and photo-first detail/editor layout. Disposable fixture data only; no real user entries were written.
+
+UI correction deployed to cloud dev as `20260927003706998`. Production remains unchanged. The correction keeps New Drugs styling and restores Logcal’s continuous calendar, square mosaics, four-wide contact sheet, Today strip, photo-first details, media-first editor, and bottom entry actions.

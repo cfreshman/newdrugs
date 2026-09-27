@@ -17,8 +17,8 @@ export async function connectDatabase(name?: string) {
   const hello = await database.admin().command({ hello: 1 });
   if (!hello.setName) throw new Error('The cloud MongoDB connection needs a replica set for atomic credits.');
   await Promise.all([
-    rows('logEntries').createIndex({members:1,date:-1,_id:-1}),
-    rows('logEntries').createIndex({invited:1,date:-1,_id:-1}),
+    rows('logEntries').createIndex({members:1,date:-1,createdAt:-1,_id:-1}),
+    rows('logEntries').createIndex({invited:1,date:-1,createdAt:-1,_id:-1}),
     rows('logEntries').createIndex({'contributions.fileIds':1}),
     rows('agentSessionCleanup').createIndex({ availableAt: 1 }),
     rows('automations').createIndex({ status: 1, nextRunAt: 1 }),

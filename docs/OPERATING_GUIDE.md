@@ -14,7 +14,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
 | Production | `https://druggie.org`, v0.19.1, release `20260926221734638` |
-| Cloud dev | `https://dev.druggie.org`, release `20260926233414675`; local frontend at `http://localhost:7330/log` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927003706998`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both have approved utilities. Dev additionally has the native Log experiment. Log has not been released to production. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -402,3 +402,7 @@ Media uses the existing quota and file service with `log_media` purpose. `newdru
 The Log source project `../logcal` is read-only, like the other references. Do not copy its JWT accounts, friend graph, exact GPS behavior, native configuration or anonymous share keys. The parity map documents adaptations and intentional omissions.
 
 Log completion evidence: dev release `20260926233414675`, with production unchanged at `20260926221734638`. Both health endpoints returned `ok:true`. The dev catalog exposes all 15 `log.*` operations, and live read-only CLI checks succeeded. The Log/push regression passed 101 tests; subsequent navigation/draft checks passed 71, plus focused backend tests for attachment order and stale revisions. Counts overlap across suites. Mobile UI was reviewed at 390px and 320px using disposable fixtures; no personal Log entries were created for QA. The code is checkpointed on `experiment/log`; see `git log` for the final implementation commit.
+
+The first Log UI was corrected after the user clarified “New Drugs skin, Logcal bones.” Keep the reference calendar’s continuous backward weeks, flat square mosaics and four-wide contact sheet. Do not reintroduce month-by-month paging as the main experience. `src/LogCalendar.tsx` owns progressive calendar loading; `src/logCalendarModel.ts` defines adjacent year chunks. Day tiles open one entry or a chooser, and empty days create a dated draft. Photos lead entry details and editor media comes first. New Drugs fonts, palette, controls and native routing remain in use.
+
+UI correction deployed to cloud dev as `20260927003706998`. Production remains unchanged. The correction keeps New Drugs styling and restores Logcal’s continuous calendar, square mosaics, four-wide contact sheet, Today strip, photo-first details, media-first editor, and bottom entry actions.

@@ -37,11 +37,11 @@ async function list(userId:string,d:LogList,session?:ClientSession,full=false){
  if(d.personId)filter.push({members:d.personId});if(d.recurring)filter.push({recurrence:{$ne:'none'}});
  if(d.from||d.through)filter.push({date:{...(d.from?{$gte:d.from}:{}),...(d.through?{$lte:d.through}:{})}});
  const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
- const signature=createHash('sha256').update(JSON.stringify([userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring])).digest('hex');
- if(d.before){try{const cursor=JSON.parse(Buffer.from(d.before,'base64url').toString());if(cursor.signature!==signature||typeof cursor.id!=='string'||typeof cursor.date!=='string')throw Error();filter.push({$or:[{date:{$lt:cursor.date}},{date:cursor.date,_id:{$lt:cursor.id}}]});}catch{throw new AppError(422,'log_cursor','Reload this Log view.');}}
- const found=await entries().find({$and:filter},{session}).sort({date:-1,_id:-1}).limit(d.limit+1).toArray(),page=found.slice(0,d.limit),last=page.at(-1);
+ const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring])).digest('hex');
+ if(d.before){try{const cursor=JSON.parse(Buffer.from(d.before,'base64url').toString());if(cursor.signature!==signature||typeof cursor.id!=='string'||typeof cursor.date!=='string'||typeof cursor.createdAt!=='string')throw Error();filter.push({$or:[{date:{$lt:cursor.date}},{date:cursor.date,createdAt:{$lt:cursor.createdAt}},{date:cursor.date,createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]});}catch{throw new AppError(422,'log_cursor','Reload this Log view.');}}
+ const found=await entries().find({$and:filter},{session}).sort({date:-1,createdAt:-1,_id:-1}).limit(d.limit+1).toArray(),page=found.slice(0,d.limit),last=page.at(-1);
  const items=[];for(const row of page)items.push(await project(row,userId,session,!full));
- return {items,nextCursor:found.length>d.limit&&last?Buffer.from(JSON.stringify({date:last.date,id:last._id,signature})).toString('base64url'):null};
+ return {items,nextCursor:found.length>d.limit&&last?Buffer.from(JSON.stringify({date:last.date,createdAt:last.createdAt,id:last._id,signature})).toString('base64url'):null};
 }
 export async function logOperation(name:string,d:Record<string,unknown>,actor:Actor,session?:ClientSession):Promise<unknown>{
  const userId=actor.userId,now=new Date().toISOString();
@@ -61,7 +61,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  if(name==='log.neighbors'){
   const allowed=await access(userId,session),result:{previous:LogEntry|null;next:LogEntry|null}={previous:null,next:null};
   for(const direction of ['previous','next'] as const){const comparison=direction==='previous'?'$lt':'$gt',order=direction==='previous'?-1:1;
-   const adjacent=await entries().findOne({$and:[allowed,{members:userId},{$or:[{date:{[comparison]:row.date}},{date:row.date,_id:{[comparison]:row._id}}]}]},{session,sort:{date:order,_id:order}});if(adjacent)result[direction]=await project(adjacent,userId,session);
+   const adjacent=await entries().findOne({$and:[allowed,{members:userId},{$or:[{date:{[comparison]:row.date}},{date:row.date,createdAt:{[comparison]:row.createdAt}},{date:row.date,createdAt:row.createdAt,_id:{[comparison]:row._id}}]}]},{session,sort:{date:order,createdAt:order,_id:order}});if(adjacent)result[direction]=await project(adjacent,userId,session);
   }return result;
  }
 

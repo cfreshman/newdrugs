@@ -22,7 +22,7 @@ function operation<S extends z.ZodRawShape>(name: string, kind: 'read' | 'write'
 }
 export const operations = [
   operation('log.people','read','List the people who share an accessible Log entry with you, for structured person filters. Does not search profiles outside your diary.',{}),
-  operation('log.neighbors','read','Read the immediately older and newer entries around an authorized Log entry. Uses calendar date then stable ID, excluding entries you cannot access.',{entryId:z.uuid()}),
+  operation('log.neighbors','read','Read the immediately older and newer entries around an authorized Log entry. Uses calendar date, creation time, then stable ID, excluding entries you cannot access.',{entryId:z.uuid()}),
   operation('log.list','read','Browse your private and explicitly shared Log entries by date, person, scope or text. List previews cap each note at 500 characters and mark noteTruncated; use log.get for full contributions. Private diary content never appears in public search. Query matches titles, places and notes: spaces/+ mean AND, | means OR, quoted phrases stay together, - excludes. Use structured dates/personId for constraints. recurring lists anniversary/birthday source entries.',logListInput),
   operation('log.get','read','Read one authorized Log entry, its participants, each person’s own contribution and attachments. Pending invitees may preview before accepting.',{entryId:z.uuid()}),
   operation('log.create','write','Save a private dated moment or future plan in your Log. Date is a local calendar day, not a UTC timestamp. Preserve the user’s memories and wording; never invent experiences. Sharing happens separately through a reviewed invitation. Attach only existing owned uploads.',{entry:logFields,contribution:logContribution}),
