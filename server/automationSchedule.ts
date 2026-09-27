@@ -1,3 +1,4 @@
+import {Temporal} from '@js-temporal/polyfill';
 import { AppError } from './errors';
 import type { AutomationConfig } from '../shared/automations';
 export function scheduleParts(time: number, timeZone: string) {
@@ -8,11 +9,17 @@ export function scheduleParts(time: number, timeZone: string) {
 /** Wall-clock recurrence: skip nonexistent local times and never repeat a fall-back date. */
 export function nextAutomationTime(schedule: AutomationConfig['schedule'], after = Date.now(), skipDate?: string): number | null {
   if (schedule.kind === 'once') return Date.parse(schedule.at) > after ? Date.parse(schedule.at) : null;
-  try { new Intl.DateTimeFormat('en-US', { timeZone: schedule.timeZone }); } catch { throw new AppError(422, 'timezone', 'Choose a valid IANA timezone.'); }
-  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: schedule.timeZone, year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-  for (let time = Math.floor(after / 60000) * 60000 + 60000, end = after + 9 * 86400000; time <= end; time += 60000) {
-    const parts = Object.fromEntries(formatter.formatToParts(time).map(part => [part.type, part.value]));
-    if (Number(parts.hour) === schedule.hour && Number(parts.minute) === schedule.minute && schedule.weekdays.includes(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(parts.weekday)) && `${parts.year}-${parts.month}-${parts.day}` !== skipDate) return time;
+  let day:Temporal.PlainDate;
+  try { day=Temporal.Instant.fromEpochMilliseconds(after).toZonedDateTimeISO(schedule.timeZone).toPlainDate(); }
+  catch { throw new AppError(422,'timezone','Choose a valid IANA timezone.'); }
+  for(let offset=0;offset<10;offset++){
+    const date=day.add({days:offset});
+    if(date.toString()===skipDate||!schedule.weekdays.includes(date.dayOfWeek%7))continue;
+    const fields={timeZone:schedule.timeZone,year:date.year,month:date.month,day:date.day,hour:schedule.hour,minute:schedule.minute};
+    const candidates=['earlier','later'].map(disambiguation=>Temporal.ZonedDateTime.from(fields,{disambiguation:disambiguation as 'earlier'|'later'}))
+      .filter(value=>value.toPlainDate().equals(date)&&value.hour===schedule.hour&&value.minute===schedule.minute&&value.epochMilliseconds>after)
+      .map(value=>value.epochMilliseconds);
+    if(candidates.length)return Math.min(...candidates);
   }
   throw Error('No valid next occurrence.');
 }

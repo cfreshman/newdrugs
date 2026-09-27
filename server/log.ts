@@ -1,10 +1,10 @@
+import {publishLogChange} from './recordEvents';
 import {projectInvite} from './logInvites';
 import {ownBirthdaySchema,type OwnBirthday} from '../shared/logBirthday';
 import {config} from './config';
 import {destinationPath} from '../shared/navigation';
 import type {LogContact} from '../shared/logJoining';
 import {enqueueLogPush} from './push';
-import {profileVisibleTo} from './profileVisibility';
 import {randomUUID,randomBytes,createHash} from 'node:crypto';
 import type {ClientSession,Filter} from 'mongodb';
 import {rows} from './db';
@@ -12,7 +12,7 @@ import {users,type Actor} from './auth';
 import {AppError,requireValue} from './errors';
 import {uploads,ownUpload,retainUploads,deleteUpload} from './uploads';
 import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogList} from '../shared/log';
-interface LogRow extends LogFields {_id:string;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
+interface LogRow extends LogFields {_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
 const entries=()=>rows<LogRow>('logEntries');
 async function excluded(userId:string,session?:ClientSession){return [...(await rows('blocks').find({members:userId},{session}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)),...(await users().find({suspendedAt:{$type:'string'}},{session,projection:{_id:1}}).toArray()).map(row=>row._id)];}
 async function access(userId:string,session?:ClientSession):Promise<Filter<LogRow>>{const blocked=await excluded(userId,session);return {deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]};}
@@ -20,13 +20,24 @@ export async function logFileVisibleTo(userId:string,ownerId:string,fileId:strin
 export async function logAttachmentLocations(userId:string,fileIds:string[]|undefined,session?:ClientSession){return entries().find({$and:[await access(userId,session),{members:userId,contributions:{$elemMatch:{userId,...(fileIds?{fileIds:{$in:fileIds}}:{})}}}]},{session,projection:{title:1,date:1,'contributions.userId':1,'contributions.fileIds':1}}).toArray();}
 export async function hasSharedHangouts(userId:string,personId:string,session?:ClientSession){if(userId===personId)return false;return Boolean(await entries().findOne({$and:[await access(userId,session),{members:{$all:[userId,personId]}}]},{session,projection:{_id:1}}));}
 export async function logEntryFor(userId:string,id:string,session?:ClientSession){return requireValue(await entries().findOne({$and:[{_id:id},await access(userId,session)]},{session}),'This Log entry is unavailable.');}
-async function project(row:LogRow,userId:string,session?:ClientSession,preview=false):Promise<LogEntry>{
- const people=await users().find({_id:{$in:[...row.members,...row.invited]}},{session,projection:{name:1,handle:1,photos:1,discoverable:1}}).toArray();
- const visible=new Set<string>();for(const person of people)if(await profileVisibleTo(userId,person,session))visible.add(person._id);
- const files=await uploads().find({_id:{$in:row.contributions.flatMap(c=>c.fileIds)},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session}).toArray();
- const person=(id:string)=>{const user=people.find(p=>p._id===id);return {userId:id,profileVisible:visible.has(id),name:user?.name||user?.handle||'Member',...(user?.handle?{handle:user.handle}:{}),...(user?.photos?.[0]&&visible.has(id)?{photoId:user.photos[0]}:{})};};
- return {id:row._id,ownerId:row.ownerId,...(row.historicalPeople?.length?{historicalPeople:row.historicalPeople}:{}),title:row.title,date:row.date,place:row.place,links:row.links,recurrence:row.recurrence,coverFileId:files.some(f=>f._id===row.coverFileId)?row.coverFileId:null,revision:row.revision,createdAt:row.createdAt,updatedAt:row.updatedAt,membership:row.members.includes(userId)?'member':row.invited.includes(userId)?'invited':'declined',contributors:row.contributions.filter(c=>row.members.includes(c.userId)).map(c=>({...person(c.userId),note:preview?c.note.slice(0,500):c.note,...(preview&&c.note.length>500?{noteTruncated:true}:{}),files:c.fileIds.flatMap(id=>files.filter(f=>f._id===id&&f.userId===c.userId)).map(f=>({id:f._id,name:f.name,mime:f.mime,bytes:f.bytes,url:`/api/files/${f._id}`}))})),invitations:row.invited.map(person)};
+export async function projectLogEntries(records:LogRow[],userId:string,session?:ClientSession,preview=false):Promise<LogEntry[]>{
+ if(!records.length)return [];
+ const ids=[...new Set(records.flatMap(row=>[...row.members,...row.invited]))],fileIds=[...new Set(records.flatMap(row=>row.contributions.flatMap(person=>person.fileIds)))];
+ const people=await users().find({_id:{$in:ids}},{session,projection:{name:1,handle:1,photos:1,discoverable:1,suspendedAt:1}}).toArray();
+ const files=await uploads().find({_id:{$in:fileIds},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session}).toArray();
+ const byPerson=new Map(people.map(person=>[person._id,person])),byFile=new Map(files.map(file=>[file._id,file]));
+ const visible=new Set(people.filter(person=>person._id===userId||!person.suspendedAt&&person.discoverable).map(person=>person._id));
+ for(const row of records)if(row.members.includes(userId))for(const id of row.members)if(!byPerson.get(id)?.suspendedAt)visible.add(id);
+ const unresolved=ids.filter(id=>!visible.has(id)&&!byPerson.get(id)?.suspendedAt);
+ if(unresolved.length){
+  const shared=await entries().aggregate<{_id:string}>([{$match:{members:userId,deletedAt:{$exists:false},$and:[{members:{$in:unresolved}}]}},{$unwind:'$members'},{$match:{members:{$in:unresolved}}},{$group:{_id:'$members'}}],{session}).toArray();shared.forEach(row=>visible.add(row._id));
+  const connections=await rows('connections').find({members:userId,$and:[{members:{$in:unresolved}}],$or:[{status:{$in:['pending','accepted']}},{status:'declined',toId:userId}]},{session,projection:{members:1}}).toArray();for(const row of connections)for(const id of row.members as string[])if(unresolved.includes(id))visible.add(id);
+ }
+ const person=(id:string)=>{const user=byPerson.get(id);return {userId:id,profileVisible:visible.has(id),name:user?.name||user?.handle||'Member',...(user?.handle?{handle:user.handle}:{}),...(user?.photos?.[0]&&visible.has(id)?{photoId:user.photos[0]}:{})};};
+ return records.map(row=>({id:row._id,ownerId:row.ownerId,...(row.historicalPeople?.length?{historicalPeople:row.historicalPeople}:{}),title:row.title,date:row.date,place:row.place,links:row.links,recurrence:row.recurrence,coverFileId:byFile.has(row.coverFileId||'')?row.coverFileId:null,revision:row.revision,createdAt:row.createdAt,updatedAt:row.updatedAt,membership:row.members.includes(userId)?'member':row.invited.includes(userId)?'invited':'declined',contributors:row.contributions.filter(c=>row.members.includes(c.userId)).map(c=>({...person(c.userId),note:preview?c.note.slice(0,500):c.note,...(preview&&c.note.length>500?{noteTruncated:true}:{}),files:c.fileIds.flatMap(id=>{const file=byFile.get(id);return file&&file.userId===c.userId?[{id:file._id,name:file.name,mime:file.mime,bytes:file.bytes,url:`/api/files/${file._id}`}]:[];})})),invitations:row.invited.map(person)}));
 }
+async function project(row:LogRow,userId:string,session?:ClientSession,preview=false){return (await projectLogEntries([row],userId,session,preview))[0];}
+
 async function media(userId:string,ids:string[],entryId:string,session?:ClientSession){
  for(const id of ids){
   const file=await ownUpload(userId,id,session);
@@ -42,8 +53,10 @@ async function removeMedia(actor:Actor,ids:string[],session?:ClientSession){
 async function notification(row:LogRow,actorId:string,userId:string,kind:'log_invitation'|'log_update'|'log_added',session?:ClientSession){await rows('notifications').updateOne({_id:`log:${row._id}:${userId}`},{$set:{userId,actorId,entryId:row._id,kind,title:kind==='log_added'?'You were added to a hangout':kind==='log_invitation'?'An invitation to a shared Log entry':'A new contribution to a hangout',text:'',revision:row.revision,readAt:null,createdAt:new Date().toISOString()}},{upsert:true,session});await enqueueLogPush(userId,actorId,row._id,row.revision,session,kind);}
 async function save(row:LogRow,revision:number,actor:Actor,session?:ClientSession){
  if(row.revision!==revision)throw new AppError(409,'log_changed','This entry changed. Reload it before saving.');
- row.updatedAt=new Date().toISOString();row.revision++;
+ const previous=await entries().findOne({_id:row._id,revision},{session,projection:{members:1,invited:1,date:1}});
+ row.updatedAt=new Date().toISOString();row.revision++;row.liveEventVersion=1;
  const result=await entries().replaceOne({_id:row._id,revision},{...row},{session});if(!result.matchedCount)throw new AppError(409,'log_changed','This entry changed. Reload it before saving.');
+ await publishLogChange(previous,row,session);
  return project(row,actor.userId,session);
 }
 /** Match Logcal: alert once on a member's first content, not on every save. */
@@ -66,7 +79,7 @@ async function list(userId:string,d:LogList,session?:ClientSession,full=false){
  const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring])).digest('hex');
  if(d.before){try{const cursor=JSON.parse(Buffer.from(d.before,'base64url').toString());if(cursor.signature!==signature||typeof cursor.id!=='string'||typeof cursor.date!=='string'||typeof cursor.createdAt!=='string')throw Error();filter.push({$or:[{date:{$lt:cursor.date}},{date:cursor.date,createdAt:{$lt:cursor.createdAt}},{date:cursor.date,createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]});}catch{throw new AppError(422,'log_cursor','Reload this Log view.');}}
  const found=await entries().find({$and:filter},{session}).sort({date:-1,createdAt:-1,_id:-1}).limit(d.limit+1).toArray(),page=found.slice(0,d.limit),last=page.at(-1);
- const items=[];for(const row of page)items.push(await project(row,userId,session,!full));
+ const items=await projectLogEntries(page,userId,session,!full);
  return {items,nextCursor:found.length>d.limit&&last?Buffer.from(JSON.stringify({date:last.date,createdAt:last.createdAt,id:last._id,signature})).toString('base64url'):null};
 }
 async function contactRows(actor:Actor,session?:ClientSession):Promise<LogContact[]>{
@@ -129,7 +142,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  if(name==='log.create'){
   const fields=d.entry as LogFields,contribution=d.contribution as LogContribution,entryId=randomUUID();await media(userId,contribution.fileIds,entryId,session);
   if(fields.coverFileId&&(!contribution.fileIds.includes(fields.coverFileId)||!await uploads().findOne({_id:fields.coverFileId,ready:true,mime:{$regex:'^image/'}},{session})))throw new AppError(422,'log_cover','Choose a cover from this entry’s attachments.');
-  const row:LogRow={...fields,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});return project(row,userId,session);
+  const row:LogRow={...fields,liveEventVersion:1,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});await publishLogChange(null,row,session);return project(row,userId,session);
  }
  if(name==='log.people'){
   const ids=await entries().distinct('members',{$and:[await access(userId,session),{members:userId}]},{session});
@@ -145,7 +158,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
 
  if(name==='log.code'){
   if(!row.members.includes(userId))throw new AppError(403,'log_member','Join the hangout before sharing its code.');
-  if(!row.joinKey||d.reset){row.joinKey=randomBytes(16).toString('hex');await entries().updateOne({_id:row._id},{$set:{joinKey:row.joinKey}},{session});}
+  if(!row.joinKey||d.reset){row.joinKey=randomBytes(16).toString('hex');await entries().updateOne({_id:row._id},{$set:{joinKey:row.joinKey}},{session});await publishLogChange(row,row,session);}
   return {entryId:row._id,code:row.joinKey,url:new URL(destinationPath({view:'log_join',resourceId:row.joinKey}),config.uiOrigin).href};
  }
  if(name!=='log.get'&&row.revision!==Number(d.revision))throw new AppError(409,'log_changed','This entry changed. Review the latest version before saving.');

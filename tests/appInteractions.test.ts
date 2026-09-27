@@ -185,6 +185,16 @@ describe('chat interaction integration', () => {
     expect(transport.post).toHaveBeenCalledWith('/chat',expect.objectContaining({text:'who is around'}));
     expect(dom.container.querySelector('dialog')).toBeNull();
   });
+  it('opens Notifications from a push click in an existing Posts workspace',async()=>{
+    const worker=new EventTarget();vi.stubGlobal('navigator',{...navigator,serviceWorker:worker});history.replaceState(null,'','/feed');await mount();await load();
+    await act(async()=>worker.dispatchEvent(new MessageEvent('message',{data:{type:'newdrugs-open',path:'/log/resource',notification:true}})));
+    expect(dom.container.querySelector('dialog[open]')?.textContent).toContain('Notifications');expect(dom.container.querySelector('.social-posts .log-modal[data-open=true] .log-detail h2')?.textContent).toBe('Test memory');
+  });
+  it('opens Notifications once after a cold notification launch and retains the target panel underneath',async()=>{
+    history.replaceState(null,'','/log/resource?notification=1');await mount();await load();await act(async()=>dom.frame());
+    expect(dom.container.querySelector('dialog[open] .settings-title')?.textContent||dom.container.querySelector('dialog[open]')?.textContent).toContain('Notifications');
+    expect(dom.container.querySelector('.social-log .log-modal[data-open=true] .log-detail h2')?.textContent).toBe('Test memory');expect(location.search).not.toContain('notification=1');
+  });
   it('shows invite photos before login and restores the invite after the account identity changes',async()=>{
     const code='a'.repeat(32);history.replaceState(null,'',`/log/join/${code}`);await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,id:'guest',handle:undefined}}));
     expect(dom.container.querySelector('.log-join .log-photo-strip img')).not.toBeNull();expect(dom.container.querySelector('.log-join .log-note-content strong')?.textContent).toBe('shared');expect(dom.container.querySelector('.log-join audio')?.getAttribute('src')).toBe('/invite-voice');

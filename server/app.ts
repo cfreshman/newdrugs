@@ -1,3 +1,4 @@
+import {updateLiveInterests} from './liveSubscriptions';
 import {publicInvitePreview,readInvitePhoto,readInviteMedia} from './logInvites';
 import {pagePreview,readPagePreviewImage} from './pagePreviews';
 import {renderPagePreview} from '../shared/pagePreview';
@@ -111,6 +112,7 @@ export function createApp() {
     res.json({ ...await readLiveState(actor.userId),
       config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
   });
+  app.post('/api/events/interests',updateLiveInterests);
   app.get('/api/events', streamLiveState);
   app.get('/api/push', async (req, res) => {
     const actor = browserActor(req), user = await currentUser(actor.userId);

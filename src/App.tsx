@@ -84,7 +84,7 @@ export function App() {
   useLayoutEffect(()=>{document.title='New Drugs';},[]);
   const standalone=useStandalone();
   const [clientId] = useState(browserSession);
-  const [mode,setMode]=useState<AppMode>('agent'),[agentDockOpen,setAgentDockOpen]=useState(false);
+  const [mode,setMode]=useState<AppMode>('agent'),[agentDockOpen,setAgentDockOpen]=useState(false),[notificationMode,setNotificationMode]=useState<AppMode|null>(null);
   const pendingAgentDestination=useRef<Destination|null>(null),pendingHandoffDock=useRef<AppMode|null>(null);
   const pendingAgentTask=useRef<{kind:'discuss';item:InboxItem}|{kind:'example';prompt:string}|{kind:'record';record:RecordContext}|null>(null);
   const activeModeRef=useRef(mode);activeModeRef.current=mode;
@@ -220,6 +220,7 @@ export function App() {
             if(inlineViews.has(destination.view)&&!(initialMode!=='agent'&&settingsViews.has(destination.view))){setPanelSpace('composer');setLauncherOpen(true);}
           }
         }
+        const launch=new URL(location.href);if(launch.searchParams.get('notification')==='1'){launch.searchParams.delete('notification');history.replaceState(history.state,'',launch.pathname+launch.search+launch.hash);setNotificationMode(initialMode);}
       } catch (e) { logError(errorText(e)); }
     })();
     return () => { cancelled = true; };
@@ -365,14 +366,15 @@ export function App() {
     if(task?.kind==='example')sendExample(task.prompt);
     if(task?.kind==='record')askAbout(task.record);
   },[mode]);
+  useEffect(()=>{if(!data||notificationMode===null||mode!==notificationMode)return;setNotificationMode(null);open('notifications',{},'modal');},[data?.user.id,mode,notificationMode]);
   useEffect(() => {
     if (!data || !('serviceWorker' in navigator)) return;
     const receive = (event: MessageEvent) => {
       if (event.data?.type !== 'newdrugs-open' || typeof event.data.path !== 'string') return;
-      const url = new URL(event.data.path, location.origin);
+      let url:URL;try{url=new URL(event.data.path,location.origin);}catch{return;}
       if (url.origin !== location.origin) return;
       const destination = parseDestination(url.href, location.origin);
-      if (destination) { navigate(destination); event.ports[0]?.postMessage({ handled: true }); event.ports[0]?.close(); }
+      if (destination) { navigate(destination);if(event.data.notification===true)setNotificationMode(destination.mode||(mode==='agent'&&destination.view.startsWith('log')?'log':mode)); event.ports[0]?.postMessage({ handled: true }); event.ports[0]?.close(); }
     };
     navigator.serviceWorker.addEventListener('message', receive);
     return () => navigator.serviceWorker.removeEventListener('message', receive);

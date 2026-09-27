@@ -4,6 +4,18 @@ Research and implementation proposal, September 27, 2026.
 
 **Status: plan only.** No indexing, report generation, new billing, provider calls over user content, or application deployment is authorized or performed by this document. The report's audience and billing toggle were ideas to evaluate, not fixed requirements.
 
+## Latest product direction: user instructions and agent notes
+
+The founder subsequently suggested using Wayfinder-style custom instructions plus a separate field the agent maintains. Source inspection confirms Wayfinder has one private 8,000-character preference field with optimistic revision checks, per-run snapshots and prompt framing below current explicit requests (`convex/agentRuntime/{preferences,customInstructions,runtimeState}.ts`). Its `agentMemory/` module is separate; there is not already a second freely edited custom-instructions field to copy verbatim.
+
+Recommended New Drugs adaptation: **Your instructions** are user-owned and changed by the agent only at explicit user request. **Agent notes** are a bounded private working memo the agent may update directly, without an approval for each edit. The user can inspect, correct or clear it. Treat the memo as fallible remembered context, never as system policy or authority to expand permissions/spending. Current requests and user instructions take precedence. Keep provenance and dates for evidence-dependent claims, and do not turn retrieved content into standing commands.
+
+This is the simpler first expression of the report idea: no separately scheduled paid report is necessary to maintain notes during ordinary authorized chat work. Persistence itself is a free app operation; any extra model/context tokens still follow normal at-cost billing. Snapshot both fields per run and apply edits to subsequent runs without repeatedly rebuilding a global agent configuration. Use revision checks and idempotency, a strict size/token budget, and structured source references when facts depend on Log/chat access. Revocation must invalidate derived claims, not merely hide their links.
+
+Store Agent notes as individual slots, each with a stable ID, key/title, content, core/non-core class, source references, timestamps and its own revision. Core slots are returned together for ordinary run context within a strict aggregate token budget; non-core slots remain explicitly readable and searchable. The normal context read returns the small bounded slot collection together; individual create/update/delete operations make focused edits without rewriting a shared blob. Enforce a total context budget as well as per-slot bounds and use optimistic conflicts/idempotency. If memory grows into a larger library, semantic search is an additional retrieval path, not a requirement for reading the core notes. Do not silently discard core slots to fit a prompt. Every context read and slot mutation returns pressure metadata: core tokens used/limit/remaining, utilization and a comfortable/near-limit/full status. A rejected over-budget write returns the same data so the agent can merge, shorten or demote individual slots. Never silently evict core memory. Bound and advertise non-core storage too. Token estimation/version must be explicit; pressure is prompt-context capacity, not permission or financial budget. User instructions remain a separate user-owned value.
+
+Semantic search remains the scalable detailed-history layer. The two fields must not grow into an unbounded diary or substitute for canonical source reads. The broader overview/report pipeline below is optional later work; scaling work is the currently authorized implementation objective.
+
 ## Recommended direction
 
 Build a private evidence index with two ways to use it:

@@ -9,6 +9,7 @@ const env = z.object({
   UI_ORIGIN: z.string().default(''),
   MONGODB_URI: z.string().min(1, 'Set the cloud database connection. A local database is not used.'),
   SEARCH_DAILY_BUDGET_NANOS: z.coerce.number().int().min(0).default(250000000),
+  LIVE_MAX_CONNECTIONS:z.coerce.number().int().min(1).default(2048),
   DATA_DIR: z.string().default('.data/private'),
   MCP_ORIGIN: z.string().default(''),
   DEV_ACCESS_KEY: z.string().default(''),

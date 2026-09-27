@@ -1,3 +1,4 @@
+import {publishLogChange} from './recordEvents';
 import { profileVisibleTo } from './profileVisibility';
 import { randomUUID, createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
@@ -115,10 +116,12 @@ export async function deleteUpload(actor:Actor,id:string,session?:ClientSession)
   if(file.purpose==='profile_photo'&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile photos are managed by the person in Settings.');
   await uploads().updateOne({_id:id,userId:actor.userId},{$set:{deletedAt:new Date().toISOString(),ready:false,retained:false,bytes:0,expiresAt:new Date()}},{session});
   await users().updateOne({_id:actor.userId},{$inc:{storageBytes:-file.bytes},$pull:{photos:id}},{session});
+  const affectedLogs=await rows('logEntries').find({'contributions.fileIds':id},{session,projection:{date:1,members:1,invited:1}}).toArray();
   // Remove public references in the same transaction, also emitting post refreshes.
   await rows<{ _id: string; fileIds: string[] }>('posts').updateMany({ userId: actor.userId, fileIds: id }, { $pull: { fileIds: id } }, { session });
   await rows<{_id:string;revision:number;contributions:{userId:string;fileIds:string[]}[]}>('logEntries').updateMany({'contributions.fileIds':id},[{$set:{contributions:{$map:{input:'$contributions',as:'c',in:{$mergeObjects:['$$c',{fileIds:{$filter:{input:'$$c.fileIds',as:'f',cond:{$ne:['$$f',id]}}}}]}}},revision:{$add:['$revision',1]},updatedAt:new Date().toISOString()}}],{session});
   await rows('logEntries').updateMany({coverFileId:id},{$set:{coverFileId:null}},{session});
+  for(const entry of affectedLogs)await publishLogChange(entry as any,entry as any,session);
   return {deleted:true,id,bytesFreed:file.bytes};
 }
 export async function expireUploads(){
