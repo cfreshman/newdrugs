@@ -10,7 +10,7 @@ export async function walletActivity(userId:string,limit=30){
   if(usage&&amount<0&&recent===0){
    if(group){group.amountNanos+=amount;group.startedAt=date;group.chargeCount++;group.id=`usage-group:${row._id}`;continue;}
    if(items.length>=limit)break;
-   group={id:`usage-group:${row._id}`,kind:'usage',label:'Agent usage',amountNanos:amount,startedAt:date,endedAt:date,chargeCount:1};items.push(group);continue;
+   group={id:`usage-group:${row._id}`,kind:'usage',label:'Agent usage rollup',amountNanos:amount,startedAt:date,endedAt:date,chargeCount:1};items.push(group);continue;
   }
   group=undefined;
   if(items.length>=limit)break;

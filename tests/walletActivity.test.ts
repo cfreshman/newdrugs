@@ -10,7 +10,7 @@ beforeAll(async()=>{await connectDatabase();await clean();});beforeEach(async()=
 it('preserves the latest three charges across credits and rolls older periods with their real date range',async()=>{
  await rows('ledger').insertMany([charge(1),charge(2),charge(3),charge(4),charge(5),charge(6),{_id:'credit',userId:'me',amountNanos:1000,label:'Credit added',createdAt:date(5).replace('12:','11:')},{_id:'starter',userId:'me',amountNanos:1000,label:'Starter credit',createdAt:date(1).replace('12:','11:')}]);
  const {items}=await walletActivity('me');expect(items.map(item=>item.kind)).toEqual(['charge','charge','credit','charge','usage','credit']);
- expect(items[3]).toMatchObject({id:'usage:004',label:'Automation: Friends',chargeCount:1});expect(items[4]).toMatchObject({amountNanos:-300,chargeCount:3,startedAt:date(1),endedAt:date(3)});
+ expect(items[3]).toMatchObject({id:'usage:004',label:'Automation: Friends',chargeCount:1});expect(items[4]).toMatchObject({label:'Agent usage rollup',amountNanos:-300,chargeCount:3,startedAt:date(1),endedAt:date(3)});
  expect((await users().findOne({_id:'me'}))?.balanceNanos).toBe(5000);expect(await rows('ledger').countDocuments()).toBe(8);
 });
 it('completes a period before limiting output and never truncates it to the latest thirty receipts',async()=>{

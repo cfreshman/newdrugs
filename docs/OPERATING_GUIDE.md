@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.27.3.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.29.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.27.3, release `20260927170616543` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927172405413`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.29.1, release `20260927172820480` |
+| Cloud dev | `https://dev.druggie.org`, release `20260927172924146`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
@@ -593,3 +593,5 @@ The reported production invite URL already returned its title/photo from both st
 Validation: 119 image/cache/app checks, 96 billing/image/app checks, and 111 final UI/preview checks passed (overlapping suites), plus the operation-contract checks. The billing backend regression verifies complete groups over more than 30 receipts, latest-three behavior across credits, refunds, zero-cost receipts, reconciliation and caller isolation without changing balances. The supplied invite preview was checked read-only against prod and dev without printing its content.
 
 This image/billing/link-card batch is on cloud dev `20260927172405413`. Build and database health passed; live CLI discovery/schema and read-only `wallet.activity` verified its three-charge limit and valid ranges. Production remains v0.27.3.
+
+The image/billing/native-link batch shipped on explicit production request, followed by the user’s in-flight naming correction: grouped rows are labeled **Agent usage rollup**, while individual charges retain their labels. Final production is **v0.29.1**, `20260927172820480`; dev is `20260927172924146`. The five billing checks passed again. Live production activity verified the exact rollup label and latest-three behavior; assets and API health passed.
