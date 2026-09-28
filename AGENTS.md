@@ -251,3 +251,5 @@ agent-written rules (you are allowed to edit below this line)
 - Before implementing Log semantic search or personal reports, read the research proposal: @docs/log-integration/SEMANTIC_SEARCH_AND_REPORTS.md. It is a plan, not authorization to launch paid processing or new public profiling.
 
 - Scaling is an explicit product requirement. Read @docs/SCALING_AUDIT.md before expanding search, reports, live state or history. Avoid request-time full-history scans, whole-index rebuilds, global private-data invalidations and unbounded mounted history. Exact retrieval must have a bounded subset threshold; a cache or response limit does not bound underlying work. Prove capacity with an explicit workload, not today’s user count.
+
+- Hide the external Video call control on mobile/touch layouts. A native video-call system is a possible future project, not currently authorized implementation work.

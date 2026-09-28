@@ -385,6 +385,9 @@ p > button.text-link { display: inline; min-height: 0; padding: 2px 7px; }
 .post-footer { align-items: flex-start; }
 .feed-updates { margin-bottom: var(--space-3); }
 .video-link { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); margin-top: var(--space-3); }
+@media(max-width:760px),(pointer:coarse){
+ .message-view-actions .video-link {display:none;}
+}
 .inbox-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .unread-label { color: var(--primary); font-size: var(--text-xs); font-weight: 700; }
 .inbox-preview { font-size: var(--text-sm); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
