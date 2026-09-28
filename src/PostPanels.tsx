@@ -5,9 +5,9 @@ import {normalizedPostLinks} from '../shared/postLinks';
 import {LocationLabel} from './LocationLabel';
 import { ContentReport } from './PeopleSafety';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useId, type FormEvent } from 'react';
-import { LinkSimple, BookmarkSimple, Flag, Heart, ChatCircle, UserCircle, Trash, ArrowBendUpLeft, ImageSquare, X } from '@phosphor-icons/react';
+import { LinkSimple, BookmarkSimple, Flag, Heart, ChatCircle, UserCircle, Trash, ArrowBendUpLeft, ImageSquare, ShareNetwork, Check, X } from '@phosphor-icons/react';
 import type { Profile } from '../shared/types';
-import type { Destination } from '../shared/navigation';
+import {destinationPath,type Destination} from '../shared/navigation';
 import { RadiusSelect } from './RadiusSelect';
 import { SearchField } from './SearchField';
 import type { SearchResult, SearchRetrieval } from '../shared/search';
@@ -19,6 +19,7 @@ import { PostPhotos, type PostPhoto } from './PostPhotos';
 import { uploadFile } from './uploads';
 import type { UploadRef } from '../shared/uploads';
 import { usePanelLoading, usePanelVisible } from './PanelReadiness';
+import {shareLink} from './shareLink';
 
 export interface Post { links?:string[]; photos?: PostPhoto[]; id: string; userId: string; text: string; createdAt: string; city: string; parentId?: string; rootId?: string; parent?: {id:string;text:string;deleted:boolean;author?:{name:string;handle?:string}}; deleted?: boolean; moderated?: boolean; saved?:boolean; likeCount: number; liked: boolean; replyCount: number; author?: { name: string; handle?: string; photoId?: string; profileVisible?:boolean } }
 interface Page { items: Post[]; nextCursor: string | null; retrieval?:SearchRetrieval }
@@ -26,8 +27,9 @@ type Navigate = (destination: Destination) => void;
 function timeLabel(value: string) { const seconds = Math.max(0, (Date.now() - Date.parse(value)) / 1000); return seconds < 60 ? 'now' : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
 function PostCard({ post, user, navigate, changed, deleted, reply, showReplyContext = false }: { post: Post; user: Profile; navigate: Navigate; changed(post: Post): void; deleted(): void; reply?: () => void; showReplyContext?:boolean }) {
   const [reporting,setReporting]=useState(false);
-  const [review, setReview] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [optimistic, setOptimistic] = useState<boolean | null>(null);
+  const [review, setReview] = useState(false), [busy, setBusy] = useState(false),[sharing,setSharing]=useState(false),[copied,setCopied]=useState(false), [error, setError] = useState(''), [optimistic, setOptimistic] = useState<boolean | null>(null);
   const key = useRef(crypto.randomUUID()), likeIntent = useRef<{ liked: boolean; key: string } | null>(null);
+  const copiedTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);useEffect(()=>()=>clearTimeout(copiedTimer.current),[]);
   const remove = async () => { setBusy(true); try { await operation('posts.delete', { postId: post.id }, { confirmed: true, key: key.current }); setReview(false);deleted(); } catch (error) { setError(errorText(error)); } finally { setBusy(false); } };
   const like = async () => {
     if (!user.handle) { navigate({ view: 'profile' }); return; } if (busy) return;
@@ -40,6 +42,7 @@ function PostCard({ post, user, navigate, changed, deleted, reply, showReplyCont
     if(!user.handle){navigate({view:'profile'});return;}if(busy)return;
     setBusy(true);setError('');try{changed(await operation<Post>('posts.save',{postId:post.id,saved:!post.saved}));}catch(error){setError(errorText(error));}finally{setBusy(false);}
   };
+  const share=async()=>{if(sharing)return;setSharing(true);setError('');try{const result=await shareLink(new URL(destinationPath({view:'post',resourceId:post.id}),location.origin).href,post.parentId?'New Drugs reply':'New Drugs post');if(result==='copied'){setCopied(true);clearTimeout(copiedTimer.current);copiedTimer.current=setTimeout(()=>setCopied(false),1500);}}catch(error){setError(errorText(error));}finally{setSharing(false);}};
   const liked = optimistic ?? post.liked, count = Math.max(0, (post.likeCount || 0) + (optimistic === null ? 0 : optimistic === post.liked ? 0 : optimistic ? 1 : -1));
   return <article className="post-card" data-post-id={post.id} onClick={event => { if (reply || (event.target as HTMLElement).closest('button, a, input, textarea, form') || window.getSelection()?.toString()) return; navigate({ view: 'post', resourceId: post.id }); }}>
 
@@ -48,7 +51,7 @@ function PostCard({ post, user, navigate, changed, deleted, reply, showReplyCont
     {(post.text||post.deleted)&&<p className={`post-text ${post.deleted ? 'quiet' : ''}`}>{post.deleted ? post.moderated ? 'This post was removed by moderation.' : 'This post was deleted.' : <LinkedText text={post.text} />}</p>}
     {!post.deleted && <><PostPhotos photos={post.photos || []} /><LinkPreviews text={post.text} links={post.links}/></>}
     {post.city && <p className="quiet small post-area"><LocationLabel label={post.city}/></p>}
-    <div className="post-actions">{!post.deleted && <button className={`post-action ${liked ? 'is-liked' : ''}`} aria-label={`${liked ? 'Unlike' : 'Like'} post`} aria-pressed={liked} disabled={busy} onClick={() => void like()}><Heart size={18} weight={liked ? 'fill' : 'regular'} /><span>{count || 'Like'}</span></button>}<button className="post-action" aria-label="Open replies" onClick={() => reply ? reply() : navigate({ view: 'post', resourceId: post.id })}><ChatCircle size={18} /><span>{post.replyCount || 'Reply'}</span></button>{!post.deleted&&<button className="post-action" aria-label={post.saved?'Unsave post':'Save post'} aria-pressed={Boolean(post.saved)} disabled={busy} onClick={()=>void save()}><BookmarkSimple size={18} weight={post.saved?'fill':'regular'}/></button>}{post.userId!==user.id&&!post.deleted&&<button className="post-action report-post" aria-label="Report post" onClick={()=>setReporting(value=>!value)}><Flag size={17}/></button>}{post.userId === user.id && (!post.deleted || post.moderated) && <button className="post-action delete-post" aria-label="Delete post" aria-expanded={review} disabled={busy} onClick={() => setReview(!review)}><Trash size={17} /></button>}</div>
+    <div className="post-actions">{!post.deleted && <button className={`post-action ${liked ? 'is-liked' : ''}`} aria-label={`${liked ? 'Unlike' : 'Like'} post`} aria-pressed={liked} disabled={busy} onClick={() => void like()}><Heart size={18} weight={liked ? 'fill' : 'regular'} /><span>{count || 'Like'}</span></button>}<button className="post-action" aria-label="Open replies" onClick={() => reply ? reply() : navigate({ view: 'post', resourceId: post.id })}><ChatCircle size={18} /><span>{post.replyCount || 'Reply'}</span></button>{!post.deleted&&<button className="post-action" aria-label={post.saved?'Unsave post':'Save post'} aria-pressed={Boolean(post.saved)} disabled={busy} onClick={()=>void save()}><BookmarkSimple size={18} weight={post.saved?'fill':'regular'}/></button>}{!post.deleted&&<button className="post-action" aria-label={copied?'Link copied':post.parentId?'Share reply':'Share post'} title={copied?'Link copied':undefined} disabled={sharing} onClick={()=>void share()}>{copied?<Check size={18} weight="bold"/>:<ShareNetwork size={18}/>}</button>}{post.userId!==user.id&&!post.deleted&&<button className="post-action report-post" aria-label="Report post" onClick={()=>setReporting(value=>!value)}><Flag size={17}/></button>}{post.userId === user.id && (!post.deleted || post.moderated) && <button className="post-action delete-post" aria-label="Delete post" aria-expanded={review} disabled={busy} onClick={() => setReview(!review)}><Trash size={17} /></button>}</div>
     {reporting&&<ContentReport personId={post.userId} postId={post.id} close={()=>setReporting(false)}/>}
     {review && <DeleteConfirmation title={post.parentId?'Delete this reply?':'Delete this post?'} detail="This can’t be undone." confirmLabel={post.parentId?'Delete reply':'Delete post'} busy={busy} onCancel={()=>setReview(false)} onConfirm={remove}/>}{error && <p className="error" role="alert">{error}</p>}
   </article>;

@@ -159,6 +159,7 @@ agent-written rules (you are allowed to edit below this line)
 - Deploy completed changes to cloud dev promptly after targeted validation, especially backend changes required by the local frontend. Do not defer dev updates until an entire larger experiment is finished. Production still requires an explicit request.
 
 - Posts and replies support three separate URL attachments in addition to photos and a 280-character caption. Keep UI/CLI/MCP parity and exact-link review. Recognized providers and MUSE/POPS/CIF render natively; custom JSON and linked text are fetched through bounded public-URL validation, and inactive media stops playing.
+- Posts and replies have a Share control immediately to the right of Save. Use the native share sheet when available, otherwise copy the canonical link and show a checkmark briefly.
 
 - MUSE, CIF and POPS audio uses one shared compact native-style player: play/pause, elapsed time and scrubber, without volume controls or native/download menus. MUSE and CIF do not expose raw Source links. CIF reserves media geometry while loading; its media container radius is the outer card radius minus the card padding. Background scrolling in Friends/Posts targets the active main content and respects focused inputs, native subpanels and dialogs.
 
