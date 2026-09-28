@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. Start with [HANDOFF.md](HANDOFF.md) for the short current snapshot. This guide provides detailed workflows and a code map. Historical release notes are in [OPERATING_HISTORY.md](OPERATING_HISTORY.md). Update it when those facts change.
 
-**Updated September 28, 2026. Production: v0.31.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 28, 2026.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans. Use `release.json` and the live stage symlinks when an exact version or deployment ID matters; routine patch releases do not require documentation churn here.
 
 ## Handoff state
 
@@ -12,10 +12,10 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Branch | `main` |
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
-| Working tree | Requested implementation is committed through `34080f9`; this handoff update is documentation-only. Inspect status before editing. |
-| Production | `https://druggie.org`, v0.31.2, release `20260928133221855`, checkpoint `169b457` |
-| Cloud dev | `https://dev.druggie.org`, release `20260928132842754`; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have the calendar/DM/CLI additions and in-session app-update prompt. Production has the imported Log history. Dev retains v0.31.1 display metadata because dev does not bump public releases. |
+| Working tree | Requested implementation is committed on `main`. Inspect status before editing. |
+| Production | `https://druggie.org`; exact version is in `release.json`, exact deployment is the live `prod/current` target |
+| Cloud dev | `https://dev.druggie.org`; exact deployment is the live `dev/current` target; local frontend at `http://localhost:7330/log` |
+| Stage parity | Both stages have the calendar/DM/CLI additions and in-session app-update prompt. Production has the imported Log history. Dev does not bump public versions. |
 | Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx verified active; both API health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |

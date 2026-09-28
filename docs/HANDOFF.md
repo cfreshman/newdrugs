@@ -6,8 +6,8 @@ Current operational handoff, verified September 28, 2026. Read this and `AGENTS.
 
 - Product: **New Drugs**, made in New England, at **https://druggie.org**.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
-- Production **v0.31.2**, release **`20260928133221855`**, from checkpoint **`169b457`**.
-- Dev release **`20260928132842754`** has the same application behavior; its displayed version remains v0.31.1 because dev does not bump releases.
+- Production is deployed from `main`. `release.json` is the authoritative public version; inspect the live `prod/current` symlink only when an exact deployment ID matters.
+- Cloud dev carries current development behavior without bumping the public version. Inspect the live `dev/current` symlink only when an exact deployment ID matters.
 - All requested implementation is committed and deployed. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
 - **No unfinished feature or production deployment is queued.** Continue from the user's next request. Deferred ideas are not permission to start or deploy projects.
