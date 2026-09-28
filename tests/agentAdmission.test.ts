@@ -19,3 +19,9 @@ it('reclaims an expired lease once and excludes work already active in this proc
  await rows('runs').insertOne({...queued('expired','a'),status:'running',lease:'old',leaseUntil:Date.now()-1});
  expect(await claimAgentRun(['expired'],limits)).toBeNull();const attempts=await Promise.all([claimAgentRun([],limits),claimAgentRun([],limits)]);expect(attempts.filter(Boolean)).toHaveLength(1);expect(attempts.find(Boolean)?.lease).not.toBe('old');
 });
+
+it('does not write an admission fence when the queue has no eligible work',async()=>{
+ for(let i=0;i<20;i++)expect(await claimAgentRun([],limits)).toBeNull();
+ await rows('runs').insertOne({...queued('future','owner'),nextAttempt:Date.now()+60000});
+ expect(await claimAgentRun([],limits)).toBeNull();expect(await rows('agentAdmission').countDocuments({})).toBe(0);
+});

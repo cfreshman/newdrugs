@@ -14,6 +14,14 @@ export function pressure(state:State):MemoryPressure{
  return {coreUsed:state.coreUsed,coreLimit:4000,coreRemaining:Math.max(0,4000-state.coreUsed),coreSlots:state.coreSlots,coreSlotLimit:32,noncoreUsed:state.noncoreUsed,noncoreLimit:32000,slots:state.slots,slotLimit:128,utilization,status:state.coreUsed>=4000||state.coreSlots>=32?'full':utilization>=.8?'near_limit':'comfortable',estimator:'utf8-third-v1'};
 }
 const view=(note:Note):MemoryNote=>({key:note.key,title:note.title,content:note.content,core:note.core,sources:note.sources,revision:note.revision,estimatedTokens:note.estimatedTokens,updatedAt:note.updatedAt});
+/** Evidence identity excludes counters and caller-specific presentation state. */
+export function memorySourceContent(kind:MemorySource['kind'],value:Record<string,any>){
+ const pick=(keys:string[])=>Object.fromEntries(keys.map(key=>[key,value[key]]));
+ if(kind==='post')return pick(['id','userId','text','links','photos','createdAt','parentId','deleted','moderated']);
+ if(kind==='person')return pick(['id','name','handle','bio','interests','city','area','photos','discoverable']);
+ if(kind==='log')return {...pick(['id','ownerId','title','date','place','links','recurrence','historicalPeople']),contributors:value.contributors?.map((person:any)=>({userId:person.userId,note:person.note,files:person.files})),invitations:value.invitations?.map((person:any)=>person.userId)};
+ return pick(['id','connectionId','fromId','text','files','createdAt','moderatedAt']);
+}
 async function proof(userId:string,source:MemorySource){
  if(source.kind==='chat'){
   const message=requireValue(await rows('messages').findOne({_id:source.id,userId},{projection:{role:1,text:1,files:1}}),'This chat message is unavailable.');
@@ -24,7 +32,7 @@ async function proof(userId:string,source:MemorySource){
  const input=source.kind==='log'?{entryId:source.id}:source.kind==='post'?{postId:source.id}:source.kind==='person'?{personId:source.id}:{messageId:source.id};
  const result=await executeOperation(operation,input,{userId,source:'external',scope:'read'}) as {deleted?:boolean};
  if(result.deleted)throw new AppError(404,'source_unavailable','This source is unavailable.');
- return hash(JSON.stringify(result));
+ return hash(JSON.stringify(memorySourceContent(source.kind,result)));
 }
 async function sourceStatus(note:Note,cache=new Map<string,Promise<string>>()){
  try{const proofs=await Promise.all(note.sources.map(source=>{const key=`${source.kind}:${source.id}`;if(!cache.has(key))cache.set(key,sourceGate.run(()=>proof(note.userId,source)));return cache.get(key)!;}));return proofs.every((value,index)=>value===note.sourceProofs[index])?'current' as const:'changed' as const;}

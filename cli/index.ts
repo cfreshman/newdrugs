@@ -23,7 +23,7 @@ const store = new ConfigStore();
 function option(name: string) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; }
 async function request<T>(login: Login, path: string, body?: unknown, idempotencyKey?: string, confirmed = false): Promise<T> {
   const response = await fetch(`${login.url}/api${path}`, { method: body === undefined ? 'GET' : 'POST', redirect: 'error',
-    signal: AbortSignal.timeout(30000), headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}), ...(confirmed ? { 'X-NewDrugs-Confirmed': 'true' } : {}) },
+    signal: AbortSignal.timeout(60000), headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}), ...(confirmed ? { 'X-NewDrugs-Confirmed': 'true' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body) });
   const result = await response.json() as { error?: { message?: string } };
   if (!response.ok) throw new Error(result.error?.message || `Request failed (${response.status}).`);

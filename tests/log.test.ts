@@ -1,4 +1,5 @@
-import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
+import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
+import {Collection} from 'mongodb';
 import {randomUUID} from 'node:crypto';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {users,type Actor,type User} from '../server/auth';
@@ -164,4 +165,15 @@ it('indexes anniversary month/day and handles leap-day reminders without reading
  expect((await call('log.list',{calendarDay:'2027-02-28',includeAnniversaries:true})).items).toEqual([]);
  await rows('logEntries').updateOne({_id:row.id},{$unset:{calendarMonthDay:''}});const {backfillLogCalendar}=await import('../server/log');expect(await backfillLogCalendar()).toBe(1);expect(await backfillLogCalendar()).toBe(0);
  expect((await call('log.calendar',{from:'2027-03-01',through:'2027-03-01',today:'2027-02-01'})).days[0].items.map((item:any)=>item.id)).toEqual([row.id]);
+});
+
+it('admits full calendar ranges without queuing one application task per day',async()=>{
+ await create({date:'2026-09-26'});
+ const aggregate=vi.spyOn(Collection.prototype,'aggregate');
+ try{
+  const pages=await Promise.all(Array.from({length:8},()=>call('log.calendar',{from:'2026-08-17',through:'2026-09-27',today:'2026-09-27'})));
+  expect(pages.every(page=>page.days.length===42)).toBe(true);
+  expect(aggregate).toHaveBeenCalledTimes(8);
+  for(const [pipeline]of aggregate.mock.calls)expect(pipeline!.filter((stage:any)=>stage.$unionWith)).toHaveLength(41);
+ }finally{aggregate.mockRestore();}
 });

@@ -6,6 +6,9 @@ import type {RunRecord} from './runTypes';
  * Active leases bound the read. Interactive work retains reserved capacity;
  * an account can hold one automation slot plus its interactive conversation. */
 export async function claimAgentRun(excluded:string[]=[],limits={global:config.AGENT_GLOBAL_CONCURRENCY,interactive:config.AGENT_INTERACTIVE_SLOTS,perAccount:config.AGENT_ACCOUNT_CONCURRENCY}){
+ // Advisory only. Capacity and eligibility are checked again under the fence.
+ // An idle worker must not write a transaction fence every polling interval.
+ if(!await rows<RunRecord>('runs').findOne({_id:{$nin:excluded},$or:[{status:'queued',nextAttempt:{$not:{$gt:Date.now()}}},{status:'running',leaseUntil:{$lt:Date.now()}}]},{projection:{_id:1}}))return null;
  for(let attempt=0;attempt<3;attempt++)try{return await transaction(async session=>{
   const now=Date.now();await rows<{_id:string;revision:number}>('agentAdmission').updateOne({_id:'global'},{$inc:{revision:1}},{upsert:true,session});
   const runs=rows<RunRecord>('runs'),active=await runs.find({status:'running',leaseUntil:{$gt:now}},{session,projection:{userId:1,purpose:1}}).limit(limits.global).toArray();

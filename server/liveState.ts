@@ -135,6 +135,7 @@ export async function streamLiveState(req:Request,res:Response){
  const group=groups.get(userId)||{listeners:new Set<Subscriber>(),dirty:new Set<LiveTopic>()};groups.set(userId,group);group.listeners.add(listener);
  const sameSession=sessions.get(sessionId)||new Set<Subscriber>();sameSession.add(listener);sessions.set(sessionId,sameSession);
  try{await startWatch();if(!closed){topics.forEach(topic=>group.dirty.add(topic));await flush(userId,group);}}catch{close();return;}
+ if(closed)return;
  heartbeat=setInterval(()=>write(': heartbeat\n\n'),15000);
  expiration=setTimeout(()=>close(true),Math.max(1,Math.min(2147483647,new Date(credential.expiresAt as Date).getTime()-Date.now())));
 }

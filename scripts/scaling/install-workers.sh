@@ -15,7 +15,7 @@ User=newdrugs-%i
 Group=newdrugs-%i
 WorkingDirectory=/srv/newdrugs/%i/current
 EnvironmentFile=/etc/newdrugs/%i.env
-ExecStart=/usr/bin/env PROCESS_ROLE=worker /usr/local/bin/node --max-old-space-size=384 dist/server/index.js
+ExecStart=/usr/bin/env PROCESS_ROLE=worker /usr/local/bin/node --max-old-space-size=256 dist/server/index.js
 Restart=always
 RestartSec=3
 TimeoutStopSec=25

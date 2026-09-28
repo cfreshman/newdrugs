@@ -405,10 +405,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       return { read: true, throughMessageId: d.throughMessageId };
     }
     case 'notifications.list': {
-      const state = await notificationState(userId, session);
+      const state = await notificationState(userId, session, d.before as string|undefined);
       if (!actor.background) return state;
       const items = state.items.filter(item => item.kind !== 'agent_update' && item.kind !== 'automation_status' && item.kind !== 'review');
-      return { items, unread: items.filter(item => !item.read).length };
+      return {items,unread:items.filter(item=>!item.read).length,unreadCapped:state.unreadCapped,nextCursor:state.nextCursor};
     }
     case 'notifications.read': {
       const id = String(d.notificationId);

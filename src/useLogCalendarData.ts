@@ -37,15 +37,16 @@ export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filter
   for(const index of targets.current){const page=cache.current.get(index);if(page){cache.current.delete(index);cache.current.set(index,page);}}
   pump.current();
  },[wantedKey,visible]);
- useEffect(()=>()=>{alive.current=false;for(const request of requests.current.values())request.abort();},[]);
+ useEffect(()=>{alive.current=true;return()=>{alive.current=false;for(const request of requests.current.values())request.abort();};},[]);
  useRecordRefreshDetails(['log'],change=>{
   for(const index of new Set([...cache.current.keys(),...requests.current.keys()])){
    const dates=change?.log?.flatMap(item=>[item.date,item.previousDate].filter((date):date is string=>Boolean(date))),window=range(index);
    // Upcoming reminders may change even when their original date is years earlier.
    if(index===0||!dates?.length||dates.some(date=>date>=window.from&&date<=window.through)){
     dirty.current.add(index);requests.current.get(index)?.abort();requests.current.delete(index);
-    const page=cache.current.get(index),deleted=new Set(change?.log?.filter(item=>item.deleted).map(item=>item.id));
-    if(page&&deleted.size)cache.current.set(index,{...page,days:page.days.map(day=>({...day,items:day.items.filter(item=>!deleted.has(item.id))}))});
+    const page=cache.current.get(index),changedIds=new Set(change?.log?.map(item=>item.id));
+    if(page&&changedIds.size)cache.current.set(index,{...page,days:page.days.map(day=>({...day,items:day.items.filter(item=>!changedIds.has(item.id))}))});
+    else if(page&&!dates?.length)cache.current.delete(index);
    }
   }
   changed(value=>value+1);pump.current();

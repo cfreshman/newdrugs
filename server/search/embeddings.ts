@@ -18,7 +18,7 @@ export async function embed(text: string, kind: 'document' | 'query', namespace 
     await budget.updateOne({ _id: day }, { $setOnInsert: { spentNanos: 0 } }, { upsert: true });
     const allowed = await budget.updateOne({ _id: day, spentNanos: { $lte: config.SEARCH_DAILY_BUDGET_NANOS - reserved } }, { $inc: { spentNanos: reserved } });
     if (!allowed.modifiedCount) throw new Error('embedding_budget');
-    const client = new OpenAI({ apiKey: config.OPENAI_API_KEY, timeout: 10000, maxRetries: 0 });
+    const client = new OpenAI({ apiKey: config.OPENAI_API_KEY, timeout: 30000, maxRetries: 0 });
     // On an ambiguous provider failure keep the reservation: do not assume it was free.
     const response = await client.embeddings.create({ model: EMBEDDING_MODEL, dimensions: DIMENSIONS, encoding_format: 'float', input: text });
     const vector = response.data[0]?.embedding;

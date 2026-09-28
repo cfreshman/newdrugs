@@ -1,5 +1,7 @@
 # Scaling implementation
 
+Current release: **v0.30.1**, production `20260928003152356`, on replacement host `167.172.21.42` (NYC3). The ten [review findings](REVIEW-2026-09-27.md) are fixed. Validation: 25 local regression checks and 106 isolated cloud checks. Production media migration verified 537 files, with zero failures; all 507 Log sources are indexed and indexing/replication queues drained. The old host remains an HTTPS forwarding bridge during DNS propagation; see [incident](INCIDENT-2026-09-27.md) and [migration](HOST_MIGRATION.md).
+
 Authorized September 27, 2026. This tracks implementation of SCALING_AUDIT.md. Application changes target cloud dev. The user has now authorized production once the entire requested batch is ready and validated, explicitly forbidding a premature production rollout. Local Vite/admin servers remain user-owned. Large capacity tests must not run on the shared production host.
 
 ## Work remaining
@@ -86,3 +88,12 @@ Both private NYC3 buckets and restricted keys are ready. Dev migrated nine files
 Final privacy regressions: ten suites passed 65 checks; the remaining scoped-moderation fixture was corrected to include required connection fields and passed separately. Candidate-local suspension checks now replace global suspended-account enumeration in people/posts/connections/activity/notifications; Log notifications batch their authorized entry projections. Retrieval also pages metadata to reconcile orphaned or stale remote source records. No vectors or source text are fetched for that sweep.
 
 Production rollout is currently held on live outbound connectivity. The dev Log search returned keyword fallback. Direct embedding probes confirmed a configured key and ample platform budget, then timed out before any provider response. Both OpenAI and Spaces lookups/connections have intermittently failed from the droplet. The VPC DNS resolver is `10.116.15.254`; its original per-link settings were restored after temporary alternative-resolver tests did not reliably help. No DNS configuration file was changed. Restarting systemd-resolved did not establish reliable connectivity. RAM is ample, both app health checks pass, and guest CPU steal sampled 8–13%. Do not mistake these transport failures for invalid credentials or exhausted credit. No keys were rotated. The founder's workstation is overloaded too, causing slow/interrupted SSH transfers; all final integration tests ran cloud-locally in the isolated test database.
+
+
+## Final rollout
+
+Dev fixes: `20260928002625337`, with API and exact-PID worker health verified. Production: `20260928003152356`, v0.30.1. Production now has separate web/worker services, Qdrant on loopback 7337 and private NYC3 Spaces. Existing files migrated in batches of 500 and 37, each read back and checksummed before updating its storage pointer. Local rollback copies remain. New uploads use object storage without a growing local mirror.
+
+Live semantic queries returned hybrid results on both stages. The production Log backfill reached all 507 sources, with zero remaining Log/replication jobs. This consumed platform search budget, not user credits. No social writes or hosted reasoning runs were manufactured for verification. Production identity and wallet read-only CLI checks passed.
+
+The replacement has a shared app/search slice ceiling of 2,816 MiB; APIs are capped at 512/384 MiB (prod/dev), workers 512/384 MiB and search 640/384 MiB. Mongo retains its 500 MiB ceiling and 256 MiB WiredTiger cache. This is a resource budget, not a production capacity benchmark.

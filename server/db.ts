@@ -11,11 +11,12 @@ export async function transaction<T>(run: (session: ClientSession) => Promise<T>
   try { return await session.withTransaction(() => run(session), { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' } }) as T; }
   finally { await session.endSession(); }
 }
-export async function connectDatabase(name?: string) {
+export async function connectDatabase(name?: string,options:{indexes?:boolean}={}) {
   await mongo.connect();
   database = mongo.db(name);
   const hello = await database.admin().command({ hello: 1 });
   if (!hello.setName) throw new Error('The cloud MongoDB connection needs a replica set for atomic credits.');
+  if(options.indexes===false)return;
   await Promise.all([
     rows('mediaWriteIntents').createIndex({availableAt:1}),
     rows('mediaDeletes').createIndex({availableAt:1}),
@@ -47,6 +48,7 @@ export async function connectDatabase(name?: string) {
     rows('liveSubscriptions').createIndex({userId:1,channel:1}),
     rows('logContactSources').createIndex({members:1,_id:1}),
     rows('logContactCounts').createIndex({userId:1,count:-1,personId:1}),
+    rows('connections').createIndex({members:1,status:1,_id:1}),
     rows('logContactStates').createIndex({dirty:1,leaseUntil:1}),
     rows('logEntries').createIndex({members:1,_id:1}),
     rows('logEntries').createIndex({calendarMonthDay:1,_id:1}),
@@ -107,6 +109,10 @@ export async function connectDatabase(name?: string) {
     rows('connections').createIndex({ members: 1, updatedAt: -1, _id: -1 }),
     rows('connections').createIndex({ toId: 1, status: 1, createdAt: -1 }),
     rows('notifications').createIndex({ userId: 1, readAt: 1, createdAt: -1 }),
+    rows('notifications').createIndex({userId:1,readAt:1,createdAt:-1,_id:-1}),
+    rows('notifications').createIndex({userId:1,createdAt:-1,_id:-1}),
+    rows('connections').createIndex({toId:1,status:1,notificationReadAt:1,createdAt:-1,_id:-1}),
+    rows('connections').createIndex({toId:1,createdAt:-1,_id:-1}),
     rows('uploads').createIndex({ retained: 1, expiresAt: 1 }),
     rows('uploads').createIndex({ userId: 1, _id: -1 }),
     rows('directMessages').createIndex({ connectionId: 1, _id: -1 }),

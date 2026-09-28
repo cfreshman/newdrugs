@@ -1,5 +1,5 @@
 /* Three primary experiences. The original Agent composition stays intact. */
-.app { --mode-switch-clearance:24px; --agent-min-width:320px; --agent-max-width:620px; --mode-header-height:56px; --mode-gutter: 20px; --mode-top: 12px; --mode-bottom: max(16px,calc(6px + var(--safe-area-bottom))); --panel-safe-bottom:0px; --mode-sidebar: 184px; --mode-main: 680px; --mode-rail: 252px; --mode-gap: 20px; }
+.app { --mode-switch-clearance:24px; --agent-min-width:320px; --agent-dock-gutter:12px; --agent-dock-gap:16px; --mode-header-height:56px; --mode-gutter: 20px; --mode-top: 12px; --mode-bottom: max(16px,calc(6px + var(--safe-area-bottom))); --panel-safe-bottom:0px; --mode-sidebar: 184px; --mode-main: 680px; --mode-rail: 252px; --mode-gap: 20px; }
 .mode-switch { position:fixed;z-index:8;top:12px;left:12px;display:flex;align-items:center;padding:4px;gap:2px;border-radius:999px;background:var(--glass);backdrop-filter:blur(22px);color:var(--ink);width:var(--mode-expanded-width,max-content);transition:width 140ms ease;overflow:hidden;box-shadow:0 2px 12px #24243206; }
 .mode-switch button,.mode-measure-item {display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 13px;white-space:nowrap;border-radius:999px;background:transparent;font-size:13px;line-height:20px;flex:none;}
 .mode-switch button[aria-pressed=true] {background:var(--ink);color:var(--inverse-ink);}
@@ -140,3 +140,18 @@
 }
 
 .mode-mobile-nav[hidden]{display:none;}
+
+/* Center the content itself, rather than the asymmetric navigation/dock grid. */
+@media(min-width:761px){
+  .mode-sidebar {width:var(--mode-sidebar);justify-self:end;}
+  .app[data-agent-dock=true] .social-experience {
+    /* Move only enough to let the corner chat grow to the main panel width. */
+    --mode-dock-space:calc(var(--agent-min-width) + var(--agent-dock-gap) + var(--agent-dock-gutter) - var(--mode-gutter) - var(--mode-gap));
+    --mode-desired-dock-space:calc(var(--mode-main) + var(--agent-dock-gap) + var(--agent-dock-gutter) - var(--mode-gutter) - var(--mode-gap));
+    --mode-leading-space:max(var(--mode-sidebar),min(calc((100% - var(--mode-main) - 2 * var(--mode-gap)) / 2),calc(100% - var(--mode-main) - 2 * var(--mode-gap) - var(--mode-desired-dock-space))));
+    grid-template-columns:var(--mode-leading-space) minmax(0,var(--mode-main)) minmax(var(--mode-dock-space),1fr);
+  }
+  .app:not([data-agent-dock=true]) .social-experience {
+    grid-template-columns:var(--mode-sidebar) minmax(0,var(--mode-main)) var(--mode-sidebar);
+  }
+}

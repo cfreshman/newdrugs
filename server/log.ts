@@ -11,7 +11,7 @@ import {destinationPath} from '../shared/navigation';
 import type {LogContact} from '../shared/logJoining';
 import {enqueueLogPush} from './push';
 import {randomUUID,randomBytes,createHash} from 'node:crypto';
-import type {ClientSession,Filter} from 'mongodb';
+import type {ClientSession,Filter,Document} from 'mongodb';
 import {rows} from './db';
 import {users,type Actor} from './auth';
 import {AppError,requireValue} from './errors';
@@ -91,26 +91,26 @@ async function list(userId:string,d:LogList,session?:ClientSession,full=false){
  const items=await projectLogEntries(page,userId,session,!full);
  return {items,nextCursor:found.length>d.limit&&last?Buffer.from(JSON.stringify({date:last.date,createdAt:last.createdAt,id:last._id,signature})).toString('base64url'):null};
 }
-const calendarReads=workGate(4,256);
+const calendarReads=workGate(4,64);
 function calendarDateFilter(day:string,anniversaries:boolean):Filter<LogRow>{
  if(!anniversaries)return {date:day};
  const date=Temporal.PlainDate.from(day),monthDays=[day.slice(5)];
  if(date.month===2&&date.day===28&&!date.inLeapYear)monthDays.push('02-29');
  return {$or:[{date:day},{calendarMonthDay:{$in:monthDays},date:{$lt:day}}]};
 }
-async function calendar(userId:string,d:{from:string;through:string;today:string;scope:string;query?:string;personId?:string},session?:ClientSession):Promise<LogCalendarPage>{
+async function readCalendar(userId:string,d:{from:string;through:string;today:string;scope:string;query?:string;personId?:string},session?:ClientSession):Promise<LogCalendarPage>{
  const first=Temporal.PlainDate.from(d.from),count=first.until(Temporal.PlainDate.from(d.through)).days+1;
  if(count<1||count>42)throw new AppError(422,'log_dates','Choose a calendar range of at most 42 days.');
  const filter:Filter<LogRow>[]=[await access(userId,session),{members:userId}];
  if(d.scope==='private')filter.push({members:{$size:1},invited:{$size:0}});
  if(d.scope==='shared')filter.push({$or:[{'members.1':{$exists:true}},{'invited.0':{$exists:true}}]});
  if(d.personId)filter.push({members:d.personId});const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
- // Each indexed day stops at ten authorized rows. Dense days never load their full history.
- const result=await Promise.all(Array.from({length:count},(_,offset)=>calendarReads.run(async()=>{
-  const date=first.add({days:offset}).toString();
-  const found=await visibleEntries({$and:[...filter,calendarDateFilter(date,date>d.today)]},session,{date:-1,createdAt:-1,_id:-1},10,{_id:1,date:1,title:1,createdAt:1,coverFileId:1,'contributions.userId':1,'contributions.fileIds':1,members:1});
-  return {date,found:found.slice(0,9),more:found.length>9};
- })));
+ // One admitted aggregate per range. Every union branch seeks an indexed day
+ // and stops at ten authorized rows, including on a densely populated day.
+ const dates=Array.from({length:count},(_,offset)=>first.add({days:offset}).toString());
+ const dayPipeline=(date:string):Document[]=>[{$match:{$and:[...filter,calendarDateFilter(date,date>d.today)]}},{$sort:{date:-1,createdAt:-1,_id:-1}},...activeMemberStages(),{$limit:10},{$project:{_id:1,date:1,title:1,createdAt:1,coverFileId:1,'contributions.userId':1,'contributions.fileIds':1,members:1}},{$set:{calendarDate:{$literal:date}}}];
+ const found=await entries().aggregate<LogRow&{calendarDate:string}>([...dayPipeline(dates[0]),...dates.slice(1).map(date=>({$unionWith:{coll:'logEntries',pipeline:dayPipeline(date)}}))],{session,maxTimeMS:10000}).toArray();
+ const result=dates.map(date=>{const matches=found.filter(row=>row.calendarDate===date);return {date,found:matches.slice(0,9),more:matches.length>9};});
  const source=[...new Map(result.flatMap(day=>day.found).map(row=>[row._id,row])).values()];
  const ids=[...new Set(source.flatMap(row=>row.contributions.filter(c=>row.members.includes(c.userId)).flatMap(c=>c.fileIds)))];
  const files=await uploads().find({_id:{$in:ids},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false},mime:{$regex:'^image/'}},{session,projection:{userId:1,name:1,mime:1,bytes:1}}).toArray();
@@ -118,6 +118,7 @@ async function calendar(userId:string,d:{from:string;through:string;today:string
  const tiles=new Map(source.map(row=>{const photos=row.contributions.filter(c=>row.members.includes(c.userId)).flatMap(c=>c.fileIds.flatMap(id=>{const file=byFile.get(id);return file?.userId===c.userId?[file]:[];})),cover=photos.find(file=>file._id===row.coverFileId)||photos[0];return [row._id,{id:row._id,date:row.date,title:row.title,createdAt:row.createdAt,cover:cover?{id:cover._id,name:cover.name,mime:cover.mime,bytes:cover.bytes,url:`/api/files/${cover._id}`}:null}];}));
  return {days:result.map(day=>({date:day.date,more:day.more,items:day.found.map(row=>tiles.get(row._id)!)})),indexing:Boolean(await entries().findOne({members:userId,calendarMonthDay:{$exists:false},deletedAt:{$exists:false}},{session,projection:{_id:1}}))};
 }
+function calendar(userId:string,d:Parameters<typeof readCalendar>[1],session?:ClientSession){return calendarReads.run(()=>readCalendar(userId,d,session));}
 export async function backfillLogCalendar(){
  const batch=await entries().find({calendarMonthDay:{$exists:false}},{projection:{_id:1}}).limit(100).toArray();
  if(batch.length)await entries().updateMany({_id:{$in:batch.map(row=>row._id)},calendarMonthDay:{$exists:false}},[{$set:{calendarMonthDay:{$cond:[{$eq:['$recurrence','none']},'',{$substrBytes:['$date',5,5]}]}}}]);

@@ -1,4 +1,12 @@
-# Infrastructure activation proposal
+# Current infrastructure
+
+Production v0.30.1 runs on **newdrugs-recovery**, Droplet **604194887**, **167.172.21.42**, NYC3, Ubuntu 24.04, 4 GB / 2 vCPU regular Basic at $24/month. Both existing private Spaces buckets share the existing $5 allowance. The intended base is $29/month after retiring the source. The user approved up to $1 temporary droplet overlap.
+
+The original NYC1 host 603479023 / 24.144.121.19 is retained only for DNS forwarding and rollback. Its app/worker services are stopped and disabled. Do not deploy to it or restart its workers. Default deployment targets the replacement. See [migration](HOST_MIGRATION.md).
+
+Production: web 7331, Mongo 7332, dev web 7333, dev Qdrant 7336, prod Qdrant 7337, all on loopback behind nginx where applicable. Both stage workers are enabled. Production migrated 537 verified objects; dev already had nine. Local original media copies remain for rollback. No extra bucket subscription, backup, load balancer or CDN was enabled.
+
+# Infrastructure activation and current host
 
 Updated September 27, 2026. The founder approved the $29/month base. The existing New Drugs droplet was resized to 4 GB / 2 vCPU, keeping its 25 GB disk and IP. Both stage health checks passed after boot. A dev-only Qdrant service is installed and passed a live synthetic contract probe; Dev Spaces is activated; production search/storage are not activated yet.
 

@@ -1,5 +1,5 @@
 import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {connectDatabase,db,mongo,rows,transaction} from '../server/db';
 import {config} from '../server/config';
 import {users,type Actor,type User} from '../server/auth';
@@ -29,4 +29,12 @@ it('backfills existing entries and pages candidates without hydrating or aggrega
  await rows('logEntries').insertMany([{_id:'one',members:['me','a']},{_id:'two',members:['me','b']}]);expect(await backfillLogContacts(1)).toBe(1);expect(await backfillLogContacts(1)).toBe(1);expect(await backfillLogContacts(1)).toBe(0);expect(await backfillLogContacts(1)).toBe(0);
  const first=await listLogContacts(actor,{limit:1}),second=await listLogContacts(actor,{limit:1,before:first.nextCursor!}),third=await listLogContacts(actor,{limit:1,before:second.nextCursor!});expect(new Set([...first.items,...second.items,...third.items].map(person=>person.id)).size).toBe(3);expect(first.indexing).toBe(false);expect(third.nextCursor).toBeNull();
  expect((await listLogContacts({...actor,background:true,accountActivity:false},{query:'friend'})).items).toEqual([]);
+});
+
+it('bounds sparse name filtering and resumes from the last examined contact',async()=>{
+ const people=Array.from({length:250},(_,i)=>({_id:`p${String(i).padStart(3,'0')}`,handle:`person${i}`,name:i===249?'Needle':'Other',bio:'',city:'',cityKey:'',interests:[],discoverable:false,balanceNanos:0,reservedNanos:0,createdAt:new Date().toISOString()}));
+ await users().insertMany(people);
+ await rows('logContactCounts').insertMany(people.map(person=>({_id:createHash('sha256').update(JSON.stringify(['me',person._id])).digest('hex'),userId:'me',personId:person._id,count:1})));
+ const first=await listLogContacts(actor,{query:'Needle'});expect(first.items).toEqual([]);expect(first.nextCursor).toBeTruthy();
+ const second=await listLogContacts(actor,{query:'Needle',before:first.nextCursor!});expect(second.items.map(item=>item.id)).toEqual(['p249']);expect(second.nextCursor).toBeNull();
 });

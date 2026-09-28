@@ -65,7 +65,7 @@ export const outputs: Record<string, z.ZodType> = {
   'connections.get': z.object({ connection, people: z.array(profileOutput) }),
   'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.list': page(message), 'messages.send': message,
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
-  'notifications.list': z.object({ unread: z.number(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
+  'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),
   'people.block': z.object({ personId: id, blocked: z.boolean() }), 'people.report': z.object({ id, status: z.literal('unreviewed') }),
   'people.blocked': page(z.object({ id, personId: id, name: z.string(), handle: z.string().optional(), createdAt: z.string() })),

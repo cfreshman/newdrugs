@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.29.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.30.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,15 +13,15 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.29.2, release `20260927173600978` |
-| Cloud dev | `https://dev.druggie.org`, release `20260927173448958`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.30.2, release `20260928005650796` |
+| Cloud dev | `https://dev.druggie.org`, release `20260928005542193`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
-| Git remote | None configured. “Push” was clarified by the user to mean production deployment. |
+| Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
 | Outstanding requested work | Cyrus/Laura import completed and verified: 504 entries, 527 media files, 65 already-broken source media references retained for repair. Physical iPhone recording/playback checks remain outstanding. |
 
-**The shipped pre-Log system is checkpointed at `pre-log-v0.19.1`.** Preserve tracked and untracked work made after that checkpoint. Do not reset, clean, stash, or revert an experiment casually. Deployment still builds the working tree, not a Git commit. There is no Git remote configured.
+**The shipped pre-Log system is checkpointed at `pre-log-v0.19.1`.** Preserve tracked and untracked work made after that checkpoint. Do not reset, clean, stash, or revert an experiment casually. Deployment still builds the working tree, not a Git commit. An origin remote has since been configured.
 
 Recent completed work includes mode-aware URLs and browser history, bottom-pinned horizontal desktop dragging, the Chat search label, profile action menus with edge-aware positioning, inline profile name/username layout, matching username font sizes, DM jump-to-latest controls, header tap-to-top, and the compact secondary Agent footer. Earlier UI patches also removed an extra 4px inset on the draft post's author row.
 
@@ -76,7 +76,7 @@ Node.js **22 or newer** and npm are required. The server bundle explicitly targe
 | 7334 | Separate admin Vite frontend | Local machine; user starts and owns it |
 | 7335 | Existing convention for a test MongoDB SSH tunnel | Local forwarding to droplet 7332, not a local database |
 
-Production and dev share the DigitalOcean droplet at `24.144.121.19`, with separate service instances, databases, environment files, and runtime state. MongoDB is a replica set because wallet, receipts, indexing jobs, and other state transitions rely on transactions.
+Production and dev share the DigitalOcean droplet at `167.172.21.42` (NYC3), with separate service instances, databases, environment files, and runtime state. MongoDB is a replica set because wallet, receipts, indexing jobs, and other state transitions rely on transactions.
 
 Cloud dev has **no public frontend**. The user uses the local browser frontend. Vite proxies `/api` to the HTTPS cloud dev API and injects `X-NewDrugs-Dev-Key` on the server side. Never put this key in client code. CLI and hosted MCP use their own bearer credentials; an Authorization header passing the dev gate is not a substitute for actual authentication.
 
@@ -156,7 +156,7 @@ The known SSH entry point is:
 ```sh
 ssh -i /Users/work/.ssh/newdrugs_do \
   -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
-  root@24.144.121.19
+  root@167.172.21.42
 ```
 
 Useful read-only checks on the host:
@@ -619,3 +619,18 @@ Scaling milestone: dev is now `20260927205919364`; prod remains v0.29.2. Persist
 The next scaling checkpoint is dev `20260927214247608`, with separate API/worker services and bounded shared run admission. See the implementation log for later local scoped-moderation/orphan-reconciliation changes and the current live connectivity investigation. Production is still v0.29.2. Both production private services are prepared and existing production vectors copied without model calls, but production object migration/app activation has not happened. Keep local Vite/admin processes untouched. Source checks and cloud-isolated integration checks have passed; live embedding connectivity must be verified before finishing the authorized production rollout.
 
 Chat clearing deletes the conversation/provider session state and searchable history, while separately saved agent notes/instructions remain. The confirmation says so explicitly. Source-backed notes whose chat evidence disappeared are excluded from core context.
+
+
+### Performance review fixes and host migration
+
+All ten findings in [the performance-pass review](scaling/REVIEW-2026-09-27.md) are fixed and shipped as **v0.30.1**. Tests passed: 25 local regressions and 106 isolated database checks. The review document maps each failure to its fix. Production Log semantic search, private agent memory/instructions, bounded notification/contact/calendar reads, incremental billing/storage/retrieval indexes and separate workers are active.
+
+The original host developed intermittent TCP/TLS/SSH/outbound failures. Reboots only helped temporarily. The founder authorized replacement and up to $1 temporary overlap; the new 4 GB / 2 vCPU NYC3 droplet is `newdrugs-recovery` (604194887), `167.172.21.42`. DNS for both app domains now targets it. Source app/worker services are disabled, and old nginx forwards over verified TLS while caches expire. Never restart source workers or point deployment back to that machine. Support ticket 12849848 was explicitly authorized and submitted.
+
+The final frozen database copy restored 4,494 documents with zero failures. All 117 non-TTL collections in prod, dev and shared state matched canonical content hashes before activation. Existing users, balances, sessions, credentials and admin/starter-pool state were preserved. All 537 production local files matched their checksums before cutover and then migrated to private Spaces with read-back verification. All 507 Log source records finished indexing. Source and target never served independent writes simultaneously.
+
+Production is `20260928003152356`; reviewed dev is `20260928005542193`. The downloadable CLI is v0.30.1. Live identity/wallet reads and real hybrid Log search passed; no test social messages/posts or hosted reasoning calls were sent. Some recursive resolvers retained the old address after cutover; direct replacement and fresh US/Germany probes were fast. Retire the old host only after its prior one-hour DNS cache window clears and deletion is explicitly confirmed. See [migration runbook](scaling/HOST_MIGRATION.md) for remaining cleanup.
+
+### Desktop panel layout, v0.30.2
+
+Posts/Friends/Log center their content panel while secondary chat is closed. Opening chat moves content left only enough to let the corner-anchored chat grow toward the main panel width. Sidebar width stays fixed. At narrower desktop widths, available room limits chat and main width; mobile takeover remains unchanged. Browser geometry checks covered 761, 1000, 1200, 1440, 1920 and 2560 pixels, and 87 existing app/dock interaction tests passed. Dev release `20260928005542193`; production release `20260928005650796`.

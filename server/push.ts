@@ -65,7 +65,7 @@ export async function pushStillRelevant(event: { userId: unknown; actorId: unkno
   if (!await users().findOne({ _id: userId, suspendedAt:null, handle: { $type: 'string' } })) return false;
   if (await rows('blocks').findOne({ members: { $all: [userId, actorId] } })) return false;
   if(event.kind==='log_invitation'||event.kind==='log_added'||event.kind==='log_update'){
-    const {logEntryFor}=await import('./log');try{const entry=await logEntryFor(userId,connectionId);if(event.kind==='log_invitation'?!entry.invited.includes(userId):!entry.members.includes(userId))return false;}catch{return false;}
+    const {logEntryFor}=await import('./log');try{const entry=await logEntryFor(userId,connectionId);if(event.kind==='log_invitation'?!entry.invited.includes(userId):!entry.members.includes(userId))return false;}catch(error){if(error instanceof AppError&&[403,404].includes(error.status))return false;throw error;}
     return Boolean(await rows('notifications').findOne({_id:`log:${connectionId}:${userId}`,userId,actorId,kind:event.kind,revision:Number(event.eventId),readAt:null}));
   }
   if (event.kind === 'invitation') return Boolean(await rows('connections').findOne({ _id: connectionId, toId: userId, fromId: actorId, status: 'pending', notificationReadAt: null, createdAt: event.eventId }));
@@ -86,7 +86,7 @@ export async function deliverPush(send = webpush.sendNotification) {
     // Resolve current authorized metadata instead of sending a stale stored title.
     let entry;
     try { entry = await logEntryFor(event.userId, event.connectionId); }
-    catch { await finish('skipped'); return; }
+    catch (error) { if(error instanceof AppError&&[403,404].includes(error.status)){await finish('skipped');return;}throw error; }
     body = logNotificationText(event.kind, actor, entry.title);
   } else {
     body = event.kind === 'automation_status' ? 'You have an automation update.' : event.kind === 'agent_update' ? 'You have an agent update.' : event.kind === 'invitation' ? `${actor} invited you to connect` : `${actor} sent you a message`;

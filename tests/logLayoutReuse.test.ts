@@ -42,3 +42,26 @@ it('does not restore older saved layouts over newer optimistic choices',async()=
  await act(async()=>first({...preferences,arrangement:'gallery'}));expect(button('List').getAttribute('aria-pressed')).toBe('true');
  await act(async()=>second(preferences));expect(button('List').getAttribute('aria-pressed')).toBe('true');
 });
+
+it('evicts a deleted calendar preview from Grid after authoritative refresh',async()=>{
+ const dom=setupDOM();let deleted=false;
+ let preferences={arrangement:'calendar',todayPresentation:'full',views:[]};
+ const date=Temporal.Now.plainDateISO().toString();
+ const tile={id:'entry',date,title:'Deleted review fixture',createdAt:'2026-09-27T00:00:00Z',cover:null};
+ api.operation.mockImplementation(async(name,input)=>{
+  if(name==='log.preferences')return preferences;
+  if(name==='log.preferences_update'){preferences=input;return input;}
+  if(name==='log.calendar'){const first=Temporal.PlainDate.from(input.from);return {days:Array.from({length:first.until(Temporal.PlainDate.from(input.through)).days+1},(_,i)=>{const day=first.add({days:i}).toString();return {date:day,items:!deleted&&day===date?[tile]:[],more:false};}),indexing:false};}
+  if(name==='log.list'&&!input.from&&!deleted)return {items:[{...tile,place:'',contributors:[],links:[],recurrence:'none',coverFileId:null,membership:'member'}],nextCursor:null};
+  return {items:[],nextCursor:null};
+ });
+ try{
+  await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogPanel,{user:{id:'me',name:'Me'} as any,navigate:vi.fn()}))));
+  await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('[aria-label="Log view"] button')].find(button=>button.textContent==='Grid')!.click());
+  expect(dom.container.querySelector('.log-gallery')?.textContent).toContain(tile.title);
+  deleted=true;api.operation.mockClear();
+  await act(async()=>{window.dispatchEvent(new CustomEvent('newdrugs:records',{detail:{keys:['log'],log:[{id:tile.id,date,deleted:true}]}}));await new Promise(resolve=>setTimeout(resolve,120));});
+  expect(api.operation.mock.calls.some(call=>call[0]==='log.list')).toBe(true);
+  expect(dom.container.querySelector('.log-gallery')?.textContent).not.toContain(tile.title);
+ }finally{dom.cleanup();}
+});

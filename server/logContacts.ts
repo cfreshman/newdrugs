@@ -35,21 +35,42 @@ async function readyContacts(userId:string,session?:ClientSession){
  if((state?.generation||0)!==current){await states().updateOne({_id:userId,generation:state?.generation},{$set:{dirty:true,generation:current,cursor:null,leaseUntil:0},$inc:{revision:1}},{session});if(!state)await states().updateOne({_id:userId},{$setOnInsert:{dirty:true,generation:current,cursor:null,revision:1}},{upsert:true,session});return false;}
  return !state?.dirty;
 }
-/** Keyset-page the maintained social graph, never the hangout collection. */
+/** Seek two indexed streams: positive co-attendance counts, then friend-only
+ * contacts. Hydration and text filtering have a hard per-page candidate budget. */
 export async function listLogContacts(actor:Actor,input:{query?:string;limit?:number;before?:string},session?:ClientSession){
- const userId=actor.userId,ready=await readyContacts(userId,session),limit=input.limit||20,canReadFriends=!actor.background||actor.accountActivity;
- const blocked=(await rows('blocks').find({members:userId},{session,projection:{members:1}}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId));
- const signature=createHash('sha256').update(JSON.stringify([userId,input.query||'',canReadFriends])).digest('hex');let cursor:{count:number;id:string}|undefined;
- if(input.before){try{const value=JSON.parse(Buffer.from(input.before,'base64url').toString());if(value.signature!==signature||!Number.isInteger(value.count)||typeof value.id!=='string')throw Error();cursor=value;}catch{throw new AppError(422,'log_cursor','Reload the people picker.');}}
- const pipeline:Document[]=[{$match:{userId,count:{$gt:0},...(!ready?{_id:'unavailable'}:{})}},{$project:{_id:'$personId',count:1,friend:{$literal:false}}}];
- if(canReadFriends)pipeline.push({$unionWith:{coll:'connections',pipeline:[{$match:{members:userId,status:'accepted'}},{$project:{_id:{$arrayElemAt:[{$filter:{input:'$members',as:'person',cond:{$ne:['$$person',userId]}}},0]},count:{$literal:0},friend:{$literal:true}}}]}});
- pipeline.push({$group:{_id:'$_id',count:{$max:'$count'},friend:{$max:'$friend'}}},{$match:{_id:{$nin:[userId,...blocked]},...(cursor?{$or:[{count:{$lt:cursor.count}},{count:cursor.count,_id:{$gt:cursor.id}}]}:{})}},{$sort:{count:-1,_id:1}},{$lookup:{from:'users',localField:'_id',foreignField:'_id',pipeline:[{$match:{handle:{$type:'string'},suspendedAt:null}},{$project:{name:1,handle:1,photos:1}}],as:'person'}},{$unwind:'$person'});
- if(input.query){const expression=new RegExp(input.query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');pipeline.push({$match:{$or:[{'person.name':expression},{'person.handle':expression}]}});}
- pipeline.push({$limit:limit+1});
- const found=await counts().aggregate<{_id:string;count:number;friend:boolean;person:{name?:string;handle:string;photos?:string[]}}>(pipeline,{session,maxTimeMS:5000}).toArray(),page=found.slice(0,limit),last=page.at(-1);
- const items:LogContact[]=page.map(row=>({id:row._id,name:row.person.name||row.person.handle,handle:row.person.handle,...(row.person.photos?.[0]?{photoId:row.person.photos[0]}:{}),sharedHangouts:row.count,...(canReadFriends?{friend:row.friend}:{})}));
+ const userId=actor.userId,ready=await readyContacts(userId,session),limit=input.limit||20,canReadFriends=Boolean(!actor.background||actor.accountActivity);
+ const blocked=new Set((await rows('blocks').find({members:userId},{session,projection:{members:1}}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)));
+ const signature=createHash('sha256').update(JSON.stringify(['seek-v2',userId,input.query||'',canReadFriends,ready])).digest('hex');
+ type Cursor={phase:'contacts'|'friends';count:number;id:string};let cursor:Cursor={phase:ready?'contacts':'friends',count:0,id:''};
+ if(input.before){try{const value=JSON.parse(Buffer.from(input.before,'base64url').toString());if(value.signature!==signature||!['contacts','friends'].includes(value.phase)||!Number.isInteger(value.count)||value.count<0||typeof value.id!=='string')throw Error();cursor=value;}catch{throw new AppError(422,'log_cursor','Reload the people picker.');}}
+ const pair=(id:string)=>[userId,id].sort().join(':'),items:LogContact[]=[],query=input.query?.trim().toLocaleLowerCase()||'';
+ let scanned=0,more=false;
+ while(scanned<200&&items.length<limit){
+  if(cursor.phase==='friends'&&!canReadFriends)break;
+  const take=Math.min(50,200-scanned),contactPhase=cursor.phase==='contacts';
+  const candidates=contactPhase
+   ?await counts().find({userId,count:{$gt:0},...(cursor.id?{$or:[{count:{$lt:cursor.count}},{count:cursor.count,personId:{$gt:cursor.id}}]}:{})},{session}).sort({count:-1,personId:1}).limit(take+1).toArray()
+   :(await rows('connections').find({members:userId,status:'accepted',...(cursor.id?{_id:{$gt:pair(cursor.id)}}:{})},{session,projection:{members:1}}).sort({_id:1}).limit(take+1).toArray()).map(row=>({_id:row._id,userId,personId:(row.members as string[]).find(id=>id!==userId)!,count:0}));
+  const page=candidates.slice(0,take),ids=page.map(row=>row.personId).filter(Boolean);
+  const [people,friendRows,shared]=await Promise.all([
+   users().find({_id:{$in:ids},handle:{$type:'string'},suspendedAt:null},{session,projection:{name:1,handle:1,photos:1}}).toArray(),
+   contactPhase&&canReadFriends?rows('connections').find({_id:{$in:ids.map(pair)},members:userId,status:'accepted'},{session,projection:{members:1}}).toArray():Promise.resolve([]),
+   !contactPhase&&ready?counts().find({_id:{$in:ids.map(id=>counterId(userId,id))},count:{$gt:0}},{session,projection:{personId:1}}).toArray():Promise.resolve([]),
+  ]);
+  const byId=new Map(people.map(person=>[person._id,person])),friendIds=new Set(friendRows.flatMap(row=>row.members as string[])),alreadyShared=new Set(shared.map(row=>row.personId));
+  for(let index=0;index<page.length;index++){
+   const row=page[index];scanned++;cursor={phase:contactPhase?'contacts':'friends',count:row.count,id:row.personId};
+   const person=byId.get(row.personId);
+   if(person&&!blocked.has(person._id)&&person._id!==userId&&!alreadyShared.has(person._id)&&(!query||`${person.name||''} ${person.handle}`.toLocaleLowerCase().includes(query)))items.push({id:person._id,name:person.name||person.handle!,handle:person.handle,...(person.photos?.[0]?{photoId:person.photos[0]}:{}),sharedHangouts:row.count,...(canReadFriends?{friend:!contactPhase||friendIds.has(person._id)}:{})});
+   if(items.length===limit){more=index+1<page.length||candidates.length>take;if(!more&&contactPhase&&canReadFriends){cursor={phase:'friends',count:0,id:''};more=Boolean(await rows('connections').findOne({members:userId,status:'accepted'},{session,projection:{_id:1}}));}break;}
+  }
+  if(items.length===limit)break;
+  if(candidates.length>take){more=true;continue;}
+  if(contactPhase&&canReadFriends){cursor={phase:'friends',count:0,id:''};more=true;continue;}
+  more=false;break;
+ }
  const backfill=await rows('logContactMeta').findOne({_id:'backfill'},{session,projection:{done:1}});
- return {items,nextCursor:found.length>limit&&last?Buffer.from(JSON.stringify({signature,count:last.count,id:last._id})).toString('base64url'):null,indexing:!ready||!backfill?.done};
+ return {items,nextCursor:more?Buffer.from(JSON.stringify({signature,...cursor})).toString('base64url'):null,indexing:!ready||!backfill?.done};
 }
 export async function backfillLogContacts(limit=20){
  const lease=randomUUID(),meta=rows('logContactMeta');await meta.updateOne({_id:'backfill'},{$setOnInsert:{done:false,cursor:null,leaseUntil:0}},{upsert:true});
