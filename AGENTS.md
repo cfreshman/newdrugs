@@ -181,7 +181,7 @@ agent-written rules (you are allowed to edit below this line)
 
 - Log Scan is the camera with a Cancel control. Do not add paste-code forms, image-file pickers or start/stop camera buttons. Shared links open the Join screen directly.
 
-- Log modals use the browser top layer to escape the panel clipping container, align to the base panel bounds with the same exterior gaps, and use only one content inset. Do not add extra header/footer padding.
+- Log modals use the browser top layer to escape the panel clipping container, align to the base panel bounds with the same exterior gaps, follow its position when side chat moves it even without a size change, and use only one content inset. Do not add extra header/footer padding.
 
 - Log editor uses Logcal’s Uncommon section with a Set as anniversary start toggle. Do not present One time/Anniversary/Birthday as recurrence choices: the marker remembers the original date, not a repeating hangout. Preserve existing birthday records without offering that invented choice for new entries.
 
@@ -218,7 +218,7 @@ agent-written rules (you are allowed to edit below this line)
 - When another landing tab is preferred, Agent uses explicit `/agent`. Dark-mode panels, gradients, inputs and controls use warm charcoal/red-orange rather than blue. Preserve original Logcal entry/person/media IDs internally; future account linking happens only through a separate explicitly requested migration.
 
 - Cache recent Log photos locally with IndexedDB through the marked-image service-worker path. Keep it account-scoped, bounded by bytes/count/age and available browser quota, with LRU eviction, background revalidation, and deletion/logout invalidation. Do not cache app/API responses or videos/audio. Do not clear persisted photos on startup before account identity is known.
-- Load older Log weeks one scrollport ahead, adapting on resize. Apply mobile bottom safe area once: outside inset panels, inside standalone edge-to-edge panels and their floating controls. Remove it while the keyboard is open. In mobile standalone, Log overlays fit the main content panel and leave the top mode/settings controls usable.
+- Load older Log weeks one scrollport ahead, adapting on resize. Retain visited week/image DOM during ordinary back-and-forth browsing; evict least recently viewed rows only beyond 260 weeks or 512 thumbnail elements, protecting the current viewport. Keep fetched date summaries for up to 104 five-week chunks. Retention must never expand the viewport-driven request range. Apply mobile bottom safe area once: outside inset panels, inside standalone edge-to-edge panels and their floating controls. Remove it while the keyboard is open. In mobile standalone, Log overlays fit the main content panel and leave the top mode/settings controls usable.
 
 - Hard rule: do not add reduced-motion settings, prefers-reduced-motion queries, or animation-disabling branches based on OS motion preferences. Keep app animations consistent. Explicitly restore app animation options when third-party libraries alter them; do not override global browser APIs.
 

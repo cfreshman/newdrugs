@@ -51,3 +51,24 @@ it('opens the multi-event chooser immediately from tiles while detail records lo
  await act(async()=>picker.querySelector<HTMLButtonElement>('.log-day-choice')!.click());expect(props.open).toHaveBeenCalledWith(expect.objectContaining({id:'one'}),expect.arrayContaining([expect.objectContaining({id:'two'})]),expect.objectContaining({calendarDay:date}),undefined);
  await act(async()=>finish({items:[],nextCursor:null}));
 });
+
+it('retains loaded image nodes while browsing distant weeks and does not refetch them on return',async()=>{
+ vi.spyOn(HTMLElement.prototype,'clientWidth','get').mockReturnValue(600);
+ vi.spyOn(HTMLElement.prototype,'clientHeight','get').mockReturnValue(500);
+ const date=Temporal.Now.plainDateISO().toString();
+ api.operation.mockImplementation(async(name,input)=>{
+  if(name!=='log.calendar')return {items:[],nextCursor:null};
+  const page=calendarPage(input,[{id:'photo',date,title:'Photo',createdAt:''}]);
+  for(const day of page.days)for(const item of day.items)item.cover={url:'/api/files/retained-photo',mime:'image/webp',id:'retained-photo'};
+  return page;
+ });
+ await mount();const first=dom.container.querySelector('.log-day-mosaic img');expect(first).not.toBeNull();
+ await act(async()=>edge().fire());
+ const scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;
+ await act(async()=>{scroller.scrollTop=3500;scroller.dispatchEvent(new Event('scroll'));});
+ expect(first?.isConnected).toBe(true);expect(dom.container.querySelector('.log-day-mosaic img')).toBe(first);
+ const requests=()=>api.operation.mock.calls.filter(call=>call[0]==='log.calendar').length,count=requests();
+ expect(count).toBeGreaterThan(3);expect(count).toBeLessThan(15);
+ await act(async()=>{scroller.scrollTop=0;scroller.dispatchEvent(new Event('scroll'));});
+ expect(requests()).toBe(count);expect(dom.container.querySelector('.log-day-mosaic img')).toBe(first);
+});

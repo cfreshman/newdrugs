@@ -4,8 +4,8 @@ import type {LogCalendarPage} from '../shared/log';
 import {operation,errorText} from './api';
 import {logCalendarRange} from './logCalendarModel';
 import {useRecordRefreshDetails} from './useRecordRefresh';
-export const CALENDAR_CHUNK_WEEKS=5,CALENDAR_CACHE_CHUNKS=24;
-/** Data follows the virtual viewport. Evicted dates reload when revisited. */
+export const CALENDAR_CHUNK_WEEKS=5,CALENDAR_CACHE_CHUNKS=104;
+/** Keep roughly ten years of fetched summaries; only the current viewport drives requests. */
 export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filters:{scope:'all'|'private'|'shared';query?:string;personId?:string},wanted:number[],visible:boolean){
  const cache=useRef(new Map<number,LogCalendarPage>()),dirty=useRef(new Set<number>()),requests=useRef(new Map<number,AbortController>()),targets=useRef<number[]>([]),alive=useRef(true);
  const [revision,changed]=useState(0),[error,setError]=useState('');

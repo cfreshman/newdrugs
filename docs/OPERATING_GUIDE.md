@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.30.2.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.30.3.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.30.2, release `20260928005650796` |
-| Cloud dev | `https://dev.druggie.org`, release `20260928005542193`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.30.3, release `20260928010629053` |
+| Cloud dev | `https://dev.druggie.org`, release `20260928010526509`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
@@ -634,3 +634,9 @@ Production is `20260928003152356`; reviewed dev is `20260928005542193`. The down
 ### Desktop panel layout, v0.30.2
 
 Posts/Friends/Log center their content panel while secondary chat is closed. Opening chat moves content left only enough to let the corner-anchored chat grow toward the main panel width. Sidebar width stays fixed. At narrower desktop widths, available room limits chat and main width; mobile takeover remains unchanged. Browser geometry checks covered 761, 1000, 1200, 1440, 1920 and 2560 pixels, and 87 existing app/dock interaction tests passed. Dev release `20260928005542193`; production release `20260928005650796`.
+
+### Log presentation follow-up, v0.30.3
+
+Desktop Log overlays track underlying panel translation as well as resizing, retaining mounted hangout content. Initial deep-link mounting also resolves its anchor before the parent ref is set. Calendar virtualization retains visited week/image elements until 260 weeks or 512 thumbnails, evicting least recently viewed rows while protecting the viewport. Summary data retains 104 five-week chunks. Retained rows do not enlarge fetch ranges; prefetch still follows the actual viewport. Thumbnail counting is cached between data changes.
+
+Validation: 38 targeted tests passed, including exact image-node retention across roughly one year of scrolling and no repeat requests on return. The final counting optimization passed the 16 calendar-focused checks again. Dev release `20260928010526509`; production v0.30.3 release `20260928010629053`. Public bundles and API/worker health were verified. Owned migration Mongo tunnels on 7338/7339 are closed. Old-droplet retirement remains scheduled for 01:23 UTC with its status in `.data/migration/retirement-status.json`; do not infer completion from the schedule.

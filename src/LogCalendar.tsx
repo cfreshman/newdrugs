@@ -12,10 +12,12 @@ import {type LogEntry,type LogList,type LogCalendarTile} from '../shared/log';
 import {operation} from './api';
 import {usePanelVisible} from './PanelReadiness';
 import {useRecordRefresh} from './useRecordRefresh';
-import {useVirtualizer,type Virtualizer} from '@tanstack/react-virtual';
+import {useVirtualizer,defaultRangeExtractor,type Range,type Virtualizer} from '@tanstack/react-virtual';
+import {retainCalendarWeeks} from './logCalendarRetention';
 import {LOG_WEEK_BATCH,logWeekStart,logCalendarWeeks,logWeekMonth,logCover} from './logCalendarModel';
 
 type Scope='all'|'private'|'shared';
+const EMPTY_ENTRIES:LogEntry[]=[];
 // Preserved panels may become display:none. Ignore zero-sized observations so
 // hiding an overlay does not discard the visible rows or their scroll anchor.
 function observeCalendarRect(instance:Virtualizer<HTMLElement,Element>,callback:(rect:{width:number;height:number})=>void){
@@ -24,7 +26,7 @@ function observeCalendarRect(instance:Virtualizer<HTMLElement,Element>,callback:
  measure();const observer=new ResizeObserver(measure);observer.observe(node);return()=>observer.disconnect();
 }
 
-export function LogCalendar({month,scope,query,personId,jump,create,open,openPerson,onPreviews,seedEntries=[]}:{month?:string;scope:Scope;query:string;personId?:string;jump(month?:string):void;create(date:string):void;open(entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null):void;openPerson?(personId:string):void;onPreviews?(entries:LogCalendarTile[]):void;seedEntries?:LogEntry[]}){
+export function LogCalendar({month,scope,query,personId,jump,create,open,openPerson,onPreviews,seedEntries=EMPTY_ENTRIES}:{month?:string;scope:Scope;query:string;personId?:string;jump(month?:string):void;create(date:string):void;open(entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null):void;openPerson?(personId:string):void;onPreviews?(entries:LogCalendarTile[]):void;seedEntries?:LogEntry[]}){
  const actions=useRef({open,create,openPerson,onPreviews});actions.current={open,create,openPerson,onPreviews};
  const openEntry=useCallback((entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null)=>{if("contributors" in entry)primeLogEntry(entry);actions.current.open(entry,list,query,cursor);},[]);
  const createEntry=useCallback((date:string)=>actions.current.create(date),[]),showPerson=useCallback((id:string)=>actions.current.openPerson?.(id),[]);
@@ -66,10 +68,25 @@ export function LogCalendar({month,scope,query,personId,jump,create,open,openPer
  const estimateSize=useCallback(()=>Math.max(1,(rowWidth-2*Math.max(34,(rowWidth-8)/9)-8)/7),[rowWidth]);
  const getItemKey=useCallback((index:number)=>starts[index].toString(),[starts]);
  const measureElement=useCallback((element:Element,_entry:ResizeObserverEntry|undefined,instance:Virtualizer<HTMLElement,Element>)=>element.getBoundingClientRect().height||instance.getVirtualItems().find(item=>item.index===Number(element.getAttribute('data-index')))?.size||estimateSize(),[estimateSize]);
- const virtual=useVirtualizer({count:starts.length,getScrollElement,getItemKey,estimateSize,measureElement,overscan:10,gap:1,initialRect:{width:600,height:800},observeElementRect:observeCalendarRect});
+ const retainedWeeks=useRef(new Map<string,number>());
+ const weekIndices=useMemo(()=>new Map(starts.map((start,index)=>[start.toString(),index])),[starts]);
+ const thumbnailCounts=useMemo(()=>new Map<string,number>(),[weekIndices,onDay]);
+ const rangeExtractor=useCallback((range:Range)=>{
+  const visible=defaultRangeExtractor(range).map(index=>starts[index].toString());
+  retainedWeeks.current=retainCalendarWeeks(retainedWeeks.current,visible,week=>{
+   const cached=thumbnailCounts.get(week);if(cached!==undefined)return cached;
+   const index=weekIndices.get(week);if(index===undefined)return 0;
+   const count=Array.from({length:7},(_,day)=>onDay(starts[index].add({days:day}).toString()).slice(0,9).filter(entry=>entry.cover).length).reduce((sum,count)=>sum+count,0);
+   thumbnailCounts.set(week,count);return count;
+  });
+  return [...retainedWeeks.current.keys()].flatMap(week=>{const index=weekIndices.get(week);return index===undefined?[]:[index];}).sort((a,b)=>a-b);
+ },[starts,weekIndices,onDay,thumbnailCounts]);
+ const virtual=useVirtualizer({count:starts.length,getScrollElement,getItemKey,estimateSize,measureElement,rangeExtractor,overscan:10,gap:1,initialRect:{width:600,height:800},observeElementRect:observeCalendarRect});
  const virtualRows=virtual.getVirtualItems();
- const virtualRange=virtualRows.length?`${starts[virtualRows[0].index]}:${starts[virtualRows.at(-1)!.index]}`:'';
- useEffect(()=>{if(!virtualRows.length)return;const indices=virtualRows.map(row=>Math.max(0,Math.floor(starts[row.index].until(anchor).days/7/CALENDAR_CHUNK_WEEKS))),from=Math.max(0,Math.min(...indices)-1),through=Math.max(...indices)+1;setWanted(Array.from({length:through-from+1},(_,i)=>from+i));},[virtualRange]);
+ // Retained rows are presentation only. Prefetch follows the actual viewport.
+ const viewportRows=virtual.range?defaultRangeExtractor({...virtual.range,overscan:10,count:starts.length}):[];
+ const virtualRange=viewportRows.length?`${starts[viewportRows[0]]}:${starts[viewportRows.at(-1)!]}`:'';
+ useEffect(()=>{if(!viewportRows.length)return;const indices=viewportRows.map(index=>Math.max(0,Math.floor(starts[index].until(anchor).days/7/CALENDAR_CHUNK_WEEKS))),from=Math.max(0,Math.min(...indices)-1),through=Math.max(...indices)+1;setWanted(Array.from({length:through-from+1},(_,i)=>from+i));},[virtualRange]);
  const grid=useMemo(()=> <div className="log-calendar-weeks" aria-label="Calendar" data-week-count={starts.length} data-cached-chunks={cachedChunks} style={{height:virtual.getTotalSize(),position:'relative'}}>
    {virtualRows.map(virtualRow=>{const index=virtualRow.index,start=starts[index];
     const days=Array.from({length:7},(_,day)=>start.add({days:day}));
