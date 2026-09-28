@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. It records the current system, the user's decisions, and the practical handoff from the first long build session. Update it when those facts change.
 
-**Updated September 27, 2026. Production: v0.30.4.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 27, 2026. Production: v0.30.5.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -13,8 +13,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | The accumulated shipped work is checkpointed before Log integration. Preserve ongoing Log changes; inspect status before editing. |
-| Production | `https://druggie.org`, v0.30.4, release `20260928011527096` |
-| Cloud dev | `https://dev.druggie.org`, release `20260928011430295`; local frontend at `http://localhost:7330/log` |
+| Production | `https://druggie.org`, v0.30.5, release `20260928012914741` |
+| Cloud dev | `https://dev.druggie.org`, release `20260928012818652`; local frontend at `http://localhost:7330/log` |
 | Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
 | Services | `newdrugs@dev` and `newdrugs@prod` were active; both database-backed health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
@@ -352,7 +352,7 @@ If the test URI uses localhost port 7335, it is an SSH tunnel to the cloud Mongo
 ssh -N -L 127.0.0.1:7335:127.0.0.1:7332 \
   -i /Users/work/.ssh/newdrugs_do \
   -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
-  root@24.144.121.19
+  root@167.172.21.42
 ```
 
 This is not permission to start local MongoDB or replace test connection configuration. Use the existing private test credentials without exposing them.
@@ -644,3 +644,11 @@ Validation: 38 targeted tests passed, including exact image-node retention acros
 ### Profile/mobile controls, v0.30.4
 
 Withdraw invitation now uses the existing rectangular secondary profile button treatment. The external Video call control is hidden on narrow/mobile and coarse-pointer layouts; desktop behavior is preserved. A native call system remains a future idea. Both stages were deployed, build/API/worker checks passed, and public production assets matched the build. Production release `20260928011527096`.
+
+### Host retirement complete, September 28
+
+Old Droplet 603479023 (24.144.121.19) is deleted, verified through the provider API after the approved DNS waiting period and fresh DNS/service/health checks. Replacement 604194887 (167.172.21.42) remains the sole live host. Temporary proxy trust is removed, owned migration tunnels are closed, and the temporary extra droplet charge has ended. Private migration exports and diagnostics are retained locally. This supersedes earlier scheduled/pending retirement notes.
+
+### Mobile header scale, v0.30.5
+
+The mobile mode switch and Settings control now retain desktop button/icon sizing. Mobile mode labels stay collapsed, and mobile gutters/glass backing stay intact. Dev and production builds/deployments passed; public assets and API/worker health matched the new production release `20260928012914741`.
