@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import {pagePreviewSchema,renderPagePreview} from './shared/pagePreview';
+import {pagePreviewSchema,renderPagePreview} from './shared/pagePreview.ts';
 import { config as loadEnv } from 'dotenv';
 loadEnv({ path: '.env.cloud-dev', quiet: true });
 
