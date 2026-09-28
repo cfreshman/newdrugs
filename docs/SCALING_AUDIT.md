@@ -1,5 +1,7 @@
 # Scaling audit
 
+**Historical pre-fix audit.** The corrective batch is shipped. Read [current handoff](HANDOFF.md), [implementation status](scaling/IMPLEMENTATION.md) and [review fixes](scaling/REVIEW-2026-09-27.md) before treating a finding below as still present. The proposed load/recall gates remain useful and do not constitute achieved capacity.
+
 September 27, 2026. Code-level findings and corrective plan, not a load-tested capacity claim. No application code, infrastructure, stored data or deployment was changed for this audit.
 
 ## Answer

@@ -1,10 +1,10 @@
 # Scaling implementation
 
-Current release: **v0.30.1**, production `20260928003152356`, on replacement host `167.172.21.42` (NYC3). The ten [review findings](REVIEW-2026-09-27.md) are fixed. Validation: 25 local regression checks and 106 isolated cloud checks. Production media migration verified 537 files, with zero failures; all 507 Log sources are indexed and indexing/replication queues drained. The old host remains an HTTPS forwarding bridge during DNS propagation; see [incident](INCIDENT-2026-09-27.md) and [migration](HOST_MIGRATION.md).
+Current production is **v0.30.5**, release `20260928012914741`, on replacement host `167.172.21.42` (NYC3). The scaling batch shipped in v0.30.1. The ten [review findings](REVIEW-2026-09-27.md) are fixed. Validation: 25 local regressions and 106 isolated cloud checks. Production media migration verified 537 files; all 507 initial Log sources were indexed. **Old-host deletion and proxy-trust cleanup are complete.** See [current handoff](../HANDOFF.md). Later milestone sections below are historical, not remaining rollout tasks.
 
-Authorized September 27, 2026. This tracks implementation of SCALING_AUDIT.md. Application changes target cloud dev. The user has now authorized production once the entire requested batch is ready and validated, explicitly forbidding a premature production rollout. Local Vite/admin servers remain user-owned. Large capacity tests must not run on the shared production host.
+Authorized September 27, 2026. This tracks implementation of SCALING_AUDIT.md. That authorized production rollout is complete. New work defaults to dev and requires a fresh explicit production request. Local Vite/admin servers remain user-owned. Large capacity tests must not run on the shared production host.
 
-## Work remaining
+## Shipped implementation scope
 
 - Targeted, coalesced live invalidation, shared account projections, cross-instance connection leases and view interests.
 - Batched Log projection/authorization, incremental calendar ranges and bounded DOM.
@@ -15,13 +15,17 @@ Authorized September 27, 2026. This tracks implementation of SCALING_AUDIT.md. A
 - Indexed attachment references instead of history-sized file filters.
 - Shared rate limits, multi-instance deployment readiness, instrumentation and reproducible isolated scale tests.
 
+## Remaining limits
+
+Large-corpus recall/latency, concurrent-client capacity and multi-instance failure/load envelopes are not established by the correctness tests. Run any large workload on separately approved isolated infrastructure, not the shared production host. Automatic paid reports remain deferred. These limits are not authorization to start new projects.
+
 ## Validation and rollout
 
 Record each milestone's actual tests and dev release here. Never describe unit/mock tests as a live million-record benchmark. Infrastructure that needs new services/credentials will be prepared concretely before requesting any necessary access or spending approval. The optional semantic report product remains subsequent work unless separately requested.
 
 ## Report/memory steering during implementation
 
-The founder proposed Wayfinder-style user instructions plus agent-owned memory. The plan now records individual core/non-core slots, per-slot revision/idempotency, a combined bounded core-context read, optional semantic non-core retrieval and API pressure feedback (used/remaining/limit). These do not replace permission checks or the scaling work. Current focus remains infrastructure/data-path scaling; no recurring report billing has been enabled.
+The founder proposed Wayfinder-style user instructions plus agent-owned memory. The plan now records individual core/non-core slots, per-slot revision/idempotency, a combined bounded core-context read, optional semantic non-core retrieval and API pressure feedback (used/remaining/limit). These do not replace permission checks or the scaling work. Instructions and revisioned core/non-core memory slots are now shipped. No recurring report billing has been enabled.
 
 ## First milestone
 

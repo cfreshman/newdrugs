@@ -1,8 +1,14 @@
 we are building "New Drugs" made in new england at druggie.org
 
-Current operating guide and handoff. Read this before working on the project:
+Current handoff. Read this first when entering the project:
+
+@docs/HANDOFF.md
+
+Detailed operating guide and code map. Read the sections relevant to the task:
 
 @docs/OPERATING_GUIDE.md
+
+Past rollout notes live in docs/OPERATING_HISTORY.md. They are historical evidence, not current instructions or pending work.
 
 we are on a computer with a project called 'Wayfinder OS' already built
 

@@ -1,5 +1,7 @@
 # Log integration
 
+**Historical integration plan and milestones. Log is shipped and the requested data migrations are complete.** Use [the current handoff](../HANDOFF.md), AGENTS.md and [parity decisions](PARITY.md) for current behavior; earlier “dev-only”/“not deployed” notes below are superseded.
+
 ## Approved objective
 
 After shipping the approved agent utilities, adapt `~/dev/logcal` into New Drugs as a native **Log** primary tab. The user wants essentially full parity in the features that matter, with deliberate adaptation and omission of duplicated infrastructure such as user accounts. It must feel like Log inside New Drugs, not an embedded separate app.

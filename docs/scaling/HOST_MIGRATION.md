@@ -26,7 +26,7 @@ After retiring the old droplet, the base returns to the approved $29/month inclu
 ## Current status
 
 - Replacement: `newdrugs-recovery`, Droplet **604194887**, **167.172.21.42**, NYC3, 4 GB / 2 vCPU, Ubuntu 24.04.
-- Production v0.30.1 is live, release `20260928003152356`. Both APIs, both separate workers, both private Qdrant instances and Mongo are healthy.
+- Scaling shipped in production v0.30.1; current production is v0.30.5, release `20260928012914741`. Both APIs, both separate workers, both private Qdrant instances and Mongo are healthy.
 - Final quiesced restore copied 4,494 documents with zero failures. Hashes matched across 117 non-TTL collections before target activation. Existing accounts, sessions, balances and keys were retained.
 - All 537 production media files migrated into the existing private Spaces bucket with read-back verification and zero failures. Original local files remain for rollback. All 507 Log sources indexed; both indexing queues drained.
 - Root and dev A records point to the replacement with TTL 300. The former TTL was 3,600 seconds. The conservative retirement deadline was 01:23 UTC; deletion followed at approximately 01:28 UTC.
