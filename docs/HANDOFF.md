@@ -6,11 +6,11 @@ Current operational handoff, verified September 28, 2026. Read this and `AGENTS.
 
 - Product: **New Drugs**, made in New England, at **https://druggie.org**.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
-- Production **v0.30.5**, release **`20260928012914741`**.
-- Dev release **`20260928012818652`** has the same application changes; its displayed version is v0.30.4 because dev does not bump versions.
-- Latest application/infrastructure checkpoint before this documentation cleanup: **`dc963fa`**. All requested application changes are committed and deployed. Inspect `git status` for subsequent work.
+- Production **v0.31.1**, release **`20260928131916109`**, from application checkpoint **`4828935`**. Release metadata is committed in **`acf7daa`**.
+- Dev release **`20260928132842754`** additionally includes the in-session app-update prompt from **`34080f9`**. Its displayed version remains v0.31.1 because dev does not bump releases.
+- All requested implementation is committed and deployed to its authorized stage. The update prompt is dev-only until a separate production request. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
-- **No unfinished feature or production deployment is queued.** Continue from the user's next request. Deferred ideas are not permission to start projects.
+- **No unfinished feature or authorized production deployment is queued.** Continue from the user's next request. Deferred ideas and dev-only work are not permission to deploy production.
 
 ## Product intent
 

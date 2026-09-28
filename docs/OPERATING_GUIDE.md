@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. Start with [HANDOFF.md](HANDOFF.md) for the short current snapshot. This guide provides detailed workflows and a code map. Historical release notes are in [OPERATING_HISTORY.md](OPERATING_HISTORY.md). Update it when those facts change.
 
-**Updated September 28, 2026. Production: v0.30.5.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
+**Updated September 28, 2026. Production: v0.31.1.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans.
 
 ## Handoff state
 
@@ -12,10 +12,10 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Branch | `main` |
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
-| Working tree | All requested app/infrastructure work is committed through `dc963fa`; this handoff cleanup is documentation-only. Inspect status before editing. |
-| Production | `https://druggie.org`, v0.30.5, release `20260928012914741` |
-| Cloud dev | `https://dev.druggie.org`, release `20260928012818652`; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have native Log, migration metadata, global preferences and the latest UI corrections. Production has the imported history. |
+| Working tree | Requested implementation is committed through `34080f9`; this handoff update is documentation-only. Inspect status before editing. |
+| Production | `https://druggie.org`, v0.31.1, release `20260928131916109`, application checkpoint `4828935` |
+| Cloud dev | `https://dev.druggie.org`, release `20260928132842754`; local frontend at `http://localhost:7330/log` |
+| Stage parity | Production has the calendar/DM/CLI and operation additions. Dev additionally has the in-session app-update prompt from `34080f9`; it requires a new explicit production request. |
 | Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx verified active; both API health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
@@ -23,7 +23,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 
 **Log and scaling are already shipped.** The old checkpoint tags are historical recovery points, not the current base. Do not reset, clean, stash, or revert work casually. Deployment builds the working tree, not a Git commit.
 
-Recent completed work includes mode-aware URLs and browser history, bottom-pinned horizontal desktop dragging, the Chat search label, profile action menus with edge-aware positioning, inline profile name/username layout, matching username font sizes, DM jump-to-latest controls, header tap-to-top, and the compact secondary Agent footer. Earlier UI patches also removed an extra 4px inset on the draft post's author row.
+Recent completed work includes stale-while-refresh Log calendar tiles, grouped DMs with sparse time markers, structured CLI failures, `access.get`, `messages.window`, `automations.validate`, and an in-session app-update prompt on dev. Earlier UI/navigation corrections remain documented below and in history.
 
 This guide does not itself authorize another production deployment, restart of a local frontend, new social activity, or a new feature project.
 
