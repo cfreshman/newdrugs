@@ -11,6 +11,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     links.push({ rel: 'open_in_newdrugs', targetKind, title: title.slice(0, 160), url: new URL(destinationPath(destination), config.uiOrigin).href, resourceType, ...(resourceId ? { resourceId } : {}) });
   };
   if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){add({view:'agent_memory'},'Your agent','surface','agent_memory');return links;}
+  if(name==='access.get'){add({view:'agents'},'Connected agents','surface','agents');return links;}
   if(name==='account.preferences'||name==='account.preferences_update'){add({view:'preferences'},'Preferences','surface','preferences');return links;}
   if(name==='log.birthday_get'||name==='log.birthday_update'){add({view:'log_settings'},'Log settings','surface','log_settings');return links;}
   if(name==='log.birthdays'){for(const item of data.items||[])add({view:'person',resourceId:item.personId},item.name,'exact','person',item.personId);return links;}
@@ -26,7 +27,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     for(const post of data.recentPosts?.items||[])if(post.id)add({view:'post',resourceId:post.id},'View post','exact','post',post.id);
   }else if(name==='activity.since'){
     for(const item of rows)if(item.link)links.push(item.link);
-  }else if (name.startsWith('automations.')) { if (typeof input.automationId === 'string') add({ view: 'automations', resourceId: input.automationId }, 'Open automation', 'exact', 'automation', input.automationId); else for (const row of rows) if (row.id) add({ view: 'automations', resourceId: row.id }, 'Open automation', 'exact', 'automation', row.id); }
+  }else if (name.startsWith('automations.')) { if(name==='automations.validate')add({view:'automations'},'Automations','surface','automations');else if (typeof input.automationId === 'string') add({ view: 'automations', resourceId: input.automationId }, 'Open automation', 'exact', 'automation', input.automationId); else for (const row of rows) if (row.id) add({ view: 'automations', resourceId: row.id }, 'Open automation', 'exact', 'automation', row.id); }
   else if (name.startsWith('inbox.') && name !== 'inbox.delete') { for (const row of rows) if (row.id) add({ view: 'inbox', resourceId: row.id }, 'Open agent update', 'exact', 'inbox', row.id); }
   else if (['search.query','posts.search','search.similar','search.refine','search.explain'].includes(name)) {
     for (const match of Array.isArray(data.matches) ? data.matches : data.match ? [data.match] : []) {
@@ -48,9 +49,9 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     for (const row of name === 'connections.status' || name === 'connections.get' ? [object(data.connection)] : rows) if (typeof row.id === 'string') add({ view: 'messages', resourceId: row.id }, row.status === 'accepted' ? 'Open conversation' : 'View invitation', 'exact', row.status === 'accepted' ? 'conversation' : 'invitation', row.id);
     if (!links.length || name === 'connections.list') add({ view: 'messages' }, 'View invitations and conversations', 'surface', 'connections');
   } else if (name === 'notifications.list') return rows.map(row => row.link as ResourceLink).filter(Boolean);
-  else if (name.startsWith('messages.') && typeof (input.connectionId || data.connectionId) === 'string') {
-    const connectionId=String(input.connectionId || data.connectionId);
-    add({ view: 'messages', resourceId: connectionId }, 'Open conversation', name === 'messages.list' ? 'exact' : 'surface', 'conversation', connectionId);
+  else if (name.startsWith('messages.') && typeof (input.connectionId || data.connectionId || data.connection?.id) === 'string') {
+    const connectionId=String(input.connectionId || data.connectionId || data.connection.id);
+    add({ view: 'messages', resourceId: connectionId }, 'Open conversation', ['messages.list','messages.window'].includes(name) ? 'exact' : 'surface', 'conversation', connectionId);
   } else if (name === 'people.blocked' || name === 'people.block') add({ view: 'blocked' }, 'Manage blocked people', 'surface', 'blocked');
   else if(name==='storage.attachments'){for(const attachment of rows)if(attachment.destination)add(attachment.destination,attachment.label,'exact',attachment.destination.view,attachment.destination.resourceId);}
   else if (name === 'storage.list' || name === 'files.delete') {for(const row of rows)for(const attachment of row.attachments||[])if(attachment.destination)add(attachment.destination,attachment.label,'exact',attachment.destination.view,attachment.destination.resourceId);add({ view: 'storage' }, 'Manage storage', 'surface', 'storage');}

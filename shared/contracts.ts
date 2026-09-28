@@ -7,7 +7,7 @@ import {logOutputs} from './log';
 import {timeResolveOutput,timeConvertOutput,timeOverlapOutput} from './utilitySchemas';
 import {customDocumentSchema} from './customMedia';
 import { recordAttachmentSchema } from './recordContext';
-import { automationSchema } from './automations';
+import { automationSchema,automationValidationSchema } from './automations';
 import { inboxItemSchema } from './inbox';
 import { z } from 'zod';
 
@@ -29,7 +29,9 @@ const searchRetrieval = z.object({id,mode:z.enum(['hybrid','semantic','keyword',
 const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetrieval,nextCursor:z.string().nullable()});
 export const outputs: Record<string, z.ZodType> = {
   ...logOutputs,
+  'access.get':z.object({source:z.enum(['browser','external','agent']),scope:z.enum(['read','write']),background:z.boolean(),credential:z.object({name:z.string(),createdAt:z.string().optional(),expiresAt:z.string().nullable()}).optional(),grants:z.object({logAccess:z.boolean(),privateChat:z.boolean(),accountActivity:z.boolean(),webSearch:z.boolean()}).optional(),operations:z.object({read:z.array(z.string()),write:z.array(z.string()),confirmationRequired:z.array(z.string())})}),
   'account.preferences':accountPreferencesSchema,'account.preferences_update':accountPreferencesSchema,
+  'automations.validate':automationValidationSchema,
   'automations.create': automationSchema, 'automations.get': automationSchema, 'automations.update': automationSchema, 'automations.enable': automationSchema, 'automations.pause': automationSchema, 'automations.delete': automationSchema,
   'automations.list': z.object({ items: z.array(automationSchema) }), 'automations.run_now': z.object({ runId: id }),
   'automations.runs': page(z.object({ id, status: z.string(), outcome: z.string().optional(), createdAt: z.string(), costNanos: z.number(), usagePending: z.boolean(), reason: z.string().optional(), inboxId: z.string().optional(), sleep: z.object({ until: z.number(), reason: z.string() }).optional() })),
@@ -63,7 +65,7 @@ export const outputs: Record<string, z.ZodType> = {
   'connections.list': page(connection).extend({ people: z.array(profileOutput) }),
   'connections.status': z.object({ connection: connection.nullable() }),
   'connections.get': z.object({ connection, people: z.array(profileOutput) }),
-  'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.list': page(message), 'messages.send': message,
+  'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.window':z.object({items:z.array(message),targetId:id,connection,people:z.array(profileOutput),olderCursor:id.nullable(),newerCursor:id.nullable()}), 'messages.list': page(message), 'messages.send': message,
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
   'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),

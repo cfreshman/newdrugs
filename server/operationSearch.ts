@@ -1,4 +1,4 @@
-import { backgroundCanRead } from './backgroundAuthority';
+import { operationAvailable } from './backgroundAuthority';
 import OpenAI from 'openai';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -60,7 +60,7 @@ export function operationSearchText(op:{name:string;kind:string;description:stri
 }
 export async function searchOperations(raw: unknown, actor: Actor) {
   const input = searchSchema.parse(raw);
-  const available = operations.filter(o => backgroundCanRead(actor, o.name) && (actor.source === 'browser' || o.name !== 'profile.update') && (actor.source !== 'agent' || o.agent) && (actor.scope === 'write' || o.kind === 'read'));
+  const available = operations.filter(o => operationAvailable(actor,o));
   const documents = available.map(operationSearchText);
   const identity = hash(JSON.stringify([input.query, input.mode, documents]));
   let offset = 0; let forcedKeyword = false; let requireSemantic=false;

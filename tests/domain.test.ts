@@ -223,6 +223,20 @@ describe('human profile photos and real areas', () => {
 });
 
 describe('manual social flow shared with agents', () => {
+  it('reads a stable context window around one authorized human message',async()=>{
+    const sender=await person(),recipient=await person(),outsider=await person();
+    await users().updateOne({_id:recipient.userId},{$set:{discoverable:true,name:'Recipient'}});
+    const invitation=await executeOperation('connections.request',{personId:recipient.userId,note:'Hello'},sender,randomUUID(),{confirmed:true}) as {id:string};
+    await executeOperation('connections.respond',{connectionId:invitation.id,accept:true},recipient,randomUUID(),{confirmed:true});
+    const messages=Array.from({length:45},(_,index)=>({_id:(index+1).toString(16).padStart(24,'0'),connectionId:invitation.id,fromId:index%2?recipient.userId:sender.userId,text:`Message ${index+1}`,createdAt:new Date(1_700_000_000_000+index).toISOString()}));
+    await rows('directMessages').insertMany(messages);
+    const window=await executeOperation('messages.window',{messageId:messages[22]._id},sender) as any;
+    expect(window.items).toHaveLength(41);expect(window.items[20]).toMatchObject({id:messages[22]._id,text:'Message 23'});
+    expect(window.items.map((message:any)=>message.id)).toEqual(messages.slice(2,43).map(message=>message._id));
+    expect(window).toMatchObject({targetId:messages[22]._id,olderCursor:messages[2]._id,newerCursor:messages[42]._id,connection:{id:invitation.id,status:'accepted'}});
+    expect(window.people).toHaveLength(2);
+    await expect(executeOperation('messages.window',{messageId:messages[22]._id},outsider)).rejects.toThrow();
+  });
   it('reviews invitations, sends requested DMs without review, and keeps unread state and blocks authoritative', async () => {
     const sender = await person(), recipient = await person(), stranger = await person();
     await users().updateOne({ _id: recipient.userId }, { $set: { discoverable: true, name: 'Recipient' } });

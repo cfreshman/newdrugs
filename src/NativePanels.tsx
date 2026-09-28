@@ -1,7 +1,7 @@
 import {LocationLabel} from './LocationLabel';
 import { DotsThree } from '@phosphor-icons/react';
 import { ContentReport } from './PeopleSafety';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { Fragment,useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { Profile } from '../shared/types';
 import type { CoarseArea } from '../shared/geo';
 import type { Destination } from '../shared/navigation';
@@ -17,6 +17,7 @@ import { useMessagePlacement } from './useMessagePlacement';
 import { CollapsibleMessage } from './CollapsibleMessage';
 import { useRecordRefresh } from './useRecordRefresh';
 import { captureHistoryAnchor, restoreHistoryAnchor, OlderMessages, useTopPagination } from './ChatHistory';
+import {directMessageLayout,directMessageTimeLabel} from './directMessageGrouping';
 
 interface Page<T> { items: T[]; nextCursor: string | null }
 interface Connection { initialInvitation?:{fromId:string;note:string;createdAt:string}; disconnectedBy?:string; createdAt: string; id: string; members: string[]; fromId: string; toId: string; note: string; status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'disconnected'; unread?: boolean; lastMessage?: { text: string; fromId: string; createdAt: string } }
@@ -166,6 +167,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     })}</div>{inbox && !inbox.items.length && <><p className="quiet">No invitations or conversations yet.</p><button className="text-link" onClick={() => navigate({ view: 'people' })}>Find people nearby</button></>}
     {inbox?.nextCursor && <button className="text-link" onClick={() => void moreConnections()}>More conversations</button>}{error && <p className="error" role="alert">{error}</p>}</>;
   const other = current?.people.find(person => person.id !== userId);
+  const chronologicalMessages=messages?[...messages.items].reverse():[],messageLayout=directMessageLayout(chronologicalMessages);
   return <div className={messages ? 'message-view' : undefined}>{other && <div className="message-view-actions"><button className="text-link" disabled={other.discoverable===false&&!['accepted','pending'].includes(current!.connection.status)&&!(current!.connection.status==='declined'&&current!.connection.toId===userId)} onClick={() => navigate({ view: 'person', resourceId: other.id })}>{other.handle ? `@${other.handle}` : other.name}</button>{messages && current?.connection.status==='accepted' && <a className="video-link" href="https://pair.video" target="_blank" rel="noopener noreferrer" title="Create a call, then share its link in this conversation"><VideoCamera size={19} />Video call</a>}{messages&&<details className="conversation-menu"><summary aria-label="Conversation actions"><DotsThree size={23}/></summary><div><button type="button" onClick={event=>{setChoosingReport(true);setReporting(null);event.currentTarget.closest('details')?.removeAttribute('open');}}>Report a message</button></div></details>}</div>}
     {current && ['pending','declined','withdrawn'].includes(current.connection.status) && <p>{current.connection.note}</p>}
     {current?.connection.status === 'pending' && <>{current.connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(current.connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(current.connection, true)}>Accept invitation</button></div> : <><p className="quiet">Invitation sent. Messages open when they accept.</p><button className="text-link" disabled={busy} onClick={() => void withdraw(current.connection)}>Withdraw invitation</button></>}</>}
@@ -176,10 +178,11 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
         <small className="invitation-meta">Invitation · <time dateTime={current.connection.initialInvitation?.createdAt || current.connection.createdAt}>{new Date(current.connection.initialInvitation?.createdAt || current.connection.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</time></small>
         <div className="bubble"><CollapsibleMessage text={current.connection.initialInvitation?.note || current.connection.note} assistant={false} social scrollRef={scroller} /></div>
       </article>}
-      {[...messages.items].reverse().map(message=>{
+      {chronologicalMessages.map((message,index)=>{
         const selectable=choosingReport&&message.fromId!==userId;
         const select=()=>{setReporting(message.id);setChoosingReport(false);};
-        return <article className={`message ${message.fromId===userId?'user':'peer'}`} key={message.clientId||message.id} data-message-id={message.clientId?`pending:${message.clientId}`:message.id}>
+        const layout=messageLayout[index];
+        return <Fragment key={message.clientId||message.id}>{layout.showTime&&<time className="message-time-separator" dateTime={message.createdAt}>{directMessageTimeLabel(message.createdAt)}</time>}<article className={`message ${message.fromId===userId?'user':'peer'} ${layout.groupWithPrevious?'dm-group-with-previous':''} ${layout.groupWithNext?'dm-group-with-next':''}`} data-message-id={message.clientId?`pending:${message.clientId}`:message.id} title={new Date(message.createdAt).toLocaleString()}>
           <div className={`bubble ${selectable?'report-target':''}`} role={selectable?'button':undefined} tabIndex={selectable?0:undefined} aria-label={selectable?`Report message: ${message.text}`:undefined}
             onClickCapture={selectable?event=>{event.preventDefault();event.stopPropagation();select();}:undefined}
             onKeyDownCapture={selectable?event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();select();}}:undefined}>
@@ -187,7 +190,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
           </div>
           {reporting===message.id&&<ContentReport personId={message.fromId} messageId={message.id} close={()=>setReporting(null)}/>}
           {message.failed&&<button className="retry-message" disabled={busy} onClick={()=>void send(undefined,message)}>Not sent · retry</button>}
-        </article>;
+        </article></Fragment>;
       })}</div>
     </div>{awayFromBottom&&<button className="latest-chat latest-dm" type="button" aria-label="Latest messages" title="Latest messages" onClick={followLatest}><ArrowDown size={22} weight="bold"/></button>}</div>{current?.connection.status==='accepted'&&<form className="message-compose" ref={composer} onSubmit={send}><label className="sr-only" htmlFor="direct-message">Message</label><textarea id="direct-message" ref={input} value={text} maxLength={2000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(event); } }} /><button className="solid" aria-label="Send direct message" disabled={busy || !text.trim()}><ArrowUp size={20} weight="bold" /></button></form>}</>}{error && <p className="error" role="alert">{error}</p>}</div>;
 }

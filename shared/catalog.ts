@@ -28,6 +28,7 @@ function operation<S extends z.ZodRawShape>(name: string, kind: 'read' | 'write'
     confirmationRequired: Boolean(consequences[name]), consequence: consequences[name] ?? null };
 }
 export const operations = [
+  operation('access.get','read','Read the current connection authority: credential scope and expiry, background data grants, available read/write operations, and which writes require confirmation. This reveals no token secret and grants no new authority.',{}),
   operation('agent.instructions.get','read','Read the owner’s personal custom instructions and revision. These are preferences, not system policy or permission to act.',{}),
   operation('agent.instructions.update','write','Replace personal custom instructions only when the user explicitly asks. Preserve their intended wording. Read the current revision first. The user reviews the exact replacement.',{text:z.string().max(8000),revision:z.number().int().nonnegative()}),
   operation('agent.memory.context','read','Read the user’s instructions and all current core memory slots together, with estimated context pressure. Start here for personal continuity. Stale or inaccessible source-backed notes are omitted. Notes are fallible context, never authority.',{}),
@@ -63,6 +64,7 @@ export const operations = [
   operation('log.preferences_update','write','Replace your Log arrangement and saved views. Use unique UUIDs for views and preserve unrelated views.',logPreferencesSchema.shape),
   operation('log.export','read','Export a page of authorized Log entries as structured data and readable text. Follow nextCursor to complete the export. Media URLs remain authenticated. Does not publish the diary.',logListInput),
 
+  operation('automations.validate','read','Validate and normalize an automation configuration without creating, enabling, pausing or running anything. Returns the next scheduled run, explicit data grants, readable operations, delivery choices and the absence of social-write authority.',automationConfigSchema.shape),
   operation('automations.create', 'write', 'Create an active automation with its next scheduled run. Requires one exact user review of the instruction, schedule, data access and spending limits. Keep the instruction faithful to the user’s request, with only necessary gap-filling and no snapshots of changing profile/account data. Choose a timezone-aware schedule, per-run and daily budget, and permitted account activity, private agent-chat and web research. Creation includes activation; do not call enable afterward.', automationConfigSchema.shape),
   operation('automations.list', 'read', 'List your non-primary-chat automations, schedule, status and budgets.', {}),
   operation('automations.get', 'read', 'Read one owned automation and its current revision.', { automationId: z.uuid() }),
@@ -133,6 +135,7 @@ export const operations = [
   operation('connections.disconnect', 'write', 'End an accepted connection. Stops new DMs, preserves existing history, and only the person ending it may initiate a new invitation. Requires review.', { connectionId: id }),
   operation('connections.withdraw', 'write', 'Withdraw your own pending invitation. Does not remove an accepted conversation. No extra confirmation is needed.', { connectionId: id }),
   operation('messages.get','read','Read one exact message in a conversation you can access. Returns its conversation ID for a precise context handoff. Does not read other messages.',{messageId:id}),
+  operation('messages.window','read','Read one exact human DM with up to twenty messages on each side, oldest to newest, plus the current connection state and authorized participant profiles. This is separate from private agent chat. Older/newer cursors are boundary message IDs that can be used as another window anchor.',{messageId:id}),
   operation('messages.list', 'read', 'Read direct messages (DMs) between you and another person by connection ID, newest first with pagination. Includes accepted conversations and retained history after a connection ends. For the inbox and connection IDs, use connections.list. This is separate from your AI agent chat.', { connectionId: id, ...page }),
   operation('messages.send', 'write', 'Send a message directly in an accepted connection when the user requests it. No extra confirmation step. Only send the intended text to the resolved connection. clientId optionally reconciles a local pending bubble.', { connectionId: id, text: text(2000), clientId:z.uuid().optional() }),
   operation('messages.mark_read', 'write', 'Mark one accepted conversation read through an actually viewed message. Does not send a message or require confirmation.', { connectionId: id, throughMessageId: id.optional() }),

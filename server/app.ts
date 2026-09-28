@@ -13,7 +13,7 @@ import {EMBED_ORIGINS} from '../shared/postLinks';
 import { recordReferenceSchema } from '../shared/recordContext';
 import { revokeAutomationCredential } from './automations';
 import { clearAgentChat, changeUsername, changeAccountPassword, verifyAccountPassword } from './account';
-import { backgroundCanRead } from './backgroundAuthority';
+import { operationAvailable } from './backgroundAuthority';
 import { adminCliRouter } from './adminCli';
 import { pushConfigured, pushDevices, saveSubscription, revokePush, subscriptionSchema } from './push';
 import express, { type ErrorRequestHandler } from 'express';
@@ -185,7 +185,7 @@ export function createApp() {
   app.post('/api/account/logout', async (req, res) => { browserActor(req); await logout(req, res); res.json({ ok: true }); });
   app.get('/api/catalog', (req, res) => {
     const actor = requireActor(req);
-    res.json({ operations: operations.filter(o => backgroundCanRead(actor, o.name) && (actor.source === 'browser' || o.name !== 'profile.update') && (actor.scope === 'write' || o.kind === 'read')).map(o => describeOperation(o.name)) });
+    res.json({ operations: operations.filter(o => operationAvailable(actor,o)).map(o => describeOperation(o.name)) });
   });
   app.post('/api/catalog/search', async (req, res) => { res.json(await searchOperations(searchSchema.parse(req.body), requireActor(req))); });
   app.post('/api/operations/:name', async (req, res) => {

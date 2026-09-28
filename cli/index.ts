@@ -11,6 +11,7 @@ import { ConfigStore, operatorStore, validUrl, profileName, type Login } from '.
 import { maybeAutoUpdate, uninstall } from './lifecycle';
 import { downloadFile } from './download';
 import { uploadLocalFile } from './upload';
+import { CliRequestError,cliFailure,requestError } from './errors';
 
 interface Operation { name: string; kind: 'read' | 'write'; description: string; inputSchema: Record<string, unknown> }
 const rawArgs = process.argv.slice(2);
@@ -25,8 +26,9 @@ async function request<T>(login: Login, path: string, body?: unknown, idempotenc
   const response = await fetch(`${login.url}/api${path}`, { method: body === undefined ? 'GET' : 'POST', redirect: 'error',
     signal: AbortSignal.timeout(60000), headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}), ...(confirmed ? { 'X-NewDrugs-Confirmed': 'true' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body) });
-  const result = await response.json() as { error?: { message?: string } };
-  if (!response.ok) throw new Error(result.error?.message || `Request failed (${response.status}).`);
+  let result:unknown;
+  try{result=await response.json();}catch{if(!response.ok)throw new CliRequestError('request_failed',`Request failed (${response.status}).`,response.status);throw new Error('The server returned an invalid response.');}
+  if (!response.ok) throw requestError(response.status,result);
   return result as T;
 }
 async function catalog(login: Login) { return (await request<{ operations: Operation[] }>(login, '/catalog')).operations; }
@@ -64,7 +66,7 @@ async function main() {
   if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
     return;
   }
   if (command === 'admin') {
@@ -138,4 +140,4 @@ async function main() {
   }
   throw new Error('Use read for reads and execute for writes.');
 }
-main().catch(error => { console.error(error instanceof Error ? error.message : 'Command failed.'); process.exitCode = 1; });
+main().catch(error => { const failure=cliFailure(error);process.stderr.write(`${JSON.stringify(failure)}\n`);process.exitCode=failure.exitCode; });

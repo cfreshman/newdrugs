@@ -43,6 +43,23 @@ it('refreshes only affected cached date windows, keeping unrelated history and b
  await act(async()=>{window.dispatchEvent(new CustomEvent('newdrugs:records',{detail:{keys:['log'],log:[{id:'changed',date,deleted:true}]}}));await new Promise(resolve=>setTimeout(resolve,100));});
  expect(dom.container.querySelector('.log-day-mosaic')).toBeNull();
 });
+it('keeps cached hangouts painted while a hidden calendar refreshes on return',async()=>{
+ const date=Temporal.Now.plainDateISO().toString(),entry={id:'changed',date,title:'Original',createdAt:'2026-01-01T00:00:00Z'};
+ let refreshing=false;const pending:{input:any;resolve:(page:any)=>void}[]=[];
+ api.operation.mockImplementation((name,input)=>{
+  if(name!=='log.calendar')return Promise.resolve({items:[],nextCursor:null});
+  if(!refreshing)return Promise.resolve(calendarPage(input,[entry]));
+  return new Promise(resolve=>pending.push({input,resolve}));
+ });
+ const render=(visible:boolean)=>dom.root.render(createElement('div',{className:'composer-view'},createElement(PanelVisibilityContext.Provider,{value:visible},createElement(LogCalendar,props))));
+ await act(async()=>render(true));const day=dom.container.querySelector<HTMLButtonElement>('.log-day[aria-label$="Original"]')!;expect(day).toBeTruthy();
+ await act(async()=>render(false));refreshing=true;
+ await act(async()=>{window.dispatchEvent(new CustomEvent('newdrugs:records',{detail:{keys:['log']}}));await new Promise(resolve=>setTimeout(resolve,100));});
+ await act(async()=>{render(true);await new Promise(resolve=>setTimeout(resolve,100));});
+ expect(pending.length).toBeGreaterThan(0);expect(day.isConnected).toBe(true);expect(dom.container.querySelector('.log-day[aria-label$="Original"]')).toBe(day);
+ await act(async()=>{for(const request of pending.splice(0))request.resolve(calendarPage(request.input,[{...entry,title:'Updated'}]));await Promise.resolve();});
+ expect(dom.container.querySelector('.log-day[aria-label$="Updated"]')).toBe(day);
+});
 it('opens the multi-event chooser immediately from tiles while detail records load',async()=>{
  const date=Temporal.Now.plainDateISO().toString(),previews=[{id:'one',date,title:'First',createdAt:''},{id:'two',date,title:'Second',createdAt:''}];let finish!:(page:any)=>void;
  api.operation.mockImplementation(async(name,input)=>name==='log.calendar'?calendarPage(input,previews):name==='log.list'?new Promise(resolve=>{finish=resolve;}):{items:[]});await mount();

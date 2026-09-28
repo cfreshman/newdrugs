@@ -1,4 +1,4 @@
-import { backgroundCanRead } from './backgroundAuthority';
+import { operationAvailable } from './backgroundAuthority';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -46,7 +46,7 @@ const descriptions: Record<keyof typeof schemas, string> = {
   newdrugs_read: 'Read an authorized operation from the catalog. Does not change records.',
   newdrugs_execute: 'Execute one write. confirmed is the external host attestation of exact human authorization, never the model approving itself. Reuse the exact idempotency key for retries.',
 };
-const visible = (actor: Actor) => operations.filter(o => backgroundCanRead(actor, o.name) && o.name !== 'profile.update' && (actor.source !== 'agent' || o.agent) && (actor.scope === 'write' || o.kind === 'read'));
+const visible = (actor: Actor) => operations.filter(o => operationAvailable(actor,o));
 export function createMcpServer(actor: Actor, authority: ExecutionProof = {}) {
   const server = new Server({ name: 'new-drugs', version: release.version }, { capabilities: { tools: {}, resources: {} }, instructions: MCP_INSTRUCTIONS });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: Object.entries(schemas).filter(([name]) => (actor.scope === 'write' && actor.source !== 'agent') || !name.includes('execute')).map(([name, schema]) => ({ name,

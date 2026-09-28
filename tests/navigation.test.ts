@@ -22,7 +22,13 @@ it('does not fabricate inspectable links for deleted posts, unready files or unf
   expect(buildResourceLinks('posts.delete', { postId: 'gone' }, { id: 'gone', deleted: true }, actor)).toEqual([]);
   expect(buildResourceLinks('files.get', {}, { id: 'file', ready: false }, actor)).toEqual([]);
   expect(buildResourceLinks('messages.get', { messageId: 'message' }, { id: 'message', connectionId: 'connection' }, actor)[0]).toMatchObject({ targetKind: 'surface', resourceType: 'conversation', resourceId: 'connection' });
+  expect(buildResourceLinks('messages.window', { messageId: 'message' }, { targetId:'message',connection:{id:'connection'} }, actor)[0]).toMatchObject({ targetKind: 'exact', resourceType: 'conversation', resourceId: 'connection' });
   expect(buildResourceLinks('messages.send', { connectionId: 'connection' }, { id: 'message' }, actor)[0]).toMatchObject({ targetKind: 'surface', resourceId: 'connection' });
+});
+
+it('links authority and automation validation to their existing settings surfaces',()=>{
+ expect(buildResourceLinks('access.get',{}, {},actor)[0]).toMatchObject({targetKind:'surface',resourceType:'agents'});
+ expect(buildResourceLinks('automations.validate',{}, {},actor)[0]).toMatchObject({targetKind:'surface',resourceType:'automations'});
 });
 
 it('takes a guest identity to account creation instead of a blank public profile', () => {

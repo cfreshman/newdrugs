@@ -21,6 +21,12 @@ export async function automationAuthorized(run: { userId: string; automationId?:
   if (row.credentialId && !await rows('tokens').findOne({ _id: row.credentialId, userId: run.userId, scope: 'write', revokedAt: null, $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] }, { session })) return false;
   return true;
 }
+export function validateAutomationConfiguration(data:unknown) {
+  const configuration=automationConfigSchema.parse(data),nextRunAt=nextAutomationTime(configuration.schedule);
+  if(!nextRunAt)throw new AppError(422,'schedule','Choose a future time before creating this automation.');
+  if(configuration.dailyBudgetNanos<configuration.maxRunNanos)throw new AppError(422,'budget','Daily allowance must cover one run.');
+  return {configuration,nextRunAt:new Date(nextRunAt).toISOString(),dataAccess:{logAccess:configuration.logAccess,privateChat:configuration.privateChat,accountActivity:configuration.accountActivity,webSearch:configuration.webSearch}};
+}
 export async function admitAutomation(row: AutomationRow, occurrence: string, session: ClientSession) {
   const runId = `automation:${row._id}:${hash(occurrence).slice(0, 24)}`;
   const prior = await runs().findOne({ _id: runId, userId: row.userId }, { session }); if (prior) return prior._id;
@@ -43,9 +49,7 @@ export async function automationOperation(name: string, data: Record<string, unk
   const userId = actor.userId;
   if (name === 'automations.list') return { items: (await automations().find({ userId, status: { $ne: 'deleted' } }, { session }).sort({ createdAt: -1 }).limit(50).toArray()).map(viewAutomation) };
   if (name === 'automations.create') {
-    const input = automationConfigSchema.parse(data),nextRunAt=nextAutomationTime(input.schedule);
-    if(!nextRunAt)throw new AppError(422,'schedule','Choose a future time before creating this automation.');
-    if (input.dailyBudgetNanos < input.maxRunNanos) throw new AppError(422, 'budget', 'Daily allowance must cover one run.');
+    const {configuration:input,nextRunAt:nextRun}=validateAutomationConfiguration(data),nextRunAt=Date.parse(nextRun);
     await users().updateOne({ _id: userId }, { $inc: { automationRevision: 1 } }, { session });
     if (await automations().countDocuments({ userId, status: { $ne: 'deleted' } }, { session }) >= 20) throw new AppError(409, 'automation_limit', 'Pause or remove old automations before adding more.');
     const row: AutomationRow = { _id: randomUUID(), userId, ...input, revision: 1, generation: 1, status: 'active', nextRunAt, createdAt: new Date().toISOString(), ...(actor.source === 'external' ? { credentialId: actor.credentialId } : {}) };

@@ -17,9 +17,9 @@ import {normalizedPostLinks} from '../shared/postLinks';
 import { setCollection, collectionPage, postAudience } from './socialCollections';
 import { profileVisibleTo } from './profileVisibility';
 import legacyOperationRevisions from '../shared/legacyOperationRevisions.json';
-import { automationOperation, ownAutomation } from './automations';
+import { automationOperation, ownAutomation,validateAutomationConfiguration } from './automations';
 import { wakeRun } from './sleep';
-import { backgroundCanRead, assertBackgroundAuthority } from './backgroundAuthority';
+import { backgroundCanRead, assertBackgroundAuthority,operationAvailable } from './backgroundAuthority';
 import { inboxOperation, validateInboxLinks, ownInbox } from './inbox';
 import { enqueueChatSearch, searchChat } from './search/chat';
 import { enqueuePush, pushDevices, revokePush } from './push';
@@ -46,6 +46,7 @@ import { searchPublic, similarPublic, refinePublic, explainPublic, searchStatus,
 const nextId = () => new ObjectId().toHexString();
 const pairId = (a: string, b: string) => [a, b].sort().join(':');
 const publicRow = (r: Row) => { const { _id, ...rest } = r; return { id: _id, ...rest }; };
+const directMessage = (row:Row) => publicRow(row.moderatedAt?{...row,text:'Message removed by moderation.'}:row);
 async function blockedIds(userId: string, session?: ClientSession) {
   const blocks = await rows('blocks').find({ members: userId }, { session }).limit(1001).toArray();
   if (blocks.length > 1000) throw new AppError(422, 'block_limit', 'Please contact support about your block list.');
@@ -94,6 +95,11 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   if (/^(people\.|posts\.|connections\.|messages\.|notifications\.|storage\.|search\.|links\.)/.test(name)) registered(user);
   if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){registered(user);return memoryOperation(name,d,actor,session);}
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
+  if(name==='automations.validate'){
+    registered(user);const validated=validateAutomationConfiguration(d),authority:Actor={userId,source:'agent',scope:'read',background:true,...validated.dataAccess};
+    const readableOperations=operations.filter(operation=>operation.kind==='read'&&operationAvailable(authority,operation)).map(operation=>operation.name).sort();
+    return {...validated,readableOperations,socialWrites:false,delivery:['agent_inbox','silent'],notice:'Validation does not create or authorize a run. Creation and execution recheck the schedule, budget, credential and current source permissions.'};
+  }
   if (name.startsWith('automations.')) { registered(user); return automationOperation(name, d, actor, session); }
   if (name === 'runs.wake') return wakeRun(actor.userId, String(d.runId), true, session);
   if (name === 'runs.cancel') return (await import('./agent')).cancelRun(actor.userId, String(d.runId), session);
@@ -103,6 +109,12 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   const pageFilter = d.before ? { _id: { $lt: String(d.before) } } : {};
   const paginate = <T extends { _id: string }>(items: T[]) => ({ items: items.slice(0, limit).map(publicRow), nextCursor: items.length > limit ? items[limit - 1]._id : null });
   switch (name) {
+    case 'access.get': {
+      const available=operations.filter(operation=>operationAvailable(actor,operation)),writes=available.filter(operation=>operation.kind==='write');
+      const credential=actor.source==='external'&&actor.credentialId?requireValue(await rows('tokens').findOne({_id:actor.credentialId,userId,revokedAt:null,$or:[{expiresAt:null},{expiresAt:{$gt:new Date()}}]},options),'This connected agent is unavailable.'):null;
+      const date=(value:unknown)=>value instanceof Date?value.toISOString():typeof value==='string'?value:undefined;
+      return {source:actor.source,scope:actor.scope,background:Boolean(actor.background),...(credential?{credential:{name:String(credential.name||'My AI agent'),...(date(credential.createdAt)?{createdAt:date(credential.createdAt)}:{}),expiresAt:date(credential.expiresAt)||null}}:{}),...(actor.source==='agent'?{grants:{logAccess:Boolean(actor.logAccess),privateChat:Boolean(actor.privateChat),accountActivity:Boolean(actor.accountActivity),webSearch:Boolean(actor.webSearch)}}:{}),operations:{read:available.filter(operation=>operation.kind==='read').map(operation=>operation.name).sort(),write:writes.map(operation=>operation.name).sort(),confirmationRequired:writes.filter(operation=>operation.confirmationRequired).map(operation=>operation.name).sort()}};
+    }
     case 'time.resolve': return resolveTime(d as unknown as TimeResolveInput);
     case 'time.convert': return convertTime(d as unknown as TimeConvertInput);
     case 'time.overlap': return overlapTimes(d as unknown as TimeOverlapInput);
@@ -384,7 +396,17 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       return publicRow(result);
     }
     case 'messages.get': {
-      const message=requireValue(await rows('directMessages').findOne({_id:String(d.messageId)},options));await connectionFor(userId,String(message.connectionId),session,true);return publicRow(message.moderatedAt?{...message,text:'Message removed by moderation.'}:message);
+      const message=requireValue(await rows('directMessages').findOne({_id:String(d.messageId)},options));await connectionFor(userId,String(message.connectionId),session,true);return directMessage(message);
+    }
+    case 'messages.window': {
+      const target=requireValue(await rows('directMessages').findOne({_id:String(d.messageId)},options),'This message is unavailable.');
+      await connectionFor(userId,String(target.connectionId),session,true);
+      const [older,newer,context]=await Promise.all([
+        rows('directMessages').find({connectionId:target.connectionId,_id:{$lt:target._id}},options).sort({_id:-1}).limit(21).toArray(),
+        rows('directMessages').find({connectionId:target.connectionId,_id:{$gt:target._id}},options).sort({_id:1}).limit(21).toArray(),
+        run('connections.get',{connectionId:target.connectionId},actor,session) as Promise<{connection:Record<string,unknown>;people:Profile[]}>,
+      ]),olderPage=older.slice(0,20),newerPage=newer.slice(0,20);
+      return {items:[...olderPage.reverse(),target,...newerPage].map(directMessage),targetId:target._id,connection:context.connection,people:context.people,olderCursor:older.length>20?olderPage[0]._id:null,newerCursor:newer.length>20?newerPage.at(-1)!._id:null};
     }
     case 'messages.list': {
       await connectionFor(userId, String(d.connectionId), session, true);

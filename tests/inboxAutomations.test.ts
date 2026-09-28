@@ -54,6 +54,24 @@ it('creates one active scheduled automation after review, with no separate enabl
  await rows('tokens').updateOne({_id:me.credentialId},{$set:{revokedAt:'now'}});
  expect(await automationAuthorized({userId:me.userId,automationId:created.id,automationGeneration:1})).toBe(false);
 });
+it('validates automation schedules and data authority without saving or running anything',async()=>{
+ const me=await actor(),basic=await executeOperation('automations.validate',definition,me) as any;
+ expect(basic).toMatchObject({configuration:{...definition,logAccess:false,accountActivity:false},dataAccess:{logAccess:false,privateChat:false,accountActivity:false,webSearch:false},socialWrites:false,delivery:['agent_inbox','silent']});
+ expect(Date.parse(basic.nextRunAt)).toBeGreaterThan(Date.now());expect(basic.readableOperations).toContain('posts.list');expect(basic.readableOperations).not.toContain('messages.window');expect(basic.readableOperations).not.toContain('log.get');expect(basic.readableOperations).not.toContain('conversation.window');expect(basic.readableOperations).not.toContain('links.preview');
+ const expanded=await executeOperation('automations.validate',{...definition,logAccess:true,privateChat:true,accountActivity:true,webSearch:true},me) as any;
+ for(const operation of ['messages.window','log.get','conversation.window','links.preview'])expect(expanded.readableOperations).toContain(operation);
+ expect(await automations().countDocuments({userId:me.userId})).toBe(0);expect(await runs().countDocuments({userId:me.userId})).toBe(0);
+ await expect(executeOperation('automations.validate',{...definition,schedule:{kind:'once',at:'2020-01-01T00:00:00.000Z'}},me)).rejects.toMatchObject({code:'schedule'});
+ await expect(executeOperation('automations.validate',{...definition,maxRunNanos:200000000,dailyBudgetNanos:100000000},me)).rejects.toMatchObject({code:'budget'});
+});
+it('reports the current credential authority without exposing its secret',async()=>{
+ const me=await actor(),access=await executeOperation('access.get',{},me) as any;
+ expect(access).toMatchObject({source:'external',scope:'write',background:false,credential:{name:'My connected agent',expiresAt:null}});
+ expect(access.credential).not.toHaveProperty('id');expect(JSON.stringify(access)).not.toContain('hash');
+ expect(access.operations.read).toContain('access.get');expect(access.operations.write).toContain('messages.send');expect(access.operations.write).not.toContain('profile.update');expect(access.operations.confirmationRequired).toContain('posts.create');expect(access.operations.confirmationRequired).not.toContain('messages.send');
+ await rows('tokens').updateOne({_id:me.credentialId},{$set:{scope:'read'}});const readOnly=await executeOperation('access.get',{}, {...me,scope:'read'}) as any;expect(readOnly.operations.write).toEqual([]);
+ const browser=await executeOperation('access.get',{}, {userId:me.userId,source:'browser',scope:'write'}) as any;expect(browser.credential).toBeUndefined();expect(browser.operations.write).toContain('profile.update');
+});
 it('rejects an expired one-time schedule instead of creating an unscheduled active task',async()=>{
  const me=await actor();await expect(executeOperation('automations.create',{...definition,schedule:{kind:'once',at:'2020-01-01T00:00:00.000Z'}},me,randomUUID(),{confirmed:true})).rejects.toMatchObject({code:'schedule'});
  expect(await automations().countDocuments({userId:me.userId})).toBe(0);

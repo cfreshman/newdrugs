@@ -6,7 +6,17 @@ export const scheduleSchema = z.discriminatedUnion('kind', [
 ]);
 export const automationConfigSchema = z.strictObject({ name: z.string().trim().min(1).max(80), instruction: z.string().trim().min(1).max(6000).describe('Preserve the user’s original request and explicit constraints. Add only necessary missing direction. Do not embed snapshots of profile tags, interests, location, relationships or activity; direct the agent to read current permitted data each run. Keep explicitly requested fixed criteria. Avoid invented strategies and duplicated base rules.'), schedule: scheduleSchema, maxRunNanos: z.number().int().min(10000000).max(500000000).default(50000000).describe('Maximum charge for one run in USD nanodollars: 1 dollar = 1,000,000,000. Default is $0.05.'), dailyBudgetNanos: z.number().int().min(10000000).max(1000000000).default(200000000).describe('Daily allocation allowance in USD nanodollars, reset at midnight UTC. All automations also share a $1/day account ceiling.'), logAccess: z.boolean().default(false).describe('Allow reading private and explicitly shared Log diary entries. Separate from social account activity and agent chat. Never grants diary write permission.'), privateChat: z.boolean().default(false), accountActivity: z.boolean().default(false).describe('Allow reading your own social account activity: connections, invitations, DMs, notifications and action history. Private agent chat is controlled separately. No posting or messaging permission.'), webSearch: z.boolean().default(false) });
 export const automationSchema = automationConfigSchema.extend({ id: z.string(), revision: z.number(), status: z.enum(['paused', 'active', 'deleted']), nextRunAt: z.string().nullable(), createdAt: z.string(), blockedReason: z.string().optional(), blockedCode: z.string().optional(), retryAt: z.string().optional() });
+export const automationValidationSchema = z.object({
+  configuration: automationConfigSchema,
+  nextRunAt: z.string(),
+  dataAccess: z.object({logAccess:z.boolean(),privateChat:z.boolean(),accountActivity:z.boolean(),webSearch:z.boolean()}),
+  readableOperations: z.array(z.string()),
+  socialWrites: z.literal(false),
+  delivery: z.array(z.enum(['agent_inbox','silent'])),
+  notice: z.string(),
+});
 export const automationOutcomeSchema = z.discriminatedUnion('outcome', [deliverySchema.extend({ outcome: z.literal('publish') }), z.strictObject({ outcome: z.literal('silent'), reason: z.string().trim().min(1).max(500) })]);
 export type Automation = z.infer<typeof automationSchema>;
 export type AutomationConfig = z.infer<typeof automationConfigSchema>;
+export type AutomationValidation = z.infer<typeof automationValidationSchema>;
 export type AutomationOutcome = z.infer<typeof automationOutcomeSchema>;

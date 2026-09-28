@@ -226,7 +226,7 @@ Settings overlays preserve the underlying panel. Inbox, Automations, and Chat se
 - The page/install icon is the dimensional blue orb. The interactive mic is flat black. Its icon hides while typing; the circle does not fade. Dictation splits into flat red Cancel and green Send.
 - The secondary Agent footer places the mic immediately left of Close; both circles are 40px. Its redundant launcher/control row is absent. Keep shared size/radius variables consistent.
 - Assistant messages are black; user messages are blue with 12px text and compact padding. Long messages have Show more. AI chat and DMs have a floating circular down-arrow when scrolled away from the latest messages.
-- DM history includes the original invitation from connection data, not a duplicate inserted message. The DM scroller has a 1px top boundary. Sending clears the composer immediately and uses the message transition.
+- DM history includes the original invitation from connection data, not a duplicate inserted message. The DM scroller has a 1px top boundary. Sending clears the composer immediately and uses the message transition. Consecutive messages from the same sender group within one minute, with a tight sender-facing top corner on continuation bubbles. The first loaded message and gaps of at least one hour receive centered date-time markers.
 - The top-right New post button is black while the composer is active, on desktop and mobile.
 - Profile names and usernames sit on the same baseline, name first, wrapping if needed. They share a font size while retaining their different weight/color treatment. Apply size consistency to post headers, the post editor, and People results too.
 - Open messages is followed by a rounded-rectangle three-dot button of matching height. It contains Unfriend, Block, and Report, retaining reviews/forms before submission. The menu is positioned within the viewport and every clipping panel ancestor; it shifts horizontally, flips above, and scrolls internally when space is short. Reuse `useEdgeAwareMenu` instead of fixed dropdown offsets.
@@ -250,6 +250,8 @@ Hosted runs are durable. The host persists run state, tool decisions, review con
 Streaming must work from provider events through durable state and `/api/events` into React. Do not substitute “one moment,” flickering placeholders, or repeatedly restarting fake text. Completed final output appears immediately. Wallet and record changes should refresh through the shared live-state path, not a collection of arbitrary polling timers. Technical errors should not shift the input layout.
 
 The operation catalog is the common contract for UI/CLI/MCP. A feature that changes domain behavior needs validation, authorization, idempotency, exact links, and appropriate reactive invalidation. Utility operations can remain agent/CLI/MCP-only. Add direct UI when it makes sense for the user workflow, not mechanically for every helper; core social actions still need usable manual controls.
+
+`access.get` reports the current connection scope and filtered operation authority without exposing a token. `messages.window` provides bounded, source-authorized context around one human DM. `automations.validate` uses the same schema and scheduler as creation but makes no change, creates no run and grants no authority. Keep these focused reads separate from generic operation-preview or broad cross-dataset aggregation machinery.
 
 Keep these four things distinct:
 
@@ -275,6 +277,8 @@ Locations use H3 resolution 5 and fixed coarse area centers, roughly ten miles a
 ## Automations, account activity, and inbox
 
 New automations are created **active through one confirmed `automations.create` operation**, with the next scheduled run. Do not bring back the old save-paused-then-enable creation flow. Editing a definition still pauses it for a separate reviewed enable. Creation does not immediately run or charge it.
+
+`automations.validate` is the non-mutating configuration check. It returns normalized defaults, the next run, explicit data grants, readable operations and the fixed publish-or-silent delivery choices. Creation and execution still recheck current schedule, budget, credential and source authority.
 
 Automation examples auto-send to the primary agent and preserve the existing draft. Schedules use an IANA timezone with DST-aware calculation. Instructions preserve the user's original request and constraints. Read changing interests, profile tags, location, and account facts at run time rather than baking them into saved prose. The worldwide friend example is deliberate while the user base is small.
 
@@ -313,6 +317,8 @@ newdrugs --profile dev read identity.get
 ```
 
 Discover and describe operations before use. Do not perform real writes merely to verify connection health. Explicit `--profile` is safer than changing the globally active connection during development. Ordinary users default to the public site without dev/prod jargon.
+
+CLI failures are one JSON object on stderr with a stable server error code when available, an HTTP status for API failures and a nonzero typed exit code. Preserve token redaction and the MCP `{ ok:false, error }` contract when changing transport behavior.
 
 Credentials live in the private config store, normally `~/.config/newdrugs/config.json`; operator credentials are separate in `admin.json`. Never dump these files. Login tokens go through `--token-stdin`, not command arguments, shell history, docs, screenshots, or replies. Reuse the user's existing connection; do not ask for or expose keys unnecessarily.
 
@@ -386,7 +392,7 @@ There is no promise of physical-iPhone coverage, large-corpus search capacity, e
 
 Log is shipped and production data is migrated. It is private or explicitly shared, never part of public discovery. The separate read-only `logAccess` automation grant is required for background Log access. Each attendee owns their contribution; removing themselves deletes their own attached media, not other attendees’ data. QR/code joins and eligible co-attendee/friend additions use the canonical operations. Source-list entry navigation preserves that list and uses Previous/Next; direct calendar entry navigation uses Older/Newer.
 
-Preserve Logcal’s continuous calendar, fixed weekday row, square mosaics, four-column Grid, today floaters and overlaid Scan/Log buttons. Log modals stay in the top layer over the mounted calendar and follow anchor translation, including when side chat moves it without changing width. Image detail is another top layer above the still-mounted entry. Use [parity decisions](log-integration/PARITY.md) and current AGENTS.md before changing these behaviors.
+Preserve Logcal’s continuous calendar, fixed weekday row, square mosaics, four-column Grid, today floaters and overlaid Scan/Log buttons. Log modals stay in the top layer over the mounted calendar and follow anchor translation, including when side chat moves it without changing width. Cached calendar tiles remain painted while stale ranges revalidate after returning from an overlay; only an explicit deletion disappears before the replacement response. Image detail is another top layer above the still-mounted entry. Use [parity decisions](log-integration/PARITY.md) and current AGENTS.md before changing these behaviors.
 
 Calendar reads use bounded five-week chunks and viewport-driven prefetch. Data cache retains 104 chunks. Visited week/image DOM stays mounted through ordinary browsing, evicting least recently viewed rows only beyond 260 weeks or 512 thumbnails while protecting the viewport. The retention set must not become the prefetch range. Photo cache and initial-only entry snapshots are account-scoped, bounded and invalidated for deletion/revocation; canonical fetches still win.
 

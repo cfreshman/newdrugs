@@ -350,6 +350,10 @@ p > button.text-link { display: inline; min-height: 0; padding: 2px 7px; }
 .message-compose .solid { background: var(--control-black); color: var(--on-assistant); flex: 0 0 40px; width: 40px; min-width: 40px; height: 40px; min-height: 40px; border: 0; aspect-ratio: 1; padding: 0; border-radius: 50%; display: grid; place-items: center; }
 .message-compose .solid:hover:enabled { background: var(--control-black); }
 .direct-message-content { display: flex; flex-direction: column; gap: var(--space-2); }
+.message-time-separator { align-self: stretch; margin: var(--space-3) 0 var(--space-1); color: var(--muted); font-size: var(--text-xs); line-height: 1.3; text-align: center; }
+.direct-message-content .message.dm-group-with-previous { margin-top: calc(2px - var(--space-2)); }
+.direct-message-content .message.user.dm-group-with-previous .bubble { border-top-right-radius: 5px; }
+.direct-message-content .message.peer.dm-group-with-previous .bubble { border-top-left-radius: 5px; }
 .direct-message-content .message.peer { align-self: flex-start; }
 .direct-message-content .message.peer .bubble { background: var(--surface-soft); border-bottom-left-radius: 5px; }
 .direct-messages .message .message-text { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -63,6 +63,7 @@ export function parseDestination(value: string, origin: string): Destination | n
 }
 
 export const operationUiBindings: Record<string, { route: string; targetKind: ResourceLink['targetKind']; resourceType: string }[]> = {
+ 'access.get':[{route:'/agents',targetKind:'surface',resourceType:'agents'}],
  ...Object.fromEntries(['agent.instructions.get','agent.instructions.update','agent.memory.context','agent.memory.list','agent.memory.get','agent.memory.save','agent.memory.delete'].map(name=>[name,[{route:'/settings/agent',targetKind:'surface' as const,resourceType:'agent_memory'}]])),
  'log.search':[{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'}],
  'log.birthday_get':[{route:'/log/preferences',targetKind:'surface',resourceType:'log_settings'}],
@@ -98,6 +99,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'people.blocked': [{ route: '/blocked', targetKind: 'surface', resourceType: 'blocked' }],
   'connections.respond': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
   'messages.list': [{ route: '/messages/[connectionId]', targetKind: 'exact', resourceType: 'conversation' }],
+  'messages.window': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
   'messages.send': [{ route: '/messages/[connectionId]', targetKind: 'surface', resourceType: 'message' }],
   'wallet.activity': [{ route: '/billing', targetKind: 'surface', resourceType: 'wallet' }],
   'wallet.get': [{ route: '/billing', targetKind: 'surface', resourceType: 'wallet' }],

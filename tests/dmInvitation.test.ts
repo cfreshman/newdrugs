@@ -45,6 +45,19 @@ it('only offers per-message reporting after choosing it in conversation actions'
   expect(transport.operation.mock.calls.some(call=>call[0]==='people.report')).toBe(false);
 });
 
+it('groups rapid messages and inserts sparse date-time separators',async()=>{
+ const start=Date.parse('2026-09-25T12:00:00.000Z'),items=[
+  {...message,id:'later',fromId:'friend',text:'later',createdAt:new Date(start+2*60*60_000).toISOString()},
+  {...message,id:'second',text:'second',createdAt:new Date(start+30_000).toISOString()},
+  {...message,id:'first',text:'first',createdAt:new Date(start).toISOString()},
+ ];
+ transport.operation.mockImplementation(async(name:string)=>name==='connections.get'?{connection,people:[]}:name==='messages.list'?{items,nextCursor:null}:{read:true});
+ await act(async()=>dom.root.render(createElement(MessagesPanel,{userId:'me',connectionId:'connection',navigate(){}})));
+ const rendered=[...dom.container.querySelectorAll<HTMLElement>('.direct-message-content .message:not(.invitation-message)')];
+ expect(rendered).toHaveLength(3);expect(rendered[0].classList.contains('dm-group-with-next')).toBe(true);expect(rendered[0].classList.contains('dm-group-with-previous')).toBe(false);expect(rendered[1].classList.contains('dm-group-with-previous')).toBe(true);expect(rendered[2].classList.contains('dm-group-with-previous')).toBe(false);
+ expect([...dom.container.querySelectorAll<HTMLTimeElement>('.message-time-separator')].map(time=>time.dateTime)).toEqual([items[2].createdAt,items[0].createdAt]);
+});
+
 it('shows the chat down arrow while reading older DMs and returns to latest without sending the draft',async()=>{
   vi.spyOn(HTMLElement.prototype,'clientHeight','get').mockReturnValue(200);
   vi.spyOn(HTMLElement.prototype,'scrollHeight','get').mockReturnValue(1000);

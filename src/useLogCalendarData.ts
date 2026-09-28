@@ -44,9 +44,10 @@ export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filter
    // Upcoming reminders may change even when their original date is years earlier.
    if(index===0||!dates?.length||dates.some(date=>date>=window.from&&date<=window.through)){
     dirty.current.add(index);requests.current.get(index)?.abort();requests.current.delete(index);
-    const page=cache.current.get(index),changedIds=new Set(change?.log?.map(item=>item.id));
-    if(page&&changedIds.size)cache.current.set(index,{...page,days:page.days.map(day=>({...day,items:day.items.filter(item=>!changedIds.has(item.id))}))});
-    else if(page&&!dates?.length)cache.current.delete(index);
+    // Keep the current calendar painted while an ordinary or generic refresh
+    // replaces it. Only an explicit deletion disappears immediately.
+    const page=cache.current.get(index),deletedIds=new Set(change?.log?.filter(item=>item.deleted).map(item=>item.id));
+    if(page&&deletedIds.size)cache.current.set(index,{...page,days:page.days.map(day=>({...day,items:day.items.filter(item=>!deletedIds.has(item.id))}))});
    }
   }
   changed(value=>value+1);pump.current();
