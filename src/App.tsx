@@ -61,7 +61,7 @@ import { NotificationsPanel } from './NotificationsPanel';
 import { UploadPanel } from './UploadPanel';
 import type { UploadRef } from '../shared/uploads';
 import { cleanDestinationContext, parseDestination, surfaceTitles, surfaceViews, type Destination } from '../shared/navigation';
-import {observeAppRelease,type AppReleaseState} from './appRelease';
+import {applyAppRelease,observeAppRelease,type AppReleaseState} from './appRelease';
 import release from '../release.json';
 
 const settingsViews = new Set(['agent_memory','preferences','appearance','account_menu','settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'storage', 'notifications', 'location']);
@@ -505,7 +505,7 @@ export function App() {
   const notificationBadge=unreadNotifications>9?'9+':notificationsCapped?`${unreadNotifications||''}+`:String(unreadNotifications);
   const completeLog=(entry?:import('../shared/log').LogEntry)=>{if(!surface||!['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(surface.view))return;if(!run?.surface?.waiting){setSurface(null);return;}const current=surface;void post(`/runs/${current.runId}/surface`,{id:current.id,saved:Boolean(entry),...(entry?{resourceId:entry.id}:{})}).then(()=>{setSurface(null);return refresh();}).catch(error=>logError(errorText(error)));};
   const panelContent = panel ? (panel === 'settings' ? <nav className="settings-menu" aria-label="Settings">
-        {availableRelease&&<button className="settings-update" onClick={()=>window.location.reload()}><Star size={23} weight="fill"/>Reload to apply app update</button>}
+        {availableRelease&&<button className="settings-update" onClick={()=>void applyAppRelease(closePanel)}><Star size={23} weight="fill"/>Reload to apply app update</button>}
         <button onClick={() => navigatePanel('notifications')}><Bell size={23} />Notifications</button>
         {data?.user.handle&&<button onClick={()=>navigatePanel('account')}><UserCircle size={23}/>Profile</button>}
         <button onClick={()=>navigatePanel('account_menu')}><LockKey size={23}/>Account</button>

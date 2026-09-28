@@ -76,7 +76,7 @@ agent-written rules (you are allowed to edit below this line)
 
 - the chat input has no border. retain its rounded corners and no placeholder.
 
-- a fixed Phosphor gear control in the top-right opens base settings, profile, billing, and external-agent connections. When an already-open app observes a later, strictly newer server release, the gear becomes a filled Star with a badge and Settings gains a priority-styled top row to reload. Initial page load never raises this prompt. Desktop modals open from that corner with the X aligned to the control; mobile modals stay centered.
+- a fixed Phosphor gear control in the top-right opens base settings, profile, billing, and external-agent connections. When an already-open app observes a later, strictly newer server release, the gear becomes a filled Star with a badge and Settings gains a priority-styled top row to reload. Applying the update closes Settings and restores its underlying route before reloading on the next frame. Initial page load never raises this prompt. Desktop modals open from that corner with the X aligned to the control; mobile modals stay centered.
 
 - the settings circle is white glass. nested settings screens have a back arrow immediately left of the X. backdrop dismissal happens on outside pointer-down only, never pointer-up/click, so text selection does not close the modal.
 

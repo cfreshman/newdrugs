@@ -11,3 +11,6 @@ export function observeAppRelease(state:AppReleaseState,serverVersion:string|und
  if(state.observed===null)return {observed:serverVersion,available:null};
  return {observed:serverVersion,available:newerAppRelease(serverVersion,loadedVersion)?serverVersion:null};
 }
+export async function applyAppRelease(close:()=>void|Promise<void>,schedule:(callback:FrameRequestCallback)=>number=requestAnimationFrame,reload:()=>void=()=>window.location.reload()){
+ await close();schedule(()=>reload());
+}
