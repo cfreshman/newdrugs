@@ -5,7 +5,7 @@ Current operational handoff, verified September 28, 2026. Read this and `AGENTS.
 ## State at handoff
 
 - Product: **New Drugs**, made in New England, at **https://druggie.org**.
-- Repository: `/Users/work/dev/newdrugs`; branch **`experiment/log`**. This is the working branch, despite its old name. Do not reset to a pre-Log tag or assume Log is unshipped.
+- Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
 - Production **v0.30.5**, release **`20260928012914741`**.
 - Dev release **`20260928012818652`** has the same application changes; its displayed version is v0.30.4 because dev does not bump versions.
 - Latest application/infrastructure checkpoint before this documentation cleanup: **`dc963fa`**. All requested application changes are committed and deployed. Inspect `git status` for subsequent work.

@@ -9,7 +9,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Item | State at handoff |
 | --- | --- |
 | Repository | `/Users/work/dev/newdrugs` |
-| Branch | `experiment/log` |
+| Branch | `main` |
 | Pre-Log baseline | Tag `pre-log-v0.19.1`, the shipped system before native Log work |
 | Checkpoint tag | `pre-three-mode-20260926` |
 | Working tree | All requested app/infrastructure work is committed through `dc963fa`; this handoff cleanup is documentation-only. Inspect status before editing. |
