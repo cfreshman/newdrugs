@@ -29,7 +29,7 @@ import { AutomationsPanel } from './AutomationsPanel';
 import type { InboxAttachment, InboxItem } from '../shared/inbox';
 import { ChatSearchPanel } from './ChatSearchPanel';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Shield, HardDrives, ArrowClockwise } from '@phosphor-icons/react';
+import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Star, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Shield, HardDrives, ArrowClockwise } from '@phosphor-icons/react';
 import type { Bootstrap, Message, RunView } from '../shared/types';
 import { api, post, errorText, ApiError, balanceLabel } from './api';
 import { useDictation } from './useDictation';
@@ -61,6 +61,7 @@ import { NotificationsPanel } from './NotificationsPanel';
 import { UploadPanel } from './UploadPanel';
 import type { UploadRef } from '../shared/uploads';
 import { cleanDestinationContext, parseDestination, surfaceTitles, surfaceViews, type Destination } from '../shared/navigation';
+import {observeAppRelease,type AppReleaseState} from './appRelease';
 import release from '../release.json';
 
 const settingsViews = new Set(['agent_memory','preferences','appearance','account_menu','settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'storage', 'notifications', 'location']);
@@ -99,6 +100,8 @@ export function App() {
   const [media,setMedia]=useState<{items:MediaItem[];index:number}|null>(null);
   const workspaceRef=useRef<HTMLElement>(null);
   const [data, setData] = useState<Bootstrap | null>(null);
+  const [availableRelease,setAvailableRelease]=useState<string|null>(null),releaseState=useRef<AppReleaseState>({observed:null,available:null});
+  const observeRelease=useCallback((version:string|undefined)=>{const previous=releaseState.current,next=observeAppRelease(previous,version,release.version);if(next===previous)return;releaseState.current=next;if(next.available!==previous.available)setAvailableRelease(next.available);},[]);
   useLayoutEffect(()=>{if(data){const account=data.user.handle?data.user.id:null;bindLogImageCache(account);bindLogEntryCache(account);}},[data?.user.id,data?.user.handle]);
   useFont(data?(data.preferences?.font||'mono'):undefined);
   useAppearance(data?(data.preferences||defaultPreferences).appearance:undefined);
@@ -162,6 +165,7 @@ export function App() {
     if (request !== refreshRequest.current) return;
     const changedIdentity = identity.current !== next.user.id;
     if (!changedIdentity && revision !== liveRevision.current) return;
+    observeRelease(next.config.version);
     if (changedIdentity) {
       identity.current = next.user.id; pendingHandoffDock.current=null;tabWorkspaces.current={};setRecordAttachments([]);setSocialRequests({});setAgentDockOpen(false);completedRuns.current.clear(); submission.current = null;
       dictation.cancel(); setLauncherOpen(false); setUnderlay(null); lastComposer.current = null; setAfterAccount(null); setResumeChat(null); setSubmitting(false); setSurface(null); setAttachments([]); setInboxAttachments([]); setPanel(null); setPanelHistory([]); seenSurfaces.current.clear();
@@ -172,7 +176,7 @@ export function App() {
     rememberCompleted(next.messages);
     setData(next); setRun(previous => next.run && completedRuns.current.has(next.run.id) ? null : mergeRun(previous, next.run ?? null));
     if (!changedIdentity) chatHistory.receive(next.user.id, next.messages, next.conversationCursor, undefined, next.conversationGeneration);
-  }, []);
+  }, [observeRelease]);
   useLiveState(data?.user.id, (change, actorId) => {
     if (actorId !== identity.current) return;
     liveRevision.current++;
@@ -193,6 +197,7 @@ export function App() {
       try {
         await post('/session'); const initial = await api<Bootstrap>('/bootstrap'); if (cancelled) return;
         identity.current = initial.user.id;
+        observeRelease(initial.config.version);
         const initialDestination=landingDestination(location.href,location.origin,initial.preferences?.landingPage||'agent');
         const initialMode=initialDestination?.mode|| (initialDestination?modeForDestination(initialDestination):'agent');
         if(authDestination.current){
@@ -225,7 +230,7 @@ export function App() {
       } catch (e) { logError(errorText(e)); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [observeRelease]);
   useEffect(() => {
     if (!data) return;
     try {
@@ -293,7 +298,7 @@ export function App() {
   const reopenSettings=()=>{
     const saved=resumeSettings.current?rememberedSettings.current:null;
     if(saved&&saved.userId===data?.user.id){resumeSettings.current=false;open(saved.panel,saved.context,'modal');setPanelHistory(saved.history);}
-    else open((data?.notifications?.unread||data?.notifications?.unreadCapped)&&panel!=='notifications'?'notifications':'settings',{},'modal');
+    else open(availableRelease?'settings':(data?.notifications?.unread||data?.notifications?.unreadCapped)&&panel!=='notifications'?'notifications':'settings',{},'modal');
   };
   const navigatePanel = (next: Exclude<Panel, null>, context: Omit<Destination, 'view'> = {}) => {
     if (data?.user.id !== identity.current) return;
@@ -496,8 +501,11 @@ export function App() {
     if(mode!=='agent'){revealConversation();requestAnimationFrame(()=>void send(undefined,prompt,undefined,true));}
     else void closePanel().then(()=>send(undefined,prompt,undefined,true));
   };
+  const unreadNotifications=data?.notifications?.unread||0,notificationsCapped=Boolean(data?.notifications?.unreadCapped),hasUnreadNotifications=Boolean(unreadNotifications||notificationsCapped);
+  const notificationBadge=unreadNotifications>9?'9+':notificationsCapped?`${unreadNotifications||''}+`:String(unreadNotifications);
   const completeLog=(entry?:import('../shared/log').LogEntry)=>{if(!surface||!['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(surface.view))return;if(!run?.surface?.waiting){setSurface(null);return;}const current=surface;void post(`/runs/${current.runId}/surface`,{id:current.id,saved:Boolean(entry),...(entry?{resourceId:entry.id}:{})}).then(()=>{setSurface(null);return refresh();}).catch(error=>logError(errorText(error)));};
   const panelContent = panel ? (panel === 'settings' ? <nav className="settings-menu" aria-label="Settings">
+        {availableRelease&&<button className="settings-update" onClick={()=>window.location.reload()}><Star size={23} weight="fill"/>Reload to apply app update</button>}
         <button onClick={() => navigatePanel('notifications')}><Bell size={23} />Notifications</button>
         {data?.user.handle&&<button onClick={()=>navigatePanel('account')}><UserCircle size={23}/>Profile</button>}
         <button onClick={()=>navigatePanel('account_menu')}><LockKey size={23}/>Account</button>
@@ -573,7 +581,7 @@ export function App() {
       </div>
       {mode!=='agent'&&<footer className="agent-dock-footer"><button onClick={()=>changeMode('agent')} title="Open Agent mode"><Robot size={21}/>Agent</button><div className="agent-dock-actions">{dictationControl}<button className="agent-dock-close" aria-label="Close agent" onClick={closeAgent}><X size={21}/></button></div></footer>}
     </main>
-    <div className="settings-controls"><span className="app-version">v{data.config.version || release.version}</span><button className="settings-button" aria-label={`${(data.notifications?.unread||data.notifications?.unreadCapped) && panel !== 'notifications' ? `Notifications, ${data.notifications.unreadCapped?'at least ':''}${data.notifications.unread} updates` : 'Settings'}, ${balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))} ${!data.user.handle && data.wallet.starterAvailableNanos ? 'starter credit available after signup' : 'credit balance'}`} onClick={reopenSettings}><span>{balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))}</span>{(data.notifications?.unread||data.notifications?.unreadCapped) && panel !== 'notifications' ? <><Bell size={22} /><span className="notification-count" aria-hidden="true">{data.notifications.unread > 9 ? '9+' : data.notifications.unreadCapped ? `${data.notifications.unread||''}+` : data.notifications.unread}</span></> : <GearSix size={22} />}</button></div></>}
+    <div className="settings-controls"><span className="app-version">v{release.version}</span><button className="settings-button" data-update-available={availableRelease||undefined} aria-label={`${availableRelease?`App update ${availableRelease} available${hasUnreadNotifications?`, Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:''}`:hasUnreadNotifications&&panel!=='notifications'?`Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:'Settings'}, ${balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))} ${!data.user.handle && data.wallet.starterAvailableNanos ? 'starter credit available after signup' : 'credit balance'}`} onClick={reopenSettings}><span>{balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))}</span>{availableRelease?<><Star size={22} weight="fill"/><span className="notification-count update-indicator" aria-hidden="true">{hasUnreadNotifications?notificationBadge:''}</span></>:hasUnreadNotifications&&panel!=='notifications'?<><Bell size={22}/><span className="notification-count" aria-hidden="true">{notificationBadge}</span></>:<GearSix size={22}/>}</button></div></>}
     {settingsSnapshot&&<Dialog key={`settings:${settingsSnapshot.userId}`} visible={settingsVisible} title={settingsSnapshot.title} close={()=>{resumeSettings.current=false;void closePanel();}} back={settingsSnapshot.history.length?backPanel:undefined}>{settingsSnapshot.content}</Dialog>}
     {panel && panelSpace === 'modal' && !settingsViews.has(panel) && <Dialog placement="task" title={panelTitle} close={() => void closePanel()} back={panelHistory.length ? backPanel : undefined}>{panelContent}</Dialog>}
   </div>{media&&<ImageViewer items={media.items} index={media.index} close={()=>setMedia(null)}/>}</NavigationContext.Provider></ExperienceContext.Provider>;

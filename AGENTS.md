@@ -76,13 +76,13 @@ agent-written rules (you are allowed to edit below this line)
 
 - the chat input has no border. retain its rounded corners and no placeholder.
 
-- a fixed Phosphor gear control in the top-right opens base settings, profile, billing, and external-agent connections. Desktop modals open from that corner with the X aligned to the gear; mobile modals stay centered.
+- a fixed Phosphor gear control in the top-right opens base settings, profile, billing, and external-agent connections. When an already-open app observes a later, strictly newer server release, the gear becomes a filled Star with a badge and Settings gains a priority-styled top row to reload. Initial page load never raises this prompt. Desktop modals open from that corner with the X aligned to the control; mobile modals stay centered.
 
 - the settings circle is white glass. nested settings screens have a back arrow immediately left of the X. backdrop dismissal happens on outside pointer-down only, never pointer-up/click, so text selection does not close the modal.
 
 - admin is a separate frontend under `admin/`, with its own sign-in. first setup creates the sole owner, using the trusted dev connection to prevent someone else claiming it. the owner manages one shared $100 starter-credit pool across prod/dev; eligible saved accounts get $1 once while the pool has funds, limited to one new claim per public IPv4 address or IPv6 /64 using a shared keyed fingerprint. Guests only see the eligible dollar, without allocating it. Existing credit is preserved, and the budget can be raised later.
 
-- show a small version left of the settings gear. dev edits/builds/deploys must NOT bump the displayed release. On an explicitly approved production release, increment patch; if CLI/MCP operations changed since the published release, increment minor once, reset patch, then apply the production patch increment. Draft contracts use their own content revision for approval binding.
+- show a small version left of the settings control. It reports the loaded browser bundle, never a newer server version before reload. Dev edits/builds/deploys must NOT bump the displayed release. On an explicitly approved production release, increment patch; if CLI/MCP operations changed since the published release, increment minor once, reset patch, then apply the production patch increment. Draft contracts use their own content revision for approval binding.
 
 - "deploy" always means cloud dev. Only deploy production when the user explicitly says "deploy prod". Generic requests to deploy/test or ongoing feature work never authorize production.
 
@@ -166,7 +166,7 @@ agent-written rules (you are allowed to edit below this line)
 
 - Do not add people bookmarks. Saves are for posts only. Discovery improvements must work from general operation documentation and ranking, never hardcoded search phrases. On installed mobile apps only, Friends and Posts extend to the side and bottom edges below the top controls; keep safe-area padding inside their content.
 
-- Notifications is the first Settings item. Inbox, Automations and Chat search can open inside the current Friends/Posts browser panel, retaining Back navigation and drafts. Actual chat actions use the side chat on desktop and switch to the Agent tab on mobile, carrying their attachment/prompt/message target after the destination workspace is restored. Bare deep links choose the destination's natural mode; explicit mode-prefixed links preserve their requested mode. In-app navigation retains its current mode. Dismiss the source modal when navigating.
+- Notifications is the first ordinary Settings item. A pending in-session app update may place its reload action above Notifications. Inbox, Automations and Chat search can open inside the current Friends/Posts browser panel, retaining Back navigation and drafts. Actual chat actions use the side chat on desktop and switch to the Agent tab on mobile, carrying their attachment/prompt/message target after the destination workspace is restored. Bare deep links choose the destination's natural mode; explicit mode-prefixed links preserve their requested mode. In-app navigation retains its current mode. Dismiss the source modal when navigating.
 
 - New automations are created active with the next scheduled run through a single confirmed `automations.create` action. Do not save paused and require a separate enable step for creation. Resume paused automations through `automations.enable`; edits retain their separate reviewed re-enable behavior.
 

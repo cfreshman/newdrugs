@@ -216,6 +216,7 @@ a { color: inherit; }
 .settings-button { min-width: var(--settings-control-size); height: var(--settings-control-size); display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 0 11px; border-radius: 999px; background: var(--floating-control-surface); color: var(--ink); backdrop-filter: blur(var(--floating-control-blur)); -webkit-backdrop-filter: blur(var(--floating-control-blur)); font-size: var(--text-label); font-variant-numeric: tabular-nums; }
 .settings-button { position: relative; }
 .notification-count { position: absolute; right: 1px; top: -3px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 50%; background: var(--danger); color: var(--on-danger); font-size: 10px; font-weight: 700; }
+.notification-count.update-indicator:empty { right: 3px; top: 0; min-width: 8px; width: 8px; height: 8px; padding: 0; }
 .notification-list { display: flex; flex-direction: column; }
 .notification-list > button { text-align: left; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) 0; background: none; border-bottom: var(--border-width) solid var(--divider); }
 .notification-list > button > span { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
@@ -229,6 +230,7 @@ p > button.text-link { display: inline; min-height: 0; padding: 2px 7px; }
 .settings-menu button, .settings-menu a { border: 0; background: var(--surface-soft); border-radius: var(--radius-control); padding: var(--space-3); }
 .settings-menu, .launcher-menu { gap: var(--space-2); font-size: var(--text-body); line-height: 1.6; }
 .settings-menu button, .settings-menu a, .launcher-menu button { min-height: 48px; padding: var(--space-3); gap: var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--surface-soft); font-size: var(--text-body); font-weight: 500; text-decoration: none; }
+.settings-menu button.settings-update { background: var(--primary); color: var(--on-primary); font-weight: 700; }
 .settings-menu svg, .launcher-menu svg { flex: 0 0 24px; width: 24px; height: 24px; }
 .settings-menu .settings-credit { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--text-sm); }
 .settings-menu .settings-credit a { display: inline; padding: 0; min-height: 0; background: none; border-radius: 0; font-size: inherit; font-weight: 400; color: inherit; text-decoration: underline; }

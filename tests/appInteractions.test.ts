@@ -5,6 +5,7 @@ import { App } from '../src/App';
 import type { Bootstrap, RunView } from '../shared/types';
 import { rect, setupDOM } from './dom';
 import { surfaceViews, surfaceTitles } from '../shared/navigation';
+import release from '../release.json';
 
 const transport = vi.hoisted(() => ({ api: vi.fn(), post: vi.fn(), operation: vi.fn() }));
 vi.mock('../src/api', async original => ({ ...await original<typeof import('../src/api')>(), ...transport }));
@@ -219,7 +220,19 @@ describe('chat interaction integration', () => {
     await load(); dom.frame();
     expect(dom.container.querySelector('textarea')).not.toBeNull();
     expect(dom.container.querySelector('.settings-button')?.textContent).toBe('$1.00');
-    expect(dom.container.querySelector('.app-version')?.textContent).toBe('v0.3.1');
+    expect(dom.container.querySelector('.app-version')?.textContent).toBe(`v${release.version}`);
+    expect(dom.container.querySelector('.settings-button')?.hasAttribute('data-update-available')).toBe(false);
+  });
+  it('offers a priority reload only after the open page observes a newer server release',async()=>{
+    await mount();await load();expect(dom.container.querySelector('.settings-update')).toBeNull();
+    transport.api.mockResolvedValue({...initial,config:{...initial.config,version:'99.0.0'},notifications:{unread:3,items:[]}});type('Check for an update');
+    act(()=>dom.container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    await act(async()=>chat.resolve({run:active}));
+    const settings=dom.container.querySelector<HTMLButtonElement>('.settings-button')!;
+    expect(settings.dataset.updateAvailable).toBe('99.0.0');expect(settings.getAttribute('aria-label')).toContain('App update 99.0.0 available');expect(settings.querySelector('.notification-count')?.textContent).toBe('3');
+    expect(dom.container.querySelector('.app-version')?.textContent).toBe(`v${release.version}`);
+    await act(async()=>settings.click());const update=dom.container.querySelector<HTMLButtonElement>('.settings-menu>button')!;
+    expect(update.classList.contains('settings-update')).toBe(true);expect(update.textContent).toBe('Reload to apply app update');
   });
   it('clears the draft and inserts its message immediately while the request is still pending', async () => {
     await mount(); await load(); dom.frame(); type('Meet at the park?');
