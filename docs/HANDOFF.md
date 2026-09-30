@@ -8,9 +8,17 @@ Current operational handoff, verified September 30, 2026. Read this and `AGENTS.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
 - Production is deployed from `main`. `release.json` is the authoritative public version; inspect the live `prod/current` symlink only when an exact deployment ID matters.
 - Cloud dev carries current development behavior without bumping the public version. Inspect the live `dev/current` symlink only when an exact deployment ID matters.
-- Production is **v0.33.1**, deployment `20260930040709817`, with the completed Log UI checkpoint `66a7c6f`. Cloud dev has the same UI and operation behavior at deployment `20260930040022354` without a public-version bump. Inspect `git status` for subsequent work.
+- Production is **v0.33.1**, deployment `20260930040709817`, with the completed Log UI checkpoint `66a7c6f`. Cloud dev carries the separate day-modal hotfix candidate `795345f` at deployment `20260930045725280` without a public-version bump. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
-- **The approved UI production deployment is complete. No further production deployment is authorized.** The later level-up work belongs on a separate branch/worktree and preview database, while the user tests the stable production UI on phone.
+- **The first approved UI production deployment is complete. The requested production UI hotfix is held for post-fix mobile touch verification.** Level-up work stays paused on its separate branch/worktree and preview database; no level-up production deployment is authorized.
+
+### In-flight day-modal hotfix
+
+Candidate `795345f` keeps native touch capture on its starting element, ignores descendant capture-loss events, and gives entry swipes the same 700ms release allowance as the working shared media handler. The chooser reserves native vertical scrolling and pinch zoom across its entire card. Its scrim fits the main panel below the mode/settings controls, darkens to 65% black, removes the unwanted dialog focus outline, and gives both 40px arrows 12px gaps from the card and panel edges.
+
+53 focused gesture/day/modal/entry/media checks, TypeScript and the full build passed. Cloud dev API and exact worker PID/heartbeat passed. Before/after visual fixtures were inspected at 393px, plus a scrolling dark-mode chooser at 320px with no horizontal overflow. Local evidence is under ignored `.data/visuals/day-hotfix-evidence/`. These fixtures use actual components with synthetic data and no real account writes.
+
+Baseline day and entry touch swipes both worked in iPhone 16 Pro Simulator Safari on iOS 18.6; this did not reproduce the user's physical-phone failure. The Mac then locked before post-fix native-touch and Safari screenshot checks. Manual unlock has been requested. Do not claim those checks passed or deploy this hotfix to production before completing them. Native media/note detail remains a separate swipe level to verify. Fixture builders are in the hotfix worktree's ignored `.data/visual-hotfix/`, and fixture bundles are served by the existing user-owned Vite from the canonical checkout's ignored `.data/visuals/`; remove temporary served fixtures before the production checkpoint, retaining screenshot evidence.
 
 ## Product intent
 

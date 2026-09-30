@@ -206,10 +206,10 @@ agent-written rules (you are allowed to edit below this line)
 - Log note and other text inputs use the same backing. The media action rail keeps its full width when Remove/Set cover are hidden. Link attachments have explicit add/remove controls and compact previews. Bare domains do not acquire a display or stored root slash; keep explicit URL paths intact.
 
 - Tap to add log appears only on a truly empty entry. Existing title/place/links/media/anniversary or additional participants already count as information; do not nag for a separate note.
-- The generic Log new event control always opens on the current local calendar day after a completed save. Date-specific calendar creation and Log another event preserve the explicitly selected day. Navigation clicks must not fall through to an underlying date or control.
+- The generic Log new event control always opens on the current local calendar day after a completed save. Date-specific calendar creation preserves the explicitly selected day. The day chooser has no Log another event action. Navigation clicks must not fall through to an underlying date or control.
 
 - Today cards use horizontal swipes between full/left-square/right-square, saved per account in Log preferences. Squares and full cards have equal heights. Keep vertical list scrolling native and suppress clicks after a swipe. The loading spinner belongs in the media preview, including while the image itself loads.
-- Today cards, the borderless darker multi-day panel and the three-dots panel use Logcal’s 4px outer radius. Their photos use 2px corners. Keep a 1px gap between the weekly row and the expanded multi-day panel. Its Log another event action fills the panel width like the base Log new event control.
+- Today cards and the three-dots panel use Logcal’s 4px outer radius, with 2px photo corners. Multi-event calendar days open a centered mini chooser above the preserved calendar, with New Drugs backing and controls. Both swipes and side arrows navigate to occupied dates, including single-event dates, skipping empty dates without wrapping. There is no Close or Log another event button. Outside pointer-down and Escape dismiss it. Entries without photos retain colored squares; only loading contributor text reserves empty space.
 
 - Log scope/person filters and saved views remain CLI/MCP-only. The List page has a search field that presents direct text matches first and semantic results after them. Keep layout switching and export.
 
