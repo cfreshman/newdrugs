@@ -4,7 +4,7 @@ export function isEditableLogTarget(target:EventTarget|null){return target insta
 /** Share the same anchor tracking with detail layers above the retained Log panel. */
 export function observeLogLayerGeometry(dialog:HTMLElement,panel:HTMLElement){
  const outer=panel.matches('.log-modal,.composer-menu-layer')?panel:panel.closest<HTMLElement>('.social-experience')||panel;
- const place=()=>{const bounds=panel.getBoundingClientRect(),standalone=panel.closest<HTMLElement>('.app')?.dataset.standalone==='true'&&window.matchMedia('(max-width:760px), (pointer:coarse)').matches,vertical=standalone?bounds:outer.getBoundingClientRect();if(!bounds.width||!bounds.height)return;Object.assign(dialog.style,{left:`${bounds.left}px`,top:`${vertical.top}px`,width:`${bounds.width}px`,height:`${vertical.height}px`,transform:'none',borderRadius:getComputedStyle(panel).borderRadius});};
+ const place=()=>{const bounds=panel.getBoundingClientRect(),standalone=panel.closest<HTMLElement>('.app')?.dataset.standalone==='true'&&window.matchMedia('(max-width:760px), (pointer:coarse)').matches,vertical=standalone?bounds:outer.getBoundingClientRect();if(!bounds.width||!bounds.height)return;Object.assign(dialog.style,{left:`${bounds.left}px`,top:`${vertical.top}px`,width:`${bounds.width}px`,height:`${vertical.height}px`,transform:'none',borderRadius:getComputedStyle(panel).borderRadius});dialog.style.setProperty('--log-layer-height',`${vertical.height}px`);};
  place();const observer=new ResizeObserver(place);observer.observe(panel);if(outer!==panel)observer.observe(outer);
  const layout=new MutationObserver(place),app=panel.closest('.app');
  if(app)layout.observe(app,{attributes:true,attributeFilter:['data-agent-dock','data-mode','data-standalone']});

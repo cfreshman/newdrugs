@@ -9,6 +9,7 @@ import {logMediaEntries,logImageBase,boundLogImage,pinchLogImage,type LogMediaSo
 import {AgentMarkdown} from './AgentMarkdown';
 import {AudioPlayer} from './AudioPlayer';
 import {NavLink} from './NavLink';
+import {useHorizontalSwipe,consumeSwipeClick} from './useHorizontalSwipe';
 
 interface Selection {entryId:string;key:string;preview?:MediaItem;element?:HTMLElement}
 type Navigate=(destination:Destination)=>void;
@@ -64,7 +65,7 @@ function LogDetailImage({file,preview,previous,next,zoom}:{file:NonNullable<LogM
  const finish=(event:PointerEvent<HTMLDivElement>,cancelled=false)=>{
   event.stopPropagation();if(!points.current.has(event.pointerId))return;points.current.delete(event.pointerId);
   const start=swipe.current;swipe.current=null;
-  if(!cancelled&&!pinched.current&&!points.current.size&&current.current.scale===1&&start&&Date.now()-start.time<700){const dx=event.clientX-start.x,dy=event.clientY-start.y;if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy)*1.5){if(dx>0)previous();else next();}}
+  if(!cancelled&&!pinched.current&&!points.current.size&&current.current.scale===1&&start&&Date.now()-start.time<700){const dx=event.clientX-start.x,dy=event.clientY-start.y;if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy)*1.5){consumeSwipeClick(event.currentTarget);if(dx>0)previous();else next();}}
  };
  const ready=(image:HTMLImageElement)=>{if(!image.naturalWidth||!image.naturalHeight)return;setSize({width:image.naturalWidth,height:image.naturalHeight});setLoaded(true);setFailed(false);};
  useLayoutEffect(()=>{if(imageRef.current?.complete)ready(imageRef.current);},[]);
@@ -88,20 +89,12 @@ function LogDetailVideo({file,active}:{file:NonNullable<LogMediaEntry['file']>;a
 
 export function LogMediaDetail({source,entries,selection,select,active,anchor,navigate,back,close}:{source:LogMediaSource;entries:LogMediaEntry[];selection:Selection;select(selection:Selection):void;active:boolean;anchor:RefObject<HTMLElement|null>;navigate:Navigate;back():void;close():void}){
  const layer=useRef<HTMLDialogElement>(null),dismiss=useRef<HTMLButtonElement>(null),sourceFocus=useRef(selection.element);
- const zoomed=useRef(false),swipe=useRef<{x:number;y:number;time:number}|null>(null);
- useLayoutEffect(()=>{zoomed.current=false;swipe.current=null;},[selection.key]);
+ const zoomed=useRef(false);
+ useLayoutEffect(()=>{zoomed.current=false;},[selection.key]);
  const index=entries.findIndex(item=>item.key===selection.key),item=entries[index];
  const previous=index>0,next=index>=0&&index<entries.length-1;
  const go=(direction:number)=>{const target=entries[index+direction];if(!target)return;const thumbnail=[...anchor.current?.querySelectorAll<HTMLAnchorElement>('a[data-photo-id]')||[]].find(link=>link.dataset.photoId===target.file?.id),image=thumbnail?.querySelector('img');select({...selection,key:target.key,preview:target.file&&image?{id:target.file.id,url:target.file.url,name:target.file.name,width:image.naturalWidth,height:image.naturalHeight,previewUrl:loadedPhotoPreview(image)}:undefined});};
- const startSwipe=(event:PointerEvent<HTMLDialogElement>)=>{
-  event.stopPropagation();if(event.pointerType==='touch'&&!zoomed.current&&!(event.target as HTMLElement).closest('button,a,input,textarea,select,video,audio,.log-media-detail-image'))swipe.current={x:event.clientX,y:event.clientY,time:Date.now()};
- };
- const finishSwipe=(event:PointerEvent<HTMLDialogElement>)=>{
-  event.stopPropagation();const start=swipe.current;swipe.current=null;
-  if(!start||zoomed.current||Date.now()-start.time>700||window.getSelection()?.isCollapsed===false)return;
-  const dx=event.clientX-start.x,dy=event.clientY-start.y;
-  if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy)*1.5){if(dx>0&&previous)go(-1);else if(dx<0&&next)go(1);}
- };
+ const swipe=useHorizontalSwipe({active,threshold:40,ratio:1.5,canSwipe:()=>!zoomed.current,ignore:'a,button,input,textarea,select,video,audio,iframe,[contenteditable],.log-media-detail-image',swipe:direction=>{if(direction<0&&previous)go(-1);else if(direction>0&&next)go(1);}});
  useLayoutEffect(()=>{const dialog=layer.current,panel=anchor.current?.closest<HTMLElement>('.log-modal,.mode-main,.composer-menu-layer')||anchor.current;if(active&&dialog&&panel)return observeLogLayerGeometry(dialog,panel);},[active,anchor]);
  useLayoutEffect(()=>{
   const dialog=layer.current;if(!dialog)return;let cancelled=false;
@@ -113,7 +106,7 @@ export function LogMediaDetail({source,entries,selection,select,active,anchor,na
  return <dialog ref={layer} popover="manual" open={active} className="log-modal log-media-detail" data-open={active||undefined} aria-label="Hangout media" onCancel={event=>{event.preventDefault();event.stopPropagation();back();}} onKeyDown={event=>{
   event.stopPropagation();if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.altKey||event.shiftKey||isEditableLogTarget(event.target))return;
   if(event.key==='Escape'){event.preventDefault();back();}else if(event.key==='ArrowLeft'&&previous){event.preventDefault();go(-1);}else if(event.key==='ArrowRight'&&next){event.preventDefault();go(1);}
- }} onPointerDown={startSwipe} onPointerCancel={()=>{swipe.current=null;}} onPointerUp={finishSwipe}>
+ }} {...swipe}>
   <section className="log-detail log-media-detail-content"><div className="log-detail-body"><h2>{source.title||'(untitled)'}</h2>{item?<>
    {item.file?.mime.startsWith('image/')?<LogDetailImage key={item.key} file={item.file} preview={selection.preview?.id===item.file.id?selection.preview:undefined} previous={()=>{if(previous)go(-1);}} next={()=>{if(next)go(1);}} zoom={scale=>{zoomed.current=scale>1;}}/>:item.file?.mime.startsWith('video/')?<LogDetailVideo key={item.key} file={item.file} active={active}/>:<div className="log-media-detail-visual log-media-detail-empty"><span className="quiet">(no visual)</span></div>}
    <div className="log-media-detail-author">{item.contributor.profileVisible===false?<span className="quiet">{item.contributor.handle||item.contributor.name}</span>:<NavLink to={{view:'person',resourceId:item.contributor.userId}} navigate={navigate}>{item.contributor.handle||item.contributor.name}</NavLink>}{item.contributor.files.filter(file=>file.mime.startsWith('audio/')).map(file=><AudioPlayer key={file.id} src={file.url} active={active} voiceNote/>)}</div>

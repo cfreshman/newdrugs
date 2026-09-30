@@ -1,5 +1,5 @@
 import {useEffect,type RefObject} from 'react';
-const panels='.direct-messages,.log-detail-body,.log-editor-body,.log-settings-body,.log-directory-body,.log-task-content,.composer-surface-content,.conversation';
+const panels='.direct-messages,.log-detail-body,.log-editor-body,.log-settings-body,.log-directory-body,.log-day-choices,.log-task-content,.composer-surface-content,.conversation';
 function visible(node:HTMLElement){return !node.closest('[hidden],[inert]')&&getComputedStyle(node).display!=='none'&&getComputedStyle(node).visibility!=='hidden';}
 function scroller(root:HTMLElement|null):HTMLElement|null{
  if(!root)return null;

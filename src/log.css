@@ -95,7 +95,7 @@
 .log-calendar-heading strong{font-weight:400;}.log-calendar-heading .log-today{margin-left:0;background:transparent;}
 .log-virtual-week{display:flex;flex-direction:column;gap:1px;}
 .log-day-picker{padding:var(--card-inset);border:0;border-radius:4px;background:var(--surface-soft);display:flex;flex-direction:column;gap:5px;}
-.log-day-picker>div{display:flex;justify-content:space-between;align-items:center;font-size:12px;}.log-day-picker>div button{background:transparent;padding:5px;}
+.log-day-heading{display:flex;justify-content:space-between;align-items:center;font-size:var(--text-body);}
 .log-day-choice{display:flex;align-items:center;gap:8px;background:transparent;color:inherit;text-decoration:none;text-align:left;padding:5px;border-radius:4px;}
 .log-day-choice img,.log-choice-placeholder{width:40px;height:40px;object-fit:cover;flex:none;border-radius:2px;background:var(--primary);}
 .log-day-choice>span:last-child{display:flex;flex-direction:column;gap:3px;}.log-day-choice small{color:var(--muted);}
@@ -274,8 +274,6 @@
 @media(max-width:760px),(pointer:coarse){.log-join-label-full{display:none;}.log-join-label-short{display:inline;}}
 .log-day-choice>span:last-child{min-width:0;flex:1;}
 .log-day-people{display:block;min-height:1.4em;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.log-people-placeholder{display:flex;align-items:center;gap:4px;height:1.4em;}
-.log-people-placeholder>span{display:block;width:4em;height:.75em;border-radius:999px;background:color-mix(in srgb,var(--muted) 22%,transparent);}
 .log-retained-calendar[hidden]{display:none;}
 
 .log-modal.log-media-detail{padding:var(--panel-inset);padding-bottom:calc(var(--panel-inset) + var(--panel-safe-bottom,0px));}
@@ -302,3 +300,18 @@
 .log-crop-actions{--log-footer-padding-y:10px;--log-footer-min-height:0px;}
 .log-media-detail .log-detail-body{touch-action:pan-y pinch-zoom;}
 .log-note-open{cursor:pointer;user-select:text;-webkit-user-select:text;outline:none;}.log-note-open:focus-visible{background:var(--surface-soft);}
+
+.log-modal.log-day-layer[data-open=true]{display:grid;place-items:center;background:transparent;overflow:visible;pointer-events:none;}
+.log-day-scrim{position:absolute;inset:0;border-radius:inherit;background:color-mix(in srgb,var(--control-black) 25%,transparent);pointer-events:auto;}
+.log-day-card{--log-day-arrow-size:40px;--log-day-arrow-gap:8px;position:relative;width:min(400px,calc(100% - 2 * (var(--log-day-arrow-size) + var(--log-day-arrow-gap))));max-height:min(560px,calc(var(--log-layer-height,var(--viewport-height,100dvh)) * .8));pointer-events:auto;}
+.log-day-card>.log-day-picker{max-height:inherit;gap:var(--space-2);padding:var(--panel-inset);border-radius:var(--radius-control);background:var(--surface);}
+.log-detail-body{touch-action:pan-y pinch-zoom;}.log-entry-facts,.log-contributions,.log-today-floaters{touch-action:pan-y pinch-zoom;}
+.log-day-heading h2{margin:0;font:600 var(--text-body)/1.4 var(--font-ui);overflow-wrap:anywhere;}
+.log-day-choices{display:flex;flex-direction:column;gap:var(--space-2);min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y pinch-zoom;}
+.log-day-choices:empty{min-height:48px;}
+.log-day-picker .log-day-choice{flex:none;border:1px solid var(--divider);border-radius:4px;background:var(--surface-soft);padding:var(--card-inset);gap:12px;user-select:none;-webkit-user-select:none;}
+.log-day-picker .log-day-choice :is(img,.log-choice-placeholder){width:48px;height:48px;border-radius:2px;}.log-day-picker .log-choice-placeholder{background:transparent;}
+.log-day-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-body);}
+.log-day-footer{display:flex;flex-direction:column;gap:var(--space-2);}.log-day-footer>.panel-actions{margin:0;}
+.log-day-card>.log-day-previous,.log-day-card>.log-day-next{position:absolute;top:50%;transform:translateY(-50%);width:var(--log-day-arrow-size);height:var(--log-day-arrow-size);padding:0;}
+.log-day-card>.log-day-previous{right:calc(100% + var(--log-day-arrow-gap));}.log-day-card>.log-day-next{left:calc(100% + var(--log-day-arrow-gap));}

@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {CircleNotch,X} from '@phosphor-icons/react';
+import {CircleNotch} from '@phosphor-icons/react';
 import type {LogEntry,LogPage,LogList,LogCalendarTile} from '../shared/log';
 import {operation,errorText} from './api';
 import {logDateLabel} from './logDate';
@@ -7,8 +7,10 @@ import {logCover} from './logCalendarModel';
 import {logImageUrl} from './logImageCache';
 import {useRecordRefresh} from './useRecordRefresh';
 import {NavLink} from './NavLink';
+import {usePanelVisible} from './PanelReadiness';
 export function LogCalendarDay({date,today,filters,previews,close,open,openPreview,create,children}:{date:string;today:string;filters:Partial<LogList>;previews:LogCalendarTile[];openPreview(entry:LogCalendarTile):void;close():void;open(entry:LogEntry):void;create():void;children:React.ReactNode}){
  const [page,setPage]=useState<LogPage>({items:[],nextCursor:null}),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(true),[error,setError]=useState('');
+ const visible=usePanelVisible(),body=useRef<HTMLDivElement>(null);
  const request=useRef<AbortController|null>(null),query={...filters,calendarDay:date,includeAnniversaries:date>today};
  const load=async(append=false)=>{
   request.current?.abort();const controller=new AbortController();request.current=controller;setBusy(true);setError('');
@@ -16,18 +18,18 @@ export function LogCalendarDay({date,today,filters,previews,close,open,openPrevi
   catch(error){if(!controller.signal.aborted)setError(errorText(error));}
   finally{if(!controller.signal.aborted)setBusy(false);}
  };
- useEffect(()=>{void load();return()=>request.current?.abort();},[]);useRecordRefresh(['log'],()=>load());
+ useEffect(()=>{if(visible)void load();return()=>request.current?.abort();},[visible]);useRecordRefresh(['log'],()=>{if(visible)void load();});
  const items:(LogEntry|LogCalendarTile)[]=[...(loaded?page.items:previews)].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
  return <section className="log-day-picker" aria-label={`Entries for ${date}`}>
-  <div><strong>{logDateLabel(date)}</strong><button aria-label="Close day" onClick={close}><X size={18}/></button></div>
-  {children}
+  <header className="log-day-heading" onClick={()=>body.current?.scrollTo?.({top:0,behavior:'smooth'})}><h2>{logDateLabel(date)}</h2></header>
+  <div ref={body} className="log-day-choices">{children}
   {items.map(entry=>{const full='contributors' in entry,cover=full?logCover(entry):entry.cover;return <NavLink className="log-day-choice" key={entry.id} to={{view:'log',resourceId:entry.id}} navigate={()=>full?open(entry):openPreview(entry)}>
    {cover?<img src={logImageUrl(cover.url)} alt=""/>:<span className="log-choice-placeholder"/>}
-   <span>{entry.title||'(untitled)'}<small className="log-day-people">{full?entry.contributors.map(person=>person.handle||person.name).join(', '):<span className="log-people-placeholder" aria-hidden="true"><span/></span>}</small></span>
+   <span><span className="log-day-title">{entry.title||'(untitled)'}</span><small className="log-day-people" aria-hidden={!full||undefined}>{full?entry.contributors.map(person=>person.handle||person.name).join(', '):null}</small></span>
   </NavLink>;})}
   {busy&&!items.length&&<CircleNotch className="spin" size={18} aria-label="Loading entries"/>}
   {error&&<p className="error">{error}</p>}
   {page.nextCursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}
-  <NavLink className="log-outline-button" to={{view:'log_compose',date}} navigate={create}>Log another event</NavLink>
+  </div><footer className="log-day-footer"><div className="panel-actions log-entry-actions"><NavLink className="solid" to={{view:'log_compose',date}} navigate={create}>Log another event</NavLink></div><div className="panel-actions log-task-footer"><button type="button" aria-label="Close day" onClick={close}>Close</button></div></footer>
  </section>;
 }

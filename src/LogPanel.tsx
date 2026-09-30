@@ -1,6 +1,7 @@
 import {useLogContacts} from './useLogContacts';
 import {LogMedia} from './LogMedia';
 import {useLogMediaDetail,LogNoteDetailLink} from './LogMediaDetail';
+import {useHorizontalSwipe} from './useHorizontalSwipe';
 import {useOpenLogList} from './logSequence';
 import {useLogNeighbors} from './useLogNeighbors';
 import {logImageUrl} from './logImageCache';
@@ -107,13 +108,15 @@ export function LogEditor({user,entry,date,onSaved,cancel,onRemoved}:{user:Profi
 
 export function LogDetail({entryId,user,navigate,onSaved,onCancel,onClose,onAdjacent,logSequence,closeLabel='Close'}:{entryId:string;closeLabel?:string;logSequence?:LogSequence;onAdjacent?(entryId:string,sequence?:LogSequence):void;user:Profile;navigate:Navigate;onSaved?(entry:LogEntry):void;onCancel?():void;onClose?():void}){
  const [entry,setEntry]=useState<LogEntry|null>(()=>cachedLogEntry(user.id,entryId)),[error,setError]=useState(''),[editing,setEditing]=useState(false),[busy,setBusy]=useState(false);
- const swipe=useRef<{x:number;y:number;time:number}|null>(null),request=useRef(0),settled=useRef(0);
+ const request=useRef(0),settled=useRef(0);
  const [fresh,setFresh]=useState(false);
  const visible=usePanelVisible(),intent=useRef<{signature:string;key:string}|null>(null);
  const closeDetail=()=>{if(onClose)onClose();else navigate({view:'log'});};
  const media=useLogMediaDetail(entry?{id:entry.id,title:entry.title,contributors:entry.contributors,coverId:cover(entry)?.id}:null,visible&&!editing,navigate,closeDetail);
  const load=async()=>{const ticket=++request.current;setFresh(false);try{const saved=await operation<LogEntry>('log.get',{entryId});if(ticket!==request.current)return;cacheLogEntry(user.id,saved);setEntry(saved);setFresh(true);setError('');}catch(e){if(ticket!==request.current)return;setError(errorText(e));if(e instanceof ApiError&&[401,403,404,410].includes(e.status)){forgetLogEntry(user.id,entryId);setEntry(null);}}finally{if(ticket===request.current)settled.current=ticket;}};
  const adjacent=useLogNeighbors({entryId,userId:user.id,visible,context:logSequence}),neighbors=adjacent.neighbors;
+ const visitAdjacent=(entry:LogEntry)=>{cacheLogEntry(user.id,entry);if(onAdjacent)onAdjacent(entry.id,adjacent.sequence());else navigate({view:'log',resourceId:entry.id,logSequence:adjacent.sequence()});};
+ const swipe=useHorizontalSwipe({active:visible&&!media.open&&!editing,threshold:48,maxDuration:350,ignore:'a,button,input,textarea,select,video,audio,iframe,[contenteditable],.log-photo-strip,.audio-player,.log-voice-player',swipe:direction=>{const target=direction<0?neighbors.previous:neighbors.next;if(target)visitAdjacent(target);}});
  useLayoutEffect(()=>{if(visible){setFresh(false);setEntry(previous=>previous?.id===entryId?cachedLogEntry(user.id,entryId)||previous:cachedLogEntry(user.id,entryId));setError('');}},[user.id,entryId,visible]);
  useEffect(()=>{if(!visible)return;void load();const ticket=request.current;void readCachedLogEntry(user.id,entryId).then(saved=>{if(saved&&request.current===ticket&&settled.current!==ticket)setEntry(previous=>previous||saved);});return()=>{request.current++;};},[user.id,entryId,visible]);
  useRecordRefresh(['log','people'],()=>{if(visible&&!editing)void load();});
@@ -121,11 +124,10 @@ export function LogDetail({entryId,user,navigate,onSaved,onCancel,onClose,onAdja
 
  usePanelLoading(!entry&&!error);
  if(!entry)return <section className="log-task"><div className="log-task-content">{error?<p className="error" role="alert">{error}</p>:null}</div><footer className="panel-actions log-task-footer"><button onClick={closeDetail}>{closeLabel}</button></footer></section>;
- const visitAdjacent=(entry:LogEntry)=>{cacheLogEntry(user.id,entry);if(onAdjacent)onAdjacent(entry.id,adjacent.sequence());else navigate({view:'log',resourceId:entry.id,logSequence:adjacent.sequence()});};
  if(editing)return <LogEditor user={user} entry={entry} onRemoved={()=>{onCancel?.();if(onClose)onClose();else navigate({view:'log'});}} onSaved={saved=>{request.current++;cacheLogEntry(user.id,saved);setEntry(saved);setFresh(true);setEditing(false);onSaved?.(saved);}} cancel={()=>{setEditing(false);onCancel?.();void load();}}/>;
  const displayCoverId=cover(entry)?.id;
 
- return <PanelVisibilityContext.Provider value={visible&&!media.open}><article ref={media.anchor} className="log-detail" onKeyDown={event=>{if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.altKey||isEditableLogTarget(event.target))return;const target=event.key==='ArrowLeft'?neighbors.previous:event.key==='ArrowRight'?neighbors.next:null;if(target){event.preventDefault();event.stopPropagation();visitAdjacent(target);}else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeDetail();}}} onPointerDown={event=>{if(event.pointerType!=='touch'||(event.target as HTMLElement).closest('button,a,input,textarea,video,audio,.log-note-open,.log-photo-strip,.audio-player'))return;swipe.current={x:event.clientX,y:event.clientY,time:Date.now()};}} onPointerCancel={()=>{swipe.current=null;}} onPointerUp={event=>{const start=swipe.current;swipe.current=null;if(!start||Date.now()-start.time>700)return;const dx=event.clientX-start.x,dy=event.clientY-start.y;if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*2)return;const adjacent=dx<0?neighbors.next:neighbors.previous;if(adjacent)visitAdjacent(adjacent);}}>
+ return <PanelVisibilityContext.Provider value={visible&&!media.open}><article ref={media.anchor} className="log-detail" onKeyDown={event=>{if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.altKey||isEditableLogTarget(event.target))return;const target=event.key==='ArrowLeft'?neighbors.previous:event.key==='ArrowRight'?neighbors.next:null;if(target){event.preventDefault();event.stopPropagation();visitAdjacent(target);}else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeDetail();}}} {...swipe}>
   <div className="log-detail-body"><h2>{entry.title||'(untitled)'}</h2>
   <div className="log-photo-strip"><PostPhotos log horizontal onOpen={media.photo} photos={entry.contributors.flatMap(person=>person.files).filter(file=>file.mime.startsWith('image/')).sort((a,b)=>Number(b.id===displayCoverId)-Number(a.id===displayCoverId))}/></div>
   <div className="log-entry-facts"><p>{entry.date>today()?'plan for':'hung out'} {dateLabel(entry.date)}</p>{entry.place&&<p>at {entry.place}</p>}<p className="log-with">with {entry.contributors.map((person,index)=><span key={person.userId}>{index>0?', ':''}{person.profileVisible===false?<span className="quiet">{person.handle||person.name}</span>:<NavLink to={{view:'person',resourceId:person.userId}} navigate={navigate}>{person.handle||person.name}</NavLink>}</span>)}{entry.historicalPeople?.length?<span>, {entry.historicalPeople.join(', ')}</span>:null}</p></div>

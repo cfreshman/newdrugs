@@ -1,5 +1,6 @@
 import {useLogCalendarData,CALENDAR_CHUNK_WEEKS} from './useLogCalendarData';
 import {LogCalendarDay} from './LogCalendarDay';
+import {LogDayDialog} from './LogDayDialog';
 import {primeLogEntry} from './logEntryCache';
 import {logImageUrl} from './logImageCache';
 import {logDateLabel as dateLabel} from './logDate';
@@ -37,6 +38,8 @@ export function LogCalendar({month,scope,query,personId,jump,create,open,openPer
  const [anchor]=useState(()=>logWeekStart(month?Temporal.PlainDate.from(`${month}-01`).add({months:1}).subtract({days:1}):today));
  const [birthdays,setBirthdays]=useState<BirthdayPerson[]>([]),[ownBirthday,setOwnBirthday]=useState<OwnBirthday|null>(null);
  const [weeks,setWeeks]=useState(LOG_WEEK_BATCH),[selectedDay,setSelectedDay]=useState<string|null>(null),[wanted,setWanted]=useState([0,1]);
+ const closeDay=useCallback(()=>setSelectedDay(null),[]);
+ const adjacentDay=(direction:number)=>{if(!selectedDay)return null;try{const date=Temporal.PlainDate.from(selectedDay).add({days:direction}).toString();return /^\d{4}-/.test(date)&&date>='0001-01-01'&&date<='9999-12-31'?date:null;}catch{return null;}};
  const filters={scope,...(query?{query}:{}),...(personId?{personId}:{})};
  const {days:calendarDays,busy,error,retry,cachedChunks}=useLogCalendarData(anchor,today.toString(),filters,wanted,visible);
  useEffect(()=>{actions.current.onPreviews?.([...new Map([...calendarDays.values()].flatMap(day=>day.items).map(entry=>[entry.id,entry])).values()]);},[calendarDays]);
@@ -100,15 +103,16 @@ export function LogCalendar({month,scope,query,personId,jump,create,open,openPer
       if(birthdays.length===1&&!entries.length)return <NavLink key={date} {...state} to={{view:'person',resourceId:birthdays[0].personId}} navigate={()=>showPerson(birthdays[0].personId)}>{content}</NavLink>;
       if(entries.length===1&&!birthdays.length)return <NavLink key={date} {...state} to={{view:'log',resourceId:entries[0].id}} navigate={()=>openEntry(entries[0])}>{content}</NavLink>;
       if(calendarDays.has(date)&&!entries.length&&!birthdays.length)return <NavLink key={date} {...state} to={{view:'log_compose',date}} navigate={()=>createEntry(date)}>{content}</NavLink>;
-      return <button key={date} {...state} onClick={()=>setSelectedDay(selectedDay===date?null:date)}>{content}</button>;
+      return <button key={date} {...state} onClick={()=>setSelectedDay(date)}>{content}</button>;
      })}</div><div className="log-week-right" aria-label={age?`${age.years} years${age.months?`, ${age.months} months`:""}`:undefined}>{age?.label}</div>
-    </section>{selectedDay&&days.some(day=>day.toString()===selectedDay)&&<LogCalendarDay key={selectedDay} date={selectedDay} today={today.toString()} filters={filters} previews={onDay(selectedDay)} openPreview={openEntry} close={()=>setSelectedDay(null)} open={openEntry} create={()=>createEntry(selectedDay)}>{birthdaysOn(selectedDay).map(person=><NavLink className="log-day-choice" key={`birthday:${person.personId}`} to={{view:'person',resourceId:person.personId}} navigate={()=>showPerson(person.personId)}><Cake size={24}/><span>{person.handle||person.name}’s birthday</span></NavLink>)}</LogCalendarDay>}</div>;
+    </section></div>;
 
    })}
-  </div>,[virtualRows,starts,onDay,birthdaysOn,ownBirthday,selectedDay,today,calendarDays,cachedChunks,openEntry,createEntry,showPerson,virtual]);
+  </div>,[virtualRows,starts,onDay,birthdaysOn,ownBirthday,today,calendarDays,cachedChunks,openEntry,createEntry,showPerson,virtual]);
  return <div ref={root} className="log-calendar-history">
   <LogCalendarHeader><button type="button" className="log-weekday-row" aria-label="Scroll calendar to top" onClick={()=>root.current?.closest<HTMLElement>('.composer-view')?.scrollTo({top:0,behavior:'smooth'})}><span/>{['S','M','T','W','T','F','S'].map((day,index)=><span className="log-weekday" key={index}>{day}</span>)}<span/></button></LogCalendarHeader>
   {grid}
   <div ref={sentinel} className="log-calendar-edge" aria-live="polite">{busy?<CircleNotch className="spin spinner-immediate" size={22} aria-label="Loading older weeks"/>:error?<><p className="error">{error}</p><button onClick={retry}>Try again</button></>:<button onClick={append}>Older weeks</button>}</div>
+  {selectedDay&&<LogDayDialog active={visible} anchor={root} close={closeDay} previous={adjacentDay(-1)?()=>setSelectedDay(adjacentDay(-1)):undefined} next={adjacentDay(1)?()=>setSelectedDay(adjacentDay(1)):undefined}><LogCalendarDay key={selectedDay} date={selectedDay} today={today.toString()} filters={filters} previews={onDay(selectedDay)} openPreview={openEntry} close={closeDay} open={openEntry} create={()=>createEntry(selectedDay)}>{birthdaysOn(selectedDay).map(person=><NavLink className="log-day-choice" key={`birthday:${person.personId}`} to={{view:'person',resourceId:person.personId}} navigate={()=>showPerson(person.personId)}><Cake size={24}/><span>{person.handle||person.name}’s birthday</span></NavLink>)}</LogCalendarDay></LogDayDialog>}
  </div>;
 }
