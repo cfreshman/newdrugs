@@ -15,7 +15,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Working tree | Requested implementation is committed on `main`. Inspect status before editing. |
 | Production | `https://druggie.org`; exact version is in `release.json`, exact deployment is the live `prod/current` target |
 | Cloud dev | `https://dev.druggie.org`; exact deployment is the live `dev/current` target; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have device login, the Log image maker, the single visual plus voice-note contribution rule, and the inbox/mobile-control correction. Production has the imported Log history. Dev does not bump public versions. |
+| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, the single visual plus voice-note contribution rule, and the inbox/mobile-control correction. Production has the imported Log history. Dev does not bump public versions. |
 | Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx verified active; both API health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |

@@ -1,6 +1,19 @@
 # Log image maker
 
-Shipped to production on September 30, 2026. Current production is v0.34.2 at `20260930134827130`; cloud dev is `20260930134655256`. Source is on `main` at `0d2e3e0` with the later UI correction `04c61b0`. The user approved the production release. The separate Square worktree is an old prototype checkpoint, not the current implementation.
+## Square follow-up v0.34.3
+
+After the v0.34.2 release, the user approved another Square pass and explicitly requested production deployment. It shipped to production as v0.34.3 at `20260930192839484` and cloud dev at `20260930192733218`.
+
+- The canvas size now follows its available width, up to 512px, instead of the editor's height. In a 393px mobile-sized localhost view, the preview stayed 369px square when viewport height changed from 760px to 430px during text editing. The editor scrolls when the keyboard leaves less room.
+- Tapping an existing text layer now selects it without reopening typing. Edit text and End edit explicitly change modes, so dragging can resume after End edit. A browser pointer drag moved the text on the mobile-sized view; physical touch still needs user/device confirmation.
+- Text has a Background toggle and color picker. Its chosen backing color survives an off/on toggle. The renderer paints the backing behind each rendered line instead of across the entire text layer box, following the canonical Square span behavior. No image backing color control was added, per the user's correction.
+- Style sliders now use a thinner filled track and rectangular thumb related to the imported-photo zoom control. Their labels and tracks align in fixed columns. Background, Outline and Shadow each have their own aligned row, with the relevant color swatch in that row.
+- The user approved editable drawing palette swatches with per-swatch reset, Random color and local-file/image-link drag/drop. Random stays at the end of the color row; Reset stays in the draw controls row. Image links use a bounded credential-free browser fetch and require CORS; local file drop works independently. The user then explicitly removed Grid. Center actions remain excluded because snapping guides already cover them.
+- Clicking the rainbow custom-color picker immediately reapplies its remembered color, before any picker change. When More opens, the palette, type-specific tools, ordinary layer actions and layer list hide. The persistent top toolbar, square, More button and footer remain visible, with style controls directly below the square. Opening More ends active text typing.
+
+TypeScript, both deployment builds, API/worker activation, all four service checks, public API health, and published JS/CSS byte comparison passed. The mobile-sized localhost view was inspected for preview sizing, text drag, style layout, the More mode and custom-color click. No test suite or physical touch check ran. The canonical reference and comparison are in [REFERENCE.md](REFERENCE.md).
+
+The initial maker shipped to production on September 30, 2026 as v0.34.2 at `20260930134827130`; cloud dev was `20260930134655256`. The separate Square worktree is an old prototype checkpoint, not the current implementation.
 
 ## Behavior
 

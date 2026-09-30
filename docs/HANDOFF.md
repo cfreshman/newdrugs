@@ -8,9 +8,10 @@ Current operational handoff, verified September 30, 2026. Read this and `AGENTS.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
 - Production is deployed from `main`. `release.json` is the authoritative public version; inspect the live `prod/current` symlink only when an exact deployment ID matters.
 - Cloud dev carries current development behavior without bumping the public version. Inspect the live `dev/current` symlink only when an exact deployment ID matters.
-- Production is **v0.34.2**, deployment `20260930134827130`. Cloud dev is at deployment `20260930134655256`; dev does not bump the public version. Both include the Log image maker, optional device login, and the single visual plus voice-note Log contribution rule. Inspect `git status` for subsequent work.
+- Production is **v0.34.3**, deployment `20260930192839484`. Cloud dev is at deployment `20260930192733218`; dev does not bump the public version. Both include the Log image maker, its latest Square refinements, optional device login, and the single visual plus voice-note Log contribution rule. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
-- **The Square and device-login production release is complete.** The user approved production, and the later inbox-link/mobile-drawing correction shipped as v0.34.2. The planned app upgrade remains in a separate paused worktree and has no production approval.
+- **The Square and device-login production release is complete.** The latest user-approved Square follow-up shipped as v0.34.3. The planned app upgrade remains in a separate paused worktree and has no production approval.
+- **Square v0.34.3:** mobile preview sizing and text selection/dragging, text backgrounds, slimmer sliders, drawing swatch editing, Random color and image drag/drop are shipped. More hides ordinary controls while its style controls are open. The custom-color picker selects its remembered color on click. Image backing color, Grid and explicit center actions remain excluded by the user's correction. Read [the current Square handoff](square/HANDOFF.md) before continuing that editor.
 
 ### Completed Log hotfix
 
@@ -159,7 +160,7 @@ SH
 
 Reload the browser afterward to load the matching old bundle. This UI batch introduces no database migration to undo; runtime data stays intact.
 
-The final UI checkpoint passed 95 focused UI/navigation checks and 3 additional isolated database checks; the full build passed. The later v0.33.3 hotfix and its validation are recorded above. The immediate prior production release is now v0.34.1; the v0.32.1 baseline remains separately pinned.
+The final UI checkpoint passed 95 focused UI/navigation checks and 3 additional isolated database checks; the full build passed. The later v0.33.3 hotfix and its validation are recorded above. Its immediate prior production release was v0.34.1; the v0.32.1 baseline remains separately pinned.
 
 ## Current release and next work
 
@@ -167,4 +168,4 @@ Optional browser-approved device login and the Log image maker are in production
 
 The Log image maker is part of the existing entry editor, retaining its form and scroll. It keeps raw layers and source images only during the active edit; Save entry uploads the final flattened PNG once. Each attendee can save one photo or video and one voice note, with this rule shared by UI, CLI and MCP. Read [the current Square handoff](square/HANDOFF.md) for UI details and validation. The reference apps remain read-only.
 
-Production v0.34.2 passed deployment API health, exact worker heartbeat, all required service checks, public API health, and published JS/CSS byte comparison with the local build. The public HTML differs from the static template because server page-preview metadata is rendered into it. Cloud dev activation passed API and exact worker checks. The planned app upgrade remains queued in `/Users/work/.codex/worktrees/app-level-up/newdrugs`; no work on it was included in this release.
+Production v0.34.3 passed deployment API health, exact worker heartbeat, all required service checks, public API health, and published JS/CSS byte comparison with the local build. The public HTML differs from the static template because server page-preview metadata is rendered into it. Cloud dev activation passed API and exact worker checks. The immediate prior production release is v0.34.2 at `/srv/newdrugs/prod/releases/20260930134827130`. The planned app upgrade remains queued in `/Users/work/.codex/worktrees/app-level-up/newdrugs`; no work on it was included in this release.

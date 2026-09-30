@@ -32,7 +32,7 @@ export class SquarePainter {
    layerContext.clearRect(0,0,bitmap.width,bitmap.height);layerContext.save();layerContext.translate(shadowPad+(layer.x+layer.w/2)*SQUARE_SIZE,shadowPad+(layer.y+layer.h/2)*SQUARE_SIZE);layerContext.rotate(layer.angle*Math.PI/180);
    const width=layer.w*SQUARE_SIZE,height=layer.h*SQUARE_SIZE,left=-width/2,top=-height/2;
    const path=()=>{layerContext.beginPath();if(layer.oval)layerContext.ellipse(0,0,width/2,height/2,0,0,Math.PI*2);else layerContext.rect(left,top,width,height);};
-   if(layer.type==='shape'||layer.background!=='transparent'){layerContext.fillStyle=layer.type==='shape'?layer.color:layer.background;path();layerContext.fill();}
+   if(layer.type==='shape'||layer.type!=='text'&&layer.background!=='transparent'){layerContext.fillStyle=layer.type==='shape'?layer.color:layer.background;path();layerContext.fill();}
    if(layer.type==='image'||layer.type==='draw'){
     const image=layer.id===drawing?.id?drawing.canvas:layer.src?images.get(layer.src):undefined;
     if(image){layerContext.save();path();layerContext.clip();const region=layer.crop||{x:0,y:0,w:1,h:1},sourceWidth=image instanceof HTMLImageElement?image.naturalWidth:image.width,sourceHeight=image instanceof HTMLImageElement?image.naturalHeight:image.height;layerContext.imageSmoothingEnabled=true;layerContext.imageSmoothingQuality='high';layerContext.drawImage(image,region.x*sourceWidth,region.y*sourceHeight,region.w*sourceWidth,region.h*sourceHeight,left,top,width,height);layerContext.restore();}
@@ -40,7 +40,7 @@ export class SquarePainter {
     const layout=this.text(layerContext,layer,width,height);layerContext.font=font(layer,layout.size);layerContext.textBaseline='alphabetic';layerContext.textAlign=layer.align;layerContext.fillStyle=layer.color;
     const first=layerContext.measureText(layout.lines[0]||'M'),last=layerContext.measureText(layout.lines.at(-1)||'M'),ascent=first.actualBoundingBoxAscent||layout.size*.8,descent=last.actualBoundingBoxDescent||layout.size*.2,lineHeight=layout.size*1.1;
     const x=layer.align==='left'?left:layer.align==='right'?width/2:0,y=(ascent-(layout.lines.length-1)*lineHeight-descent)/2;
-    layout.lines.forEach((line,index)=>{if(layer.outline){layerContext.strokeStyle=layer.outlineColor;layerContext.lineWidth=layout.size*layer.outlineWidth/100;layerContext.lineJoin='round';layerContext.strokeText(line,x,y+index*lineHeight);}layerContext.fillText(line,x,y+index*lineHeight);});
+    layout.lines.forEach((line,index)=>{const baseline=y+index*lineHeight;if(line&&layer.background!=='transparent'){const measured=layerContext.measureText(line),left=layer.align==='left'?x:layer.align==='right'?x-measured.width:x-measured.width/2;layerContext.fillStyle=layer.background;layerContext.fillRect(left,baseline-layout.size*.8,measured.width,lineHeight);layerContext.fillStyle=layer.color;}if(layer.outline){layerContext.strokeStyle=layer.outlineColor;layerContext.lineWidth=layout.size*layer.outlineWidth/100;layerContext.lineJoin='round';layerContext.strokeText(line,x,baseline);}layerContext.fillText(line,x,baseline);});
    }
    if(layer.border){path();layerContext.strokeStyle=layer.borderColor;layerContext.lineWidth=layer.borderWidth;layerContext.stroke();}
    layerContext.restore();ctx.save();ctx.globalAlpha=layer.opacity;if(layer.shadow){ctx.shadowColor=layer.shadowColor;ctx.shadowOffsetX=layer.shadowX;ctx.shadowOffsetY=layer.shadowY;}ctx.drawImage(bitmap,-shadowPad,-shadowPad);ctx.restore();
