@@ -2,7 +2,7 @@
 
 This is the entry point for operating and continuing work on New Drugs. Read it with [AGENTS.md](../AGENTS.md) before changing the project. Start with [HANDOFF.md](HANDOFF.md) for the short current snapshot. This guide provides detailed workflows and a code map. Historical release notes are in [OPERATING_HISTORY.md](OPERATING_HISTORY.md). Update it when those facts change.
 
-**Updated September 28, 2026.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans. Use `release.json` and the live stage symlinks when an exact version or deployment ID matters; routine patch releases do not require documentation churn here.
+**Updated September 30, 2026.** Historical research and roadmap documents are useful context, but some describe behavior that has since been replaced. Current user instructions, current code, and the verified state below take precedence over those old plans. Use `release.json` and the live stage symlinks when an exact version or deployment ID matters; routine patch releases do not require documentation churn here.
 
 ## Handoff state
 
@@ -15,15 +15,15 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Working tree | Requested implementation is committed on `main`. Inspect status before editing. |
 | Production | `https://druggie.org`; exact version is in `release.json`, exact deployment is the live `prod/current` target |
 | Cloud dev | `https://dev.druggie.org`; exact deployment is the live `dev/current` target; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have the calendar/DM/CLI additions and in-session app-update prompt. Production has the imported Log history. Dev does not bump public versions. |
+| Stage parity | Both stages have device login, the Log image maker, the single visual plus voice-note contribution rule, and the inbox/mobile-control correction. Production has the imported Log history. Dev does not bump public versions. |
 | Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx verified active; both API health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
-| Outstanding requested work | No unfinished requested feature/deployment. Physical iPhone validation, large capacity measurements and 65 already-broken imported source media references remain known limits, not authorization for new projects. |
+| Outstanding requested work | The larger app upgrade remains paused in its separate worktree. Physical iPhone validation, large capacity measurements and 65 already-broken imported source media references remain known limits, not authorization for new projects. |
 
 **Log and scaling are already shipped.** The old checkpoint tags are historical recovery points, not the current base. Do not reset, clean, stash, or revert work casually. Deployment builds the working tree, not a Git commit.
 
-Recent completed work includes stale-while-refresh Log calendar tiles, grouped DMs with sparse time markers, structured CLI failures, `access.get`, `messages.window`, `automations.validate`, and an in-session app-update prompt on dev. Earlier UI/navigation corrections remain documented below and in history.
+Recent completed work includes the Log image maker, optional browser-approved CLI device login, stale-while-refresh Log calendar tiles, grouped DMs with sparse time markers, structured CLI failures, `access.get`, `messages.window`, `automations.validate`, and an in-session app-update prompt. Earlier UI/navigation corrections remain documented below and in history.
 
 This guide does not itself authorize another production deployment, restart of a local frontend, new social activity, or a new feature project.
 
@@ -324,7 +324,7 @@ CLI failures are one JSON object on stderr with a stable server error code when 
 
 Credentials live in the private config store, normally `~/.config/newdrugs/config.json`; operator credentials are separate in `admin.json`. Never dump these files. Login tokens go through `--token-stdin`, not command arguments, shell history, docs, screenshots, or replies. Reuse the user's existing connection; do not ask for or expose keys unnecessarily.
 
-The default Connected agents setup still uses a PAT and the existing LLM paste prompt. Optional `newdrugs login --device --name "My cloud agent" --scope read` prints an approval link/code and polls for up to ten minutes. The human approves at `/agents/device`, chooses the ordinary name, permission and expiration, and can revoke the connection in Connected agents. The CLI verifies identity before saving credentials automatically; it starts no browser or localhost callback. Only the human code/link may be relayed in chat. Dev remains gated and links to local Vite; production links to the public app origin. Device login is currently deployed to dev only.
+The default Connected agents setup still uses a PAT and the existing LLM paste prompt. Optional `newdrugs login --device --name "My cloud agent" --scope read` prints an approval link/code and polls for up to ten minutes. The human approves at `/agents/device`, chooses the ordinary name, permission and expiration, and can revoke the connection in Connected agents. The CLI verifies identity before saving credentials automatically; it starts no browser or localhost callback. Only the human code/link may be relayed in chat. Dev remains gated and links to local Vite; production links to the public app origin. Device login is deployed to both stages as of v0.34.1.
 
 Installed CLI copies check daily for a strictly newer published version. `newdrugs update` checks immediately. Source checkouts do not self-overwrite. For controlled source verification after a build:
 

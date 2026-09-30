@@ -20,7 +20,7 @@ The reference export uses a remotely loaded html2canvas script and removes a one
 
 ## Integration constraints
 
-Device login is complete on dev. The unfinished maker is paused in the Square worktree; read [HANDOFF.md](HANDOFF.md) for the current source and remaining validation. The user wants this before the larger app upgrade.
+Device login and the Log image maker are shipped to both stages. The earlier Square worktree is a prototype checkpoint; the current source is on `main`. Read [HANDOFF.md](HANDOFF.md) for the released behavior and remaining device-validation limits. The larger app upgrade remains separate.
 
 The latest user scope is Make inside Log entry media options while nothing is attached, alongside Upload. There is no standalone page or download/export workflow. Aim for Instagram Story-quality editing on a square canvas while using New Drugs typography, icons, controls and panel geometry. Keep raw layers/source images and the flattened preview local throughout the active entry edit, permitting re-editing until Save entry. Only then upload the final flattened image through existing Log storage; clear raw components when the edit ends. Do not persist raw projects against the 64 MB account quota. Creating artwork must not automatically publish or edit a profile. Account data and server media permissions remain authoritative.
 
