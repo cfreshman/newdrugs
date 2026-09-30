@@ -156,7 +156,7 @@
 .log-floating-inline{position:sticky;bottom:0;}
 .log-floating :is(button,a),.log-floating .log-options,.log-today-floaters{pointer-events:auto;}
 .log-home-footer{position:static;padding:0;margin:0;background:none;gap:8px;}
-.log-home-actions{gap:var(--space-2);margin:0;flex-wrap:nowrap;}
+.log-home-footer .log-home-actions{gap:var(--space-2);margin:0;flex-wrap:nowrap;}
 .log-home-actions>.log-scan-button{flex:1;min-height:44px;}
 .log-home-actions>.log-outline-button{flex:2;min-height:44px;}
 .log-home-actions>.log-options-toggle{border:0;background:var(--surface-soft);color:var(--ink);}
@@ -215,7 +215,7 @@
 
 .log-editor-preview{position:relative;border-radius:var(--radius-control);}.log-media-loading{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:color-mix(in srgb,var(--surface) 75%,transparent);pointer-events:none;color:var(--primary);}
 
-.log-header-host{flex:none;}.log-fixed-weekdays{padding:var(--panel-inset) var(--panel-inset) 0;background:var(--panel-surface-top);}
+.log-header-host{flex:none;}.log-fixed-weekdays{padding:0 var(--panel-inset);background:var(--panel-surface-top);}
 .mode-main:has(.log-fixed-weekdays) .mode-page-log:has(>.log-browser){padding-top:0;}
 .log-search input{width:0;}.log-search>button{flex:0 0 auto;white-space:nowrap;}.log-search>button[aria-label="Save this view"]{width:38px;height:38px;padding:0;}
 
