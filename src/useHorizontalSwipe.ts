@@ -2,13 +2,20 @@ import {useLayoutEffect,useRef,type PointerEvent} from 'react';
 
 let clearClickGuard:(()=>void)|undefined;
 /** Consume the release click even if navigation replaces the gesture's source. */
-export function consumeSwipeClick(owner:HTMLElement){
+export function consumeSwipeClick(owner:HTMLElement,down?:Event&{pointerId:number}){
  clearClickGuard?.();
  const boundary=owner.closest('.mode-main,.composer-menu-layer')||owner.closest('.app,.composer-view')||owner;
- const clear=()=>{clearTimeout(timer);document.removeEventListener('click',click,true);document.removeEventListener('pointerdown',clear,true);if(clearClickGuard===clear)clearClickGuard=undefined;};
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ const clear=()=>{clearTimeout(timer);document.removeEventListener('click',click,true);document.removeEventListener('pointerdown',nextDown,true);document.removeEventListener('pointerup',release,true);document.removeEventListener('pointercancel',clear,true);window.removeEventListener('blur',clear);if(clearClickGuard===clear)clearClickGuard=undefined;};
+ const nextDown=(event:Event)=>{if(event!==down)clear();};
+ const arm=()=>{clearTimeout(timer);timer=setTimeout(clear,350);};
+ // A backdrop dismisses on pointer-down. Protect its eventual release click,
+ // even when the person keeps their finger down longer than the click delay.
+ const release=(event:Event)=>{if((event as Event&{pointerId:number}).pointerId===down?.pointerId)arm();};
  const click=(event:MouseEvent)=>{if(event.target instanceof Node&&boundary.contains(event.target)){event.preventDefault();event.stopImmediatePropagation();clear();}};
- const timer=setTimeout(clear,350);clearClickGuard=clear;
- document.addEventListener('click',click,true);document.addEventListener('pointerdown',clear,true);
+ clearClickGuard=clear;
+ if(down){document.addEventListener('pointerup',release,true);document.addEventListener('pointercancel',clear,true);}else arm();
+ document.addEventListener('click',click,true);document.addEventListener('pointerdown',nextDown,true);window.addEventListener('blur',clear);
 }
 interface Options {active?:boolean;allowMouse?:boolean;threshold?:number;ratio?:number;maxDuration?:number;ignore?:string;canSwipe?():boolean;swipe(direction:-1|1,dx:number,dy:number):void}
 const controls='button,input,textarea,select,video,audio,iframe,[contenteditable]';

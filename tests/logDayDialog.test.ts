@@ -32,6 +32,17 @@ it('opens a centered top-layer chooser outside week rows without moving or rebui
 it('provides desktop side arrows and skips empty dates to a single-event day',async()=>{
  await mount();await pick();expect(arrow('Previous').hidden).toBe(false);expect(arrow('Next').hidden).toBe(false);expect(arrow('Next').getAttribute('href')).toContain(`date=${newer}`);await act(async()=>arrow('Next').click());expect(layer().querySelector('[aria-label^="Entries for"]')?.getAttribute('aria-label')).toBe(`Entries for ${newer}`);expect(layer().querySelectorAll('.log-day-choice')).toHaveLength(1);expect(arrow('Next').disabled).toBe(true);await act(async()=>arrow('Previous').click());expect(layer().querySelectorAll('.log-day-choice')).toHaveLength(2);expect(open).not.toHaveBeenCalled();
 });
+it('consumes a backdrop release after a held touch without opening the calendar underneath',async()=>{
+ await mount();await pick();vi.useFakeTimers();
+ try{
+  const day=dom.container.querySelector<HTMLElement>('.log-day[aria-label^="Add entry"]')!;
+  pointer(layer().querySelector<HTMLElement>('.log-day-scrim')!,'pointerdown',1,100,100);
+  act(()=>vi.advanceTimersByTime(600));pointer(day,'pointerup',1,100,100);
+  const click=new MouseEvent('click',{bubbles:true,cancelable:true});await act(async()=>day.dispatchEvent(click));
+  expect(click.defaultPrevented).toBe(true);expect(create).not.toHaveBeenCalled();
+  pointer(day,'pointerdown',2,100,100);pointer(day,'pointerup',2,100,100);await act(async()=>day.click());expect(create).toHaveBeenCalledOnce();
+ }finally{vi.useRealTimers();}
+});
 it('swipes from a result row between days and consumes its release click',async()=>{
  await mount();await pick();const node=layer().querySelector<HTMLElement>('.log-day-choice')!;pointer(node,'pointerdown',1,200,100);pointer(node,'pointermove',1,130,102);pointer(node,'pointerup',1,120,102);await act(async()=>{await Promise.resolve();});expect(layer().querySelector('[aria-label^="Entries for"]')?.getAttribute('aria-label')).toBe(`Entries for ${newer}`);const click=new MouseEvent('click',{bubbles:true,cancelable:true});await act(async()=>arrow('Previous').dispatchEvent(click));expect(click.defaultPrevented).toBe(true);expect(layer()).toBeTruthy();expect(open).not.toHaveBeenCalled();
 });
