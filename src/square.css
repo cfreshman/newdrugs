@@ -50,7 +50,7 @@
  .square-editor .square-layer-actions{justify-content:flex-start;}
  .square-editor .square-layer-actions button{flex:none;width:40px;height:40px;min-height:40px;padding:0;}
  .square-action-icon{display:block;}
- .square-editor .square-draw-controls{display:flex;flex-wrap:nowrap;justify-content:space-between;overflow-x:auto;scrollbar-width:none;}
+ .square-editor .square-draw-controls{display:flex;flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;}
  .square-editor .square-draw-controls button{flex:none;width:40px;height:40px;min-height:40px;padding:0;}
  .square-editor .square-text-controls{display:flex;flex-wrap:nowrap;}
  .square-editor .square-font-picker{width:auto;flex:1;min-width:0;max-width:none;}
