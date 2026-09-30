@@ -46,7 +46,7 @@ export function parseDestination(value: string, origin: string): Destination | n
     if (!destination || ['person', 'post','log_join','log_code'].includes(destination.view) && !destination.resourceId) return null;
     if (destination.resourceId && !/^[A-Za-z0-9:_.-]{1,150}$/.test(destination.resourceId)) return null;
     if (mode) destination.mode = mode;
-    const date=url.searchParams.get('date');if(date&&destination.view==='log_compose'){if(!logDate.safeParse(date).success)return null;destination.date=date;}
+    const date=url.searchParams.get('date');if(date&&(destination.view==='log_compose'||destination.view==='log'&&!destination.resourceId)){if(!logDate.safeParse(date).success)return null;destination.date=date;}
     const role = url.searchParams.get('role');
     if (destination.view === 'chat_history' && (role === 'user' || role === 'assistant')) destination.role = role;
     const area = url.searchParams.get('area'), radius = Number(url.searchParams.get('radius'));

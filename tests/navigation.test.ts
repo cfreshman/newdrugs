@@ -51,3 +51,6 @@ it('uses the natural mode without a prefix and retains an explicit alternate mod
   expect(parseDestination('/posts/chat-history?q=tennis&role=user','https://druggie.org')).toEqual({view:'chat_history',query:'tennis',role:'user',mode:'posts'});
   expect(parseDestination('/friends/posts/a%2Fb','https://druggie.org')).toBeNull();
 });
+it('round-trips a date-specific Log chooser without a timezone conversion',()=>{
+ const destination={view:'log' as const,date:'2024-02-29'};expect(destinationPath(destination)).toBe('/log?date=2024-02-29');expect(parseDestination('/log?date=2024-02-29','https://druggie.org')).toMatchObject(destination);expect(parseDestination('/agent/log?date=2024-02-29','https://druggie.org')).toMatchObject({...destination,mode:'agent'});expect(parseDestination('/log?date=2023-02-29','https://druggie.org')).toBeNull();
+});

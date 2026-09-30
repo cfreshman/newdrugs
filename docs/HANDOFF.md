@@ -1,6 +1,6 @@
 # Start here: New Drugs
 
-Current operational handoff, verified September 29, 2026. Read this and `AGENTS.md` first, then the relevant sections of [the operating guide](OPERATING_GUIDE.md) and actual source. You do not need the previous conversation. Do not treat historical plans or release notes as current instructions.
+Current operational handoff, verified September 30, 2026. Read this and `AGENTS.md` first, then the relevant sections of [the operating guide](OPERATING_GUIDE.md) and actual source. You do not need the previous conversation. Do not treat historical plans or release notes as current instructions.
 
 ## State at handoff
 
@@ -8,9 +8,9 @@ Current operational handoff, verified September 29, 2026. Read this and `AGENTS.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
 - Production is deployed from `main`. `release.json` is the authoritative public version; inspect the live `prod/current` symlink only when an exact deployment ID matters.
 - Cloud dev carries current development behavior without bumping the public version. Inspect the live `dev/current` symlink only when an exact deployment ID matters.
-- Production remains **v0.32.1**, deployment `20260930000517890`. The subsequent Log cover, media/note detail, footer and day-chooser/gesture corrections are deployed to **cloud dev only**, deployment `20260930032019717`. Inspect `git status` for subsequent work.
+- Production remains **v0.32.1**, deployment `20260930000517890`. The subsequent Log cover, media/note detail, footer and day-chooser/gesture corrections are deployed to **cloud dev only**, deployment `20260930040022354`. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
-- **No further production deployment is authorized or queued.** Continue from the user's next request. Deferred ideas are not permission to start or deploy projects.
+- **The current UI checkpoint is approved for production after checks.** The later level-up work belongs on a separate branch/worktree and preview database, without an automatic production deployment.
 
 ## Product intent
 
@@ -96,7 +96,7 @@ Describe schemas before CLI calls. Existing named CLI profiles are normally `def
 - Log cover selection uses an explicit cover first, then the earliest valid photo timestamp across attendees. Missing timestamps fall back to event participant/file order; equal timestamps use that same order. Full entries, strips, calendar tiles and invite previews share this result.
 - Log photos and notes open their own nonblocking native top-layer detail above the retained entry, with contributor/note/voice context, contained media, pinch/pan and swipes. Generic post image viewing remains PhotoSwipe. Strip and detail photos use a shared 4px radius.
 - Log footers use New Drugs' shared pill styles. Media has a text-only full-width Download row above Back/Close at a 2:1 width ratio. Back returns to the entry; Close closes the entry. Download and Older/Newer share compact 6px vertical padding; the main action row stays taller. Do not import Logcal's outlined button skin or add a download icon.
-- The latest user correction replaces the inline multi-event day panel with a centered mini top-layer chooser. Both mobile and desktop have side arrows and swipes between calendar days. Keep Log another event with the selected date. There is no Close button: outside pointer-down and Escape dismiss the chooser. Events without a photo keep a colored square; only contributor-loading text reserves empty space. Scan, Log new event and Log another event use the same ordinary New Drugs pill treatment, without a separate primary color. The calendar stays mounted with its original scroll; opening a record retains normal full-calendar chronology. This overrides older inline-chooser layout instructions.
+- The latest user correction replaces the inline multi-event day panel with a centered mini top-layer chooser. Both mobile and desktop have side arrows and swipes between occupied calendar dates, including single-event days, without wrapping. Date-specific `/log?date=YYYY-MM-DD` links restore the chooser through reload and browser history. Direct single-event calendar clicks still open the individual entry. Log another event is removed by the latest user correction. There is no Close button: outside pointer-down and Escape dismiss the chooser. Events without a photo keep a colored square; only contributor-loading text reserves empty space. Scan and Log new event use the same ordinary New Drugs pill treatment, without a separate primary color. The chooser backing matches the main panel radius and clips its inner surface. The calendar stays mounted with its original scroll; opening a record retains normal full-calendar chronology. This overrides older inline-chooser layout instructions.
 - Gesture inventory traced Logcal's active today-card, hangout, media and crop flows plus native horizontal scrollers. Today cards, hangout navigation, media bodies and the day chooser share single-pointer navigation guards, vertical-scroll/selection protection and release-click consumption. Images retain their own pinch/pan behavior. Unused video-trimmer/camera gesture experiments were not ported.
 - Closed secondary chat: Posts/Friends/Log main panel centers in the viewport. Open chat: main panel moves only enough to let chat grow to its width, with fixed-width sidenav. Chat stays anchored to the bottom-right. Mobile uses a takeover, not side-by-side panels.
 - Open Log overlays track the underlying panel's movement even without a resize. Keep the mounted calendar, entry and drafts intact.
@@ -123,3 +123,30 @@ Remaining limits, not an automatic task list:
 - Do not contact DigitalOcean Support again without authorization. Existing ticket 12849848 was authorized; the original host fault was not proven, but the workload moved and the faulty host is gone.
 
 For detailed workflows use [OPERATING_GUIDE.md](OPERATING_GUIDE.md). For what happened historically, use [OPERATING_HISTORY.md](OPERATING_HISTORY.md). Keep this handoff short and current; append history to the history file, not to the operational snapshot.
+
+## Current UI release and rollback
+
+The final UI candidate passed 95 focused UI/navigation checks, 3 isolated Log database checks, TypeScript and a full build. The database checks exercise nearest occupied dates across a 60-year empty gap, forward/backward ordering with compatible existing cursors, and agent opening of date-specific chooser links. The temporary test tunnel was closed.
+
+Source sanity checks retained the existing button/typography sizes: the calendar actions have 44px hit areas, utility rows remain more compact than main action rows, and Today uses 13px titles/11px names against Logcal's 14px/12px. Preview titles are 14px. These retain the content-space balance and shared desktop/mobile hierarchy; this is a source comparison, not physical-device measurement.
+
+Before the approved production deployment, the exact rollback release is `/srv/newdrugs/prod/releases/20260930000517890`, **v0.32.1**, recorded by repository commit `209d6d7f7fc16b7ba637f2ed7b31f849b9ef3caf`. Keep that release as the protected previous target. To restore it without resetting this checkout:
+
+```sh
+ssh -i /Users/work/.ssh/newdrugs_do -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes root@167.172.21.42 'bash -s' <<'SH'
+set -eu
+ui_rollback_release=/srv/newdrugs/prod/releases/20260930000517890
+test -f "$ui_rollback_release/dist/server/index.js"
+systemctl stop newdrugs-worker@prod
+ln -sfn "$ui_rollback_release" /srv/newdrugs/prod/current.rollback
+mv -Tf /srv/newdrugs/prod/current.rollback /srv/newdrugs/prod/current
+systemctl restart newdrugs@prod
+systemctl start newdrugs-worker@prod
+curl -fsS --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:7331/api/health
+ui_rollback_pid=$(systemctl show newdrugs-worker@prod -p MainPID --value)
+node --env-file=/etc/newdrugs/prod.env "$ui_rollback_release/dist/server/workerStatus.js" --require-worker "$ui_rollback_pid"
+test "$ui_rollback_pid" = "$(systemctl show newdrugs-worker@prod -p MainPID --value)"
+SH
+```
+
+Reload the browser afterward to load the matching old bundle. This UI batch introduces no database migration to undo; runtime data stays intact.

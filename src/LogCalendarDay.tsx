@@ -8,7 +8,7 @@ import {logImageUrl} from './logImageCache';
 import {useRecordRefresh} from './useRecordRefresh';
 import {NavLink} from './NavLink';
 import {usePanelVisible} from './PanelReadiness';
-export function LogCalendarDay({date,today,filters,previews,open,openPreview,create,children}:{date:string;today:string;filters:Partial<LogList>;previews:LogCalendarTile[];openPreview(entry:LogCalendarTile):void;open(entry:LogEntry):void;create():void;children:React.ReactNode}){
+export function LogCalendarDay({date,today,filters,previews,open,openPreview,children}:{date:string;today:string;filters:Partial<LogList>;previews:LogCalendarTile[];openPreview(entry:LogCalendarTile):void;open(entry:LogEntry):void;children:React.ReactNode}){
  const [page,setPage]=useState<LogPage>({items:[],nextCursor:null}),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(true),[error,setError]=useState('');
  const visible=usePanelVisible(),body=useRef<HTMLDivElement>(null);
  const request=useRef<AbortController|null>(null),query={...filters,calendarDay:date,includeAnniversaries:date>today};
@@ -30,6 +30,6 @@ export function LogCalendarDay({date,today,filters,previews,open,openPreview,cre
   {busy&&!items.length&&<CircleNotch className="spin" size={18} aria-label="Loading entries"/>}
   {error&&<p className="error">{error}</p>}
   {page.nextCursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}
-  </div><footer className="log-day-footer"><div className="panel-actions log-entry-actions"><NavLink to={{view:'log_compose',date}} navigate={create}>Log another event</NavLink></div></footer>
+  </div>
  </section>;
 }

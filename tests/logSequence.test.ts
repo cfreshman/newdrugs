@@ -29,7 +29,7 @@ it('continues the same paginated source and carries loaded IDs into subsequent n
  const original=api.operation.getMockImplementation()!;
  api.operation.mockImplementation((name,input,...args)=>name==='log.list'?Promise.resolve({items:[entry('b'),entry('c')],nextCursor:null}):original(name,input,...args));
  await act(async()=>dom.root.render(createElement(Harness,{id:'a',context:{key:'profile',ids:['a'],query:{personId:'friend',scope:'shared'},nextCursor:'page2'}})));
- expect(api.operation).toHaveBeenCalledWith('log.list',{personId:'friend',scope:'shared',recurring:false,includeAnniversaries:false,before:'page2',limit:30},{signal:expect.anything()});
+ expect(api.operation).toHaveBeenCalledWith('log.list',{personId:'friend',scope:'shared',recurring:false,includeAnniversaries:false,order:'newest',before:'page2',limit:30},{signal:expect.anything()});
  expect(value.neighbors.next?.id).toBe('b');const context=value.sequence();expect(context?.ids).toEqual(['a','b','c']);
  await act(async()=>dom.root.render(createElement(Harness,{id:'b',context})));
  expect(value.neighbors.previous?.id).toBe('a');expect(value.neighbors.next?.id).toBe('c');expect(api.operation.mock.calls.filter(call=>call[0]==='log.list')).toHaveLength(1);

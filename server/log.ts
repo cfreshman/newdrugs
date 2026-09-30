@@ -90,9 +90,11 @@ async function list(userId:string,d:LogList,session?:ClientSession,full=false){
  if(d.personId)filter.push({members:d.personId});if(d.recurring)filter.push({recurrence:{$ne:'none'}});
  if(d.from||d.through)filter.push({date:{...(d.from?{$gte:d.from}:{}),...(d.through?{$lte:d.through}:{})}});
  const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
- const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring,...(d.calendarDay?[d.calendarDay,d.includeAnniversaries]:[])])).digest('hex');
- if(d.before){try{const cursor=JSON.parse(Buffer.from(d.before,'base64url').toString());if(cursor.signature!==signature||typeof cursor.id!=='string'||typeof cursor.date!=='string'||typeof cursor.createdAt!=='string')throw Error();filter.push({$or:[{date:{$lt:cursor.date}},{date:cursor.date,createdAt:{$lt:cursor.createdAt}},{date:cursor.date,createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]});}catch{throw new AppError(422,'log_cursor','Reload this Log view.');}}
- const found=await visibleEntries({$and:filter},session,{date:-1,createdAt:-1,_id:-1},d.limit+1),page=found.slice(0,d.limit),last=page.at(-1);
+ const ascending=d.order==='oldest',comparison=ascending?'$gt':'$lt',order=ascending?1:-1;
+ // Preserve compatible newest-first cursors from earlier releases.
+ const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring,...(d.calendarDay?[d.calendarDay,d.includeAnniversaries]:[]),...(ascending?['oldest']:[])])).digest('hex');
+ if(d.before){try{const cursor=JSON.parse(Buffer.from(d.before,'base64url').toString());if(cursor.signature!==signature||typeof cursor.id!=='string'||typeof cursor.date!=='string'||typeof cursor.createdAt!=='string')throw Error();filter.push({$or:[{date:{[comparison]:cursor.date}},{date:cursor.date,createdAt:{[comparison]:cursor.createdAt}},{date:cursor.date,createdAt:cursor.createdAt,_id:{[comparison]:cursor.id}}]});}catch{throw new AppError(422,'log_cursor','Reload this Log view.');}}
+ const found=await visibleEntries({$and:filter},session,{date:order,createdAt:order,_id:order},d.limit+1),page=found.slice(0,d.limit),last=page.at(-1);
  const items=await projectLogEntries(page,userId,session,!full);
  return {items,nextCursor:found.length>d.limit&&last?Buffer.from(JSON.stringify({date:last.date,createdAt:last.createdAt,id:last._id,signature})).toString('base64url'):null};
 }

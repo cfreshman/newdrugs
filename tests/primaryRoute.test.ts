@@ -33,3 +33,9 @@ it('replaces Agent list navigation and restores its source context from browser 
  await show({destination:{view:'chat'}});expect(push).toHaveBeenCalledTimes(1);
  await show({destination:{view:'log',resourceId:'two',logSequence:context}});expect(push).toHaveBeenCalledTimes(2);
 });
+it('writes and restores the selected Log day in browser history',async()=>{
+ const restore=vi.fn();function Day({date}:{date:string}){usePrimaryRoute(true,'log',{destination:{view:'log',date}},restore);return null;}
+ await act(async()=>dom.root.render(createElement(Day,{date:'2026-09-29'})));dom.frame();const original=history.state;
+ await act(async()=>dom.root.render(createElement(Day,{date:'2026-08-01'})));dom.frame();expect(location.pathname+location.search).toBe('/log?date=2026-08-01');
+ history.replaceState(original,'','/log?date=2026-09-29');await act(async()=>window.dispatchEvent(new PopStateEvent('popstate',{state:original})));expect(restore.mock.lastCall?.[0].destination).toMatchObject({view:'log',date:'2026-09-29'});
+});

@@ -21,7 +21,7 @@ import {NavLink} from './NavLink';
 import {PeoplePanel,MessagesPanel} from './NativePanels';import {FeedPanel,PostPanel,SelectedPostsPanel,PostComposer} from './PostPanels';import {PersonPanel} from './PersonPanel';import {AgentMarkdown} from './AgentMarkdown';
 export interface SocialRequest {id:number;destination:Destination;browser?:BrowserPanelState;restore?:boolean}
 type Screen=Destination;
-const key=(value:Screen)=>JSON.stringify([value.view,value.resourceId,value.postIds,value.date]);
+const key=(value:Screen)=>JSON.stringify([value.view,value.resourceId,value.postIds,value.view==='log'&&!value.resourceId?undefined:value.date]);
 export function SocialExperience({mode,active,data,request,covered=false,globalNavigate,openAgent,signup,dockOpen,reset,discuss,example,chatBusy,openMessage,onRoute,onLogDone}:{mode:Exclude<AppMode,'agent'>;covered?:boolean;onLogDone?(entry?:import('../shared/log').LogEntry):void;reset:number;dockOpen:boolean;chatBusy:boolean;discuss(item:InboxItem):void;example(prompt:string):void;openMessage(id:string):Promise<void>;active:boolean;data:Bootstrap;request?:SocialRequest;onRoute(mode:Exclude<AppMode,'agent'>,destination:Destination,browser:BrowserPanelState):void;globalNavigate(destination:Destination):void;openAgent():void;signup(destination?:Destination):void}){
  const [visited,setVisited]=useState(active);useEffect(()=>{if(active)setVisited(true);},[active]);
  const [logChrome,setLogChrome]=useState<HTMLDivElement|null>(null),[logHeader,setLogHeader]=useState<HTMLDivElement|null>(null);

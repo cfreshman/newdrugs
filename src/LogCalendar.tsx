@@ -1,6 +1,7 @@
 import {useLogCalendarData,CALENDAR_CHUNK_WEEKS} from './useLogCalendarData';
 import {LogCalendarDay} from './LogCalendarDay';
 import {LogDayDialog} from './LogDayDialog';
+import {useLogDayNeighbors} from './useLogDayNeighbors';
 import {primeLogEntry} from './logEntryCache';
 import {logImageUrl} from './logImageCache';
 import {logDateLabel as dateLabel} from './logDate';
@@ -28,8 +29,8 @@ function observeCalendarRect(instance:Virtualizer<HTMLElement,Element>,callback:
  measure();const observer=new ResizeObserver(measure);observer.observe(node);return()=>observer.disconnect();
 }
 
-export function LogCalendar({month,scope,query,personId,jump,create,open,openPerson,onPreviews,seedEntries=EMPTY_ENTRIES}:{month?:string;scope:Scope;query:string;personId?:string;jump(month?:string):void;create(date:string):void;open(entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null):void;openPerson?(personId:string):void;onPreviews?(entries:LogCalendarTile[]):void;seedEntries?:LogEntry[]}){
- const actions=useRef({open,create,openPerson,onPreviews});actions.current={open,create,openPerson,onPreviews};
+export function LogCalendar({month,scope,query,personId,date:initialDay,onDayChange,jump,create,open,openPerson,onPreviews,seedEntries=EMPTY_ENTRIES}:{date?:string;onDayChange?(date:string|undefined):void;month?:string;scope:Scope;query:string;personId?:string;jump(month?:string):void;create(date:string):void;open(entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null):void;openPerson?(personId:string):void;onPreviews?(entries:LogCalendarTile[]):void;seedEntries?:LogEntry[]}){
+ const actions=useRef({open,create,openPerson,onPreviews,onDayChange});actions.current={open,create,openPerson,onPreviews,onDayChange};
  const openEntry=useCallback((entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null)=>{if("contributors" in entry)primeLogEntry(entry);actions.current.open(entry,list,query,cursor);},[]);
  const createEntry=useCallback((date:string)=>actions.current.create(date),[]),showPerson=useCallback((id:string)=>actions.current.openPerson?.(id),[]);
  const visible=usePanelVisible(),root=useRef<HTMLDivElement>(null),sentinel=useRef<HTMLDivElement>(null);
@@ -37,10 +38,12 @@ export function LogCalendar({month,scope,query,personId,jump,create,open,openPer
  const [today]=useState(()=>Temporal.Now.plainDateISO());
  const [anchor]=useState(()=>logWeekStart(month?Temporal.PlainDate.from(`${month}-01`).add({months:1}).subtract({days:1}):today));
  const [birthdays,setBirthdays]=useState<BirthdayPerson[]>([]),[ownBirthday,setOwnBirthday]=useState<OwnBirthday|null>(null);
- const [weeks,setWeeks]=useState(LOG_WEEK_BATCH),[selectedDay,setSelectedDay]=useState<string|null>(null),[wanted,setWanted]=useState([0,1]);
- const closeDay=useCallback(()=>setSelectedDay(null),[]);
- const adjacentDay=(direction:number)=>{if(!selectedDay)return null;try{const date=Temporal.PlainDate.from(selectedDay).add({days:direction}).toString();return /^\d{4}-/.test(date)&&date>='0001-01-01'&&date<='9999-12-31'?date:null;}catch{return null;}};
+ const [weeks,setWeeks]=useState(LOG_WEEK_BATCH),[selectedDay,setSelectedDay]=useState<string|null>(initialDay||null),[wanted,setWanted]=useState([0,1]);
+ useLayoutEffect(()=>setSelectedDay(initialDay||null),[initialDay]);
+ const changeDay=useCallback((date:string|null)=>{setSelectedDay(date);actions.current.onDayChange?.(date||undefined);},[]);
+ const closeDay=useCallback(()=>changeDay(null),[changeDay]);
  const filters={scope,...(query?{query}:{}),...(personId?{personId}:{})};
+ const neighboringDays=useLogDayNeighbors(selectedDay,filters,visible&&Boolean(selectedDay));
  const {days:calendarDays,busy,error,retry,cachedChunks}=useLogCalendarData(anchor,today.toString(),filters,wanted,visible);
  useEffect(()=>{actions.current.onPreviews?.([...new Map([...calendarDays.values()].flatMap(day=>day.items).map(entry=>[entry.id,entry])).values()]);},[calendarDays]);
  const append=()=>setWeeks(value=>value+LOG_WEEK_BATCH);
@@ -103,16 +106,16 @@ export function LogCalendar({month,scope,query,personId,jump,create,open,openPer
       if(birthdays.length===1&&!entries.length)return <NavLink key={date} {...state} to={{view:'person',resourceId:birthdays[0].personId}} navigate={()=>showPerson(birthdays[0].personId)}>{content}</NavLink>;
       if(entries.length===1&&!birthdays.length)return <NavLink key={date} {...state} to={{view:'log',resourceId:entries[0].id}} navigate={()=>openEntry(entries[0])}>{content}</NavLink>;
       if(calendarDays.has(date)&&!entries.length&&!birthdays.length)return <NavLink key={date} {...state} to={{view:'log_compose',date}} navigate={()=>createEntry(date)}>{content}</NavLink>;
-      return <button key={date} {...state} onClick={()=>setSelectedDay(date)}>{content}</button>;
+      return <NavLink key={date} {...state} to={{view:'log',date,logScope:scope,query:query||undefined,personId}} navigate={()=>changeDay(date)}>{content}</NavLink>;
      })}</div><div className="log-week-right" aria-label={age?`${age.years} years${age.months?`, ${age.months} months`:""}`:undefined}>{age?.label}</div>
     </section></div>;
 
    })}
-  </div>,[virtualRows,starts,onDay,birthdaysOn,ownBirthday,today,calendarDays,cachedChunks,openEntry,createEntry,showPerson,virtual]);
+  </div>,[virtualRows,starts,onDay,birthdaysOn,ownBirthday,today,calendarDays,cachedChunks,openEntry,createEntry,showPerson,virtual,changeDay,scope,query,personId]);
  return <div ref={root} className="log-calendar-history">
   <LogCalendarHeader><button type="button" className="log-weekday-row" aria-label="Scroll calendar to top" onClick={()=>root.current?.closest<HTMLElement>('.composer-view')?.scrollTo({top:0,behavior:'smooth'})}><span/>{['S','M','T','W','T','F','S'].map((day,index)=><span className="log-weekday" key={index}>{day}</span>)}<span/></button></LogCalendarHeader>
   {grid}
   <div ref={sentinel} className="log-calendar-edge" aria-live="polite">{busy?<CircleNotch className="spin spinner-immediate" size={22} aria-label="Loading older weeks"/>:error?<><p className="error">{error}</p><button onClick={retry}>Try again</button></>:<button onClick={append}>Older weeks</button>}</div>
-  {selectedDay&&<LogDayDialog active={visible} anchor={root} close={closeDay} previous={adjacentDay(-1)?()=>setSelectedDay(adjacentDay(-1)):undefined} next={adjacentDay(1)?()=>setSelectedDay(adjacentDay(1)):undefined}><LogCalendarDay key={selectedDay} date={selectedDay} today={today.toString()} filters={filters} previews={onDay(selectedDay)} openPreview={openEntry} open={openEntry} create={()=>createEntry(selectedDay)}>{birthdaysOn(selectedDay).map(person=><NavLink className="log-day-choice" key={`birthday:${person.personId}`} to={{view:'person',resourceId:person.personId}} navigate={()=>showPerson(person.personId)}><Cake size={24}/><span>{person.handle||person.name}’s birthday</span></NavLink>)}</LogCalendarDay></LogDayDialog>}
+  {selectedDay&&<LogDayDialog active={visible} anchor={root} close={closeDay} previous={neighboringDays.previous?()=>changeDay(neighboringDays.previous):undefined} next={neighboringDays.next?()=>changeDay(neighboringDays.next):undefined} previousTo={neighboringDays.previous?{view:'log',date:neighboringDays.previous,logScope:scope,query:query||undefined,personId}:undefined} nextTo={neighboringDays.next?{view:'log',date:neighboringDays.next,logScope:scope,query:query||undefined,personId}:undefined}><LogCalendarDay key={selectedDay} date={selectedDay} today={today.toString()} filters={filters} previews={onDay(selectedDay)} openPreview={openEntry} open={openEntry}>{birthdaysOn(selectedDay).map(person=><NavLink className="log-day-choice" key={`birthday:${person.personId}`} to={{view:'person',resourceId:person.personId}} navigate={()=>showPerson(person.personId)}><Cake size={24}/><span>{person.handle||person.name}’s birthday</span></NavLink>)}</LogCalendarDay></LogDayDialog>}
  </div>;
 }
