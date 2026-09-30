@@ -8,9 +8,9 @@ Current operational handoff, verified September 30, 2026. Read this and `AGENTS.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
 - Production is deployed from `main`. `release.json` is the authoritative public version; inspect the live `prod/current` symlink only when an exact deployment ID matters.
 - Cloud dev carries current development behavior without bumping the public version. Inspect the live `dev/current` symlink only when an exact deployment ID matters.
-- Production remains **v0.32.1**, deployment `20260930000517890`. The subsequent Log cover, media/note detail, footer and day-chooser/gesture corrections are deployed to **cloud dev only**, deployment `20260930040022354`. Inspect `git status` for subsequent work.
+- Production is **v0.33.1**, deployment `20260930040709817`, with the completed Log UI checkpoint `66a7c6f`. Cloud dev has the same UI and operation behavior at deployment `20260930040022354` without a public-version bump. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
-- **The current UI checkpoint is approved for production after checks.** The later level-up work belongs on a separate branch/worktree and preview database, without an automatic production deployment.
+- **The approved UI production deployment is complete. No further production deployment is authorized.** The later level-up work belongs on a separate branch/worktree and preview database, while the user tests the stable production UI on phone.
 
 ## Product intent
 
@@ -112,7 +112,7 @@ Describe schemas before CLI calls. Existing named CLI profiles are normally `def
 
 The scaling review's ten defects were fixed with 25 local and 106 isolated database checks. Later layout checks passed 87 existing interaction tests; Log retention/modal work passed 38 focused checks. The latest production batch passed 138 focused UI checks, 4 isolated agent-memory database checks, a full build, desktop browser inspection, and exact API/worker/public-asset verification. The subsequent dev Log batch passed 85 focused UI checks, 42 isolated Log database checks and 10 isolated page-preview checks, a full build, live dev contract/API/exact-worker checks and the local proxy. Its temporary test tunnel was closed. Chrome was not controlled. These counts overlap and are not a current full-suite or million-user benchmark.
 
-The day-chooser and gesture follow-up passed 65 focused interaction checks; its subsequent color/dismissal correction passed 42 targeted checks, TypeScript and a full deployment build. Dev API, exact live worker heartbeat and local proxy passed. The requested changes are complete on cloud dev; production remains on its prior release. Physical-device gesture/geometry validation remains a known limit.
+The day-chooser and gesture follow-up passed 65 focused interaction checks; its subsequent color/dismissal correction passed 42 targeted checks, TypeScript and a full deployment build. Dev API, exact live worker heartbeat and local proxy passed. The requested changes are complete on cloud dev and the approved production checkpoint. Physical-device gesture/geometry validation remains a known limit.
 
 Remaining limits, not an automatic task list:
 
@@ -130,7 +130,7 @@ The final UI candidate passed 95 focused UI/navigation checks, 3 isolated Log da
 
 Source sanity checks retained the existing button/typography sizes: the calendar actions have 44px hit areas, utility rows remain more compact than main action rows, and Today uses 13px titles/11px names against Logcal's 14px/12px. Preview titles are 14px. These retain the content-space balance and shared desktop/mobile hierarchy; this is a source comparison, not physical-device measurement.
 
-Before the approved production deployment, the exact rollback release is `/srv/newdrugs/prod/releases/20260930000517890`, **v0.32.1**, recorded by repository commit `209d6d7f7fc16b7ba637f2ed7b31f849b9ef3caf`. Keep that release as the protected previous target. To restore it without resetting this checkout:
+The approved production checkpoint is deployed and verified: all required services, database-backed public API health, exact worker PID/heartbeat and matching published JS/CSS assets passed. The exact rollback release is `/srv/newdrugs/prod/releases/20260930000517890`, **v0.32.1**, recorded by repository commit `209d6d7f7fc16b7ba637f2ed7b31f849b9ef3caf`. Keep that release as the protected previous target. To restore it without resetting this checkout:
 
 ```sh
 ssh -i /Users/work/.ssh/newdrugs_do -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes root@167.172.21.42 'bash -s' <<'SH'
@@ -150,3 +150,5 @@ SH
 ```
 
 Reload the browser afterward to load the matching old bundle. This UI batch introduces no database migration to undo; runtime data stays intact.
+
+The final UI checkpoint passed 95 focused UI/navigation checks and 3 additional isolated database checks; the full build passed. Public v0.33.1 assets match the built bundle, with neither Log another event nor Close day present. Production previous still points to the v0.32.1 rollback release above.
