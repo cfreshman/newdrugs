@@ -12,7 +12,7 @@ let dom:ReturnType<typeof setupDOM>,observers:{fire():void;active:boolean;rootMa
 beforeEach(()=>{dom=setupDOM();observers=[];api.operation.mockReset().mockImplementation(async(name,input)=>name==='log.calendar'?calendarPage(input):{items:[],nextCursor:null});vi.stubGlobal('IntersectionObserver',class{record={active:true,rootMargin:'',fire:()=>{if(this.record.active)this.callback([{isIntersecting:true}]);}};constructor(private callback:Function,options:IntersectionObserverInit){this.record.rootMargin=options.rootMargin||'';observers.push(this.record);}observe(){}disconnect(){this.record.active=false;}});});
 afterEach(()=>dom.cleanup());
 const props={scope:'all' as const,query:'',jump:vi.fn(),create:vi.fn(),open:vi.fn()};
-function calendarPage(input:any,items:any[]=[]){const first=Temporal.PlainDate.from(input.from);return {days:Array.from({length:first.until(Temporal.PlainDate.from(input.through)).days+1},(_,i)=>{const date=first.add({days:i}).toString();return {date,items:items.filter(item=>item.date===date).map(item=>({...item,cover:null})),more:false};}),indexing:false};}
+function calendarPage(input:any,items:any[]=[]){const first=Temporal.PlainDate.from(input.from);return {days:Array.from({length:first.until(Temporal.PlainDate.from(input.through)).days+1},(_,i)=>{const date=first.add({days:i}).toString();return {date,items:items.filter(item=>item.date===date).map(item=>({...item,cover:item.cover||null})),more:false};}),indexing:false};}
 async function mount(){await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogCalendar,props))));}
 const edge=()=>observers.findLast(observer=>observer.active)!;
 it('uses consecutive descending Sunday weeks across leap days and year boundaries',()=>{const anchor=logWeekStart(Temporal.PlainDate.from('2024-03-02'));expect(anchor.toString()).toBe('2024-02-25');const first=logCalendarRange(anchor,0),second=logCalendarRange(anchor,52);expect(Temporal.PlainDate.from(second.through).add({days:1}).toString()).toBe(first.from);expect(logCalendarWeeks(anchor,156)).toHaveLength(156);expect(logCalendarWeeks(anchor,156).at(-1)!.until(anchor).days).toBe(155*7);});
@@ -61,12 +61,13 @@ it('keeps cached hangouts painted while a hidden calendar refreshes on return',a
  expect(dom.container.querySelector('.log-day[aria-label$="Updated"]')).toBe(day);
 });
 it('opens the multi-event chooser immediately from tiles while detail records load',async()=>{
- const date=Temporal.Now.plainDateISO().toString(),previews=[{id:'one',date,title:'First',createdAt:''},{id:'two',date,title:'Second',createdAt:''}];let finish!:(page:any)=>void;
+ const date=Temporal.Now.plainDateISO().toString(),previews=[{id:'one',date,title:'Later',createdAt:'2026-09-29T14:00:00Z',cover:{id:'later',url:'/later',mime:'image/webp'}},{id:'two',date,title:'Earlier',createdAt:'2026-09-29T09:00:00Z',cover:{id:'earlier',url:'/earlier',mime:'image/webp'}}];let finish!:(page:any)=>void;
  api.operation.mockImplementation(async(name,input)=>name==='log.calendar'?calendarPage(input,previews):name==='log.list'?new Promise(resolve=>{finish=resolve;}):{items:[]});await mount();
- await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-day:has(.log-day-mosaic)')!.click());
- const picker=dom.container.querySelector('.log-day-picker')!;expect(picker.textContent).toContain('First');expect(picker.textContent).toContain('Second');expect(picker.querySelector('[aria-label="Loading entries"]')).toBeNull();expect(picker.querySelectorAll('.log-people-placeholder')).toHaveLength(2);
- await act(async()=>picker.querySelector<HTMLButtonElement>('.log-day-choice')!.click());expect(props.open).toHaveBeenCalledWith(expect.objectContaining({id:'one'}),expect.arrayContaining([expect.objectContaining({id:'two'})]),expect.objectContaining({calendarDay:date}),undefined);
- await act(async()=>finish({items:[],nextCursor:null}));
+ expect([...dom.container.querySelectorAll<HTMLImageElement>('.log-day-mosaic img')].map(image=>image.getAttribute('src'))).toEqual(['/earlier','/later']);await act(async()=>dom.container.querySelector<HTMLElement>('.log-day:has(.log-day-mosaic)')!.click());
+ const picker=dom.container.querySelector('.log-day-picker')!,choices=()=>[...picker.querySelectorAll<HTMLAnchorElement>('.log-day-choice')];expect(choices().map(button=>button.textContent)).toEqual(expect.arrayContaining(['Earlier','Later']));expect(choices()[0].textContent).toBe('Earlier');expect(picker.querySelector('[aria-label="Loading entries"]')).toBeNull();expect(picker.querySelectorAll('.log-people-placeholder')).toHaveLength(2);
+ await act(async()=>choices()[0].click());expect(props.open.mock.lastCall?.[0]).toMatchObject({id:'two'});expect(props.open.mock.lastCall?.slice(1)).toEqual([undefined,undefined,undefined]);
+ const full=(preview:(typeof previews)[number])=>({...preview,ownerId:'me',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,updatedAt:preview.createdAt,membership:'member',contributors:[],invitations:[]});
+ await act(async()=>finish({items:[full(previews[0]),full(previews[1])],nextCursor:null}));expect(choices()[0].textContent).toContain('Earlier');await act(async()=>choices()[0].click());expect(props.open.mock.lastCall?.slice(1)).toEqual([undefined,undefined,undefined]);
 });
 
 it('retains loaded image nodes while browsing distant weeks and does not refetch them on return',async()=>{

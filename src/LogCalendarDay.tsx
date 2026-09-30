@@ -6,7 +6,8 @@ import {logDateLabel} from './logDate';
 import {logCover} from './logCalendarModel';
 import {logImageUrl} from './logImageCache';
 import {useRecordRefresh} from './useRecordRefresh';
-export function LogCalendarDay({date,today,filters,previews,close,open,openPreview,create,children}:{date:string;today:string;filters:Partial<LogList>;previews:LogCalendarTile[];openPreview(entry:LogCalendarTile,items:LogCalendarTile[],query:Partial<LogList>):void;close():void;open(entry:LogEntry,items:LogEntry[],query:Partial<LogList>,cursor:string|null):void;create():void;children:React.ReactNode}){
+import {NavLink} from './NavLink';
+export function LogCalendarDay({date,today,filters,previews,close,open,openPreview,create,children}:{date:string;today:string;filters:Partial<LogList>;previews:LogCalendarTile[];openPreview(entry:LogCalendarTile):void;close():void;open(entry:LogEntry):void;create():void;children:React.ReactNode}){
  const [page,setPage]=useState<LogPage>({items:[],nextCursor:null}),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(true),[error,setError]=useState('');
  const request=useRef<AbortController|null>(null),query={...filters,calendarDay:date,includeAnniversaries:date>today};
  const load=async(append=false)=>{
@@ -16,17 +17,17 @@ export function LogCalendarDay({date,today,filters,previews,close,open,openPrevi
   finally{if(!controller.signal.aborted)setBusy(false);}
  };
  useEffect(()=>{void load();return()=>request.current?.abort();},[]);useRecordRefresh(['log'],()=>load());
- const items:(LogEntry|LogCalendarTile)[]=loaded?page.items:previews;
+ const items:(LogEntry|LogCalendarTile)[]=[...(loaded?page.items:previews)].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
  return <section className="log-day-picker" aria-label={`Entries for ${date}`}>
   <div><strong>{logDateLabel(date)}</strong><button aria-label="Close day" onClick={close}><X size={18}/></button></div>
   {children}
-  {items.map(entry=>{const full='contributors' in entry,cover=full?logCover(entry):entry.cover;return <button className="log-day-choice" key={entry.id} onClick={()=>full?open(entry,page.items,query,page.nextCursor):openPreview(entry,previews,query)}>
+  {items.map(entry=>{const full='contributors' in entry,cover=full?logCover(entry):entry.cover;return <NavLink className="log-day-choice" key={entry.id} to={{view:'log',resourceId:entry.id}} navigate={()=>full?open(entry):openPreview(entry)}>
    {cover?<img src={logImageUrl(cover.url)} alt=""/>:<span className="log-choice-placeholder"/>}
    <span>{entry.title||'(untitled)'}<small className="log-day-people">{full?entry.contributors.map(person=>person.handle||person.name).join(', '):<span className="log-people-placeholder" aria-hidden="true"><span/></span>}</small></span>
-  </button>;})}
+  </NavLink>;})}
   {busy&&!items.length&&<CircleNotch className="spin" size={18} aria-label="Loading entries"/>}
   {error&&<p className="error">{error}</p>}
   {page.nextCursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}
-  <button className="log-outline-button" onClick={create}>Log another event</button>
+  <NavLink className="log-outline-button" to={{view:'log_compose',date}} navigate={create}>Log another event</NavLink>
  </section>;
 }

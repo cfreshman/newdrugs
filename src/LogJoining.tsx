@@ -14,6 +14,7 @@ import {parseLogCode,type LogCode,type LogJoinPreview} from '../shared/logJoinin
 import type {LogEntry} from '../shared/log';
 import {api,operation,errorText} from './api';
 import {usePanelLoading,usePanelVisible} from './PanelReadiness';
+import {NavLink} from './NavLink';
 
 type Props={closeLabel?:string;navigate(destination:Destination):void;close():void};
 const changed=()=>window.dispatchEvent(new CustomEvent('newdrugs:records',{detail:['log','people']}));
@@ -26,7 +27,7 @@ export function LogCodePanel({entryId,navigate,close,closeLabel='Close'}:Props&{
  }).catch(e=>{if(alive)setError(errorText(e));});return()=>{alive=false;};},[entryId]);
  usePanelLoading(!code&&!error);
  const share=async()=>{if(!code)return;try{if(navigator.share)await navigator.share({title:'Join hangout',url:code.url});else{await navigator.clipboard.writeText(code.url);setCopied(true);}}catch(e){if(!(e instanceof DOMException&&e.name==='AbortError'))setError(errorText(e));}};
- return <section className="log-code log-task"><div className="log-task-content"><h2>Join this hangout</h2><p>Scan with New Drugs or your camera.</p>{qr?<button className="log-qr" onClick={()=>void share()} aria-label="Share hangout code"><img src={qr} alt="QR code to join this hangout"/></button>:!error&&<CircleNotch className="spin" size={24}/>}<p className="quiet small">Anyone with this code can see and join the hangout.</p>{error&&<p role="alert" className="error">{error}</p>}</div><div className="panel-actions log-task-footer"><button onClick={close}>{closeLabel}</button><button onClick={()=>navigate({view:'log_scan'})}>Scan</button><button disabled={!code} onClick={()=>void share()}>{copied?'Copied':'Share'}</button></div></section>;
+ return <section className="log-code log-task"><div className="log-task-content"><h2>Join this hangout</h2><p>Scan with New Drugs or your camera.</p>{qr?<button className="log-qr" onClick={()=>void share()} aria-label="Share hangout code"><img src={qr} alt="QR code to join this hangout"/></button>:!error&&<CircleNotch className="spin" size={24}/>}<p className="quiet small">Anyone with this code can see and join the hangout.</p>{error&&<p role="alert" className="error">{error}</p>}</div><div className="panel-actions log-task-footer"><button onClick={close}>{closeLabel}</button><NavLink to={{view:'log_scan'}} navigate={navigate}>Scan</NavLink><button disabled={!code} onClick={()=>void share()}>{copied?'Copied':'Share'}</button></div></section>;
 }
 export function LogScanPanel({navigate,close}:Props){
  const visible=usePanelVisible(),video=useRef<HTMLVideoElement>(null),scanner=useRef<QrScanner|null>(null),[error,setError]=useState(''),scanned=useRef(false);

@@ -36,9 +36,9 @@ it('requires explicit review for user instructions and snapshots personal contex
  const next={...run,_id:'next-run',memorySnapshot:undefined};await rows<RunRecord>('runs').insertOne({...next,memorySnapshot:undefined});expect(JSON.stringify(await messageInput(next))).toContain('Longer answers');
 });
 it('omits changed or revoked sources from automatic context and rejects another account’s chat as evidence',async()=>{
- await rows('messages').insertMany([{_id:'mine',userId:'me',role:'user',text:'I like short replies'},{_id:'theirs',userId:'other',role:'user',text:'A private message'}]);
+ await rows('messages').insertMany([{_id:'mine',userId:'me',role:'user',text:'I like short replies',createdAt:'2026-09-29T08:00:00.000Z'},{_id:'theirs',userId:'other',role:'user',text:'A private message',createdAt:'2026-09-29T08:01:00.000Z'}]);
  await call('agent.memory.save',{key:'voice',title:'Voice',content:'Short replies',core:true,revision:0,sources:[{kind:'chat',id:'mine'}]});
- expect((await agentMemoryContext('me')).slots).toHaveLength(1);
+ expect((await agentMemoryContext('me')).slots).toMatchObject([{sources:[{kind:'chat',id:'mine',date:'2026-09-29'}]}]);
  await rows('messages').updateOne({_id:'mine'},{$set:{text:'I prefer detail now'}});expect(await agentMemoryContext('me')).toMatchObject({slots:[],omittedSlots:1});
  await rows('messages').deleteOne({_id:'mine'});expect((await call('agent.memory.get',{key:'voice'})).slot.sourceStatus).toBe('unavailable');
  await expect(call('agent.memory.save',{key:'bad',title:'Bad',content:'Not mine',core:true,revision:0,sources:[{kind:'chat',id:'theirs'}]})).rejects.toMatchObject({status:404});

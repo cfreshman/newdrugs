@@ -20,7 +20,8 @@ const Link: NonNullable<Components['a']> = ({ children, node: _node, ...props })
 const components: Components = {
   a: Link,
 };
+const previewComponents:Components={...components,a:({children})=><span>{children}</span>,img:()=>null};
 const plugins = [remarkGfm,remarkBareLinks];
-export function AgentMarkdown({ text }: { text: string }) {
-  return <Markdown remarkPlugins={plugins} components={components} skipHtml>{text}</Markdown>;
+export function AgentMarkdown({ text,preview=false }: { text: string;preview?:boolean }) {
+  return <Markdown remarkPlugins={plugins} components={preview?previewComponents:components} skipHtml>{text}</Markdown>;
 }

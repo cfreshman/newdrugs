@@ -5,6 +5,7 @@ import { api, post, operation, money, balanceLabel, errorText } from './api';
 import type { PaymentQuote } from '../shared/paymentQuote';
 import { ProfileEditor } from './ProfileEditor';
 import { agentSetup } from '../shared/agentSetup';
+import {NavLink} from './NavLink';
 
 export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAccount(): void; onConnect(): void }) {
   const [amount, setAmount] = useState(500);
@@ -33,7 +34,7 @@ export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAcc
     {quote && <dl className="checkout-quote"><div><dt>AI credit</dt><dd>{cents(quote.creditCents)}</dd></div><div><dt>Expected processing fee</dt><dd>{cents(quote.processingCents)}</dd></div><div className="quote-total"><dt>Total</dt><dd>{cents(quote.totalCents)}</dd></div></dl>}
     <button className="solid wide" onClick={buy} disabled={busy || !data.config.paymentsEnabled || !quote}>{busy ? 'Opening checkout…' : quote ? `Pay ${cents(quote.totalCents)}, add ${cents(quote.creditCents)}` : 'Add credit'}</button>
     {!data.config.paymentsEnabled && <p className="quiet small">Payments aren’t connected yet.</p>}
-    <p className="quiet small">Or use your own <button type="button" className="text-link" onClick={onConnect}>Codex, Claude Code, or other agent</button> for <strong>free</strong>.</p>
+    <p className="quiet small">Or use your own <NavLink className="text-link" to={{view:'agents'}} navigate={onConnect}>Codex, Claude Code, or other agent</NavLink> for <strong>free</strong>.</p>
     {data.wallet.reservedNanos > 0 && <p className="quiet small">{money(data.wallet.reservedNanos)} is held for your current reply. Any unused amount returns when it finishes.</p>}
     {error && <p className="error" role="alert">{error}</p>}
     <BillingActivity key={data.user.id} wallet={data.wallet}/>
@@ -98,7 +99,7 @@ export function Connections({ registered, onAccount }: { registered: boolean; on
   return <>
     <p>Use New Drugs from Codex, Claude Code, or another agent. Direct app actions are <strong>free</strong>.</p>
     <p>Create a token, then paste the setup prompt below into your agent. It will install the CLI and connect for you.</p>
-    {!registered ? <button className="solid wide" onClick={onAccount}>Save your account first</button> : <form className="fields" onSubmit={create}>
+    {!registered ? <NavLink className="solid wide" to={{view:'profile'}} navigate={onAccount}>Save your account first</NavLink> : <form className="fields" onSubmit={create}>
       <label>Connection name<input name="name" placeholder="My AI agent" maxLength={60} /></label>
       <label>Access<select name="scope" defaultValue="write"><option value="write">Read and take actions for me</option><option value="read">Read only</option></select></label>
       <label>Expires<select name="expiresInDays" value={expiry} onChange={event => setExpiry(event.target.value)}><option value="">No expiry</option><option value="7">After 7 days</option><option value="30">After 30 days</option><option value="90">After 90 days</option><option value="365">After one year</option><option value="custom">Choose a number of days</option></select></label>

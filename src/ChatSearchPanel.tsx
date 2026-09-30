@@ -7,6 +7,7 @@ import { SearchField } from './SearchField';
 import { operation, errorText } from './api';
 import type { ChatSearchResult } from '../shared/chatSearch';
 import { useRecordRefresh } from './useRecordRefresh';
+import {NavLink} from './NavLink';
 export function ChatSearchPanel({ initialQuery = '', initialRole = 'all', onStateChange, openMessage }: { initialQuery?: string; initialRole?:Destination['role'];onStateChange?(context:Partial<Destination>):void; openMessage(id: string): Promise<void> }) {
   const visible = usePanelVisible();
   const [query, setQuery] = useState(initialQuery || ''), [role, setRole] = useState<'all' | 'user' | 'assistant'>(initialRole);
@@ -38,7 +39,7 @@ export function ChatSearchPanel({ initialQuery = '', initialRole = 'all', onStat
         if (window.getSelection()?.toString()) return;
         open();
       }}>
-        <button className="chat-search-meta" type="button" disabled={Boolean(opening)} aria-label={`Open message from ${item.role === 'user' ? 'you' : 'your agent'} on ${new Date(item.createdAt).toLocaleDateString()}`} onClick={open}><strong>{item.role === 'user' ? 'You' : 'Your agent'}</strong><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</time>{opening === item.id && <CircleNotch className="agent-spinner" size={14} />}</button>
+        <NavLink className="chat-search-meta" to={{view:'chat',resourceId:item.id}} navigate={open} aria-disabled={Boolean(opening)} aria-label={`Open message from ${item.role === 'user' ? 'you' : 'your agent'} on ${new Date(item.createdAt).toLocaleDateString()}`}><strong>{item.role === 'user' ? 'You' : 'Your agent'}</strong><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</time>{opening === item.id && <CircleNotch className="agent-spinner" size={14} />}</NavLink>
         <div className="chat-search-excerpt"><AgentMarkdown text={item.text} /></div>
       </article>;
     })}</div>

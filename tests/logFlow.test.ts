@@ -21,7 +21,7 @@ const entry={id:'entry',ownerId:'me',date:new Date().toLocaleDateString('en-CA')
 let dom:ReturnType<typeof setupDOM>;
 beforeEach(()=>{dom=setupDOM();clearLogEntries();Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value(){this.setAttribute('open','');}});Object.defineProperty(HTMLDialogElement.prototype,'close',{configurable:true,value(){this.removeAttribute('open');}});vi.clearAllMocks();mocks.operation.mockImplementation(async(name,input)=>name==='log.preferences'?{arrangement:'calendar',views:[]}:name==='log.neighbors'?{previous:null,next:null}:name==='log.get'?entry:name==='log.contacts'?{items:[{id:'friend',name:'Sam',handle:'sam',sharedHangouts:1}],nextCursor:null}:name==='log.calendar'?{days:[{date:entry.date,items:[{id:entry.id,date:entry.date,title:entry.title,createdAt:entry.createdAt,cover:null}],more:false}],indexing:false}:name==='log.list'?{items:input.recurring?[]:[entry],nextCursor:null}:{items:[],nextCursor:null});});
 afterEach(()=>dom.cleanup());
-const button=(text:string)=>[...dom.container.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===text)!;
+const button=(text:string)=>[...dom.container.querySelectorAll<HTMLElement>('button,a')].find(control=>control.textContent===text)! as HTMLButtonElement;
 it('keeps calendar DOM and scroll under the entry overlay and floats actions outside the scroller',async()=>{
  const props={mode:'log' as const,active:true,data:{user,messages:[]} as any,reset:0,dockOpen:false,chatBusy:false,onRoute:vi.fn(),globalNavigate:vi.fn(),openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()};
  await act(async()=>dom.root.render(createElement(SocialExperience,props)));
@@ -31,6 +31,12 @@ it('keeps calendar DOM and scroll under the entry overlay and floats actions out
  const detail=dom.container.querySelector('.log-detail');await act(async()=>dom.root.render(createElement(SocialExperience,{...props,covered:true})));expect(dom.container.querySelector('.log-modal[data-open=true] .log-detail')).toBe(detail);expect(scroller.scrollTop).toBe(420);await act(async()=>dom.root.render(createElement(SocialExperience,{...props,covered:false})));expect(dom.container.querySelector('.log-modal[data-open=true] .log-detail')).toBe(detail);
  await act(async()=>button('Close').click());expect(scroller.hasAttribute('inert')).toBe(false);expect(scroller.scrollTop).toBe(420);expect(dom.container.querySelector('.log-calendar-history')).toBe(calendar);
 });
+it('keeps the floating Log new event link clickable and opens today',async()=>{
+ const props={mode:'log' as const,active:true,data:{user,messages:[]} as any,reset:0,dockOpen:false,chatBusy:false,onRoute:vi.fn(),globalNavigate:vi.fn(),openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()};
+ await act(async()=>dom.root.render(createElement(SocialExperience,props)));const link=dom.container.querySelector<HTMLAnchorElement>('.log-home-actions .log-outline-button')!;
+ expect(link.tagName).toBe('A');expect(getComputedStyle(link).pointerEvents).toBe('auto');await act(async()=>link.click());
+ expect(dom.container.querySelector('.log-modal[data-open=true] .log-editor')).not.toBeNull();expect(dom.container.querySelector<HTMLInputElement>('.log-modal [aria-label="Entry date"]')?.value).toBe(new Date().toLocaleDateString('en-CA'));
+});
 it('retries a partially saved people selection without creating a duplicate hangout, then clears the new draft',async()=>{
  const saved=vi.fn();let fail=true;
  const original=mocks.operation.getMockImplementation()!;mocks.operation.mockImplementation(async(name,input,options)=>{
@@ -39,11 +45,12 @@ it('retries a partially saved people selection without creating a duplicate hang
   return original(name,input,options);
  });
  await act(async()=>dom.root.render(createElement(LogEditor,{user,onSaved:saved,cancel:vi.fn()})));
+ const dateInput=dom.container.querySelector<HTMLInputElement>('[aria-label="Entry date"]')!;act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(dateInput,'2025-01-02');dateInput.dispatchEvent(new Event('input',{bubbles:true}));});
  await act(async()=>button('people').click());await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-contact-picker button')!.click());
  const form=dom.container.querySelector('form')!;await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));expect(saved).not.toHaveBeenCalled();expect(dom.container.textContent).toContain('Connection interrupted');
  await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
  expect(mocks.operation.mock.calls.filter(c=>c[0]==='log.create')).toHaveLength(1);expect(mocks.operation.mock.calls.filter(c=>c[0]==='log.update')).toHaveLength(0);
- const adds=mocks.operation.mock.calls.filter(c=>c[0]==='log.add_person');expect(adds).toHaveLength(2);expect(adds[0][2]).toEqual(adds[1][2]);expect(adds[0][2].confirmed).toBe(true);expect(saved).toHaveBeenCalledOnce();expect((dom.container.querySelector('[aria-label="Your note"]') as HTMLTextAreaElement).value).toBe('');
+ const adds=mocks.operation.mock.calls.filter(c=>c[0]==='log.add_person');expect(adds).toHaveLength(2);expect(adds[0][2]).toEqual(adds[1][2]);expect(adds[0][2].confirmed).toBe(true);expect(saved).toHaveBeenCalledOnce();expect((dom.container.querySelector('[aria-label="Your note"]') as HTMLTextAreaElement).value).toBe('');expect(dateInput.value).toBe(new Date().toLocaleDateString('en-CA'));
  await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));expect(mocks.operation.mock.calls.filter(c=>c[0]==='log.create')).toHaveLength(2);
 });
 it('parses only New Drugs join codes and canonical join links',()=>{
@@ -85,7 +92,7 @@ it('returns from QR-origin scanning to its QR code and Close returns through pre
  const props={mode:'log' as const,active:true,data:{user,messages:[]} as any,reset:0,dockOpen:false,chatBusy:false,onRoute:vi.fn(),globalNavigate:vi.fn(),openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()};
  const original=mocks.operation.getMockImplementation()!;mocks.operation.mockImplementation(async(name,...args)=>name==='log.code'?{entryId:entry.id,code:'a'.repeat(32),url:'https://druggie.org/log/join/'+ 'a'.repeat(32)}:original(name,...args));
  await act(async()=>dom.root.render(createElement(SocialExperience,props)));await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-today-card')!.click());
- const activeButton=(label:string)=>[...dom.container.querySelectorAll<HTMLButtonElement>('.log-modal[data-open=true] button')].find(button=>button.textContent===label)!;
+ const activeButton=(label:string)=>[...dom.container.querySelectorAll<HTMLElement>('.log-modal[data-open=true] button,.log-modal[data-open=true] a')].find(control=>control.textContent===label)!;
  await act(async()=>activeButton('Code').click());expect(dom.container.querySelector('.log-modal[data-open=true] .log-code')).not.toBeNull();
  await act(async()=>activeButton('Scan').click());expect(dom.container.querySelector('.log-modal[data-open=true] .log-scan')).not.toBeNull();
  await act(async()=>activeButton('Cancel').click());expect(dom.container.querySelector('.log-modal[data-open=true] .log-code')).not.toBeNull();
@@ -97,6 +104,15 @@ it('replaces the active hangout on Older/Newer so Close does not walk through ne
  await act(async()=>dom.root.render(createElement(SocialExperience,{mode:'log',active:true,data:{user,messages:[]} as any,reset:0,dockOpen:false,chatBusy:false,onRoute:route,globalNavigate:vi.fn(),openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()})));await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-day:has(.log-day-mosaic)')!.click());
  await vi.waitFor(()=>expect(dom.container.querySelector('.log-modal[data-open=true] [aria-label="Next entry"]')).not.toBeNull());await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-modal[data-open=true] [aria-label="Next entry"]')!.click());
  expect(route.mock.lastCall?.[2]).toMatchObject({replace:true,stack:[{view:'log'},{view:'log',resourceId:'next'}]});await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.log-modal[data-open=true] button')].find(button=>button.textContent==='Close')!.click());expect(dom.container.querySelector('.log-modal[data-open=true]')).toBeNull();
+});
+it('uses Left and Right for full-calendar neighbors and Escape for Close',async()=>{
+ const previous={...entry,id:'previous',title:'Previous'},next={...entry,id:'next',title:'Next'},onAdjacent=vi.fn(),onClose=vi.fn(),original=mocks.operation.getMockImplementation()!;
+ mocks.operation.mockImplementation(async(name,input,...args)=>name==='log.neighbors'?{previous,next}:original(name,input,...args));
+ await act(async()=>dom.root.render(createElement(LogDetail,{entryId:entry.id,user,navigate:vi.fn(),onAdjacent,onClose})));
+ await vi.waitFor(()=>expect(dom.container.querySelector<HTMLButtonElement>('[aria-label="Next entry"]')?.disabled).toBe(false));const detail=dom.container.querySelector<HTMLElement>('.log-detail')!;
+ await act(async()=>detail.querySelector<HTMLButtonElement>('[aria-label="Next entry"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})));expect(onAdjacent).toHaveBeenLastCalledWith('next',undefined);
+ await act(async()=>detail.querySelector<HTMLButtonElement>('[aria-label="Previous entry"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true})));expect(onAdjacent).toHaveBeenLastCalledWith('previous',undefined);
+ await act(async()=>detail.querySelector<HTMLButtonElement>('[aria-label="Previous entry"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));expect(onClose).toHaveBeenCalledOnce();
 });
 
 it('shows selected details before the request resolves and immediately replaces them with fresh data',async()=>{

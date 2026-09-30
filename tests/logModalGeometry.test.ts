@@ -21,3 +21,12 @@ it('keeps an open hangout on its anchor when chat moves the panel without resizi
   expect(dialog.style.left).toBe('620px');expect(input?.value).toBe('Retained draft');
  }finally{dom.cleanup();}
 });
+it('does not close from Escape while an editable field owns the key',async()=>{
+ const dom=setupDOM(),close=vi.fn();
+ try{
+  function Shell(){const anchor=useRef<HTMLDivElement>(null);return createElement('div',{className:'app'},createElement('div',{className:'mode-main',ref:anchor},createElement(LogModal,{active:true,anchor,close,children:createElement('input',{defaultValue:'Draft'})})));}
+  await act(async()=>dom.root.render(createElement(Shell)));const dialog=dom.container.querySelector<HTMLElement>('.log-modal')!,input=dialog.querySelector<HTMLInputElement>('input')!;
+  await act(async()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));expect(close).not.toHaveBeenCalled();
+  await act(async()=>dialog.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));expect(close).toHaveBeenCalledOnce();
+ }finally{dom.cleanup();}
+});

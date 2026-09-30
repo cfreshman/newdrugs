@@ -1,7 +1,9 @@
 import {useLayoutEffect,useRef,useState,type RefObject} from 'react';
 import {Robot,Users,Article,CalendarDots} from '@phosphor-icons/react';
 import {MODE_LABELS,modeSwitchIntersects,type AppMode} from '../shared/experience';
+import {plainLinkClick} from './NavLink';
 const modes:AppMode[]=['agent','posts','friends','log'];const icons={agent:Robot,friends:Users,posts:Article,log:CalendarDots};
+const hrefs:Record<AppMode,string>={agent:'/agent',posts:'/posts',friends:'/friends',log:'/log'};
 export function ModeSwitcher({mode,change,chat,chatVisible,layoutKey}:{mode:AppMode;change(mode:AppMode):void;chat:RefObject<HTMLElement|null>;chatVisible:boolean;layoutKey:string}){
  const root=useRef<HTMLElement>(null),measure=useRef<HTMLDivElement>(null),[collapsed,setCollapsed]=useState(false),[fullWidth,setFullWidth]=useState(0),[overPanel,setOverPanel]=useState(false);
  useLayoutEffect(()=>{
@@ -25,5 +27,5 @@ export function ModeSwitcher({mode,change,chat,chatVisible,layoutKey}:{mode:AppM
   document.addEventListener('scroll',schedule,true);window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);
   return()=>{cancelAnimationFrame(frame);observer.disconnect();mutations.disconnect();document.removeEventListener('scroll',schedule,true);window.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('resize',schedule);};
  },[chat,chatVisible,layoutKey]);
- return <><nav ref={root} className="mode-switch" aria-label="New Drugs mode" data-collapsed={collapsed||undefined} data-over-panel={overPanel||undefined} style={fullWidth?{'--mode-expanded-width':`${fullWidth}px`} as React.CSSProperties:undefined}>{modes.map(value=>{const Icon=icons[value];return <button key={value} type="button" aria-label={MODE_LABELS[value]} aria-pressed={mode===value} title={MODE_LABELS[value]} onClick={()=>change(value)}><Icon size={19} weight={mode===value?'fill':'regular'}/><span>{MODE_LABELS[value]}</span></button>;})}</nav><div className="mode-switch mode-switch-measure" ref={measure} aria-hidden="true" inert>{modes.map(value=>{const Icon=icons[value];return <span className="mode-measure-item" key={value}><Icon size={19}/><span>{MODE_LABELS[value]}</span></span>;})}</div></>;
+ return <><nav ref={root} className="mode-switch" aria-label="New Drugs mode" data-collapsed={collapsed||undefined} data-over-panel={overPanel||undefined} style={fullWidth?{'--mode-expanded-width':`${fullWidth}px`} as React.CSSProperties:undefined}>{modes.map(value=>{const Icon=icons[value];return <a key={value} href={hrefs[value]} aria-label={MODE_LABELS[value]} aria-current={mode===value?'page':undefined} title={MODE_LABELS[value]} onClick={event=>{if(plainLinkClick(event)){event.preventDefault();change(value);}}}><Icon size={19} weight={mode===value?'fill':'regular'}/><span>{MODE_LABELS[value]}</span></a>;})}</nav><div className="mode-switch mode-switch-measure" ref={measure} aria-hidden="true" inert>{modes.map(value=>{const Icon=icons[value];return <span className="mode-measure-item" key={value}><Icon size={19}/><span>{MODE_LABELS[value]}</span></span>;})}</div></>;
 }

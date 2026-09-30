@@ -1,6 +1,6 @@
 # Start here: New Drugs
 
-Current operational handoff, verified September 28, 2026. Read this and `AGENTS.md` first, then the relevant sections of [the operating guide](OPERATING_GUIDE.md) and actual source. You do not need the previous conversation. Do not treat historical plans or release notes as current instructions.
+Current operational handoff, verified September 29, 2026. Read this and `AGENTS.md` first, then the relevant sections of [the operating guide](OPERATING_GUIDE.md) and actual source. You do not need the previous conversation. Do not treat historical plans or release notes as current instructions.
 
 ## State at handoff
 
@@ -8,9 +8,9 @@ Current operational handoff, verified September 28, 2026. Read this and `AGENTS.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
 - Production is deployed from `main`. `release.json` is the authoritative public version; inspect the live `prod/current` symlink only when an exact deployment ID matters.
 - Cloud dev carries current development behavior without bumping the public version. Inspect the live `dev/current` symlink only when an exact deployment ID matters.
-- All requested implementation is committed and deployed. Inspect `git status` for subsequent work.
+- The latest requested implementation is committed and deployed to cloud dev only. Production remains on the prior public release, and no production deployment is authorized. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
-- **No unfinished feature or production deployment is queued.** Continue from the user's next request. Deferred ideas are not permission to start or deploy projects.
+- **No production deployment is authorized or queued.** Continue from the user's next request. Deferred ideas are not permission to start or deploy projects.
 
 ## Product intent
 
@@ -105,7 +105,7 @@ Describe schemas before CLI calls. Existing named CLI profiles are normally `def
 
 ## Evidence and remaining limits
 
-The scaling review's ten defects were fixed with 25 local and 106 isolated database checks. Later layout checks passed 87 existing interaction tests; Log retention/modal work passed 38 focused checks. These counts overlap and are not a current full-suite or million-user benchmark. Latest UI releases passed full builds, stage API/worker checks and public asset verification.
+The scaling review's ten defects were fixed with 25 local and 106 isolated database checks. Later layout checks passed 87 existing interaction tests; Log retention/modal work passed 38 focused checks. The latest cloud-dev batch passed 138 focused UI checks, 4 isolated agent-memory database checks, a full build, desktop browser inspection, and exact API/worker health verification. Mobile-width browser inspection was not rerun after the user asked Codex to stop controlling Chrome. These counts overlap and are not a current full-suite or million-user benchmark.
 
 Remaining limits, not an automatic task list:
 

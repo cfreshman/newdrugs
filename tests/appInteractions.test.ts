@@ -42,7 +42,7 @@ describe('chat interaction integration', () => {
     vi.stubGlobal('matchMedia', (query:string) => ({matches:query.includes('760'),media:query,addEventListener(){},removeEventListener(){}}));
     await mount(); await load();
     expect(dom.container.querySelector('.mode-switch')?.getAttribute('data-collapsed')).toBe('true');
-    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch button[aria-label="Posts"]')!.click());
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.mode-switch a[aria-label="Posts"]')!.click());
     const social=dom.container.querySelector('.social-posts');
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());
     const dock=dom.container.querySelector<HTMLElement>('.workspace')!;
@@ -54,16 +54,16 @@ describe('chat interaction integration', () => {
   });
   it.each(['Friends','Posts'])('opens location and subsequent profile editing visibly in %s mode',async(mode)=>{
     await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,area:{cell:'852a3313fffffff',label:'East Providence area, Rhode Island, US',point:{type:'Point',coordinates:[-71.3,41.8]}}}}));
-    await act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>(`.mode-switch a[aria-label="${mode}"]`)!.click());
     const page=dom.container.querySelector<HTMLElement>('.social-experience:not([hidden])')!;
     const clickText=async(selector:string,text:string)=>act(async()=>[...page.querySelectorAll<HTMLButtonElement>(selector)].find(button=>button.textContent===text)!.click());
     await clickText('.view-tabs button','Nearby');
-    await act(async()=>page.querySelector<HTMLButtonElement>('.composer-view:not([hidden]) .search-area-controls button')!.click());
+    await act(async()=>page.querySelector<HTMLAnchorElement>('.composer-view:not([hidden]) .search-area-controls a')!.click());
     expect(dom.container.querySelector('dialog[open] .location-picker')).not.toBeNull();
     expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(true);
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('dialog [aria-label="Close"]')!.click());
-    await clickText('.mode-sidebar nav button','Your profile');
-    await clickText('.profile-contact button','Edit profile');
+    await clickText('.mode-sidebar nav a','Your profile');
+    await clickText('.profile-contact a','Edit profile');
     expect(dom.container.querySelector('dialog[open] .profile-editor-actions')).not.toBeNull();
     expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(true);
     expect(page.querySelector('.mode-content-header h1')?.textContent).toBe('Profile');
@@ -71,33 +71,33 @@ describe('chat interaction integration', () => {
   it('keeps profile titles consistent and exposes composition in Posts mode',async()=>{
     await mount();await load();
     for(const mode of ['Posts','Friends']){
-      await act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+      await act(async()=>dom.container.querySelector<HTMLAnchorElement>(`.mode-switch a[aria-label="${mode}"]`)!.click());
       const page=dom.container.querySelector<HTMLElement>('.social-experience:not([hidden])')!;
-      await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(button=>button.textContent==='Your profile')!.click());
+      await act(async()=>[...page.querySelectorAll<HTMLAnchorElement>('.mode-sidebar nav a')].find(button=>button.textContent==='Your profile')!.click());
       expect(page.querySelector('.mode-content-header h1')?.textContent).toBe('Profile');
       expect(Boolean(page.querySelector('.mode-content-header [aria-label="New post"]'))).toBe(mode==='Posts');
     }
   });
   it('returns the active mode to its base without resetting another mode on selection',async()=>{
     await mount();await load();
-    const select=async(mode:string)=>act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+    const select=async(mode:string)=>act(async()=>dom.container.querySelector<HTMLAnchorElement>(`.mode-switch a[aria-label="${mode}"]`)!.click());
     await select('Posts');
     const posts=dom.container.querySelector('.social-posts')!;
-    await act(async()=>[...posts.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(button=>button.textContent==='Your profile')!.click());
+    await act(async()=>[...posts.querySelectorAll<HTMLAnchorElement>('.mode-sidebar nav a')].find(button=>button.textContent==='Your profile')!.click());
     expect(posts.querySelector('h1')?.textContent).toBe('Profile');
     await select('Friends');await select('Posts');expect(posts.querySelector('h1')?.textContent).toBe('Profile');
     await select('Posts');expect(posts.querySelector('h1')?.textContent).toBe('Posts');
   });
   it('restores independent agent panel, draft and tool state for each tab',async()=>{
     await mount();await load();
-    const select=async(mode:string)=>act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${mode}"]`)!.click());
+    const select=async(mode:string)=>act(async()=>dom.container.querySelector<HTMLAnchorElement>(`.mode-switch a[aria-label="${mode}"]`)!.click());
     const write=(text:string)=>act(()=>{const input=dom.container.querySelector<HTMLTextAreaElement>('#thought')!;Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));});
     const workspace=dom.container.querySelector<HTMLElement>('.workspace')!;
     write('Agent draft');await select('Posts');expect(workspace.hidden).toBe(true);
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());write('Posts draft');
     expect(dom.container.querySelector('.agent-dock-actions .dictation-slot + .agent-dock-close')).not.toBeNull();
     expect(dom.container.querySelectorAll('[aria-label="Start dictation"]')).toHaveLength(1);
-    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.social-posts .mode-sidebar nav button')].find(button=>button.textContent==='People')!.click());
+    await act(async()=>[...dom.container.querySelectorAll<HTMLAnchorElement>('.social-posts .mode-sidebar nav a')].find(button=>button.textContent==='People')!.click());
     const search=dom.container.querySelector<HTMLInputElement>('.social-posts .composer-view:not([hidden]) input[type="search"]')!;
     act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(search,'saved search');search.dispatchEvent(new Event('input',{bubbles:true}));});
     await select('Friends');expect(workspace.hidden).toBe(true);
@@ -129,7 +129,7 @@ describe('chat interaction integration', () => {
   it('auto-sends an automation example while preserving the existing composer draft', async () => {
     await mount(); await load(); type('my unsent thought');
     act(() => dom.container.querySelector<HTMLButtonElement>('[aria-label="Open New Drugs"]')!.click());
-    const button = [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent === 'Automations')!;
+    const button = [...dom.container.querySelectorAll<HTMLAnchorElement>('.launcher-menu a')].find(button => button.textContent === 'Automations')!;
     await act(async () => button.click());
     await act(async () => dom.container.querySelector<HTMLButtonElement>('.automation-examples button')!.click());
     expect(transport.post).toHaveBeenCalledWith('/chat', expect.objectContaining({ text: expect.stringContaining('Every morning at 7am'), fileIds: [] }));
@@ -138,9 +138,9 @@ describe('chat interaction integration', () => {
   it('attaches an inbox update without sending, preserves the draft and sends the owned reference on submit', async () => {
     await mount(); await load(); type('what do you think?');
     act(() => dom.container.querySelector<HTMLButtonElement>('[aria-label="Open New Drugs"]')!.click());
-    const button = [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent === 'Agent inbox')!;
-    transport.operation.mockImplementation(async (name: string) => name === 'inbox.list' ? {items:[{id:'update',title:'A useful update',producer:{name:'Connected agent'},createdAt:new Date().toISOString(),read:false}],nextCursor:null} : name === 'inbox.get' ? {id:'update',title:'A useful update',body:'Source text',producer:{name:'Connected agent'},createdAt:new Date().toISOString(),links:[],read:false,archived:false,unavailable:false} : {items:[],nextCursor:null});
-    await act(async () => button.click()); await act(async () => dom.container.querySelector<HTMLButtonElement>('.inbox-row')!.click());
+    const button = [...dom.container.querySelectorAll<HTMLAnchorElement>('.launcher-menu a')].find(button => button.textContent === 'Agent inbox')!;
+    transport.operation.mockImplementation(async (name: string) => name === 'inbox.list' ? {items:[{id:'update',title:'A useful update',body:'**Source** text',producer:{name:'Connected agent'},createdAt:new Date().toISOString(),read:false}],nextCursor:null} : name === 'inbox.get' ? {id:'update',title:'A useful update',body:'Source text',producer:{name:'Connected agent'},createdAt:new Date().toISOString(),links:[],read:false,archived:false,unavailable:false} : {items:[],nextCursor:null});
+    await act(async () => button.click());expect(dom.container.querySelector('.inbox-preview strong')?.textContent).toBe('Source');await act(async () => dom.container.querySelector<HTMLAnchorElement>('.inbox-row')!.click());
     const discuss = [...dom.container.querySelectorAll<HTMLButtonElement>('.panel-actions button')].find(button => button.textContent === 'Bring into chat')!;
     await act(async () => discuss.click());
     expect(transport.post.mock.calls.some(call => call[0] === '/chat')).toBe(false);
@@ -277,7 +277,7 @@ describe('chat interaction integration', () => {
     const dialog = dom.container.querySelector('dialog')!;
     act(() => dialog.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 0, clientY: 0 })));
     expect(dialog.hasAttribute('open')).toBe(true);
-    act(() => dom.container.querySelector<HTMLButtonElement>('.settings-menu button')!.click());
+    act(() => dom.container.querySelector<HTMLElement>('.settings-menu :is(button,a)')!.click());
     expect(Array.from(dom.container.querySelectorAll('.sheet-actions button')).map(button => button.getAttribute('aria-label'))).toEqual(['Back', 'Close']);
     act(() => dialog.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0, clientY: 0 })));
     expect(dom.container.querySelector('dialog')).toBeNull();
@@ -307,7 +307,7 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('.composer-input-layer')?.hasAttribute('inert')).toBe(true);
     expect(dom.container.querySelector('.orb-icon')?.classList.contains('icon-hidden')).toBe(true);
     expect(dom.container.querySelector('.launcher-menu')?.textContent).not.toContain('My profile');
-    const messages = [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent?.includes('Messages'))!;
+    const messages = [...dom.container.querySelectorAll<HTMLAnchorElement>('.launcher-menu a')].find(button => button.textContent?.includes('Messages'))!;
     await act(async () => messages.click());
     expect(dom.container.querySelector('dialog')).toBeNull();
     expect(dom.container.querySelector('.composer-surface h2')?.textContent).toBe('Messages');
@@ -321,7 +321,7 @@ describe('chat interaction integration', () => {
   it('keeps a launcher screen mounted under settings and restores it without losing its state', async () => {
     await mount(); await load();
     act(() => dom.container.querySelector<HTMLButtonElement>('.launcher-button')!.click());
-    await act(async () => [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent?.includes('Messages'))!.click());
+    await act(async () => [...dom.container.querySelectorAll<HTMLAnchorElement>('.launcher-menu a')].find(button => button.textContent?.includes('Messages'))!.click());
     const inbox = dom.container.querySelector('.inbox-list');
     act(() => dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
     expect(dom.container.querySelector('dialog h2')?.textContent).toBe('Settings');
@@ -336,11 +336,11 @@ describe('chat interaction integration', () => {
     localStorage.setItem('nd-draft:user','Agent draft');localStorage.setItem(`nd-draft:user:${mode.toLowerCase()}`,`${mode} draft`);
     const notice={id:'agent-notice',read:false,kind:'agent_update' as const,title:'Agent update',text:'An update',createdAt:new Date().toISOString(),link:{rel:'open_in_newdrugs' as const,targetKind:'exact' as const,resourceType:'inbox',title:'Open update',url:'https://dev.druggie.org/inbox/resource'}};
     await mount();await act(async()=>bootstrap.resolve({...initial,notifications:{unread:1,items:[notice]}}));
-    const select=async(value:string)=>act(async()=>dom.container.querySelector<HTMLButtonElement>(`.mode-switch button[aria-label="${value}"]`)!.click());
+    const select=async(value:string)=>act(async()=>dom.container.querySelector<HTMLAnchorElement>(`.mode-switch a[aria-label="${value}"]`)!.click());
     await select(mode);const page=dom.container.querySelector('.social-experience:not([hidden])')!;
-    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='Your profile')!.click());
+    await act(async()=>[...page.querySelectorAll<HTMLAnchorElement>('.mode-sidebar nav a')].find(x=>x.textContent==='Your profile')!.click());
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
-    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.notification-list button')!.click());
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.notification-list a')!.click());
     expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe(mode.toLowerCase());
     expect(dom.container.querySelector<HTMLElement>('.workspace')?.hidden).toBe(true);
     expect(page.querySelector('.agent-update')?.textContent).toContain('An update');
@@ -369,7 +369,7 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('.inbox-attachments')?.textContent).toContain('An update');
     expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe(mobile?'Agent draft':'Posts draft');
     expect(transport.post.mock.calls.filter(([path])=>path==='/chat')).toHaveLength(0);
-    if(mobile)await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch button[aria-label="Posts"]')!.click());
+    if(mobile)await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.mode-switch a[aria-label="Posts"]')!.click());
     else await act(async()=>dom.container.querySelector<HTMLButtonElement>('[aria-label="Close agent"]')!.click());
     expect(dom.container.querySelector('.social-posts .agent-update')).toBe(update);
     expect(dom.container.querySelector<HTMLTextAreaElement>('#thought')?.value).toBe('Posts draft');
@@ -414,7 +414,7 @@ describe('chat interaction integration', () => {
     expect(location.pathname).toBe('/compose');
     const input=dom.container.querySelector<HTMLTextAreaElement>('.social-posts .composer-view:not([hidden]) textarea')!;
     act(()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'A preserved post draft');input.dispatchEvent(new Event('input',{bubbles:true}));});
-    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.social-posts .mode-sidebar nav button')].find(x=>x.textContent==='Your profile')!.click());dom.frame();
+    await act(async()=>[...dom.container.querySelectorAll<HTMLAnchorElement>('.social-posts .mode-sidebar nav a')].find(x=>x.textContent==='Your profile')!.click());dom.frame();
     expect(location.pathname).toBe('/posts/people/user');
     await travel('back');expect(location.pathname).toBe('/compose');expect(input.value).toBe('A preserved post draft');expect(input.closest<HTMLElement>('.composer-view')!.hidden).toBe(false);
     await travel('back');expect(location.pathname).toBe('/feed');
@@ -440,7 +440,7 @@ describe('chat interaction integration', () => {
     await mount();await act(async()=>bootstrap.resolve({...initial,messages:[{id:'search-link',role:'assistant',text:'[Find gardens](/nearby?q=gardening&scope=all)',createdAt:new Date().toISOString(),source:'app'}]}));dom.frame();
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch [aria-label="Posts"]')!.click());
     const page=dom.container.querySelector('.social-posts')!;
-    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='People')!.click());
+    await act(async()=>[...page.querySelectorAll<HTMLAnchorElement>('.mode-sidebar nav a')].find(x=>x.textContent==='People')!.click());
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());
     const link=dom.container.querySelector<HTMLAnchorElement>('.conversation a')!;expect(link.getAttribute('href')).toBe('/posts/nearby?q=gardening&scope=all');
     await act(async()=>link.click());dom.frame();
@@ -455,9 +455,9 @@ describe('chat interaction integration', () => {
     const page=dom.container.querySelector('.social-posts')!;
     expect(page.querySelector('h1')?.textContent).toBe('Messages');
     expect(page.querySelector('.mode-sidebar [aria-current="page"]')?.textContent).toBe('Messages');
-    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='All posts')!.click());dom.frame();
+    await act(async()=>[...page.querySelectorAll<HTMLAnchorElement>('.mode-sidebar nav a')].find(x=>x.textContent==='All posts')!.click());dom.frame();
     expect(location.pathname).toBe('/feed');expect(page.querySelector('h1')?.textContent).toBe('Posts');
-    await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent==='Messages')!.click());dom.frame();
+    await act(async()=>[...page.querySelectorAll<HTMLAnchorElement>('.mode-sidebar nav a')].find(x=>x.textContent==='Messages')!.click());dom.frame();
     expect(location.pathname).toBe('/posts/messages');
     await travel('back');expect(location.pathname).toBe('/feed');
     await travel('back');expect(location.pathname).toBe('/posts/messages/person-one%3Aperson-two');
@@ -466,7 +466,7 @@ describe('chat interaction integration', () => {
     history.replaceState(null,'','/posts/example');await mount();await load();dom.frame();
     const page=dom.container.querySelector('.social-posts')!;
     expect(page.querySelector('h1')?.textContent).toBe('Post');
-    const select=async(label:string)=>{await act(async()=>[...page.querySelectorAll<HTMLButtonElement>('.mode-sidebar nav button')].find(x=>x.textContent===label)!.click());dom.frame();};
+    const select=async(label:string)=>{await act(async()=>[...page.querySelectorAll<HTMLAnchorElement>('.mode-sidebar nav a')].find(x=>x.textContent===label)!.click());dom.frame();};
     await select('People');expect(location.pathname).toBe('/posts/nearby');
     await select('All posts');expect(location.pathname).toBe('/feed');expect(page.querySelector('h1')?.textContent).toBe('Posts');
   });
@@ -514,7 +514,7 @@ describe('chat interaction integration', () => {
   });
   it('puts Notifications first in Settings',async()=>{
     await mount();await load();await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
-    expect(dom.container.querySelector('.settings-menu button')?.textContent).toBe('Notifications');
+    expect(dom.container.querySelector('.settings-menu :is(button,a)')?.textContent).toBe('Notifications');
   });
   it('opens a message notification in the launcher and preserves the underlying view', async () => {
     await mount();
@@ -522,10 +522,10 @@ describe('chat interaction integration', () => {
     await act(async () => bootstrap.resolve({ ...initial, notifications: { unread: 1, items: [notification] } }));
     transport.operation.mockImplementation(async (name: string) => name === 'connections.get' ? { connection: { id: 'connection', fromId: 'friend', toId: 'user', members: ['friend','user'], status: 'accepted', note: 'an invitation', createdAt: new Date().toISOString() }, people: [] } : { items: [], nextCursor: null, people: [] });
     act(() => dom.container.querySelector<HTMLButtonElement>('.launcher-button')!.click());
-    await act(async () => [...dom.container.querySelectorAll<HTMLButtonElement>('.launcher-menu button')].find(button => button.textContent === 'Posts')!.click());
+    await act(async () => [...dom.container.querySelectorAll<HTMLAnchorElement>('.launcher-menu a')].find(button => button.textContent === 'Posts')!.click());
     const original = dom.container.querySelector('.post-composer');
     act(() => dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
-    await act(async () => dom.container.querySelector<HTMLButtonElement>('.notification-list button')!.click());
+    await act(async () => dom.container.querySelector<HTMLAnchorElement>('.notification-list a')!.click());
     expect(dom.container.querySelector('dialog[open]')).toBeNull();
     expect(dom.container.querySelector('.composer-switcher')?.classList.contains('launcher-open')).toBe(true);
     expect(dom.container.querySelector('.composer-view:not([hidden]) .message-view')).not.toBeNull();

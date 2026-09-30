@@ -140,6 +140,7 @@ agent-written rules (you are allowed to edit below this line)
 - Sleep persists an unresolved function call until wake, with no AI execution while asleep. Provide wake/cancel controls. Continuing a sleeping primary chat supersedes its old run. Clearing chat must also clear searchable history and cached/provider context, cancel affected work, and reset open-tab history; credentials/username controls belong in a separate Account settings section.
 
 - Shared base agent context must prioritize the person’s enjoyment, expression and intended connections. Never make likes, replies, reach, posting frequency or productivity the default goal. Quiet posts and simple captions are not problems to fix. General account-activity reviews do not authorize engagement coaching. Proactive advice needs a concrete benefit grounded in the person’s own interests or plans; otherwise stay quiet. Keep this consistent across primary chat, background agents and CLI/MCP.
+- Hosted and external agents proactively save information the user supplies when it is clearly durable and useful for future turns, without requiring a separate remember request. Preferences, decisions, constraints, commitments and future work all qualify; TODOs are only one example. Do not save transient details, changing account facts or inferred traits. Read memory context once near the start of a materially new external-agent task and retrieve relevant on-demand notes when needed, not before every individual operation.
 
 - Automation instructions preserve the user’s original request and explicit constraints, adding only necessary missing direction. Never bake current profile tags/interests/location or other changing account facts into the saved instruction; read them fresh each run. Explicit user-requested topics remain fixed criteria. Keep schedule/permissions/budget in structured fields and shared behavior in base context, not repeated boilerplate in every prompt.
 
@@ -172,6 +173,7 @@ agent-written rules (you are allowed to edit below this line)
 - New automations are created active with the next scheduled run through a single confirmed `automations.create` action. Do not save paused and require a separate enable step for creation. Resume paused automations through `automations.enable`; edits retain their separate reviewed re-enable behavior.
 
 - Primary panel navigation writes shareable URLs and browser history. Use the canonical unprefixed path in its natural mode, adding /agent, /friends, /posts or /log only for another mode. Keep filters in query parameters, preserve tab drafts and mounted navigation state, and restore the visible view on Back/Forward. Settings overlays restore their underlying panel. The sidebar New Drugs wordmark uses bold Noto Serif. Tapping a panel title or empty header space scrolls its content to the top; header controls retain their actions.
+- Every control whose purpose is navigation uses a real link destination while preserving its existing button, pill, tab or card appearance. Ordinary clicks retain in-app navigation. Command/Ctrl-click, middle-click and the browser context menu must support opening the destination in a new tab. Action controls remain buttons.
 
 - Profile overflow menus stay within the intersection of the visual viewport and panel clipping boundaries. Shift horizontally, flip above when needed, and retain scrolling inside short menus. Profile names and usernames share a baseline and font size, with usernames immediately after names; apply matching name/username sizes in post headers, the post editor and People results too.
 
@@ -197,16 +199,21 @@ agent-written rules (you are allowed to edit below this line)
 - An opened empty Log matches Logcal: keep the current person’s name header above their tap to add log prompt, and omit other empty note/media rows. Participants still appear in the with list.
 
 - Log Grid runs newest first from the top left, left to right like Instagram, overriding Logcal’s original right-to-left contact sheet.
+- A day square and its expanded multi-day panel order that day’s hangouts by creation time from earlier to later. The expanded panel is only a chooser: opening an entry enters the normal full-calendar Older/Newer chronology, never a day-scoped Previous/Next sublist. Grid and List remain newest-day-first.
 
 - Log Close returns to the previous screen. Older/Newer navigation replaces the current hangout instead of adding history. Adjacent entries are preloaded. Code/Close/Edit share equal widths. Log overlays take the full available page height minus normal exterior gaps, including behind the page header, while leaving the desktop side agent usable.
 - Remove me entirely belongs in the editor’s Uncommon section. Do not put a separate entry overflow menu/Ask agent action there. Hosted messages carry a server-validated current app route, following Wayfinder page context; it is a lookup hint, never permission to act. Reauthorize the referenced record when building model input.
 - Log note and other text inputs use the same backing. The media action rail keeps its full width when Remove/Set cover are hidden. Link attachments have explicit add/remove controls and compact previews. Bare domains do not acquire a display or stored root slash; keep explicit URL paths intact.
 
 - Tap to add log appears only on a truly empty entry. Existing title/place/links/media/anniversary or additional participants already count as information; do not nag for a separate note.
+- The generic Log new event control always opens on the current local calendar day after a completed save. Date-specific calendar creation and Log another event preserve the explicitly selected day. Navigation clicks must not fall through to an underlying date or control.
 
 - Today cards use horizontal swipes between full/left-square/right-square, saved per account in Log preferences. Squares and full cards have equal heights. Keep vertical list scrolling native and suppress clicks after a swipe. The loading spinner belongs in the media preview, including while the image itself loads.
+- Today cards, the borderless darker multi-day panel and the three-dots panel use Logcal’s 4px outer radius. Their photos use 2px corners. Keep a 1px gap between the weekly row and the expanded multi-day panel. Its Log another event action fills the panel width like the base Log new event control.
 
-- Log filtering and saved views are CLI/MCP capabilities only. Do not show search, scope/person filters, or saved-view controls in the Log UI. Keep layout switching and export.
+- Log scope/person filters and saved views remain CLI/MCP-only. The List page has a search field that presents direct text matches first and semantic results after them. Keep layout switching and export.
+
+- Circles and live voice Spaces are implementation projects, not optional idea work. Circles may amount to group chats; resolve their exact membership, privacy, history and interaction behavior as part of implementation. Spaces follows the Twitter Spaces model for launching and joining live voice chats, replaces the proposed Now presence-status idea, stays separate from event planning, and leaves Log as the record of actual hangouts.
 
 - Log Grid/List include bottom scroll clearance measured from the floating controls, so the last item scrolls fully above today cards and Scan/Log buttons.
 

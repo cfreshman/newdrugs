@@ -37,6 +37,8 @@ it('generates a normal public setup prompt, with the separate dev profile only o
   expect(publicSetup.prompt).toContain('newdrugs login --url https://druggie.org --token-stdin');
   expect(publicSetup.prompt).not.toMatch(/\bprod(?:uction)?\b|--profile/);
   expect(publicSetup.prompt).toContain('/downloads/newdrugs-cli.tgz');
+  expect(publicSetup.prompt).toContain('Proactively save information');
+  expect(publicSetup.prompt).toContain('read memory context once near task start');
   expect(agentSetup('http://localhost:7330').prompt).toContain('newdrugs --profile dev login --url https://dev.druggie.org');
 });
 

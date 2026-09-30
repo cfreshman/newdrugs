@@ -12,7 +12,7 @@ beforeEach(()=>{dom=setupDOM();api.operation.mockReset().mockImplementation(asyn
 it('opens shared hangouts from a friend profile in its current mode and restores the selected tab on Close',async()=>{
  const route=vi.fn(),navigate=vi.fn();await act(async()=>dom.root.render(createElement(SocialExperience,{mode:'friends',active:true,data:{user,messages:[]} as any,request:{id:1,destination:{view:'person',resourceId:'friend'}},reset:0,dockOpen:false,chatBusy:false,onRoute:route,globalNavigate:navigate,openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()})));
  const tab=[...dom.container.querySelectorAll<HTMLButtonElement>('.profile-posts .view-tabs button')].find(button=>button.textContent==='Hangouts')!;expect(tab).toBeTruthy();await act(async()=>tab.click());
- expect(api.operation).toHaveBeenCalledWith('log.list',{personId:'friend',scope:'shared',limit:30});await act(async()=>dom.container.querySelector<HTMLButtonElement>('.profile-hangouts .log-list button')!.click());
+ expect(api.operation).toHaveBeenCalledWith('log.list',{personId:'friend',scope:'shared',limit:30});await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.profile-hangouts .log-list a')!.click());
  expect(dom.container.querySelector('.social-friends .log-modal[data-open=true] .log-detail')?.textContent).toContain('A shared walk');expect(navigate).not.toHaveBeenCalled();
  await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.log-modal[data-open=true] button')].find(button=>button.textContent==='Back')!.click());
  expect(dom.container.querySelector('.log-modal[data-open=true]')).toBeNull();expect(tab.getAttribute('aria-pressed')).toBe('true');expect(dom.container.querySelector('.composer-view:not([hidden]) .profile-hangouts')).not.toBeNull();
@@ -31,7 +31,7 @@ it('navigates only the profile collection, then restores its mounted list and sc
  await act(async()=>dom.root.render(createElement(SocialExperience,{mode:'friends',active:true,data:{user,messages:[]} as any,request:{id:1,destination:{view:'person',resourceId:'friend'}},reset:0,dockOpen:false,chatBusy:false,onRoute:route,globalNavigate:vi.fn(),openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()})));
  const tab=[...dom.container.querySelectorAll<HTMLButtonElement>('.profile-posts .view-tabs button')].find(button=>button.textContent==='Hangouts')!;await act(async()=>tab.click());
  const list=dom.container.querySelector('.profile-hangouts .log-list')!,scroller=list.closest<HTMLElement>('.composer-view')!;scroller.scrollTop=370;
- await act(async()=>list.querySelector<HTMLButtonElement>('button')!.click());
+ await act(async()=>list.querySelector<HTMLAnchorElement>('a')!.click());
  const active=()=>dom.container.querySelector('.log-modal[data-open=true]')!;
  expect(active().querySelector('[aria-label="Previous entry"]')?.textContent).toBe('Previous');expect((active().querySelector('[aria-label="Previous entry"]') as HTMLButtonElement).disabled).toBe(true);
  expect(active().querySelector('[aria-label="Next entry"]')?.textContent).toBe('Next');
