@@ -30,7 +30,12 @@ export function useHorizontalSwipe(options:Options){
   const start=gesture.current;if(!start||start.id!==event.pointerId)return;
   const dx=event.clientX-start.x,dy=event.clientY-start.y,ratio=current.current.ratio||1.25;
   if(!start.horizontal&&Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)*ratio){gesture.current=null;return;}
-  if(!start.horizontal&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*ratio){start.horizontal=true;event.currentTarget.setPointerCapture?.(event.pointerId);}
+  if(!start.horizontal&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*ratio){
+   start.horizontal=true;
+   // Touch already has implicit capture on its original target. Moving that
+   // capture to an ancestor can cancel the gesture through a bubbled loss event.
+   if(event.pointerType==='mouse')event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
   if(start.horizontal)event.preventDefault();
  };
  const onPointerUp=(event:PointerEvent<HTMLElement>)=>{
@@ -41,7 +46,8 @@ export function useHorizontalSwipe(options:Options){
   event.preventDefault();event.stopPropagation();consumeSwipeClick(event.currentTarget);config.swipe(dx<0?1:-1,dx,dy);
  };
  const onPointerCancel=(event:PointerEvent<HTMLElement>)=>{points.current.delete(event.pointerId);gesture.current=null;};
+ const onLostPointerCapture=(event:PointerEvent<HTMLElement>)=>{if(event.target===event.currentTarget)onPointerCancel(event);};
  const onPointerDownCapture=(event:PointerEvent<HTMLElement>)=>{const config=current.current;if(config.active===false||event.pointerType==='mouse'&&(!config.allowMouse||event.button!==0))return;points.current.add(event.pointerId);if(points.current.size>1)gesture.current=null;};
  const onPointerUpCapture=(event:PointerEvent<HTMLElement>)=>{points.current.delete(event.pointerId);};
- return {onPointerDownCapture,onPointerUpCapture,onPointerCancelCapture:onPointerCancel,onPointerDown,onPointerMove,onPointerUp,onPointerCancel,onLostPointerCapture:onPointerCancel};
+ return {onPointerDownCapture,onPointerUpCapture,onPointerCancelCapture:onPointerCancel,onPointerDown,onPointerMove,onPointerUp,onPointerCancel,onLostPointerCapture};
 }

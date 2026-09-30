@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {act,createElement,useRef} from 'react';
 import {it,expect,vi} from 'vitest';
-import {LogModal} from '../src/LogModal';
+import {LogModal,observeLogLayerGeometry} from '../src/LogModal';
 import {setupDOM,rect} from './dom';
 
 it('keeps an open hangout on its anchor when chat moves the panel without resizing it',async()=>{
@@ -28,5 +28,16 @@ it('does not close from Escape while an editable field owns the key',async()=>{
   await act(async()=>dom.root.render(createElement(Shell)));const dialog=dom.container.querySelector<HTMLElement>('.log-modal')!,input=dialog.querySelector<HTMLInputElement>('input')!;
   await act(async()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));expect(close).not.toHaveBeenCalled();
   await act(async()=>dialog.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));expect(close).toHaveBeenCalledOnce();
+ }finally{dom.cleanup();}
+});
+it('fits the day scrim to the main panel below the mode controls',()=>{
+ const dom=setupDOM();
+ try{
+  dom.container.innerHTML='<div class="app"><section class="social-experience"><div class="mode-main"></div></section><dialog></dialog></div>';
+  const panel=dom.container.querySelector<HTMLElement>('.mode-main')!,dialog=dom.container.querySelector('dialog')!;
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){return this===panel?rect(6,66,381,668):rect(6,6,381,728);});
+  const stop=observeLogLayerGeometry(dialog,panel,true);
+  expect(dialog.style.top).toBe('66px');expect(dialog.style.height).toBe('668px');expect(dialog.style.left).toBe('6px');
+  stop();
  }finally{dom.cleanup();}
 });

@@ -10,7 +10,7 @@ import type {Destination} from '../shared/navigation';
 export function LogDayDialog({active,anchor,close,previous,next,previousTo,nextTo,children}:{previousTo?:Destination;nextTo?:Destination;active:boolean;anchor:RefObject<HTMLElement|null>;close():void;previous?():void;next?():void;children:ReactNode}){
  const layer=useRef<HTMLDialogElement>(null),card=useRef<HTMLDivElement>(null),sourceFocus=useRef<HTMLElement|null>(null),label=useId();
  const swipe=useHorizontalSwipe({active,allowMouse:true,ignore:'button,input,textarea,select,video,audio,iframe,[contenteditable]',swipe:direction=>direction<0?previous?.():next?.()});
- useLayoutEffect(()=>{const dialog=layer.current,panel=anchor.current?.closest<HTMLElement>('.mode-main,.composer-menu-layer')||anchor.current?.closest<HTMLElement>('.composer-view')||anchor.current;if(active&&dialog&&panel)return observeLogLayerGeometry(dialog,panel);},[active,anchor]);
+ useLayoutEffect(()=>{const dialog=layer.current,panel=anchor.current?.closest<HTMLElement>('.mode-main,.composer-menu-layer')||anchor.current?.closest<HTMLElement>('.composer-view')||anchor.current;if(active&&dialog&&panel)return observeLogLayerGeometry(dialog,panel,true);},[active,anchor]);
  useLayoutEffect(()=>{
   const dialog=layer.current;if(!dialog)return;let cancelled=false;
   if(active){sourceFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;queueMicrotask(()=>{if(cancelled||!dialog.isConnected)return;dialog.showPopover?.();dialog.focus({preventScroll:true});});}
