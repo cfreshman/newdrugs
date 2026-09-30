@@ -8,7 +8,7 @@ import {logImageUrl} from './logImageCache';
 import {useRecordRefresh} from './useRecordRefresh';
 import {NavLink} from './NavLink';
 import {usePanelVisible} from './PanelReadiness';
-export function LogCalendarDay({date,today,filters,previews,close,open,openPreview,create,children}:{date:string;today:string;filters:Partial<LogList>;previews:LogCalendarTile[];openPreview(entry:LogCalendarTile):void;close():void;open(entry:LogEntry):void;create():void;children:React.ReactNode}){
+export function LogCalendarDay({date,today,filters,previews,open,openPreview,create,children}:{date:string;today:string;filters:Partial<LogList>;previews:LogCalendarTile[];openPreview(entry:LogCalendarTile):void;open(entry:LogEntry):void;create():void;children:React.ReactNode}){
  const [page,setPage]=useState<LogPage>({items:[],nextCursor:null}),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(true),[error,setError]=useState('');
  const visible=usePanelVisible(),body=useRef<HTMLDivElement>(null);
  const request=useRef<AbortController|null>(null),query={...filters,calendarDay:date,includeAnniversaries:date>today};
@@ -30,6 +30,6 @@ export function LogCalendarDay({date,today,filters,previews,close,open,openPrevi
   {busy&&!items.length&&<CircleNotch className="spin" size={18} aria-label="Loading entries"/>}
   {error&&<p className="error">{error}</p>}
   {page.nextCursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}
-  </div><footer className="log-day-footer"><div className="panel-actions log-entry-actions"><NavLink className="solid" to={{view:'log_compose',date}} navigate={create}>Log another event</NavLink></div><div className="panel-actions log-task-footer"><button type="button" aria-label="Close day" onClick={close}>Close</button></div></footer>
+  </div><footer className="log-day-footer"><div className="panel-actions log-entry-actions"><NavLink to={{view:'log_compose',date}} navigate={create}>Log another event</NavLink></div></footer>
  </section>;
 }
