@@ -23,7 +23,7 @@ export function LogDayDialog({active,anchor,close,previous,next,previousTo,nextT
   event.stopPropagation();if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.altKey||event.shiftKey||isEditableLogTarget(event.target))return;
   if(event.key==='Escape'){event.preventDefault();close();}else if(event.key==='ArrowLeft'&&previous){event.preventDefault();previous();}else if(event.key==='ArrowRight'&&next){event.preventDefault();next();}
  }} onCancel={event=>{event.preventDefault();close();}}><div className="log-day-scrim" aria-hidden="true"/><div ref={card} className="log-day-card" aria-describedby={label}>
-  <span className="sr-only" id={label}>Swipe or use the arrows to change days.</span>
+  <span className="sr-only" id={label}>Swipe to change days.</span>
   {previousTo&&previous?<NavLink className="close log-day-previous" aria-label="Previous day" to={previousTo} navigate={previous}><CaretLeft size={21}/></NavLink>:<button type="button" className="close log-day-previous" aria-label="Previous day" disabled><CaretLeft size={21}/></button>}
   <PanelVisibilityContext.Provider value={active}>{children}</PanelVisibilityContext.Provider>
   {nextTo&&next?<NavLink className="close log-day-next" aria-label="Next day" to={nextTo} navigate={next}><CaretRight size={21}/></NavLink>:<button type="button" className="close log-day-next" aria-label="Next day" disabled><CaretRight size={21}/></button>}

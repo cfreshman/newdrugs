@@ -29,7 +29,7 @@ it('opens a centered top-layer chooser outside week rows without moving or rebui
  expect(layer().tagName).toBe('DIALOG');expect(layer().open).toBe(true);expect(layer().dataset.topLayer).toBe('true');expect(layer().closest('[data-week]')).toBeNull();expect(layer().querySelectorAll('.log-day-choice')).toHaveLength(2);expect(dom.container.querySelector('[data-week]')).toBe(week);expect(dom.container.querySelector('.log-calendar-weeks')).toBe(calendar);expect(scroller.scrollTop).toBe(200);
  expect(layer().querySelector('[aria-label="Close day"]')).toBeNull();expect(layer().querySelectorAll('.log-choice-placeholder')).toHaveLength(2);await act(async()=>pointer(layer().querySelector<HTMLElement>('.log-day-scrim')!,'pointerdown',1,10,10));expect(layer()).toBeNull();expect(scroller.scrollTop).toBe(200);expect(dom.container.querySelector('[data-week]')).toBe(week);
 });
-it('keeps side arrows on touch layouts and skips empty dates to a single-event day',async()=>{
+it('provides desktop side arrows and skips empty dates to a single-event day',async()=>{
  await mount();await pick();expect(arrow('Previous').hidden).toBe(false);expect(arrow('Next').hidden).toBe(false);expect(arrow('Next').getAttribute('href')).toContain(`date=${newer}`);await act(async()=>arrow('Next').click());expect(layer().querySelector('[aria-label^="Entries for"]')?.getAttribute('aria-label')).toBe(`Entries for ${newer}`);expect(layer().querySelectorAll('.log-day-choice')).toHaveLength(1);expect(arrow('Next').disabled).toBe(true);await act(async()=>arrow('Previous').click());expect(layer().querySelectorAll('.log-day-choice')).toHaveLength(2);expect(open).not.toHaveBeenCalled();
 });
 it('swipes from a result row between days and consumes its release click',async()=>{
