@@ -1,4 +1,4 @@
-import type {ClientSession} from 'mongodb';import {rows} from './db';import {users} from './auth';import {uploads,readUpload,uploadMetadata} from './uploads';import {AppError} from './errors';
+import type {ClientSession} from 'mongodb';import {rows} from './db';import {users} from './auth';import {uploads,readUpload,uploadMetadata} from './uploads';import {AppError} from './errors';import {orderedLogContributions,selectLogCoverUpload} from './logCover';
 import type {LogJoinPreview} from '../shared/logJoining';
 export interface InviteEntry {_id:string;title:string;date:string;place:string;links?:string[];recurrence?:'none'|'anniversary'|'birthday';historicalPeople?:string[];members:string[];coverFileId:string|null;contributions:{userId:string;note?:string;fileIds:string[]}[]}
 export async function inviteEntry(code:string,session?:ClientSession){
@@ -7,10 +7,10 @@ export async function inviteEntry(code:string,session?:ClientSession){
  if(await users().findOne({_id:{$in:entry.members},suspendedAt:{$type:'string'}},{session,projection:{_id:1}}))return null;return entry;
 }
 async function inviteFiles(entry:InviteEntry,session?:ClientSession,photosOnly=false){
- const references=entry.contributions.filter(person=>entry.members.includes(person.userId)).flatMap(person=>person.fileIds.map(id=>({id,owner:person.userId})));
- references.sort((a,b)=>Number(b.id===entry.coverFileId)-Number(a.id===entry.coverFileId));if(!references.length)return [];
+ const references=orderedLogContributions(entry).flatMap(person=>person.fileIds.map(id=>({id,owner:person.userId})));if(!references.length)return [];
  const found=await uploads().find({_id:{$in:references.map(ref=>ref.id)},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false},mime:photosOnly?/^image\//:/^(image|audio|video)\//},{session}).toArray();
- return references.flatMap(ref=>{const file=found.find(file=>file._id===ref.id&&file.userId===ref.owner);return file?[file]:[];});
+ const byFile=new Map(found.map(file=>[file._id,file])),ordered=references.flatMap(ref=>{const file=byFile.get(ref.id);return file?.userId===ref.owner?[file]:[];}),cover=selectLogCoverUpload(entry,byFile);
+ return cover?[cover,...ordered.filter(file=>file._id!==cover._id)]:ordered;
 }
 export async function invitePhotos(entry:InviteEntry,session?:ClientSession){return inviteFiles(entry,session,true);}
 export async function invitePeople(entry:InviteEntry,session?:ClientSession){
@@ -21,7 +21,7 @@ export async function projectInvite(entry:InviteEntry,code:string,viewerId?:stri
  const names=await invitePeople(entry,session),files=await inviteFiles(entry,session);
  return {entryId:entry._id,title:entry.title,date:entry.date,place:entry.place,links:entry.links||[],recurrence:entry.recurrence||'none',historicalPeople:entry.historicalPeople||[],joined:Boolean(viewerId&&entry.members.includes(viewerId)),people:names,
   photos:files.filter(file=>file.mime.startsWith('image/')).map(file=>({id:file._id,name:'Hangout photo',url:`/api/log-invites/${code}/photos/${file._id}`})),
-  contributors:entry.contributions.filter(person=>entry.members.includes(person.userId)).map(person=>{const identity=names.find(item=>item.id===person.userId);return {userId:person.userId,name:identity?.name||'Member',...(identity?.handle?{handle:identity.handle}:{}),note:person.note||'',files:person.fileIds.flatMap(id=>{const file=files.find(file=>file._id===id&&file.userId===person.userId);return file?[{id:file._id,name:file.name,mime:file.mime,bytes:file.bytes,url:`/api/log-invites/${code}/${file.mime.startsWith('image/')?'photos':'media'}/${file._id}`}]:[];})};})};
+  contributors:orderedLogContributions(entry).map(person=>{const identity=names.find(item=>item.id===person.userId);return {userId:person.userId,name:identity?.name||'Member',...(identity?.handle?{handle:identity.handle}:{}),note:person.note||'',files:person.fileIds.flatMap(id=>{const file=files.find(file=>file._id===id&&file.userId===person.userId);return file?[{id:file._id,name:file.name,mime:file.mime,bytes:file.bytes,url:`/api/log-invites/${code}/${file.mime.startsWith('image/')?'photos':'media'}/${file._id}`}]:[];})};})};
 }
 export async function publicInvitePreview(code:string){const entry=await inviteEntry(code);if(!entry)throw new AppError(404,'not_found','This hangout code is unavailable.');return projectInvite(entry,code);}
 export async function inviteMediaMetadata(code:string,fileId:string,photosOnly=false){const entry=await inviteEntry(code),file=entry&&(await inviteFiles(entry,undefined,photosOnly)).find(file=>file._id===fileId);if(!file)throw new AppError(404,'not_found','This attachment is unavailable.');return uploadMetadata({userId:file.userId,source:'external',scope:'read'},file._id);}

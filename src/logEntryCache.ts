@@ -1,4 +1,5 @@
 import {logImageUrl} from './logImageCache';
+import {logCover} from './logCalendarModel';
 import type {LogEntry} from '../shared/log';
 import {LogSnapshotStore,LOG_SNAPSHOT_LIMITS,type LogSnapshot} from './logSnapshotStore';
 const entries=new Map<string,LogSnapshot>(),store=new LogSnapshotStore();
@@ -47,7 +48,7 @@ export function updateLogEntryCache(scope:ReturnType<typeof logCacheScope>,name:
  if(!name.startsWith('log.')||['log.list','log.export'].includes(name))return;
  for(const item of [value,value?.previous,value?.next])if(item?.id&&Array.isArray(item.contributors))cacheLogEntry(scope.userId,item);
 }
-export function preloadLogPhotos(entry:LogEntry){if(typeof Image==='undefined')return;for(const file of entry.contributors.flatMap(person=>person.files).filter(file=>file.mime.startsWith('image/')).slice(0,4)){const image=new Image();image.src=logImageUrl(file.url);}}
+export function preloadLogPhotos(entry:LogEntry){if(typeof Image==='undefined')return;const coverId=logCover(entry)?.id,photos=entry.contributors.flatMap(person=>person.files).filter(file=>file.mime.startsWith('image/')).sort((a,b)=>Number(b.id===coverId)-Number(a.id===coverId));for(const file of photos.slice(0,4)){const image=new Image();image.src=logImageUrl(file.url);}}
 
 export function rejectLogEntryCache(scope:ReturnType<typeof logCacheScope>,name:string,input:unknown,status:number){
  if(!scope.userId||scope.userId!==account||scope.generation!==generation||!['log.get','log.neighbors'].includes(name)||![401,403,404,410].includes(status))return;

@@ -15,7 +15,8 @@ import type {ClientSession,Filter,Document} from 'mongodb';
 import {rows} from './db';
 import {users,type Actor} from './auth';
 import {AppError,requireValue} from './errors';
-import {uploads,ownUpload,retainUploads,deleteUpload} from './uploads';
+import {uploads,ownUpload,retainUploads,deleteUpload,type Upload} from './uploads';
+import {orderedLogContributions,selectLogCoverUpload} from './logCover';
 import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogList,type LogCalendarPage} from '../shared/log';
 interface LogRow extends LogFields {calendarMonthDay?:string;_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
 const entries=()=>rows<LogRow>('logEntries');
@@ -41,7 +42,11 @@ export async function projectLogEntries(records:LogRow[],userId:string,session?:
   const connections=await rows('connections').find({members:userId,$and:[{members:{$in:unresolved}}],$or:[{status:{$in:['pending','accepted']}},{status:'declined',toId:userId}]},{session,projection:{members:1}}).toArray();for(const row of connections)for(const id of row.members as string[])if(unresolved.includes(id))visible.add(id);
  }
  const person=(id:string)=>{const user=byPerson.get(id);return {userId:id,profileVisible:visible.has(id),name:user?.name||user?.handle||'Member',...(user?.handle?{handle:user.handle}:{}),...(user?.photos?.[0]&&visible.has(id)?{photoId:user.photos[0]}:{})};};
- return records.map(row=>({id:row._id,ownerId:row.ownerId,...(row.historicalPeople?.length?{historicalPeople:row.historicalPeople}:{}),title:row.title,date:row.date,place:row.place,links:row.links,recurrence:row.recurrence,coverFileId:byFile.has(row.coverFileId||'')?row.coverFileId:null,revision:row.revision,createdAt:row.createdAt,updatedAt:row.updatedAt,membership:row.members.includes(userId)?'member':row.invited.includes(userId)?'invited':'declined',contributors:row.contributions.filter(c=>row.members.includes(c.userId)).map(c=>({...person(c.userId),note:preview?c.note.slice(0,500):c.note,...(preview&&c.note.length>500?{noteTruncated:true}:{}),files:c.fileIds.flatMap(id=>{const file=byFile.get(id);return file&&file.userId===c.userId?[{id:file._id,name:file.name,mime:file.mime,bytes:file.bytes,url:`/api/files/${file._id}`}]:[];})})),invitations:row.invited.map(person)}));
+ const fileView=(file:Upload)=>({id:file._id,name:file.name,mime:file.mime,bytes:file.bytes,url:`/api/files/${file._id}`});
+ return records.map(row=>{
+  const cover=selectLogCoverUpload(row,byFile);
+  return {id:row._id,ownerId:row.ownerId,...(row.historicalPeople?.length?{historicalPeople:row.historicalPeople}:{}),title:row.title,date:row.date,place:row.place,links:row.links,recurrence:row.recurrence,coverFileId:byFile.has(row.coverFileId||'')?row.coverFileId:null,revision:row.revision,createdAt:row.createdAt,updatedAt:row.updatedAt,cover:cover?fileView(cover):null,membership:row.members.includes(userId)?'member':row.invited.includes(userId)?'invited':'declined',contributors:orderedLogContributions(row).map(c=>({...person(c.userId),note:preview?c.note.slice(0,500):c.note,...(preview&&c.note.length>500?{noteTruncated:true}:{}),files:c.fileIds.flatMap(id=>{const file=byFile.get(id);return file&&file.userId===c.userId?[fileView(file)]:[];})})),invitations:row.invited.map(person)};
+ });
 }
 async function project(row:LogRow,userId:string,session?:ClientSession,preview=false){return (await projectLogEntries([row],userId,session,preview))[0];}
 
@@ -113,9 +118,9 @@ async function readCalendar(userId:string,d:{from:string;through:string;today:st
  const result=dates.map(date=>{const matches=found.filter(row=>row.calendarDate===date);return {date,found:matches.slice(0,9),more:matches.length>9};});
  const source=[...new Map(result.flatMap(day=>day.found).map(row=>[row._id,row])).values()];
  const ids=[...new Set(source.flatMap(row=>row.contributions.filter(c=>row.members.includes(c.userId)).flatMap(c=>c.fileIds)))];
- const files=await uploads().find({_id:{$in:ids},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false},mime:{$regex:'^image/'}},{session,projection:{userId:1,name:1,mime:1,bytes:1}}).toArray();
+ const files=await uploads().find({_id:{$in:ids},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false},mime:{$regex:'^image/'}},{session,projection:{userId:1,name:1,mime:1,bytes:1,createdAt:1}}).toArray();
  const byFile=new Map(files.map(file=>[file._id,file]));
- const tiles=new Map(source.map(row=>{const photos=row.contributions.filter(c=>row.members.includes(c.userId)).flatMap(c=>c.fileIds.flatMap(id=>{const file=byFile.get(id);return file?.userId===c.userId?[file]:[];})),cover=photos.find(file=>file._id===row.coverFileId)||photos[0];return [row._id,{id:row._id,date:row.date,title:row.title,createdAt:row.createdAt,cover:cover?{id:cover._id,name:cover.name,mime:cover.mime,bytes:cover.bytes,url:`/api/files/${cover._id}`}:null}];}));
+ const tiles=new Map(source.map(row=>{const cover=selectLogCoverUpload(row,byFile);return [row._id,{id:row._id,date:row.date,title:row.title,createdAt:row.createdAt,cover:cover?{id:cover._id,name:cover.name,mime:cover.mime,bytes:cover.bytes,url:`/api/files/${cover._id}`}:null}];}));
  return {days:result.map(day=>({date:day.date,more:day.more,items:day.found.map(row=>tiles.get(row._id)!)})),indexing:Boolean(await entries().findOne({members:userId,calendarMonthDay:{$exists:false},deletedAt:{$exists:false}},{session,projection:{_id:1}}))};
 }
 function calendar(userId:string,d:Parameters<typeof readCalendar>[1],session?:ClientSession){return calendarReads.run(()=>readCalendar(userId,d,session));}

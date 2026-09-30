@@ -19,6 +19,13 @@ it('allows only the first eligible image through a current invite capability, an
  await rows('logEntries').updateOne({_id:'private'},{$set:{joinKey:'b'.repeat(32)}});await expect(readPagePreviewImage('log-invite',code)).rejects.toMatchObject({status:404});expect((await pagePreview(`/log/join/${code}`)).imagePath).toBe('/share.png?v=gradient');
  await rows('logEntries').updateOne({_id:'private'},{$set:{deletedAt:'now'}});await expect(readPagePreviewImage('log-invite','b'.repeat(32))).rejects.toMatchObject({status:404});
 });
+it('uses the earliest invite photo when cover is unset and event user order when timestamps are unavailable',async()=>{
+ await rows('uploads').updateOne({_id:imageId},{$set:{createdAt:'2026-09-29T12:00:00.000Z'}});await rows('uploads').updateOne({_id:privateImageId},{$set:{createdAt:'2026-09-29T09:00:00.000Z'}});
+ await rows('logEntries').insertOne({_id:'fallback-cover',title:'Fallback cover',joinKey:code,members:[userId,otherId],contributions:[{userId:otherId,fileIds:[privateImageId]},{userId,fileIds:[imageId]}],coverFileId:null});
+ expect((await readPagePreviewImage('log-invite',code)).file._id).toBe(privateImageId);
+ await rows('uploads').updateMany({_id:{$in:[imageId,privateImageId]}},{$unset:{createdAt:''}});
+ expect((await readPagePreviewImage('log-invite',code)).file._id).toBe(imageId);
+});
 it('publishes public posts and opted-in profiles, but not private profiles or removed/moderated/suspended content',async()=>{
  expect(await pagePreview(`/people/${otherId}`)).toMatchObject({title:'View profile (New Drugs)',description:'Made in New England',private:true});await expect(readPagePreviewImage('person',otherId)).rejects.toMatchObject({status:404});
  expect(await pagePreview(`/people/${userId}`)).toMatchObject({description:'Public bio',private:false});expect((await readPagePreviewImage('person',userId)).file._id).toBe(imageId);

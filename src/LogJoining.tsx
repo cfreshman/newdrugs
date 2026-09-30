@@ -1,4 +1,5 @@
 import {LogMedia} from './LogMedia';
+import {useLogMediaDetail,LogNoteDetailLink} from './LogMediaDetail';
 import {AgentMarkdown} from './AgentMarkdown';
 import {LinkPreviews} from './LinkPreview';
 import {useRecordRefresh} from './useRecordRefresh';
@@ -13,7 +14,7 @@ import type {Destination} from '../shared/navigation';
 import {parseLogCode,type LogCode,type LogJoinPreview} from '../shared/logJoining';
 import type {LogEntry} from '../shared/log';
 import {api,operation,errorText} from './api';
-import {usePanelLoading,usePanelVisible} from './PanelReadiness';
+import {PanelVisibilityContext,usePanelLoading,usePanelVisible} from './PanelReadiness';
 import {NavLink} from './NavLink';
 
 type Props={closeLabel?:string;navigate(destination:Destination):void;close():void};
@@ -47,11 +48,16 @@ export function LogJoinPanel({code,navigate,close,registered=true,onAccount,onJo
  const visible=usePanelVisible();
  const openEntry=(entryId:string)=>onJoined?onJoined(entryId):navigate({view:'log',resourceId:entryId});
  const [preview,setPreview]=useState<LogJoinPreview|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),key=useRef(crypto.randomUUID());
+ const media=useLogMediaDetail(preview?{id:preview.entryId,title:preview.title,contributors:preview.contributors,coverId:preview.photos[0]?.id}:null,visible,navigate,close);
  const generation=useRef(0);
  const load=useCallback(async()=>{if(!visible)return;const request=++generation.current;try{const result=await (registered?operation<LogJoinPreview>('log.join_preview',{code}):api<LogJoinPreview>(`/log-invites/${encodeURIComponent(code)}`));if(request===generation.current){setPreview(result);setError('');}}catch(e){if(request===generation.current){setPreview(null);setError(errorText(e));}}},[code,registered,visible]);
  useEffect(()=>{void load();return()=>{generation.current++;};},[load]);useRecordRefresh(['log'],load);
  usePanelLoading(!preview&&!error);
  useEffect(()=>{if(visible&&registered&&preview?.joined)openEntry(preview.entryId);},[visible,registered,preview?.joined,preview?.entryId]);
  const join=async()=>{if(busy||!preview)return;if(!registered){onAccount?.();return;}if(preview.joined){openEntry(preview.entryId);return;}setBusy(true);setError('');try{const entry=await operation<LogEntry>('log.join',{code},{key:key.current,confirmed:true});changed();openEntry(entry.id);}catch(e){setError(errorText(e));}finally{setBusy(false);}};
- return <section className="log-join log-detail log-task"><div className="log-detail-body">{preview?<><h2>{preview.title||'(untitled)'}</h2><div className="log-photo-strip"><PostPhotos log horizontal photos={preview.photos||[]}/></div><div className="log-entry-facts"><p>{preview.date>Temporal.Now.plainDateISO().toString()?'plan for':'hung out'} {logDateLabel(preview.date)}</p>{preview.place&&<p>at {preview.place}</p>}<p>with {[...preview.people.map(person=>person.handle||person.name),...(preview.historicalPeople||[])].join(', ')}</p></div>{preview.recurrence&&preview.recurrence!=='none'&&<span className="log-recurrence-label">{preview.recurrence==='birthday'?'Birthday':'Anniversary'}</span>}<div className="log-contributions">{(preview.contributors||[]).filter(person=>person.note.trim()||person.files.some(file=>!file.mime.startsWith('image/'))).map(person=><section className="log-contribution" key={person.userId}><span className="log-author">{person.handle||person.name}</span><div className="log-note-content">{person.note.trim()&&<AgentMarkdown text={person.note}/>}<LogMedia files={person.files.filter(file=>!file.mime.startsWith('image/'))}/></div></section>)}</div><div className="log-entry-links">{(preview.links||[]).map(url=><LinkPreviews key={url} text="" links={[url]}/>)}</div></>:!error&&<CircleNotch className="spin" size={24}/>} {error&&<p className="error" role="alert">{error}</p>}</div><footer className="log-detail-footer"><div className="panel-actions log-entry-actions"><button onClick={close}>Cancel</button><button className="solid" disabled={!preview||busy} onClick={()=>void join()}>{busy?'Joining…':!registered?<><span className="log-join-label-full">Create account or sign in</span><span className="log-join-label-short">Sign in</span></>:preview?.joined?'Open hangout':'Join'}</button></div></footer></section>;
+ return <PanelVisibilityContext.Provider value={visible&&!media.open}><section ref={media.anchor} className="log-join log-detail log-task"><div className="log-detail-body">{preview?<><h2>{preview.title||'(untitled)'}</h2>
+  <div className="log-photo-strip"><PostPhotos log horizontal onOpen={media.photo} photos={preview.photos||[]}/></div><div className="log-entry-facts"><p>{preview.date>Temporal.Now.plainDateISO().toString()?'plan for':'hung out'} {logDateLabel(preview.date)}</p>{preview.place&&<p>at {preview.place}</p>}<p>with {[...preview.people.map(person=>person.handle||person.name),...(preview.historicalPeople||[])].join(', ')}</p></div>{preview.recurrence&&preview.recurrence!=='none'&&<span className="log-recurrence-label">{preview.recurrence==='birthday'?'Birthday':'Anniversary'}</span>}
+  <div className="log-contributions">{(preview.contributors||[]).filter(person=>person.note.trim()||person.files.some(file=>!file.mime.startsWith('image/'))).map(person=><section className="log-contribution" key={person.userId}><span className="log-author">{person.handle||person.name}</span><div className="log-note-content">{person.note.trim()&&<LogNoteDetailLink name={person.handle||person.name} open={element=>media.note(person.userId,element)}><AgentMarkdown text={person.note}/></LogNoteDetailLink>}<LogMedia files={person.files.filter(file=>!file.mime.startsWith('image/'))}/></div></section>)}</div><div className="log-entry-links">{(preview.links||[]).map(url=><LinkPreviews key={url} text="" links={[url]}/>)}</div></>:!error&&<CircleNotch className="spin" size={24}/>} {error&&<p className="error" role="alert">{error}</p>}</div>
+  <footer className="log-detail-footer"><div className="panel-actions log-entry-actions"><button onClick={close}>Cancel</button><button className="solid" disabled={!preview||busy} onClick={()=>void join()}>{busy?'Joining…':!registered?<><span className="log-join-label-full">Create account or sign in</span><span className="log-join-label-short">Sign in</span></>:preview?.joined?'Open hangout':'Join'}</button></div></footer>{media.detail}
+ </section></PanelVisibilityContext.Provider>;
 }

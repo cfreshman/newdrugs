@@ -8,7 +8,7 @@ Current operational handoff, verified September 29, 2026. Read this and `AGENTS.
 - Repository: `/Users/work/dev/newdrugs`; branch **`main`**. Log is shipped production work on the canonical branch. Do not reset to a pre-Log tag or assume Log is unshipped.
 - Production is deployed from `main`. `release.json` is the authoritative public version; inspect the live `prod/current` symlink only when an exact deployment ID matters.
 - Cloud dev carries current development behavior without bumping the public version. Inspect the live `dev/current` symlink only when an exact deployment ID matters.
-- The latest requested implementation is committed and deployed to cloud dev and production as **v0.32.1**. Inspect `git status` for subsequent work.
+- Production remains **v0.32.1**, deployment `20260930000517890`. The subsequent Log cover, media/note detail and footer corrections are deployed to **cloud dev only**, deployment `20260930022428870`. Inspect `git status` for subsequent work.
 - Both APIs, both workers, both search services, Mongo and nginx were active at this handoff; both database-backed health endpoints passed.
 - **No further production deployment is authorized or queued.** Continue from the user's next request. Deferred ideas are not permission to start or deploy projects.
 
@@ -93,6 +93,9 @@ Describe schemas before CLI calls. Existing named CLI profiles are normally `def
 
 ## Recent behavior to preserve
 
+- Log cover selection uses an explicit cover first, then the earliest valid photo timestamp across attendees. Missing timestamps fall back to event participant/file order; equal timestamps use that same order. Full entries, strips, calendar tiles and invite previews share this result.
+- Log photos and notes open their own nonblocking native top-layer detail above the retained entry, with contributor/note/voice context, contained media, pinch/pan and swipes. Generic post image viewing remains PhotoSwipe. Strip and detail photos use a shared 4px radius.
+- Log footers use New Drugs' shared pill styles. Media has a text-only full-width Download row above Back/Close at a 2:1 width ratio. Back returns to the entry; Close closes the entry. Download and Older/Newer share compact 6px vertical padding; the main action row stays taller. Do not import Logcal's outlined button skin or add a download icon.
 - Closed secondary chat: Posts/Friends/Log main panel centers in the viewport. Open chat: main panel moves only enough to let chat grow to its width, with fixed-width sidenav. Chat stays anchored to the bottom-right. Mobile uses a takeover, not side-by-side panels.
 - Open Log overlays track the underlying panel's movement even without a resize. Keep the mounted calendar, entry and drafts intact.
 - Calendar retains visited week/image DOM up to 260 weeks or 512 thumbnails, protecting the current viewport. Data retains 104 five-week chunks. Only the viewport drives requests. Do not reintroduce aggressive unmount/reload during ordinary back-and-forth scrolling.
@@ -105,7 +108,9 @@ Describe schemas before CLI calls. Existing named CLI profiles are normally `def
 
 ## Evidence and remaining limits
 
-The scaling review's ten defects were fixed with 25 local and 106 isolated database checks. Later layout checks passed 87 existing interaction tests; Log retention/modal work passed 38 focused checks. The latest production batch passed 138 focused UI checks, 4 isolated agent-memory database checks, a full build, desktop browser inspection, and exact API/worker/public-asset verification. Mobile-width browser inspection was not rerun after the user asked Codex to stop controlling Chrome. These counts overlap and are not a current full-suite or million-user benchmark.
+The scaling review's ten defects were fixed with 25 local and 106 isolated database checks. Later layout checks passed 87 existing interaction tests; Log retention/modal work passed 38 focused checks. The latest production batch passed 138 focused UI checks, 4 isolated agent-memory database checks, a full build, desktop browser inspection, and exact API/worker/public-asset verification. The subsequent dev Log batch passed 85 focused UI checks, 42 isolated Log database checks and 10 isolated page-preview checks, a full build, live dev contract/API/exact-worker checks and the local proxy. Its temporary test tunnel was closed. Chrome was not controlled. These counts overlap and are not a current full-suite or million-user benchmark.
+
+Current follow-up: the user requested an app-wide Logcal gesture inventory and a centered mini dialog for multi-event day selection, with day swipes, desktop side arrows and empty reserved space instead of placeholder pills. This work is in progress after the dev batch above.
 
 Remaining limits, not an automatic task list:
 
