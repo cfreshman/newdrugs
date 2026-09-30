@@ -50,8 +50,8 @@ it('keeps vertical scrolling and two-touch pinch from changing days',async()=>{
  await mount();await pick();const node=layer().querySelector<HTMLElement>('.log-day-choices')!,before=api.operation.mock.calls.length;pointer(node,'pointerdown',1,100,100);pointer(node,'pointermove',1,105,190);pointer(node,'pointerup',1,160,220);expect(api.operation.mock.calls).toHaveLength(before);
  pointer(node,'pointerdown',2,100,100);pointer(node,'pointerdown',3,200,100);pointer(node,'pointerup',2,20,100);pointer(node,'pointerup',3,240,100);expect(api.operation.mock.calls).toHaveLength(before);
 });
-it('retains the selected day behind an entry and restores it without changing calendar scroll',async()=>{
- await mount();await pick();const dialog=layer();await act(async()=>dialog.querySelector<HTMLAnchorElement>('.log-day-choice')!.click());expect(open.mock.lastCall?.[0].id).toBe('one');expect(open.mock.lastCall?.slice(1)).toEqual([undefined,undefined,undefined]);await mount(false);expect(layer()).toBe(dialog);expect(dialog.open).toBe(false);await mount(true);expect(layer()).toBe(dialog);expect(dialog.open).toBe(true);
+it('dismisses the day chooser when an entry is selected without changing the calendar scroll',async()=>{
+ await mount();await pick();const dialog=layer(),calendar=dom.container.querySelector('.log-calendar-weeks'),scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;scroller.scrollTop=200;await act(async()=>dialog.querySelector<HTMLAnchorElement>('.log-day-choice')!.click());expect(open.mock.lastCall?.[0].id).toBe('one');expect(open.mock.lastCall?.slice(1)).toEqual([undefined,undefined,undefined]);expect(layer()).toBeNull();await mount(false);await mount(true);expect(layer()).toBeNull();expect(dom.container.querySelector('.log-calendar-weeks')).toBe(calendar);expect(scroller.scrollTop).toBe(200);
 });
 it('preserves the open chooser when a mode link is pressed and restores it after changing tabs',async()=>{
  await mount();await pick();const dialog=layer(),scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;scroller.scrollTop=200;
