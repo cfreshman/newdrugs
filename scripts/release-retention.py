@@ -21,8 +21,8 @@ with (root / '.release-retention.lock').open('a') as lock:
             continue
         candidates = sorted((p for p in releases.iterdir() if re.fullmatch(r'\d{17}', p.name) and p.is_dir() and not p.is_symlink()), reverse=True)
         protected = {p.resolve() for p in candidates[:args.keep]}
-        # Current, previous rollback, and an in-flight activation are always protected.
-        for name in ['current', 'previous', 'current.next']:
+        # Keep an explicitly pinned baseline even after newer releases replace previous.
+        for name in ['current', 'previous', 'current.next', 'baseline']:
             path = base / name
             if path.is_symlink():
                 protected.add(path.resolve())

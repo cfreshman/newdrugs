@@ -14,7 +14,11 @@ export function LogDayDialog({active,anchor,close,previous,next,previousTo,nextT
  useLayoutEffect(()=>{
   const dialog=layer.current;if(!dialog)return;let cancelled=false;
   if(active){sourceFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;queueMicrotask(()=>{if(cancelled||!dialog.isConnected)return;dialog.showPopover?.();dialog.focus({preventScroll:true});});}
-  const outside=(event:PointerEvent)=>{if(card.current?.contains(event.target as Node))return;event.preventDefault();event.stopPropagation();consumeSwipeClick(dialog,event);close();};
+  const outside=(event:PointerEvent)=>{
+   // Mode navigation hides this preserved panel; it must not dismiss its day.
+   if(card.current?.contains(event.target as Node)||event.target instanceof Element&&event.target.closest('.mode-switch a'))return;
+   event.preventDefault();event.stopPropagation();consumeSwipeClick(dialog,event);close();
+  };
   if(active)document.addEventListener('pointerdown',outside,true);
   return()=>{cancelled=true;document.removeEventListener('pointerdown',outside,true);dialog.hidePopover?.();};
  },[active,close]);

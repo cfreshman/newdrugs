@@ -53,6 +53,13 @@ it('keeps vertical scrolling and two-touch pinch from changing days',async()=>{
 it('retains the selected day behind an entry and restores it without changing calendar scroll',async()=>{
  await mount();await pick();const dialog=layer();await act(async()=>dialog.querySelector<HTMLAnchorElement>('.log-day-choice')!.click());expect(open.mock.lastCall?.[0].id).toBe('one');expect(open.mock.lastCall?.slice(1)).toEqual([undefined,undefined,undefined]);await mount(false);expect(layer()).toBe(dialog);expect(dialog.open).toBe(false);await mount(true);expect(layer()).toBe(dialog);expect(dialog.open).toBe(true);
 });
+it('preserves the open chooser when a mode link is pressed and restores it after changing tabs',async()=>{
+ await mount();await pick();const dialog=layer(),scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;scroller.scrollTop=200;
+ const nav=document.createElement('nav');nav.className='mode-switch';nav.innerHTML='<a href="/posts"><span>Posts</span></a>';dom.container.querySelector('.app')!.prepend(nav);
+ const down=pointer(nav.querySelector<HTMLElement>('span')!,'pointerdown',1,10,10);expect(down.defaultPrevented).toBe(false);expect(layer()).toBe(dialog);
+ await mount(false);expect(layer()).toBe(dialog);expect(dialog.open).toBe(false);
+ await mount(true);expect(layer()).toBe(dialog);expect(dialog.open).toBe(true);expect(scroller.scrollTop).toBe(200);expect(dialog.querySelector('[aria-label^="Entries for"]')?.getAttribute('aria-label')).toBe(`Entries for ${date}`);
+});
 it('omits Log another event and does not wrap at the first occupied day',async()=>{
  await mount();await pick();expect(layer().textContent).not.toContain('Log another event');await act(async()=>arrow('Previous').click());expect(layer().querySelector('[aria-label^="Entries for"]')?.getAttribute('aria-label')).toBe(`Entries for ${older}`);expect(arrow('Previous').disabled).toBe(true);expect(create).not.toHaveBeenCalled();
 });
