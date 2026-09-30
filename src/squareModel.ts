@@ -1,7 +1,7 @@
 import {z} from 'zod';
 
 export const SQUARE_SIZE=512,MAX_SQUARE_LAYERS=32,MAX_SQUARE_BYTES=8*1024*1024;
-export const squareFonts={mono:'Noto Sans Mono',sans:'Noto Sans',serif:'Noto Serif',impact:'Impact',cursive:'cursive',fantasy:'fantasy'} as const;
+export const squareFonts={mono:'Noto Sans Mono',sans:'Noto Sans',serif:'Noto Serif',anton:'Anton',bebas:'Bebas Neue',bungee:'Bungee',caveat:'Caveat',fredoka:'Fredoka',orbitron:'Orbitron',pacifico:'Pacifico',marker:'Permanent Marker',pixel:'Press Start 2P',quicksand:'Quicksand'} as const;
 const color=z.string().regex(/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i),backing=z.union([color,z.literal('transparent')]);
 const asset=z.string().max(MAX_SQUARE_BYTES).regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/);
 const crop=z.strictObject({x:z.number().min(0).max(1),y:z.number().min(0).max(1),w:z.number().positive().max(1),h:z.number().positive().max(1)}).refine(c=>c.x+c.w<=1.000001&&c.y+c.h<=1.000001,'Keep the crop inside the image.');
@@ -9,17 +9,17 @@ const layerSchema=z.strictObject({
  id:z.string().min(1).max(80),type:z.enum(['image','shape','text','draw']),x:z.number().min(-4).max(4),y:z.number().min(-4).max(4),w:z.number().min(1/512).max(8),h:z.number().min(1/512).max(8),
  angle:z.number().min(-180).max(180).default(0),opacity:z.number().min(0).max(1).default(1),src:asset.optional(),color:color.default('#000000'),background:backing.default('transparent'),
  oval:z.boolean().default(false),border:z.boolean().default(false),borderColor:color.default('#000000'),borderWidth:z.number().min(1).max(10).default(1),crop:crop.optional(),
- text:z.string().max(1000).default(''),font:z.enum(['mono','sans','serif','impact','cursive','fantasy']).default('mono'),bold:z.boolean().default(false),italic:z.boolean().default(false),align:z.enum(['left','center','right']).default('left'),
+ text:z.string().max(1000).default(''),font:z.enum(['mono','sans','serif','anton','bebas','bungee','caveat','fredoka','orbitron','pacifico','marker','pixel','quicksand']).default('mono'),bold:z.boolean().default(false),italic:z.boolean().default(false),align:z.enum(['left','center','right']).default('left'),
  outline:z.boolean().default(false),outlineColor:color.default('#000000'),outlineWidth:z.number().min(1).max(10).default(5),
- shadow:z.boolean().default(false),shadowColor:color.default('#000000'),shadowX:z.number().min(-10).max(10).default(0),shadowY:z.number().min(-10).max(10).default(2),
+ shadow:z.boolean().default(false),shadowColor:color.default('#000000'),shadowX:z.number().min(-64).max(64).default(24),shadowY:z.number().min(-64).max(64).default(24),
 }).refine(layer=>layer.type!=='image'||Boolean(layer.src),'Choose an image for the layer.');
-const projectSchema=z.strictObject({version:z.literal(1),color:backing,layers:z.array(layerSchema).max(MAX_SQUARE_LAYERS)}).refine(project=>new Set(project.layers.map(layer=>layer.id)).size===project.layers.length,'Layer IDs must be unique.').refine(project=>project.layers.filter(layer=>layer.type==='draw').length<=1,'Use one drawing layer.');
+const projectSchema=z.strictObject({version:z.literal(1),color,layers:z.array(layerSchema).max(MAX_SQUARE_LAYERS)}).refine(project=>new Set(project.layers.map(layer=>layer.id)).size===project.layers.length,'Layer IDs must be unique.').refine(project=>project.layers.filter(layer=>layer.type==='draw').length<=1,'Use one drawing layer.');
 export type SquareLayer=z.infer<typeof layerSchema>;
 export type SquareProject=z.infer<typeof projectSchema>;
 export const emptySquare=():SquareProject=>({version:1,color:'#ffffff',layers:[]});
 export function squareLayer(type:SquareLayer['type'],data:Partial<SquareLayer>={}):SquareLayer{return layerSchema.parse({id:crypto.randomUUID(),type,x:.1,y:.1,w:.5,h:.5,...(type==='text'?{x:.1,y:.4,w:.8,h:.2}:type==='draw'?{x:0,y:0,w:1,h:1}:{}),...data});}
 export function squareBytes(project:SquareProject){return new TextEncoder().encode(JSON.stringify(project)).length;}
-export function checkSquare(project:SquareProject){if(squareBytes(project)>MAX_SQUARE_BYTES)throw Error('This project is too large. Remove an image or export it before starting a new square.');return project;}
+export function checkSquare(project:SquareProject){if(squareBytes(project)>MAX_SQUARE_BYTES)throw Error('This image is too large to edit. Remove a layer or try a smaller photo.');return project;}
 
 /** Inspect raster headers before asking the browser to decode an imported asset. */
 export function rasterDimensions(bytes:Uint8Array){
@@ -35,20 +35,6 @@ export function rasterDimensions(bytes:Uint8Array){
  throw Error('Choose a PNG, JPEG or WebP image.');
 }
 export function checkRaster(bytes:Uint8Array,maxSide=16384,maxPixels=16_000_000){const size=rasterDimensions(bytes);if(!size.width||!size.height||Math.max(size.width,size.height)>maxSide||size.width*size.height>maxPixels)throw Error('This image is too large to edit.');return size;}
-function checkAsset(src:string){const encoded=src.slice(src.indexOf(',')+1),header=atob(encoded.slice(0,Math.min(encoded.length,100000)&~3));checkRaster(Uint8Array.from(header,char=>char.charCodeAt(0)),512,512*512);}
-const legacyFont=(value:unknown):SquareLayer['font']=>value==='impact'?'impact':value==='times new roman'?'serif':value==='arial'||value==='quicksand'||value==='highway-gothic'?'sans':value==='cursive'||value==='pacifico'||value==='hand'?'cursive':value==='fantasy'||value==='super-frog'?'fantasy':'mono';
-/** Also accepts projects exported by the user's original /square editor. */
-export function parseSquare(raw:string):SquareProject{
- if(new TextEncoder().encode(raw).length>MAX_SQUARE_BYTES)throw Error('Choose a project smaller than 8 MB.');
- let value:any;try{value=JSON.parse(raw);}catch{throw Error('Choose a Square project JSON file.');}
- if(value&&Array.isArray(value.entities)){
-  if(value.entities.length>MAX_SQUARE_LAYERS)throw Error('Use up to 32 layers.');
-  value={version:1,color:value.color||'#ffffff',layers:value.entities.map((entity:any)=>{const d=entity?.data;if(!d||!['image','text','draw'].includes(entity.type))throw Error('This project contains an unsupported layer.');return {id:String(entity.id),type:entity.type==='image'&&d.color&&d.src?.startsWith('data:image/png')?'image':entity.type,x:d.x??0,y:d.y??0,w:d.w??1,h:d.h??1,src:d.src,color:d.color||'#000000',background:entity.type==='image'?d.color||'transparent':d.background||'transparent',text:d.text||'',font:legacyFont(d.font),align:d.align||'left',angle:d.angle||0,opacity:d.opacity??1,oval:Boolean(d.oval),border:Boolean(d.border),borderColor:d.border_color||'#000000',borderWidth:d.border_width||1,crop:d.crop,bold:Boolean(d.bold),italic:Boolean(d.italic),outline:Boolean(d.outline),outlineColor:d.outline_color||'#000000',outlineWidth:d.outline_width||5,shadow:Boolean(d.shadow),shadowColor:d.shadow_color||'#000000',shadowX:d.shadow_x||0,shadowY:d.shadow_y??2};})};
- }
- const parsed=projectSchema.safeParse(value);if(!parsed.success)throw Error('This is not a supported Square project.');
- for(const layer of parsed.data.layers)if(layer.src)checkAsset(layer.src);
- return checkSquare(parsed.data);
-}
 const clamp=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
 export const movedLayer=(layer:SquareLayer,dx:number,dy:number):SquareLayer=>({...layer,x:clamp(layer.x+dx,-4,4),y:clamp(layer.y+dy,-4,4)});
 /** Resize from the northeast corner while keeping the rotated southwest fixed. */

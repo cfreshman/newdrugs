@@ -51,10 +51,19 @@ export async function projectLogEntries(records:LogRow[],userId:string,session?:
 async function project(row:LogRow,userId:string,session?:ClientSession,preview=false){return (await projectLogEntries([row],userId,session,preview))[0];}
 
 async function media(userId:string,ids:string[],entryId:string,session?:ClientSession){
+ if(new Set(ids).size!==ids.length)throw new AppError(422,'log_media','Attach each file once.');
+ const visualIds=new Set<string>(),voiceIds=new Set<string>(),files:Upload[]=[];
  for(const id of ids){
   const file=await ownUpload(userId,id,session);
   if(!file.ready||!['image/','audio/','video/'].some(prefix=>file.mime.startsWith(prefix))||!['log_media','agent_input'].includes(file.purpose))throw new AppError(422,'log_media','Choose a ready photo, audio recording or video.');
   if(file.logEntryId&&file.logEntryId!==entryId||await entries().findOne({_id:{$ne:entryId},'contributions.fileIds':id,deletedAt:{$exists:false}},{session})||await rows('posts').findOne({fileIds:id,deletedAt:{$exists:false}},{session})||await users().findOne({photos:id},{session}))throw new AppError(422,'log_file_owned','Upload a separate file for this hangout.');
+  if(file.mime.startsWith('image/')||file.mime.startsWith('video/'))visualIds.add(id);
+  if(file.mime.startsWith('audio/'))voiceIds.add(id);
+  files.push(file);
+ }
+ if(visualIds.size>1)throw new AppError(422,'log_image_limit','Each person can add one photo or video to a hangout. Remove the current one before replacing it.');
+ if(voiceIds.size>1)throw new AppError(422,'log_voice_limit','Each person can add one voice note to a hangout. Remove the current one before replacing it.');
+ for(const file of files){const id=file._id;
   await uploads().updateOne({_id:id,userId},{$set:{logEntryId:entryId},$inc:{referenceRevision:1}},{session});
   await retainUploads(userId,[id],file.purpose,session);
  }
