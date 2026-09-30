@@ -324,6 +324,8 @@ CLI failures are one JSON object on stderr with a stable server error code when 
 
 Credentials live in the private config store, normally `~/.config/newdrugs/config.json`; operator credentials are separate in `admin.json`. Never dump these files. Login tokens go through `--token-stdin`, not command arguments, shell history, docs, screenshots, or replies. Reuse the user's existing connection; do not ask for or expose keys unnecessarily.
 
+The default Connected agents setup still uses a PAT and the existing LLM paste prompt. Optional `newdrugs login --device --name "My cloud agent" --scope read` prints an approval link/code and polls for up to ten minutes. The human approves at `/agents/device`, chooses the ordinary name, permission and expiration, and can revoke the connection in Connected agents. The CLI verifies identity before saving credentials automatically; it starts no browser or localhost callback. Only the human code/link may be relayed in chat. Dev remains gated and links to local Vite; production links to the public app origin. Device login is currently deployed to dev only.
+
 Installed CLI copies check daily for a strictly newer published version. `newdrugs update` checks immediately. Source checkouts do not self-overwrite. For controlled source verification after a build:
 
 ```sh

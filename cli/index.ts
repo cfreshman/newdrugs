@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {parseSearchArgs,searchCatalog,type SearchPage} from './search';
+import {deviceLogin} from './deviceLogin';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -66,7 +67,7 @@ async function main() {
   if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogin --device [--url https://druggie.org] [--name name] [--scope read|write]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
     return;
   }
   if (command === 'admin') {
@@ -95,6 +96,11 @@ async function main() {
   }
   if (command === 'login') {
     const url = validUrl(option('--url') || 'https://druggie.org');
+    if(args.includes('--device')){
+      if(args.includes('--token-stdin'))throw new Error('Choose device login or token stdin, not both.');
+      const scope=option('--scope')||'write';if(!['read','write'].includes(scope))throw new Error('Use --scope read or write.');
+      print(await deviceLogin({url,profile:selectedProfile||'default',name:option('--name')||'Remote CLI',scope:scope as 'read'|'write'},{store,verify:login=>invoke(login,'identity.get',{}),announce:(link,code,seconds)=>{process.stderr.write(`Open this link on your phone or browser:\n${link}\nCode: ${code}\nExpires in ${Math.ceil(seconds/60)} minutes. Waiting for approval...\n`);}}));return;
+    }
     const token = await readSecret();
     if (!/^nd_[A-Za-z0-9_-]{40,60}$/.test(token)) throw new Error('Invalid token format. Create one in the app with /connect.');
     const login = { url, token };

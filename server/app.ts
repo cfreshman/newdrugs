@@ -1,4 +1,7 @@
 import {uploadAdmission} from './uploadAdmission';
+import {agentAccessSchema,deviceStartSchema} from '../shared/agentAccess';
+import {insertAgentToken} from './agentTokens';
+import {startDeviceLogin,pollDeviceLogin,readDeviceLogin,decideDeviceLogin} from './deviceLogin';
 import {sendMedia} from './mediaDelivery';
 import {updateLiveInterests} from './liveSubscriptions';
 import {publicInvitePreview,inviteMediaMetadata} from './logInvites';
@@ -27,7 +30,7 @@ import { resolve } from 'node:path';
 import { config } from './config';
 import { registerAccount, authenticate, browserActor, checkPassword, createGuest, csrf, currentUser, hash, logout, newSession, passwordHash, profile, requireActor, users } from './auth';
 import { AppError, requireValue } from './errors';
-import { rows, db } from './db';
+import { rows, db, transaction } from './db';
 import { wallet, reserveRun, runs } from './wallet';
 import { conversation, executeOperation } from './operations';
 import { operations, describeOperation } from '../shared/catalog';
@@ -95,6 +98,11 @@ export function createApp() {
     const {file,bytes}=await readPagePreviewImage(String(req.params.kind),String(req.params.id));
     res.set({'Content-Type':file.mime,'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'}).send(bytes);
   });
+  // Anonymous device requests confer no access. Approval uses the browser-only
+  // routes below, behind the ordinary cookie/Origin checks. Dev stays gated.
+  const deviceJson=express.json({limit:'4kb'}),deviceHeaders:express.RequestHandler=(_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'});next();};
+  app.post('/api/agent-login/device',devApiGate,limiter('/api/agent-login/device',10,15*60000),deviceJson,authenticate,deviceHeaders,async(req,res)=>{res.json(await startDeviceLogin(deviceStartSchema.parse(req.body)));});
+  app.post('/api/agent-login/poll',devApiGate,limiter('/api/agent-login/poll',120),deviceJson,authenticate,deviceHeaders,async(req,res)=>{const data=z.strictObject({device_code:z.string().max(128)}).parse(req.body),result=await pollDeviceLogin(data.device_code);res.status('error' in result?400:200).json(result);});
   app.use('/api', devApiGate, apiRequestLimits(), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
@@ -228,15 +236,12 @@ export function createApp() {
   });
   app.post('/api/tokens', limiter('/api/tokens', 10), async (req, res) => {
     const actor = browserActor(req);
-    if (!(await currentUser(actor.userId)).handle) throw new AppError(403, 'account_required', 'Save your account before connecting an agent.');
-    const data = z.strictObject({ name: z.string().trim().max(60).default('My AI agent').transform(value => value || 'My AI agent'), scope: z.enum(['read', 'write']), expiresInDays: z.number().int().min(1).max(3650).nullable().default(null) }).parse(req.body);
-    if (await rows('tokens').countDocuments({ userId: actor.userId, revokedAt: null }) >= 20) throw new AppError(422, 'token_limit', 'Revoke an old connection first.');
-    const token = `nd_${randomBytes(32).toString('base64url')}`;
-    const { expiresInDays, ...access } = data;
-    const record = { _id: randomUUID(), userId: actor.userId, hash: hash(token), ...access, revokedAt: null, createdAt: new Date().toISOString(), expiresAt: expiresInDays === null ? null : new Date(Date.now() + expiresInDays * 86400000) };
-    await rows('tokens').insertOne(record);
+    const data=agentAccessSchema.parse(req.body),{record,token}=await transaction(session=>insertAgentToken(actor.userId,data,session));
     res.json({ token, id: record._id, expiresAt: record.expiresAt });
   });
+  app.get('/api/agent-login/device',limiter('/api/agent-login/view',30),async(req,res)=>{const actor=browserActor(req),code=z.string().max(32).parse(req.query.code);res.json(await readDeviceLogin(actor,code));});
+  app.post('/api/agent-login/approve',limiter('/api/agent-login/decide',15),async(req,res)=>{const actor=browserActor(req),data=z.strictObject({userCode:z.string().max(32),access:agentAccessSchema}).parse(req.body);res.json(await decideDeviceLogin(actor,data.userCode,'approve',data.access));});
+  app.post('/api/agent-login/deny',limiter('/api/agent-login/decide',15),async(req,res)=>{const actor=browserActor(req),data=z.strictObject({userCode:z.string().max(32)}).parse(req.body);res.json(await decideDeviceLogin(actor,data.userCode,'deny'));});
   app.delete('/api/tokens/:id', async (req, res) => {
     const actor = browserActor(req);
     await revokeAutomationCredential(actor.userId, String(req.params.id));

@@ -24,3 +24,17 @@ ${AGENT_DISCOVERY_POLICY}
 
 Tell me when setup is complete. Do not post or send messages during setup.` };
 }
+
+/** Optional remote-computer setup. Keep the existing PAT prompt as the default. */
+export function agentDeviceSetup(origin:string){
+ const {site,profile}=agentSetup(origin);
+ return `Install and connect the New Drugs CLI for me using browser approval. Use Node.js 22 or newer and install from ${site}/downloads/newdrugs-cli.tgz. Use a user-owned prefix if needed.
+
+Run newdrugs${profile} login --device --url ${site}. Give me the approval link and code it prints so I can approve it in my browser or on my phone. Keep the command running while it polls. The CLI verifies identity and saves credentials privately on your computer. It does not need a localhost callback. Keep credentials out of chat, command arguments and logs.
+
+After approval, verify with newdrugs${profile} read identity.get. Setup is free from New Drugs' side. Keep the saved profile and discover operations using search and describe. Do not post or send messages during setup.
+
+${AGENT_ETHOS}
+${AGENT_WRITING_POLICY}
+${AGENT_DISCOVERY_POLICY}`;
+}

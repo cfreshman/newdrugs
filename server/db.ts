@@ -18,6 +18,9 @@ export async function connectDatabase(name?: string,options:{indexes?:boolean}={
   if (!hello.setName) throw new Error('The cloud MongoDB connection needs a replica set for atomic credits.');
   if(options.indexes===false)return;
   await Promise.all([
+    rows('deviceLogins').createIndex({userCodeHash:1},{unique:true}),
+    rows('deviceLogins').createIndex({expiresAt:1},{expireAfterSeconds:0}),
+    rows('tokens').createIndex({userId:1,revokedAt:1}),
     rows('mediaWriteIntents').createIndex({availableAt:1}),
     rows('mediaDeletes').createIndex({availableAt:1}),
     rows('logSearchJobs').createIndex({availableAt:1}),

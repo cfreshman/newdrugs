@@ -4,7 +4,7 @@ import type { Bootstrap, Profile } from '../shared/types';
 import { api, post, operation, money, balanceLabel, errorText } from './api';
 import type { PaymentQuote } from '../shared/paymentQuote';
 import { ProfileEditor } from './ProfileEditor';
-import { agentSetup } from '../shared/agentSetup';
+import { agentSetup,agentDeviceSetup } from '../shared/agentSetup';
 import {NavLink} from './NavLink';
 
 export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAccount(): void; onConnect(): void }) {
@@ -83,6 +83,7 @@ export function Connections({ registered, onAccount }: { registered: boolean; on
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [deviceCopied,setDeviceCopied]=useState(false);
   const [expiry, setExpiry] = useState('');
   const setup = agentSetup(window.location.origin, secret);
   const load = async () => { const result = await api<{ tokens: Token[] }>('/tokens'); setTokens(result.tokens); };
@@ -117,6 +118,7 @@ export function Connections({ registered, onAccount }: { registered: boolean; on
       <p className="quiet small">MCP is optional. Its endpoint is <code>{setup.site}/mcp</code>, using your token as Bearer authentication.</p>
       <p className="quiet small">Connected agents can read your private chat and, with write access, act for you. Revoke access below whenever you want.</p>
     </section>
+    <details className="device-login-option"><summary>Browser approval for a cloud agent</summary><p>Use this optional setup when your agent runs on another computer. It gives you an approval link and code, then saves its credentials automatically.</p><pre className="setup-prompt">{agentDeviceSetup(window.location.origin)}</pre><button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(agentDeviceSetup(window.location.origin));setDeviceCopied(true);setTimeout(()=>setDeviceCopied(false),2000);}catch{setError('Select the setup prompt and copy it manually.');}}}>{deviceCopied?'Copied':'Copy device setup prompt'}</button></details>
     {tokens.length > 0 && <ul className="token-list">{tokens.map(token => <li key={token.id}><span>{token.name}<small>{token.scope === 'read' ? 'Read only' : 'Read & write'} · {token.expiresAt ? `until ${new Date(token.expiresAt).toLocaleDateString()}` : 'No expiry'}</small></span>
       <button className="text-link" onClick={async () => { try { await api(`/tokens/${token.id}`, { method: 'DELETE' }); setSecret(''); await load(); } catch (e) { setError(errorText(e)); } }}>Revoke</button></li>)}</ul>}
     {error && <p className="error" role="alert">{error}</p>}

@@ -1,4 +1,5 @@
 import {logDate,type LogList} from './log';
+import {normalizeUserCode} from './agentAccess';
 import { modeForDestination, type AppMode } from './experience';
 export const surfaceViews = ['agent_instructions','agent_memory','preferences','account_menu','appearance','log_people','log_birthdays','log_anniversaries','log_settings','log_join','log_code','log_scan','log', 'log_compose', 'account_settings', 'inbox', 'automations', 'chat_history', 'profile', 'credits', 'agents', 'connections', 'people', 'feed', 'post_list', 'person', 'post', 'messages', 'location', 'notifications', 'uploads', 'blocked', 'storage'] as const;
 export type SurfaceView = typeof surfaceViews[number];
@@ -20,7 +21,7 @@ export function destinationPath(destination: Destination) {
   if(destination.date)query.set('date',destination.date);
   if (destination.areaCell) query.set('area', destination.areaCell);
   if (destination.radiusMiles) query.set('radius', String(destination.radiusMiles));
-  if (destination.query) query.set('q', destination.query);
+  if (destination.query) query.set(destination.view==='agents'&&destination.resourceId==='device'?'code':'q', destination.query);
   if (destination.scope) query.set('scope', destination.scope);
   if (destination.role && destination.role !== 'all') query.set('role', destination.role);
   if (destination.postIds?.length) query.set('ids', destination.postIds.join(','));
@@ -38,11 +39,13 @@ export function parseDestination(value: string, origin: string): Destination | n
     if (prefix && path !== '/log') {
       const suffix = prefix[2] || (prefix[1] === 'agent' ? '/' : prefix[1] === 'friends' ? '/nearby' : prefix[1] === 'log' ? '/log' : '/feed');
       // /posts/:id is a canonical post, while /posts/people/:id retains Posts mode.
-      if (suffix === '/chat' || Object.values(surfaceRoutes).includes(suffix) || /^\/(log\/join|log\/code|people|posts|messages|chat|inbox|automations|log)\/[^/]+$/.test(suffix)) { mode = prefix[1] as AppMode; path = suffix === '/chat' ? '/' : suffix; }
+      if (suffix === '/chat' || suffix === '/agents/device' || Object.values(surfaceRoutes).includes(suffix) || /^\/(log\/join|log\/code|people|posts|messages|chat|inbox|automations|log)\/[^/]+$/.test(suffix)) { mode = prefix[1] as AppMode; path = suffix === '/chat' ? '/' : suffix; }
     }
+    const device=path==='/agents/device';
     const route = Object.entries(surfaceRoutes).find(([, route]) => route === path);
     const record = /^\/(log\/join|log\/code|people|posts|messages|chat|inbox|automations|log)\/([^/]+)$/.exec(path);
     let destination: Destination | undefined = route ? { view: route[0] as Destination['view'] } : record ? { view: record[1] === 'log/join' ? 'log_join' : record[1] === 'log/code' ? 'log_code' : record[1] === 'log' ? 'log' : record[1] === 'people' ? 'person' : record[1] === 'posts' ? 'post' : record[1] === 'chat' ? 'chat' : record[1] === 'inbox' ? 'inbox' : record[1] === 'automations' ? 'automations' : 'messages', resourceId: decodeURIComponent(record[2]) } : undefined;
+    if(device){const value=url.searchParams.get('code');if(value&&!normalizeUserCode(value))return null;destination={view:'agents',resourceId:'device',...(value?{query:normalizeUserCode(value)!}:{})};}
     if (!destination || ['person', 'post','log_join','log_code'].includes(destination.view) && !destination.resourceId) return null;
     if (destination.resourceId && !/^[A-Za-z0-9:_.-]{1,150}$/.test(destination.resourceId)) return null;
     if (mode) destination.mode = mode;

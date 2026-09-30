@@ -36,6 +36,7 @@ import { useDictation } from './useDictation';
 import { Orb } from './Orb';
 import { Dialog } from './Dialog';
 import { Account, Connections, Credits } from './Panels';
+import {DeviceApproval} from './DeviceApproval';
 import { useChatPosition } from './useChatPosition';
 import { useMobileInputFocus } from './useMobileInputFocus';
 import { useChatHistory } from './useChatHistory';
@@ -68,6 +69,7 @@ import release from '../release.json';
 const settingsViews = new Set(['agent_instructions','agent_memory','preferences','appearance','account_menu','settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'storage', 'notifications', 'location']);
 const inlineViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads']);
 const accountViews = new Set(['agent_instructions','agent_memory','log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'notifications', 'agents']);
+const requiresSavedAccount = (view: string, context: Omit<Destination, 'view'>) => accountViews.has(view) && !(view === 'agents' && context.resourceId === 'device');
 interface ComposerScreen { panel: Panel; context: Omit<Destination, 'view'>; history: { panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]; title: string; content: ReactNode; open: boolean; reset: number }
 function mergeRun(previous: RunView | null, next: RunView | null) {
   if (!next || !previous || next.id !== previous.id) return next;
@@ -285,7 +287,7 @@ export function App() {
     if (data?.user.id !== identity.current) return;
     if(next&&mode!=='agent'&&BROWSER_VIEWS.has(next)&&data?.user.handle){socialNavigate({...context,view:next as Destination['view']});return;}
     if(mode!=='agent'&&space==='composer')setAgentDockOpen(true);
-    if (next && accountViews.has(next) && !data?.user.handle) { setAfterAccount({ panel: next, context, space }); next = 'account'; context = {}; setAccountMode('register'); }
+    if (next && requiresSavedAccount(next, context) && !data?.user.handle) { setAfterAccount({ panel: next, context, space }); next = 'account'; context = {}; setAccountMode('register'); }
     dictation.stop();
     if (space === 'modal' && panelSpace === 'composer') setUnderlay(lastComposer.current);
     else if (space === 'composer') setUnderlay(null);
@@ -303,7 +305,7 @@ export function App() {
   };
   const navigatePanel = (next: Exclude<Panel, null>, context: Omit<Destination, 'view'> = {}) => {
     if (data?.user.id !== identity.current) return;
-    if (accountViews.has(next) && !data?.user.handle) { setAfterAccount({ panel: next, context, space: panelSpace }); next = 'account'; context = {}; setAccountMode('register'); }
+    if (requiresSavedAccount(next, context) && !data?.user.handle) { setAfterAccount({ panel: next, context, space: panelSpace }); next = 'account'; context = {}; setAccountMode('register'); }
     const destination = navigatePanelHistory(panelHistory, panel ? { panel, context: panelContext } : null, { panel: next, context });
     setPanelHistory(destination.history); setPanelContext(destination.current.context); setPanel(destination.current.panel);
   };
@@ -488,9 +490,9 @@ export function App() {
     {message.failure && <span className="small">{message.failure}</span>}
     {message.status === 'failed' && !message.failure && <button className="retry-message" disabled={busy} onClick={() => void send(undefined, message.text, message)}>Not sent · retry</button>}
   </article>;
-  const needsAccount = Boolean(data && !data.user.handle && panel && panel!=='log_join' && accountViews.has(panel));
+  const needsAccount = Boolean(data && !data.user.handle && panel && panel!=='log_join' && requiresSavedAccount(panel, panelContext));
   useEffect(() => { if (needsAccount && panel) { setAfterAccount({ panel, context: panelContext, space: panelSpace }); setPanel('account'); setPanelContext({}); setAccountMode('register'); } }, [needsAccount, panel]);
-  const panelTitle = needsAccount ? 'Create an account' : panel === 'account' ? data?.user.handle ? 'Profile' : accountMode === 'login' ? 'Sign in' : 'Create an account' : panel ? surfaceTitles[panel] : '';
+  const panelTitle = needsAccount ? 'Create an account' : panel === 'account' ? data?.user.handle ? 'Profile' : accountMode === 'login' ? 'Sign in' : 'Create an account' : panel === 'agents' && panelContext.resourceId === 'device' ? 'Connect agent' : panel ? surfaceTitles[panel] : '';
   const discussUpdate=(item:InboxItem)=>{
     if(mode!=='agent'&&window.matchMedia('(max-width: 760px)').matches){pendingAgentTask.current={kind:'discuss',item};changeMode('agent');return;}
     setInboxAttachments(prior=>[...prior.filter(value=>value.id!==item.id),{id:item.id,title:item.title}].slice(-3));
@@ -542,7 +544,7 @@ export function App() {
                       : panel === 'chat_history' ? <ChatSearchPanel initialQuery={panelContext.query} initialRole={panelContext.role} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} openMessage={openChatMessage} />
                       : panel === 'notifications' ? <NotificationsPanel userId={data.user.id} state={data.notifications} navigate={navigate} />
                         : panel === 'uploads' ? <UploadPanel requestId={surface?.view === 'uploads' ? surface.id : undefined} submit={async files => { if (surface?.view === 'uploads') await closePanel(true, files.map(file => file.id)); else { setAttachments(files); await closePanel(); } }} />
-                        : panel === 'agents' ? <Connections registered={Boolean(data.user.handle)} onAccount={() => navigatePanel('account')} /> : null) : null;
+                        : panel === 'agents' ? panelContext.resourceId==='device'?<DeviceApproval initialCode={panelContext.query} handle={data.user.handle} registered={Boolean(data.user.handle)} onAccount={() => startAccount({view:'agents',resourceId:'device',query:panelContext.query})} />:<Connections registered={Boolean(data.user.handle)} onAccount={() => navigatePanel('account')} /> : null) : null;
   const settingsVisible=Boolean(panel&&panelSpace==='modal'&&settingsViews.has(panel));
   if(settingsVisible&&panel&&data)rememberedSettings.current={userId:data.user.id,panel,context:panelContext,history:panelHistory,title:panelTitle,content:panelContent};
   const settingsSnapshot=settingsVisible||resumeSettings.current?rememberedSettings.current:null;
