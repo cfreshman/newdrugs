@@ -37,10 +37,12 @@ it('hides one person from indexed Explore scopes and restores them from Hidden',
  await drain();
  expect((await call('people.search',{scope:'all'},'a')).items.find((person:any)=>person.id==='c')?.friendAction).toBe('invite');
  await call('people.hide',{personId:'c',hidden:true},'a');
+ expect((await call('people.get',{personId:'c'},'a')).hidden).toBe(true);
  for(const scope of ['all','nearby','circle'])expect((await call('people.search',{scope},'a')).items.some((person:any)=>person.id==='c'),scope).toBe(false);
  expect((await call('people.search',{scope:'all',includeHidden:true},'a')).items.some((person:any)=>person.id==='c')).toBe(true);
  const hidden=await call('people.search',{scope:'hidden'},'a');expect(hidden.items.map((person:any)=>[person.id,person.hidden])).toEqual([['c',true]]);
  await call('people.hide',{personId:'c',hidden:false},'a');
+ expect((await call('people.get',{personId:'c'},'a')).hidden).toBeUndefined();
  expect((await call('people.search',{scope:'circle'},'a')).items.some((person:any)=>person.id==='c')).toBe(true);
  expect((await call('people.search',{scope:'hidden'},'a')).items).toEqual([]);
 });

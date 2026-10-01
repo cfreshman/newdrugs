@@ -12,7 +12,7 @@ import {makeOperation,normalizeMakeProject,stageMakePublish} from './make';
 import {endCallForConnection} from './calling';
 import {removeSpaceParticipantForBlock,spaceOperation} from './spaces';
 import {enqueueCircleEdge,circleSummaries,circleCandidates,circleMutualIds} from './circle';
-import {hiddenPersonIds,hiddenPeoplePage,setPersonHidden} from './peopleHides';
+import {hiddenPersonIds,hiddenPeoplePage,isPersonHidden,setPersonHidden} from './peopleHides';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
 import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
@@ -233,8 +233,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       await notBlocked(userId, String(d.personId), session);
       const person = requireValue(await users().findOne({ _id: String(d.personId) }, options));
       if (!await profileVisibleTo(userId, person, session)) throw new AppError(404, 'unavailable', 'This profile is not available.');
-      const [view]=await withMutualCounts(userId,[profile(person)],session,actor);
-      return {...view,...(!actor.background||actor.logAccess?{hasSharedHangouts:await hasSharedHangouts(userId,person._id,session)}:{})};
+      const [[view],hidden]=await Promise.all([withMutualCounts(userId,[profile(person)],session,actor),isPersonHidden(userId,person._id,session)]);
+      return {...view,...(hidden?{hidden:true}:{}),...(!actor.background||actor.logAccess?{hasSharedHangouts:await hasSharedHangouts(userId,person._id,session)}:{})};
     }
     case 'people.mutuals':{
       const personId=String(d.personId);await notBlocked(userId,personId,session);

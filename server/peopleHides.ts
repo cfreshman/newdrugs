@@ -8,6 +8,7 @@ const states=()=>rows<HideState>('peopleHideStates'),hides=()=>rows<HideRow>('pe
 const maxHidden=2000;
 export const hideKey=(userId:string,personId:string)=>`${userId}:${personId}`;
 export async function hiddenPersonIds(userId:string,session?:ClientSession){return (await states().findOne({_id:userId},{session,projection:{ids:1}}))?.ids||[];}
+export async function isPersonHidden(userId:string,personId:string,session?:ClientSession){return Boolean(await hides().findOne({_id:hideKey(userId,personId)},{session,projection:{_id:1}}));}
 export async function setPersonHidden(userId:string,personId:string,hidden:boolean,session:ClientSession){
  const key=hideKey(userId,personId);
  if(hidden){

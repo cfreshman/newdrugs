@@ -15,9 +15,9 @@ const mount=async(personId='friend')=>act(async()=>dom.root.render(createElement
 const choose=async(label:string)=>act(async()=>{const menu=dom.container.querySelector<HTMLDetailsElement>('.profile-menu')!;menu.open=true;[...menu.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===label)!.click();});
 it('keeps messages beside a single action menu and preserves explicit unfriend review',async()=>{
  await mount();const row=dom.container.querySelector('.profile-contact')!;
- expect([...row.querySelectorAll(':scope > button')].map(button=>button.textContent)).toEqual(['Open messages']);
+ expect([...row.querySelectorAll(':scope > a')].map(link=>link.textContent)).toEqual(['Open messages']);
  expect([...row.querySelectorAll('.profile-menu button')].map(button=>button.textContent)).toEqual(['Unfriend','Block','Report']);
- await act(async()=>row.querySelector<HTMLButtonElement>(':scope > button')!.click());expect(navigate).toHaveBeenCalledWith({view:'messages',resourceId:'connection'});
+ await act(async()=>row.querySelector<HTMLAnchorElement>(':scope > a')!.click());expect(navigate).toHaveBeenCalledWith({view:'messages',resourceId:'connection'});
  await choose('Unfriend');expect(dom.container.querySelector<HTMLDetailsElement>('.profile-menu')!.open).toBe(false);
  expect(transport.operation.mock.calls.some(([name])=>name==='connections.disconnect')).toBe(false);
  await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.action-review button')].find(button=>button.textContent==='Unfriend')!.click());
@@ -34,4 +34,15 @@ it('omits unfriend for non-friends and all safety actions on your own profile',a
  await mount();expect([...dom.container.querySelectorAll('.profile-menu button')].map(button=>button.textContent)).toEqual(['Block','Report']);
  const menu=dom.container.querySelector<HTMLDetailsElement>('.profile-menu')!;menu.open=true;act(()=>document.body.dispatchEvent(new Event('pointerdown',{bubbles:true})));expect(menu.open).toBe(false);
  await mount('me');expect(dom.container.querySelector('.profile-menu')).toBeNull();expect(dom.container.querySelector('.profile-contact')?.textContent).toBe('Edit profile');
+});
+it('shows Unhide instead of the invitation form on a hidden profile',async()=>{
+ const original=transport.operation.getMockImplementation()!;
+ transport.operation.mockImplementation((name:string,...args:unknown[])=>name==='people.get'?Promise.resolve({...friend,hidden:true}):name==='connections.status'?Promise.resolve({connection:null}):original(name,...args));
+ await mount();
+ const contact=dom.container.querySelector('.profile-contact')!;
+ expect(contact.textContent).toContain('Unhide');
+ expect(contact.querySelector('textarea')).toBeNull();
+ await act(async()=>[...contact.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Unhide')!.click());
+ expect(transport.operation).toHaveBeenCalledWith('people.hide',{personId:'friend',hidden:false});
+ expect(contact.textContent).toContain('Invitation note');
 });
