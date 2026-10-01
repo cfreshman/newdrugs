@@ -44,7 +44,7 @@ Do not optimize for likes/replies/reach by default. Profile text/photos are huma
 
 The primary tabs are **Agent, Posts, Friends, Log**, each with preserved independent navigation, drafts and side-chat state. Read `AGENTS.md` for the accumulated interaction decisions before changing a surface. Match the existing UI instead of redesigning adjacent features.
 
-The current product-direction proposal is [New Drugs after v0.38.1](roadmaps/10-v0.38.1-direction.md), with a concrete [build sequence](roadmaps/11-build-sequence.md). It recommends finding people through their own public posts/replies as the next product slice, then improving Agent presentation, upcoming Talk and eventually consented Circle introductions. These are plans for founder review, not authorization to release a new capability. The September roadmap pack remains historical option research.
+The October 1 v0.38.1 roadmap drafts were withdrawn because the founder had not approved their ideas before they were written into the repository. There is no new approved product direction or build sequence. The September [roadmap pack](roadmaps/README.md) remains exploratory research; its proposed plans-first sequence was declined. Discuss new ideas with the founder before saving another roadmap.
 
 ## Environment and authority
 
