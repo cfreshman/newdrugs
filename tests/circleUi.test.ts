@@ -16,7 +16,7 @@ it('shows mutual friends and their photos on the person card in every Explore sc
  expect(card.textContent).toContain('2 mutual friends: @one, @two');
  expect(card.querySelector<HTMLImageElement>('.person-mutual-avatars img')?.getAttribute('src')).toBe('/api/files/photo-one');
  expect(card.querySelectorAll('.person-mutual-avatars>span')).toHaveLength(2);
- expect([...dom.container.querySelectorAll('.view-tabs button')].map(button=>button.textContent)).toEqual(['Nearby','All people','Circle','Hidden']);
+ expect([...dom.container.querySelectorAll('.view-tabs button')].map(button=>button.textContent)).toEqual(['Nearby','All people','Circle']);
 });
 it('shows Friends as disabled and omits Hide on an accepted friend card',async()=>{
  api.operation.mockResolvedValue({items:[{id:'person',handle:'person',name:'Person',city:'',bio:'',interests:[],discoverable:true,friendAction:'friend'}],nextCursor:null});
@@ -38,4 +38,18 @@ it('opens a human-written invitation note from the card and offers Hide for a no
  await act(async()=>actions.querySelector<HTMLButtonElement>('button')!.click());
  expect(dom.container.querySelector('.person-card-invite.fields textarea')).not.toBeNull();
  expect(dom.container.querySelector('.person-card-invite>.solid')?.textContent).toBe('Send invitation');
+});
+it('replaces a hidden card with Undo and retains it through a same-filter refresh',async()=>{
+ let hidden=false;
+ api.operation.mockImplementation(async(name:string,input:{hidden?:boolean})=>{if(name==='people.hide'){hidden=Boolean(input.hidden);return {personId:'person',hidden};}return {items:hidden?[]:[{id:'person',handle:'person',name:'Person',city:'',bio:'',interests:[],discoverable:true,friendAction:'invite'}],nextCursor:null};});
+ const user={id:'viewer',handle:'viewer',name:'Viewer',city:'',bio:'',interests:[],discoverable:true};
+ await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.person-card-actions .text-link')!.click());
+ expect(dom.container.querySelector('.person-hide-undo')?.textContent).toBe('HiddenUndo');
+ await act(async()=>{dom.container.querySelector<HTMLFormElement>('.discovery-search')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});
+ expect(dom.container.querySelector('.person-hide-undo')?.textContent).toBe('HiddenUndo');
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.person-hide-undo button')!.click());
+ expect(hidden).toBe(false);
+ expect(dom.container.querySelector('.person-hide-undo')).toBeNull();
+ expect(dom.container.querySelector('.person-result-main')?.textContent).toContain('Person');
 });

@@ -29,7 +29,7 @@ import { AutomationsPanel } from './AutomationsPanel';
 import type { InboxAttachment, InboxItem } from '../shared/inbox';
 import { ChatSearchPanel } from './ChatSearchPanel';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Star, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Shield, HardDrives, ArrowClockwise, VideoCamera, Waveform } from '@phosphor-icons/react';
+import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Star, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Shield, EyeSlash, HardDrives, ArrowClockwise, VideoCamera, Waveform } from '@phosphor-icons/react';
 import type { Bootstrap, Message, RunView } from '../shared/types';
 import { api, post, errorText, ApiError, balanceLabel } from './api';
 import { useDictation } from './useDictation';
@@ -53,7 +53,7 @@ import { PersonPanel } from './PersonPanel';
 import { PeoplePanel, MessagesPanel, LocationPanel } from './NativePanels';
 import { PreservedPanels } from './PreservedPanels';
 import { FeedPanel, PostPanel, SelectedPostsPanel, PostComposer } from './PostPanels';
-import { BlockedPanel } from './PeopleSafety';
+import { BlockedPanel,HiddenPeoplePanel } from './PeopleSafety';
 import { ComposerPanel } from './ComposerPanel';
 import { StoragePanel } from './StoragePanel';
 import { useControlDrag } from './useControlDrag';
@@ -69,9 +69,9 @@ import {TalkContext,useTalkSession} from './TalkSession';
 import {TalkDock} from './TalkDock';
 import release from '../release.json';
 
-const settingsViews = new Set(['agent_instructions','agent_memory','preferences','appearance','account_menu','settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'storage', 'notifications', 'location']);
+const settingsViews = new Set(['agent_instructions','agent_memory','preferences','appearance','account_menu','settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'hidden_people', 'storage', 'notifications', 'location']);
 const inlineViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads']);
-const accountViews = new Set(['agent_instructions','agent_memory','log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'notifications', 'agents']);
+const accountViews = new Set(['agent_instructions','agent_memory','log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'hidden_people', 'notifications', 'agents']);
 const requiresSavedAccount = (view: string, context: Omit<Destination, 'view'>) => accountViews.has(view) && !(view === 'agents' && context.resourceId === 'device');
 interface ComposerScreen { panel: Panel; context: Omit<Destination, 'view'>; history: { panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]; title: string; content: ReactNode; open: boolean; reset: number }
 function mergeRun(previous: RunView | null, next: RunView | null) {
@@ -523,7 +523,7 @@ export function App() {
         <div className="settings-utilities settings-donate-row"><a href="https://fuckingdonate.co/@cyrus" target="_blank" rel="noopener noreferrer"><Heart size={21}/>Donate</a>{data?.user.handle&&<button onClick={()=>void post('/account/logout').then(()=>location.reload()).catch(e=>logError(errorText(e)))}><SignOut size={21}/>Log out</button>}</div>
         <p className="settings-credit"><a href="https://freshman.dev" target="_blank" rel="noopener noreferrer">Made by Cyrus Freshman</a></p>
       </nav> : !data ? <p>Connecting…</p> : panel === 'appearance'||panel==='preferences' ? <PreferencesPanel value={data.preferences||defaultPreferences} changed={preferences=>{liveRevision.current++;setData(previous=>previous&&preferences.revision>=(previous.preferences?.revision||0)?{...previous,preferences}:previous);}}/>
-        : panel==='agent_instructions'?<AgentMemoryPanel section="instructions"/> : panel==='agent_memory'?<AgentMemoryPanel/> : panel==='account_menu'?<nav className="settings-menu" aria-label="Account">{data.user.handle?<NavLink to={{view:'account_settings'}}><LockKey size={23}/>Sign-in &amp; security</NavLink>:<button onClick={()=>{setAccountMode('login');navigatePanel('account');}}><LockKey size={23}/>Sign in</button>}{data.user.handle&&<><NavLink to={{view:'blocked'}}><Shield size={23}/>Blocked people</NavLink><NavLink to={{view:'storage'}}><HardDrives size={23}/>Storage</NavLink></>}</nav> : panel === 'credits' ? <Credits data={data} onAccount={() => navigatePanel('account')} onConnect={() => navigatePanel('agents')} />
+        : panel==='agent_instructions'?<AgentMemoryPanel section="instructions"/> : panel==='agent_memory'?<AgentMemoryPanel/> : panel==='account_menu'?<nav className="settings-menu" aria-label="Account">{data.user.handle?<NavLink to={{view:'account_settings'}}><LockKey size={23}/>Sign-in &amp; security</NavLink>:<button onClick={()=>{setAccountMode('login');navigatePanel('account');}}><LockKey size={23}/>Sign in</button>}{data.user.handle&&<><NavLink to={{view:'blocked'}}><Shield size={23}/>Blocked people</NavLink><NavLink to={{view:'hidden_people'}}><EyeSlash size={23}/>Hidden people</NavLink><NavLink to={{view:'storage'}}><HardDrives size={23}/>Storage</NavLink></>}</nav> : panel === 'credits' ? <Credits data={data} onAccount={() => navigatePanel('account')} onConnect={() => navigatePanel('agents')} />
         : panel === 'account_settings' && data.user.handle ? <AccountSettings user={data.user} refresh={refresh} cleared={async () => { try{for(const tab of ['agent','friends','posts','log'])localStorage.removeItem(tab==='agent'?`nd-draft:${data.user.id}`:`nd-draft:${data.user.id}:${tab}`);}catch{}for(const saved of Object.values(tabWorkspaces.current)){saved.draft='';saved.attachments=[];saved.inboxAttachments=[];saved.recordAttachments=[];saved.scroll=null;}setDraft(''); setRecordAttachments([]); setInboxAttachments([]); setAttachments([]); setSubmitting(false); setRun(null); submission.current = null; chatHistory.returnLatest(); await refresh(); scroll.follow(); }} />
         : panel === 'account' || needsAccount ? <Account data={data} initialMode={accountMode} onModeChange={setAccountMode} onboarding={Boolean(afterAccount)} refresh={refresh} close={() => void closePanel()} saved={() => void accountSaved()} />
           : panel === 'log' ? panelContext.resourceId?<LogDetail logSequence={panelContext.logSequence} closeLabel={panelHistory.length?'Back':'Close'} onClose={backPanel} entryId={panelContext.resourceId} user={data.user} onAdjacent={(resourceId,logSequence)=>setPanelContext(previous=>({...previous,resourceId,logSequence}))} navigate={navigate} onSaved={completeLog} onCancel={()=>completeLog()}/>:<LogPanel user={data.user} navigate={navigate} initialQuery={panelContext.query} {...panelContext} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))}/>
@@ -543,6 +543,7 @@ export function App() {
                   : panel === 'post' ? <PostPanel user={data.user} postId={panelContext.resourceId || ''} navigate={navigate} />
                     : (panel === 'messages' || panel === 'connections') ? <MessagesPanel userId={data.user.id} connectionId={panelContext.resourceId} navigate={navigate} />
                       : panel === 'blocked' ? <BlockedPanel />
+                      : panel === 'hidden_people' ? <HiddenPeoplePanel navigate={destination=>{resumeSettings.current=true;void closePanel().then(()=>navigate(destination));}} />
                       : panel === 'storage' ? <StoragePanel navigate={destination=>{resumeSettings.current=true;void closePanel().then(()=>navigate(destination));}} />
                       : panel === 'inbox' ? <InboxPanel itemId={panelContext.resourceId} navigate={navigate} discuss={discussUpdate} />
                       : panel === 'automations' ? <AutomationsPanel automationId={panelContext.resourceId} navigate={navigate} chatBusy={sendBusy} example={sendExample} />

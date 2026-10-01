@@ -41,7 +41,9 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   } else if (['identity.get', 'profile.update', 'people.get', 'people.search','people.mutuals'].includes(name)) {
   if (name === 'identity.get' && !data.handle) { add({ view: 'profile' }, 'Create your account', 'surface', 'account'); return links; }
     for (const row of rows) if (typeof row.id === 'string' && (name === 'people.get' || name==='people.mutuals' || row.id === actor.userId || row.discoverable)) add({ view: 'person', resourceId: row.id }, `View ${row.handle ? '@' + row.handle : row.name || 'profile'}`, 'exact', 'person', row.id);
-    if (name === 'people.search') add({ view: 'people', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined, query:input.query as string|undefined,scope:input.scope as Destination['scope'] }, 'Browse people', 'surface', 'people');
+    if (name === 'people.search') input.scope==='hidden'?add({view:'hidden_people'},'Hidden people','surface','hidden_people'):add({ view: 'people', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined, query:input.query as string|undefined,scope:input.scope as Destination['scope'] }, 'Browse people', 'surface', 'people');
+  } else if(name==='people.hide'){
+    add({view:'hidden_people'},'Hidden people','surface','hidden_people');
   } else if (['posts.incoming_replies','posts.thread_updates'].includes(name)) {
     for(const row of rows)if(typeof row.id==='string')add({view:'post',resourceId:row.id},'View reply','exact','post',row.id);
     if(rows.length&&rows.every(row=>typeof row.id==='string'))add({view:'post_list',postIds:rows.map(row=>row.id)},name==='posts.incoming_replies'?'Replies to you':'Thread updates','surface','post_list');

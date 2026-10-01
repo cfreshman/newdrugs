@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { errorText, operation } from './api';
 import { useRecordRefresh } from './useRecordRefresh';
 import type { Destination } from '../shared/navigation';
+import type {Profile} from '../shared/types';
 import { usePanelLoading } from './PanelReadiness';
+import {NavLink} from './NavLink';
 
 export function PersonSafety({ personId, label, navigate, mode, close }: { personId: string; label: string; mode:'block'|'report'|null;close():void; navigate(destination: Destination): void }) {
   const [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [reported, setReported] = useState(false);
@@ -34,6 +36,15 @@ export function BlockedPanel() {
   useEffect(() => { void load(); return () => { generation.current++; }; }, [load]); useRecordRefresh(['people'], load);
   const unblock = async (personId: string) => { setBusy(personId); try { await operation('people.block', { personId, blocked: false }); await load(); } catch (error) { setError(errorText(error)); } finally { setBusy(''); } };
   return <><div className="blocked-list">{page?.items.map(person => <div key={person.id}><span>{person.handle ? `@${person.handle}` : person.name || 'Person'}</span><button className="text-link" disabled={Boolean(busy)} onClick={() => void unblock(person.personId)}>Unblock</button></div>)}</div>{page && !page.items.length && <p className="quiet">You haven’t blocked anyone.</p>}{page?.nextCursor && <button className="text-link" onClick={() => void load(page.nextCursor!)}>More</button>}{error && <p className="error" role="alert">{error}</p>}</>;
+}
+
+export function HiddenPeoplePanel({navigate}:{navigate(destination:Destination):void}){
+ const [page,setPage]=useState<{items:Profile[];nextCursor:string|null}|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState('');
+ const generation=useRef(0);usePanelLoading(!page&&!error);
+ const load=useCallback(async(before?:string)=>{const current=++generation.current;try{const next=await operation<{items:Profile[];nextCursor:string|null}>('people.search',{scope:'hidden',limit:20,...(before?{before}:{})});if(current===generation.current){setPage(previous=>before&&previous?{...next,items:[...previous.items,...next.items]}:next);setError('');}}catch(cause){if(current===generation.current)setError(errorText(cause));}},[]);
+ useEffect(()=>{void load();return()=>{generation.current++;};},[load]);useRecordRefresh(['people'],load);
+ const unhide=async(personId:string)=>{if(busy)return;setBusy(personId);setError('');try{await operation('people.hide',{personId,hidden:false});setPage(previous=>previous?{...previous,items:previous.items.filter(person=>person.id!==personId)}:previous);void load();}catch(cause){setError(errorText(cause));}finally{setBusy('');}};
+ return <><div className="blocked-list hidden-people-list">{page?.items.map(person=><div key={person.id}>{person.discoverable?<NavLink to={{view:'person',resourceId:person.id}} navigate={navigate}>{person.handle?`@${person.handle}`:person.name}</NavLink>:<span>{person.name}</span>}<button className="text-link" disabled={Boolean(busy)} onClick={()=>void unhide(person.id)}>Unhide</button></div>)}</div>{page&&!page.items.length&&<p className="quiet">No hidden people.</p>}{page?.nextCursor&&<button className="text-link" onClick={()=>void load(page.nextCursor!)}>More</button>}{error&&<p className="error" role="alert">{error}</p>}</>;
 }
 
 /** Reporting shares only the selected content, never a whole private conversation. */
