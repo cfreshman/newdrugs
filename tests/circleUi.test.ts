@@ -12,9 +12,27 @@ afterEach(()=>dom.cleanup());
 it('shows mutual friends and their photos on the person card in every Explore scope',async()=>{
  const user={id:'viewer',handle:'viewer',name:'Viewer',city:'',bio:'',interests:[],discoverable:true};
  await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
- const card=dom.container.querySelector('.people-list>a')!;
+ const card=dom.container.querySelector('.person-result-main')!;
  expect(card.textContent).toContain('2 mutual friends: @one, @two');
  expect(card.querySelector<HTMLImageElement>('.person-mutual-avatars img')?.getAttribute('src')).toBe('/api/files/photo-one');
  expect(card.querySelectorAll('.person-mutual-avatars>span')).toHaveLength(2);
- expect([...dom.container.querySelectorAll('.view-tabs button')].map(button=>button.textContent)).toEqual(['Nearby','All people','Circle']);
+ expect([...dom.container.querySelectorAll('.view-tabs button')].map(button=>button.textContent)).toEqual(['Nearby','All people','Circle','Hidden']);
+});
+it('shows Friends as disabled and omits Hide on an accepted friend card',async()=>{
+ api.operation.mockResolvedValue({items:[{id:'person',handle:'person',name:'Person',city:'',bio:'',interests:[],discoverable:true,friendAction:'friend'}],nextCursor:null});
+ const user={id:'viewer',handle:'viewer',name:'Viewer',city:'',bio:'',interests:[],discoverable:true};
+ await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
+ const actions=dom.container.querySelector('.person-card-actions')!;
+ expect(actions.querySelector<HTMLButtonElement>('button')?.textContent).toBe('Friends');
+ expect(actions.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
+ expect(actions.textContent).not.toContain('Hide');
+});
+it('opens a human-written invitation note from the card and offers Hide for a non-friend',async()=>{
+ api.operation.mockImplementation(async(name:string)=>name==='people.search'?{items:[{id:'person',handle:'person',name:'Person',city:'',bio:'',interests:[],discoverable:true,friendAction:'invite'}],nextCursor:null}:{id:'connection',status:'pending'});
+ const user={id:'viewer',handle:'viewer',name:'Viewer',city:'',bio:'',interests:[],discoverable:true};
+ await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
+ const actions=dom.container.querySelector('.person-card-actions')!;
+ expect(actions.textContent).toContain('Friend');expect(actions.textContent).toContain('Hide');
+ await act(async()=>actions.querySelector<HTMLButtonElement>('button')!.click());
+ expect(dom.container.querySelector('.person-card-invite textarea')).not.toBeNull();
 });

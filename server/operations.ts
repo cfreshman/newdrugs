@@ -12,6 +12,7 @@ import {makeOperation,normalizeMakeProject,stageMakePublish} from './make';
 import {endCallForConnection} from './calling';
 import {removeSpaceParticipantForBlock,spaceOperation} from './spaces';
 import {enqueueCircleEdge,circleSummaries,circleCandidates,circleMutualIds} from './circle';
+import {hiddenPersonIds,hiddenPeoplePage,setPersonHidden} from './peopleHides';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
 import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
@@ -59,12 +60,18 @@ async function blockedIds(userId: string, session?: ClientSession) {
 async function withMutualCounts(userId:string,people:Profile[],session?:ClientSession,actor?:Actor){
  if(actor?.background&&!actor.accountActivity)return people;
  const summaries=await circleSummaries(userId,people.map(person=>person.id),session),ids=[...new Set([...summaries.values()].flatMap(row=>row.previewIds))];
- const [friends,blocked]=await Promise.all([
+ const [friends,blocked,connections]=await Promise.all([
   users().find({_id:{$in:ids},suspendedAt:null},{session,projection:{name:1,handle:1,photos:1}}).limit(ids.length).toArray(),
   rows('blocks').find({pairId:{$in:ids.map(id=>pairId(userId,id))}},{session,projection:{pairId:1}}).limit(ids.length*2).toArray(),
+  rows('connections').find({_id:{$in:people.map(person=>pairId(userId,person.id))}},{session,projection:{status:1,toId:1,disconnectedBy:1}}).limit(people.length).toArray(),
  ]);
- const byId=new Map(friends.map(friend=>[friend._id,friend])),blockedIds=new Set(blocked.map(row=>row.pairId));
- return people.map(person=>{const row=summaries.get(person.id);if(!row?.mutualCount)return person;const mutualFriends=row.previewIds.filter(id=>byId.has(id)&&!blockedIds.has(pairId(userId,id))).map(id=>{const friend=byId.get(id)!;return {id,name:friend.handle?`@${friend.handle}`:String(friend.name||'Friend'),...(friend.photos?.[0]?{photoId:friend.photos[0]}:{})};});return {...person,mutualCount:row.mutualCount,mutualFriends};});
+ const byId=new Map(friends.map(friend=>[friend._id,friend])),blockedIds=new Set(blocked.map(row=>row.pairId)),byConnection=new Map(connections.map(row=>[row._id,row]));
+ return people.map(person=>{
+  const row=summaries.get(person.id),connection=byConnection.get(pairId(userId,person.id));
+  const friendAction:Profile['friendAction']=person.id===userId?undefined:connection?.status==='accepted'?'friend':connection?.status==='pending'?connection.toId===userId?'accept':'invited':connection?.status==='declined'&&connection.toId!==userId||connection?.status==='disconnected'&&connection.disconnectedBy!==userId?'unavailable':'invite';
+  const mutualFriends=row?.previewIds.filter(id=>byId.has(id)&&!blockedIds.has(pairId(userId,id))).map(id=>{const friend=byId.get(id)!;return {id,name:friend.handle?`@${friend.handle}`:String(friend.name||'Friend'),...(friend.photos?.[0]?{photoId:friend.photos[0]}:{})};});
+  return {...person,...(row?.mutualCount?{mutualCount:row.mutualCount,mutualFriends}:{}),...(friendAction?{friendAction}:{}),...(connection?{connectionId:connection._id}:{})};
+ });
 }
 async function notBlocked(a: string, b: string, session?: ClientSession) {
   if (await rows('blocks').findOne({ pairId: pairId(a, b) }, { session }) || await users().findOne({_id:b,suspendedAt:{$type:'string'}},{session,projection:{_id:1}})) throw new AppError(404, 'unavailable', 'This person is unavailable.');
@@ -241,6 +248,13 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const byId=new Map(friends.map(friend=>[friend._id,friend])),blockedIds=new Set(blocked.map(row=>row.pairId));
       return {items:page.ids.flatMap(id=>{const friend=byId.get(id);return friend&&!blockedIds.has(pairId(userId,id))?[{id,name:friend.handle?`@${friend.handle}`:String(friend.name||'Friend'),...(friend.photos?.[0]?{photoId:friend.photos[0]}:{})}]:[];}),nextCursor:page.nextCursor};
     }
+    case 'people.hide':{
+      registered(user);const personId=String(d.personId);if(personId===userId)throw new AppError(422,'self','You cannot hide yourself.');
+      if(d.hidden){await notBlocked(userId,personId,session);const person=requireValue(await users().findOne({_id:personId},{session}),'This person is unavailable.');if(!await profileVisibleTo(userId,person,session))throw new AppError(404,'unavailable','This person is unavailable.');}
+      await setPersonHidden(userId,personId,Boolean(d.hidden),session!);
+      await rows('recordEvents').insertOne({_id:randomUUID(),userIds:[userId],payload:{keys:['people']},expiresAt:new Date(Date.now()+3600000)},{session});
+      return {personId,hidden:Boolean(d.hidden)};
+    }
     case 'search.datasets': return searchStatus();
     case 'search.query': return searchPublic(d as unknown as SearchInput, actor);
     case 'posts.search': return searchPublic({ ...d, datasets: d.datasets || ['posts','replies'] } as unknown as SearchInput, actor);
@@ -253,14 +267,30 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'people.search': {
       if(d.scope==='circle'&&actor.background&&!actor.accountActivity)throw new AppError(403,'account_activity_required','This task cannot read your Circle.');
       if (d.query && d.scope === 'nearby' && !d.near && !user.area?.cell) throw new AppError(422,'location_required','Choose an approximate area to find nearby people.');
+      if(d.scope==='hidden'){
+        let cursor=d.before as string|undefined,scanned=0;const found:Profile[]=[];
+        while(scanned<150&&found.length<limit){
+          const page=await hiddenPeoplePage(userId,Math.min(30,limit-found.length),cursor,session);cursor=page.nextCursor||undefined;scanned+=page.items.length;
+          const people=await users().find({_id:{$in:page.items.map(row=>row.personId)}},{session}).limit(page.items.length).toArray(),byId=new Map(people.map(person=>[person._id,person]));
+          for(const item of page.items){const person=byId.get(item.personId),visible=person?.discoverable&&!person.suspendedAt;
+            const view:Profile=visible?profile(person):{id:item.personId,name:'Unavailable person',city:'',bio:'',interests:[],discoverable:false,photos:[]};
+            if(d.query&&visible&&!`${view.name} ${view.handle||''} ${view.bio} ${view.interests.join(' ')}`.toLowerCase().includes(String(d.query).toLowerCase()))continue;
+            if(d.query&&!visible)continue;
+            found.push({...view,hidden:true});
+          }
+          if(!cursor||!page.items.length)break;
+        }
+        return {items:await withMutualCounts(userId,found,session,actor),nextCursor:cursor||null};
+      }
+      const hiddenIds=d.includeHidden?[]:await hiddenPersonIds(userId,session),hiddenSet=new Set(hiddenIds);
       if (d.query) {
         let cursor=d.before as string|undefined,latest:Awaited<ReturnType<typeof searchPublic>>|undefined;
         const selected:NonNullable<Awaited<ReturnType<typeof searchPublic>>['matches']>=[];
-        for(let attempt=0;attempt<(d.scope==='circle'?5:1)&&selected.length<limit;attempt++){
+        for(let attempt=0;attempt<(d.scope==='circle'||hiddenIds.length?5:1)&&selected.length<limit;attempt++){
           const result=await searchPublic({ ...d, scope:undefined, near: d.scope === 'nearby' ? d.near || user.area?.cell : undefined, query: d.query, mode: d.mode || 'hybrid', datasets: ['profiles'], cursor, limit:Math.min(30,limit-selected.length) } as unknown as SearchInput, actor);
           latest=result;cursor=result.nextCursor||undefined;
           const records=await withMutualCounts(userId,result.matches.map(match=>match.record as Profile),session,actor);
-          for(let index=0;index<result.matches.length&&selected.length<limit;index++)if(d.scope!=='circle'||records[index].mutualCount)selected.push({...result.matches[index],record:records[index]});
+          for(let index=0;index<result.matches.length&&selected.length<limit;index++)if(!hiddenSet.has(records[index].id)&&(d.scope!=='circle'||records[index].mutualCount))selected.push({...result.matches[index],record:records[index]});
           if(!cursor)break;
         }
         return {...latest,items:selected.map(match=>match.record),matches:selected,nextCursor:cursor||null};
@@ -269,7 +299,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if(d.scope==='circle'){
         let cursor=d.before as string|undefined,more=false,scanned=0;const found:Profile[]=[];
         while(scanned<150&&found.length<limit){
-          const page=await circleCandidates(userId,Math.min(30,limit-found.length),cursor,session);cursor=page.nextCursor||undefined;scanned+=page.items.length;
+          const page=await circleCandidates(userId,Math.min(30,limit-found.length),cursor,hiddenIds,session);cursor=page.nextCursor||undefined;scanned+=page.items.length;
           const eligible=await users().find({_id:{$in:page.items.map(item=>item.id),$nin:[userId,...blocked]},discoverable:true,suspendedAt:null,handle:{$type:'string'},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})},{session}).toArray();
           const byId=new Map(eligible.map(person=>[person._id,person]));
           for(const item of page.items){const person=byId.get(item.id);if(person)found.push({...profile(person),mutualCount:item.mutualCount});}
@@ -278,14 +308,14 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         const backfill=await rows('circleMeta').findOne({_id:'backfill'},{session,projection:{done:1}});
         return {items:await withMutualCounts(userId,found,session,actor),nextCursor:more?cursor:null,indexing:!backfill?.done};
       }
-      if (d.scope === 'all') { const people = await users().find({discoverable:true,suspendedAt:null,handle:{$type:'string'},_id:{$ne:userId,$nin:blocked,...(d.before?{$lt:String(d.before)}:{})},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})},options).sort({_id:-1}).limit(limit+1).toArray(); return {items:await withMutualCounts(userId,people.slice(0,limit).map(profile),session,actor),nextCursor:people.length>limit?people[limit-1]._id:null}; }
+      if (d.scope === 'all') { const people = await users().find({discoverable:true,suspendedAt:null,handle:{$type:'string'},_id:{$ne:userId,$nin:[...blocked,...hiddenIds],...(d.before?{$lt:String(d.before)}:{})},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})},options).sort({_id:-1}).limit(limit+1).toArray(); return {items:await withMutualCounts(userId,people.slice(0,limit).map(profile),session,actor),nextCursor:people.length>limit?people[limit-1]._id:null}; }
       const cell=String(d.near||user.area?.cell||'');
       if(!cell)throw new AppError(422,'location_required','Choose an approximate area to find nearby people.');
       const radiusMiles=Number(d.radiusMiles||25);
       const paging=geoPage({cell,radiusMiles,interest:d.interest as string|undefined,before:d.before as string|undefined},userId);
       const people=await users().aggregate<User & {distanceMeters:number}>([
         {$geoNear:{near:coarsePoint(cell),key:'area.point',distanceField:'distanceMeters',spherical:true,maxDistance:radiusMiles*METERS_PER_MILE,
-          query:{discoverable:true,suspendedAt:null,_id:{$ne:userId,$nin:blocked},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})}}},
+          query:{discoverable:true,suspendedAt:null,_id:{$ne:userId,$nin:[...blocked,...hiddenIds]},...(d.interest?{interests:String(d.interest).toLowerCase()}:{})}}},
         {$sort:{distanceMeters:1,_id:1}},...paging.stages,{$limit:limit+1},
       ],options).toArray();
       return {items:await withMutualCounts(userId,people.slice(0,limit).map(p=>({...profile(p),...sharedAreaDistance(cell,p.area!.cell,p.distanceMeters)})),session,actor),nextCursor:people.length>limit?paging.cursor(people[limit-1]):null};

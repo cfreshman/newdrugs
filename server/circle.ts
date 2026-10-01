@@ -139,10 +139,10 @@ export async function circleSummaries(viewerId:string,candidateIds:string[],sess
  const found=await pairs().find({_id:{$in:candidateIds.map(id=>circlePairId(viewerId,id))}},{session,projection:{_id:1,mutualCount:1,previewIds:1}}).limit(candidateIds.length).toArray();
  const byPair=new Map(found.map(row=>[row._id,row]));return new Map(candidateIds.flatMap(id=>{const row=byPair.get(circlePairId(viewerId,id));return row?[[id,{mutualCount:row.mutualCount,previewIds:row.previewIds||[]}]]:[];}));
 }
-export async function circleCandidates(viewerId:string,limit:number,before?:string,session?:ClientSession){
+export async function circleCandidates(viewerId:string,limit:number,before?:string,excludedIds:string[]=[],session?:ClientSession){
  let cursor:{count:number;id:string}|null=null;
  if(before){try{const value=JSON.parse(Buffer.from(before,'base64url').toString());if(!Number.isInteger(value.count)||value.count<1||typeof value.id!=='string')throw Error();cursor=value;}catch{throw new AppError(422,'circle_cursor','Reload Circle.');}}
- const found=await pairs().find({members:viewerId,mutualCount:{$gt:0},...(cursor?{$or:[{mutualCount:{$lt:cursor.count}},{mutualCount:cursor.count,_id:{$gt:cursor.id}}]}:{})},{session}).sort({mutualCount:-1,_id:1}).limit(limit+1).toArray();
+ const found=await pairs().find({members:viewerId,mutualCount:{$gt:0},...(excludedIds.length?{_id:{$nin:excludedIds.map(id=>circlePairId(viewerId,id))}}:{}),...(cursor?{$or:[{mutualCount:{$lt:cursor.count}},{mutualCount:cursor.count,_id:{$gt:cursor.id}}]}:{})},{session}).sort({mutualCount:-1,_id:1}).limit(limit+1).toArray();
  const page=found.slice(0,limit),last=page.at(-1);
  return {items:page.map(row=>({id:row.members.find(id=>id!==viewerId)!,mutualCount:row.mutualCount})),nextCursor:found.length>limit&&last?Buffer.from(JSON.stringify({count:last.mutualCount,id:last._id})).toString('base64url'):null};
 }

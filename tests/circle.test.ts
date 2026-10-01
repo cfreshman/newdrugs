@@ -11,7 +11,7 @@ const call=(name:string,input:unknown,userId:string,confirmed=false)=>executeOpe
 async function clean(){if(db().databaseName!=='newdrugs_test')throw Error('Isolated test database required');for(const collection of await db().collections())await collection.deleteMany({});}
 async function drain(){for(let index=0;index<100;index++){await processCircleWork();if((await rows('circleMeta').findOne({_id:'backfill'}))?.done&&!await rows('circleJobs').countDocuments({}))return;}throw Error('Circle indexing did not drain');}
 beforeAll(async()=>{if(new URL(config.MONGODB_URI).pathname!=='/newdrugs_test')throw Error('Isolated test database required');await connectDatabase();});
-beforeEach(async()=>{await clean();const base:User={_id:'a',handle:'a',name:'A',bio:'',city:'',cityKey:'',interests:[],discoverable:true,balanceNanos:0,reservedNanos:0,createdAt:new Date().toISOString()};await users().insertMany(['a','b','c','d'].map(id=>({...base,_id:id,handle:id,name:id.toUpperCase()})));const edge=(a:string,b:string)=>({ _id:[a,b].sort().join(':'),members:[a,b],fromId:a,toId:b,note:'Hi',status:'accepted',createdAt:new Date().toISOString()});await rows('connections').insertMany([edge('a','b'),edge('a','d'),edge('b','c'),edge('c','d')]);});
+beforeEach(async()=>{await clean();const base:User={_id:'a',handle:'a',name:'A',bio:'',city:'',cityKey:'',area:{cell:'852a3313fffffff',label:'Lincoln area',point:{type:'Point',coordinates:[-71,41]}},interests:[],discoverable:true,balanceNanos:0,reservedNanos:0,createdAt:new Date().toISOString()};await users().insertMany(['a','b','c','d'].map(id=>({...base,_id:id,handle:id,name:id.toUpperCase()})));const edge=(a:string,b:string)=>({ _id:[a,b].sort().join(':'),members:[a,b],fromId:a,toId:b,note:'Hi',status:'accepted',createdAt:new Date().toISOString()});await rows('connections').insertMany([edge('a','b'),edge('a','d'),edge('b','c'),edge('c','d')]);});
 afterAll(async()=>{await clean();await mongo.close();});
 
 it('precomputes mutual counts and updates them after a disconnect and block',async()=>{
@@ -32,4 +32,15 @@ it('precomputes mutual counts and updates them after a disconnect and block',asy
  circle=await call('people.search',{scope:'circle'},'a');expect(circle.items.some((person:any)=>person.id==='c')).toBe(false);
  await call('people.block',{personId:'b',blocked:false},'a');await drain();
  circle=await call('people.search',{scope:'circle'},'a');expect(circle.items.find((person:any)=>person.id==='c')?.mutualCount).toBe(1);
+});
+it('hides one person from indexed Explore scopes and restores them from Hidden',async()=>{
+ await drain();
+ expect((await call('people.search',{scope:'all'},'a')).items.find((person:any)=>person.id==='c')?.friendAction).toBe('invite');
+ await call('people.hide',{personId:'c',hidden:true},'a');
+ for(const scope of ['all','nearby','circle'])expect((await call('people.search',{scope},'a')).items.some((person:any)=>person.id==='c'),scope).toBe(false);
+ expect((await call('people.search',{scope:'all',includeHidden:true},'a')).items.some((person:any)=>person.id==='c')).toBe(true);
+ const hidden=await call('people.search',{scope:'hidden'},'a');expect(hidden.items.map((person:any)=>[person.id,person.hidden])).toEqual([['c',true]]);
+ await call('people.hide',{personId:'c',hidden:false},'a');
+ expect((await call('people.search',{scope:'circle'},'a')).items.some((person:any)=>person.id==='c')).toBe(true);
+ expect((await call('people.search',{scope:'hidden'},'a')).items).toEqual([]);
 });

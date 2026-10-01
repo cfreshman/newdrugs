@@ -63,6 +63,8 @@
 .social-friends .people-list>a>img {width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:0;}
 .social-friends .people-list>a>span {padding:var(--card-inset);display:flex;flex-direction:column;gap:5px;}
 .social-friends .people-list strong {font-size:17px;letter-spacing:-.3px;}
+.social-friends .people-list>.person-result{border-radius:20px;background:var(--surface-soft);}.social-friends .person-result-main>img{border-radius:0;}.social-friends .person-result-main>span{padding:var(--card-inset);}
+@media(max-width:760px){.social-friends .person-result-main>img{max-height:300px;}}
 .person-mutual{display:flex;align-items:center;gap:7px;min-width:0;}.person-mutual-avatars{display:flex;flex:none;padding-left:6px;}.person-mutual-avatars>span{display:grid;place-items:center;width:30px;height:30px;margin-left:-6px;border:1px solid var(--surface-soft);border-radius:50%;overflow:hidden;background:var(--surface);color:var(--ink);font-size:12px;font-weight:700;}.person-mutual-avatars img{width:100%;height:100%;object-fit:cover;}.person-mutual>span:last-child{min-width:0;overflow-wrap:anywhere;}
 .social-friends .person-excerpt {font-size:13px;line-height:1.55;}
 .mode-page-person .profile-photo {max-height:420px;}

@@ -56,6 +56,7 @@ export async function connectDatabase(name?: string,options:{indexes?:boolean}={
     rows('circlePaths').createIndex({pairId:1,via:1}),
     rows('circlePairs').createIndex({members:1,mutualCount:-1,_id:1}),
     rows('circleJobs').createIndex({createdAt:1,_id:1}),
+    rows('peopleHides').createIndex({userId:1,createdAt:-1,_id:-1}),
     rows('logContactStates').createIndex({dirty:1,leaseUntil:1}),
     rows('logEntries').createIndex({members:1,_id:1}),
     rows('logEntries').createIndex({calendarMonthDay:1,_id:1}),

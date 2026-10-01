@@ -26,6 +26,13 @@ async function drain(){for(let i=0;i<100&&await indexOne(async text=>vector(text
 async function search(actor:Actor,input:object={}){return executeOperation('search.query',{query:'bicycle rides',datasets:['profiles'],near,radiusMiles:25,...input},actor) as Promise<SearchResult>;}
 
 describe('public semantic retrieval',()=>{
+ it('omits hidden people from the ordinary semantic People list unless explicitly included',async()=>{
+  const owner=await person(''),bike=await person('I cycle on weekends');await drain();
+  expect((await executeOperation('people.search',{scope:'all',query:'bicycle'},owner) as any).items.map((item:any)=>item.id)).toContain(bike.userId);
+  await executeOperation('people.hide',{personId:bike.userId,hidden:true},owner,randomUUID());
+  expect((await executeOperation('people.search',{scope:'all',query:'bicycle'},owner) as any).items.map((item:any)=>item.id)).not.toContain(bike.userId);
+  expect((await executeOperation('people.search',{scope:'all',query:'bicycle',includeHidden:true},owner) as any).items.map((item:any)=>item.id)).toContain(bike.userId);
+ });
  it('combines semantic meaning with strict area, discovery and block filters, returning exact links',async()=>{
   const owner=await person(''),bike=await person('I cycle on weekends'),photo=await person('photography'),remote=await person('bicycle',far),hidden=await person('bicycle',near,false),blocked=await person('bicycle');
   await executeOperation('people.block',{personId:blocked.userId,blocked:true},owner,randomUUID());await drain();

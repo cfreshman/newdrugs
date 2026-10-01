@@ -2,6 +2,7 @@ export interface Profile {
   hasSharedHangouts?: boolean;
   mutualCount?:number;
   mutualFriends?:{id:string;name:string;photoId?:string}[];
+  friendAction?:'invite'|'accept'|'invited'|'friend'|'unavailable';connectionId?:string;hidden?:boolean;
   id: string; handle?: string; name: string; city: string; bio: string;
   interests: string[]; discoverable: boolean;
   area?: import('./geo').CoarseArea | null;
