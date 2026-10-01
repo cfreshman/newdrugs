@@ -140,7 +140,7 @@ Remaining limits, not an automatic task list:
 - No measured large-corpus/concurrent-user capacity envelope or high availability claim. Use `docs/SCALING_AUDIT.md` for evaluation requirements, not as an unfixed-bug list.
 - Full physical iPhone camera/keyboard/recording/pan-zoom verification still needs a device. Emulation is not proof.
 - Migration preserved 65 already-broken Logcal source media references; do not invent replacement media or rerun imports blindly.
-- One-to-one native video calling inside accepted-friend DMs and public live-audio Talk are in production. See [calling implementation](communications/PAIR_VIDEO_REFERENCE.md). Groups, Talk screen sharing, automatic paid reports, multimodal content search and backups remain separate projects.
+- One-to-one native video calling inside accepted-friend DMs and public live-audio Talk are in production. See [calling implementation](communications/PAIR_VIDEO_REFERENCE.md). Circle is being planned as a Friends social graph, with no group chats. Talk screen sharing, automatic paid reports, multimodal content search and backups remain separate projects.
 - Do not contact DigitalOcean Support again without authorization. Existing ticket 12849848 was authorized; the original host fault was not proven, but the workload moved and the faulty host is gone.
 
 For detailed workflows use [OPERATING_GUIDE.md](OPERATING_GUIDE.md). For what happened historically, use [OPERATING_HISTORY.md](OPERATING_HISTORY.md). Keep this handoff short and current; append history to the history file, not to the operational snapshot.

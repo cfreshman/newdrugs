@@ -215,7 +215,7 @@ agent-written rules (you are allowed to edit below this line)
 
 - Log scope/person filters and saved views remain CLI/MCP-only. The List page has a search field that presents direct text matches first and semantic results after them. Keep layout switching and export.
 
-- Circles and live voice Talk are implementation projects, not optional idea work. Circles may amount to group chats; resolve their exact membership, privacy, history and interaction behavior as part of implementation. Talk follows the Twitter Spaces model for launching and joining live voice chats, replaces the proposed Now presence-status idea, stays separate from event planning, and leaves Log as the record of actual hangouts.
+- Circle is a Friends social-graph project for direct friends and friends of friends. The user explicitly rejected group chats; Messages remains focused on one-to-one invitations and conversations. Circle's exact UI placement and behavior await the user's approval of a concrete plan. Live voice Talk follows the Twitter Spaces model for launching and joining public voice chats, replaces the proposed Now presence-status idea, stays separate from event planning, and leaves Log as the record of actual hangouts.
 
 - Log Grid/List include bottom scroll clearance measured from the floating controls, so the last item scrolls fully above today cards and Scan/Log buttons.
 
