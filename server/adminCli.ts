@@ -1,3 +1,4 @@
+import {publicUploadName} from './uploadNames';
 import {listAdminUsers,adminUsersSchema} from './adminUsers';
 import { readUpload, uploads } from './uploads';
 import { moderatePost, moderateReportedMessage, suspendUser } from './moderation';
@@ -50,7 +51,7 @@ export async function executeAdminOperation(key: AdminKey, name: string, raw: un
       const report=requireValue(await rows('reports').findOne({_id:String(input.reportId)}));
       const evidence=report.evidence as {kind?:string;fileIds?:string[]}|undefined;
       const files=await uploads().find({_id:{$in:evidence?.kind==='post'?evidence.fileIds||[]:[]},userId:String(report.personId),ready:true,deletedAt:{$exists:false}}).toArray();
-      return {items:files.map(file=>({id:file._id,name:file.name,mime:file.mime,bytes:file.bytes}))};
+      return {items:files.map(file=>({id:file._id,name:publicUploadName(file),mime:file.mime,bytes:file.bytes}))};
     }
     if (name === 'reports.get') {
       const report = requireValue(await rows('reports').findOne({ _id: String(input.reportId) }));

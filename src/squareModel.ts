@@ -9,7 +9,7 @@ export const squareLayerSchema=z.strictObject({
  id:z.string().min(1).max(80),type:z.enum(['image','shape','text','draw']),x:z.number().min(-4).max(4),y:z.number().min(-4).max(4),w:z.number().min(1/512).max(8),h:z.number().min(1/512).max(8),
  angle:z.number().min(-180).max(180).default(0),opacity:z.number().min(0).max(1).default(1),src:asset.optional(),color:color.default('#000000'),background:backing.default('transparent'),
  oval:z.boolean().default(false),border:z.boolean().default(false),borderColor:color.default('#000000'),borderWidth:z.number().min(1).max(10).default(1),crop:crop.optional(),
- text:z.string().max(1000).default(''),font:z.enum(['mono','sans','serif','anton','bebas','bungee','caveat','fredoka','orbitron','pacifico','marker','pixel','quicksand']).default('mono'),bold:z.boolean().default(false),italic:z.boolean().default(false),align:z.enum(['left','center','right']).default('left'),
+ text:z.string().max(1000).default(''),font:z.enum(['mono','sans','serif','anton','bebas','bungee','caveat','fredoka','orbitron','pacifico','marker','pixel','quicksand']).default('mono'),bold:z.boolean().default(false),italic:z.boolean().default(false),align:z.enum(['left','center','right']).default('center'),
  outline:z.boolean().default(false),outlineColor:color.default('#000000'),outlineWidth:z.number().min(1).max(10).default(5),
  shadow:z.boolean().default(false),shadowColor:color.default('#000000'),shadowX:z.number().min(-64).max(64).default(24),shadowY:z.number().min(-64).max(64).default(24),
 }).refine(layer=>layer.type!=='image'||Boolean(layer.src),'Choose an image for the layer.');

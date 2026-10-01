@@ -2,7 +2,7 @@ export const searchDatasets = ['profiles', 'posts', 'replies', 'threads', 'space
 export type SearchDataset = typeof searchDatasets[number];
 export type SearchMode = 'hybrid' | 'semantic' | 'keyword';
 export interface SearchConstraints {
-  scope?: 'public'|'friends'|'saved'; near?: string; radiusMiles?: number; authorId?: string; after?: string; beforeDate?: string;
+  includeHidden?: boolean; scope?: 'public'|'friends'|'saved'; near?: string; radiusMiles?: number; authorId?: string; after?: string; beforeDate?: string;
 }
 export interface SearchEvidence { field: string; text: string; entityId: string; entityType: 'person' | 'post' | 'space' }
 export interface SearchMatch {

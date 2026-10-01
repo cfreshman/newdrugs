@@ -1,7 +1,7 @@
 import type {ClientSession} from 'mongodb';
 import type {User} from './auth';
 import {rows} from './db';
-import {uploads,uploadRef,ownUpload} from './uploads';
+import {uploads,ownedUploadRef,ownUpload} from './uploads';
 import {logAttachmentLocations} from './log';
 import {attachmentReferences,type AttachmentReference} from './attachmentReferences';
 import {destinationPath} from '../shared/navigation';
@@ -45,7 +45,7 @@ export async function listStorage(user:User,{type='all',attachedTo='all',before,
  const groups=await Promise.all(page.map(file=>referenceGate.run(()=>attachmentReferences().find({ownerId:user._id,fileId:file._id,...(attachedTo!=='all'?{kind:attachedTo}:{})},{session}).sort({_id:1}).limit(7).toArray())));
  const projected=await projectReferences(user,groups.flat(),session);
  const order={person:0,post:1,chat:2,log:3,website:4};
- const items=page.map((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);return {...uploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)),inWebsite:refs.some(ref=>ref.kind==='websites'),attachments,attachmentCursor:refs.length>6?refs[5]._id:null};})
+ const items=page.map((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);return {...ownedUploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)),inWebsite:refs.some(ref=>ref.kind==='websites'),attachments,attachmentCursor:refs.length>6?refs[5]._id:null};})
   .filter((file,index)=>attachedTo==='all'||groups[index].length>6||groups[index].some(ref=>ref.kind===attachedTo&&projected.has(ref._id)));
  const indexing=await rows('attachmentReferenceMeta').countDocuments({done:true},{session})<5;
  return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items,indexing,nextCursor:files.length>limit?page.at(-1)!._id:null};

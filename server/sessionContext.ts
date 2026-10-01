@@ -6,7 +6,7 @@ import { rows } from './db';
 import { currentUser, profile } from './auth';
 import { conversation } from './operations';
 import type { RunRecord } from './runTypes';
-import { ownUpload, uploadRef } from './uploads';
+import { ownUpload, ownedUploadRef } from './uploads';
 
 async function memoryForRun(run:RunRecord){
  if(run.memorySnapshot)return run.memorySnapshot;
@@ -18,7 +18,7 @@ const memoryText=(context:import('../shared/agentMemory').MemoryContext)=>`Curre
 
 export async function messageInput(run: RunRecord) {
   const memory=await memoryForRun(run);
-  const files = await Promise.all(run.fileIds.map(async id => uploadRef(await ownUpload(run.userId, id))));
+  const files = await Promise.all(run.fileIds.map(async id => ownedUploadRef(await ownUpload(run.userId, id))));
   const records=await resolveRecordContexts(run.userId,run.recordRefs,true);
   const delivered = await inboxContext(run.userId, run.inboxIds || []);
   const page=run.purpose==='automation'?undefined:await resolvePageContext(run.userId,run.pageContext);

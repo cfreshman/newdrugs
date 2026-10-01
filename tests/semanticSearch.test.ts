@@ -26,6 +26,20 @@ async function drain(){for(let i=0;i<100&&await indexOne(async text=>vector(text
 async function search(actor:Actor,input:object={}){return executeOperation('search.query',{query:'bicycle rides',datasets:['profiles'],near,radiusMiles:25,...input},actor) as Promise<SearchResult>;}
 
 describe('public semantic retrieval',()=>{
+ it('filters hidden profiles before ranking and rechecks saved pages without hiding their posts',async()=>{
+  const owner=await person(''),one=await person('I cycle on weekends'),two=await person('I ride a bicycle');
+  const post=await executeOperation('posts.create',{text:'bicycle ride'},one,randomUUID(),{confirmed:true}) as {id:string};await drain();
+  const first=await search(owner,{limit:1});expect(first.nextCursor).toBeTruthy();
+  for(const actor of [one,two])await executeOperation('people.hide',{personId:actor.userId,hidden:true},owner,randomUUID());
+  expect((await search(owner,{limit:1,cursor:first.nextCursor})).matches).toEqual([]);
+  await expect(executeOperation('search.explain',{retrievalId:first.retrieval.id,matchId:first.matches[0].id},owner)).rejects.toMatchObject({code:'search_changed'});
+  const hidden=await search(owner);expect(hidden.matches).toEqual([]);expect(hidden.retrieval.candidates).toBe(0);
+  const included=await search(owner,{includeHidden:true});expect(included.matches.map(item=>item.entityId).sort()).toEqual([one.userId,two.userId].sort());
+  const handle=(await users().findOne({_id:one.userId}))!.handle;
+  expect((await search(owner,{query:`@${handle}`})).matches).toEqual([]);
+  expect((await search(owner,{query:`@${handle}`,includeHidden:true})).matches[0].entityId).toBe(one.userId);
+  expect((await search(owner,{datasets:['posts'],near:undefined})).matches.map(item=>item.entityId)).toEqual([post.id]);
+ });
  it('omits hidden people from the ordinary semantic People list unless explicitly included',async()=>{
   const owner=await person(''),bike=await person('I cycle on weekends');await drain();
   expect((await executeOperation('people.search',{scope:'all',query:'bicycle'},owner) as any).items.map((item:any)=>item.id)).toContain(bike.userId);

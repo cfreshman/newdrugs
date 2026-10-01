@@ -4,6 +4,17 @@ import {queryRetrieval,replaceRetrievalSource,retrievalScope,retrievalPointId} f
 import {publicRetrievalFilter} from '../server/search/retrieve';
 import {DIMENSIONS,INDEX_VERSION} from '../server/search/model';
 const previous={url:config.QDRANT_URL,key:config.QDRANT_API_KEY,namespace:config.SEARCH_NAMESPACE};
+it('excludes hidden profiles inside both indexed retrieval lanes, with an explicit override',async()=>{
+ config.QDRANT_URL='https://retrieval.invalid';
+ const fetcher=vi.fn(async()=>new Response(JSON.stringify({result:{points:[]}})));vi.stubGlobal('fetch',fetcher);
+ const input={query:'walks',datasets:['profiles','posts'] as ('profiles'|'posts')[],mode:'hybrid' as const,limit:20};
+ const hidden={must:[{key:'dataset',match:{value:'profiles'}},{key:'ownerId',match:{any:['hidden']}}]};
+ const filter=publicRetrievalFilter(input,'me',[],null,[],['hidden']);
+ await queryRetrieval('public',undefined,{query:input.query,vector:Array(DIMENSIONS).fill(1),filter});
+ expect(fetcher).toHaveBeenCalledTimes(2);
+ for(const [,options] of fetcher.mock.calls as unknown as [URL,RequestInit][])expect(JSON.parse(String(options.body)).filter.must_not).toContainEqual(hidden);
+ expect(publicRetrievalFilter({...input,includeHidden:true},'me',[],null,[],['hidden']).must_not).not.toContainEqual(hidden);
+});
 afterEach(()=>{config.QDRANT_URL=previous.url;config.QDRANT_API_KEY=previous.key;config.SEARCH_NAMESPACE=previous.namespace;vi.unstubAllGlobals();});
 it('applies private audience and caller filters separately to both retrieval lanes, with bounded output',async()=>{
  config.QDRANT_URL='https://retrieval.invalid';config.QDRANT_API_KEY='fixture-key';

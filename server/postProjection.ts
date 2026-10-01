@@ -1,3 +1,4 @@
+import {publicUploadName} from './uploadNames';
 import {unsuspendedActors} from './scopedModeration';
 import { profileVisibleTo } from './profileVisibility';
 import type { ClientSession } from 'mongodb';
@@ -26,7 +27,7 @@ export async function postCards(records: Row[], userId: string, blocked: string[
     const rawParent=parents.find(parent=>parent._id===post.parentId&&!authors.find(author=>author._id===parent.userId)?.suspendedAt),parent:Row|undefined=rawParent?{...rawParent,deletedAt:rawParent.deletedAt||rawParent.moderatedAt}:undefined,parentAuthor=authors.find(author=>author._id===parent?.userId);
     const author = authors.find(user => user._id === post.userId), like = likes.find(row => row._id === post._id);
     return { id: post._id, saved:savedPosts.has(post._id), userId: String(post.userId), text: post.deletedAt ? '' : String(post.text),links:post.deletedAt?[]:Array.isArray(post.links)?post.links:[], city: post.deletedAt ? '' : String(post.city || ''), area: post.deletedAt ? null : post.area,
-      photos: post.deletedAt ? [] : (Array.isArray(post.fileIds) ? post.fileIds as string[] : []).flatMap(id => { const file = photos.find(file => file._id === id && file.userId === post.userId); return file ? [{ id, name: file.name, url: `/api/files/${id}` }] : []; }),
+      photos: post.deletedAt ? [] : (Array.isArray(post.fileIds) ? post.fileIds as string[] : []).flatMap(id => { const file = photos.find(file => file._id === id && file.userId === post.userId); return file ? [{ id, name: publicUploadName(file), url: `/api/files/${id}` }] : []; }),
       createdAt: String(post.createdAt), parentId: post.parentId as string | undefined, rootId: post.rootId as string | undefined, deleted: Boolean(post.deletedAt),...(post.moderatedAt?{moderated:true}:{}),
       likeCount: post.deletedAt ? 0 : like?.count || 0, liked: !post.deletedAt && Boolean(like?.liked), replyCount: replies.find(row => row._id === post._id)?.count || 0,
       ...(parent?{parent:{id:parent._id,text:parent.deletedAt?'':String(parent.text),deleted:Boolean(parent.deletedAt),...(!parent.deletedAt&&parentAuthor?{author:{name:parentAuthor.name,handle:parentAuthor.handle}}:{})}}:{}),

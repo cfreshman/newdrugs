@@ -38,7 +38,7 @@ import { wallet } from './wallet';
 import type { Message } from '../shared/types';
 import { searchPlaces, resolveArea, geoPage } from './locations';
 import { coarsePoint, distanceMeters, METERS_PER_MILE, sharedAreaDistance, type CoarseArea } from '../shared/geo';
-import {prepareUpload,ownUpload,uploadRef,uploads,retainUploads,discardUpload,deleteUpload,expireUploads} from './uploads';
+import {prepareUpload,ownUpload,ownedUploadRef,uploads,retainUploads,discardUpload,deleteUpload,expireUploads} from './uploads';
 import { MAX_ACCOUNT_UPLOAD_BYTES } from '../shared/uploads';
 import type {UploadPurpose} from '../shared/uploads';
 import { notificationState, notifyConnection } from './notifications';
@@ -173,10 +173,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'push.devices': return pushDevices(userId, session);
     case 'push.revoke': return revokePush(userId, String(d.deviceId), session);
     case 'files.prepare':return prepareUpload(d as {name:string;bytes:number;sha256:string;purpose:UploadPurpose},actor,session);
-    case 'files.get':return uploadRef(await ownUpload(userId,String(d.fileId),session));
+    case 'files.get':return ownedUploadRef(await ownUpload(userId,String(d.fileId),session));
     case 'files.discard':return discardUpload(actor,String(d.fileId),session);
     case 'files.delete':return deleteUpload(actor,String(d.fileId),session);
-    case 'files.list':return {items:(await uploads().find({userId,deletedAt:{$exists:false},moderatedAt:{$exists:false}}).sort({createdAt:-1}).limit(30).toArray()).map(uploadRef)};
+    case 'files.list':return {items:(await uploads().find({userId,deletedAt:{$exists:false},moderatedAt:{$exists:false}}).sort({createdAt:-1}).limit(30).toArray()).map(ownedUploadRef)};
     case 'storage.attachments': return storageAttachments(user,String(d.fileId),d.before as string|undefined,Number(d.limit||20),session,d.attachedTo as StorageLocation|undefined);
     case 'storage.list': return listStorage(user,{type:d.type as StorageType|undefined,attachedTo:d.attachedTo as StorageLocation|undefined,before:d.before as string|undefined,limit},session);
     case 'account.preferences':return {...defaultPreferences,...user.preferences};
@@ -284,15 +284,15 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         }
         return {items:await withMutualCounts(userId,found,session,actor),nextCursor:cursor||null};
       }
-      const hiddenIds=d.includeHidden?[]:await hiddenPersonIds(userId,session),hiddenSet=new Set(hiddenIds);
+      const hiddenIds=d.includeHidden||d.query?[]:await hiddenPersonIds(userId,session);
       if (d.query) {
         let cursor=d.before as string|undefined,latest:Awaited<ReturnType<typeof searchPublic>>|undefined;
         const selected:NonNullable<Awaited<ReturnType<typeof searchPublic>>['matches']>=[];
-        for(let attempt=0;attempt<(d.scope==='circle'||hiddenIds.length?5:1)&&selected.length<limit;attempt++){
+        for(let attempt=0;attempt<(d.scope==='circle'?5:1)&&selected.length<limit;attempt++){
           const result=await searchPublic({ ...d, scope:undefined, near: d.scope === 'nearby' ? d.near || user.area?.cell : undefined, query: d.query, mode: d.mode || 'hybrid', datasets: ['profiles'], cursor, limit:Math.min(30,limit-selected.length) } as unknown as SearchInput, actor);
           latest=result;cursor=result.nextCursor||undefined;
           const records=await withMutualCounts(userId,result.matches.map(match=>match.record as Profile),session,actor);
-          for(let index=0;index<result.matches.length&&selected.length<limit;index++)if(!hiddenSet.has(records[index].id)&&(d.scope!=='circle'||records[index].mutualCount))selected.push({...result.matches[index],record:records[index]});
+          for(let index=0;index<result.matches.length&&selected.length<limit;index++)if(d.scope!=='circle'||records[index].mutualCount)selected.push({...result.matches[index],record:records[index]});
           if(!cursor)break;
         }
         return {...latest,items:selected.map(match=>match.record),matches:selected,nextCursor:cursor||null};
