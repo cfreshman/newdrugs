@@ -1,9 +1,9 @@
 import type {ClientSession} from 'mongodb';
 import {rows,transaction} from './db';
 import {hash} from './auth';
-export type AttachmentKind='profile'|'posts'|'chat'|'hangouts';
+export type AttachmentKind='profile'|'posts'|'chat'|'hangouts'|'websites';
 export interface AttachmentReference {_id:string;ownerId:string;fileId:string;kind:AttachmentKind;sourceId:string}
-const sources={profile:'users',posts:'posts',chat:'messages',hangouts:'logEntries'};
+const sources={profile:'users',posts:'posts',chat:'messages',hangouts:'logEntries',websites:'websites'};
 export const attachmentReferences=()=>rows<AttachmentReference>('attachmentReferences');
 /** Keep attachment-kind indexes in the same transaction as their source write. */
 export async function syncSourceAttachments(kind:AttachmentKind,sourceId:string,session?:ClientSession){
@@ -14,6 +14,7 @@ export async function syncSourceAttachments(kind:AttachmentKind,sourceId:string,
   if(kind==='posts')candidates=(source.fileIds as string[]||[]).map(fileId=>({ownerId:String(source.userId),fileId}));
   if(kind==='chat')candidates=(source.files as {id:string}[]||[]).map(file=>({ownerId:String(source.userId),fileId:file.id}));
   if(kind==='hangouts')candidates=(source.contributions as {userId:string;fileIds:string[]}[]||[]).filter(person=>(source.members as string[]||[]).includes(person.userId)).flatMap(person=>person.fileIds.map(fileId=>({ownerId:person.userId,fileId})));
+  if(kind==='websites')candidates=[...new Set([...(source.assets as {fileId:string}[]||[]),...((source.published as {assets?:{fileId:string}[]}|null)?.assets||[])].map(asset=>asset.fileId))].map(fileId=>({ownerId:source._id,fileId}));
  }
  const files=await rows('uploads').find({_id:{$in:candidates.map(item=>item.fileId)},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session,projection:{userId:1}}).toArray();
  const next=candidates.filter(item=>files.some(file=>file._id===item.fileId&&file.userId===item.ownerId)).map(item=>({...item,kind,sourceId,_id:hash(JSON.stringify([kind,sourceId,item.ownerId,item.fileId]))}));

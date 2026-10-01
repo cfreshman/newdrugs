@@ -1,4 +1,5 @@
 import {logRelatedResult,logSearchResult} from './logSearch';
+import {websiteSummary,websitePath} from './website';
 import {memoryOutputs} from './agentMemory';
 import {billingActivityOutput} from './billingActivity';
 import {storageAttachmentSchema} from './storage';
@@ -15,7 +16,7 @@ import { z } from 'zod';
 
 const id = z.string();
 export const areaOutput=z.object({cell:z.string(),label:z.string(),point:z.object({type:z.literal('Point'),coordinates:z.tuple([z.number(),z.number()])})});
-export const profileOutput = z.object({ hasSharedHangouts:z.boolean().optional(), mutualCount:z.number().int().positive().optional(),mutualFriends:z.array(z.object({id,name:z.string(),photoId:z.string().optional()})).optional(),friendAction:z.enum(['invite','accept','invited','friend','unavailable']).optional(),connectionId:id.optional(),hidden:z.boolean().optional(), id, handle: z.string().optional(), name: z.string(), city: z.string(), area:areaOutput.nullable().optional(), bio: z.string(), interests: z.array(z.string()), discoverable: z.boolean(), photos: z.array(z.string()).optional(), approximateMiles:z.number().optional(),sameArea:z.boolean().optional(),distanceLabel:z.string().optional() });
+export const profileOutput = z.object({ hasSharedHangouts:z.boolean().optional(), mutualCount:z.number().int().positive().optional(),mutualFriends:z.array(z.object({id,name:z.string(),photoId:z.string().optional()})).optional(),friendAction:z.enum(['invite','accept','invited','friend','unavailable']).optional(),connectionId:id.optional(),hidden:z.boolean().optional(), websiteUrl:z.url().optional(), id, handle: z.string().optional(), name: z.string(), city: z.string(), area:areaOutput.nullable().optional(), bio: z.string(), interests: z.array(z.string()), discoverable: z.boolean(), photos: z.array(z.string()).optional(), approximateMiles:z.number().optional(),sameArea:z.boolean().optional(),distanceLabel:z.string().optional() });
 const author = z.object({ name: z.string(), handle: z.string().optional(), photoId: z.string().optional(), profileVisible:z.boolean().optional() });
 export const postPhoto = z.object({ id, name: z.string(), url: z.string() });
 const post = z.object({ id, saved:z.boolean().optional(), userId: id, text: z.string(), links:z.array(z.string()).default([]), photos: z.array(postPhoto).default([]), city: z.string(), area:areaOutput.nullable().optional(), createdAt: z.string(), author: author.optional(), approximateMiles:z.number().optional(),sameArea:z.boolean().optional(),distanceLabel:z.string().optional(), parentId:id.optional(),rootId:id.optional(),parent:z.object({id,text:z.string(),deleted:z.boolean(),author:author.optional()}).optional(),moderated:z.boolean().optional(),deleted:z.boolean().default(false),likeCount:z.number().default(0),liked:z.boolean().default(false),replyCount:z.number().default(0) });
@@ -50,8 +51,14 @@ export const outputs: Record<string, z.ZodType> = {
   ...memoryOutputs,
   'log.search':logSearchResult,
   'log.related':logRelatedResult,
+  'website.get':z.object({site:websiteSummary.nullable()}),
+  'website.create':websiteSummary,'website.patch':websiteSummary,'website.asset.add':websiteSummary,'website.asset.remove':websiteSummary,'website.restore':websiteSummary,'website.publish':websiteSummary,'website.unpublish':websiteSummary,
+  'website.file':z.object({path:websitePath,content:z.string(),revision:z.number().int().positive(),offset:z.number().int().nonnegative(),totalCharacters:z.number().int().nonnegative(),nextOffset:z.number().int().nonnegative().nullable()}),
+  'website.search':z.object({revision:z.number().int().positive(),items:z.array(z.object({path:websitePath,offset:z.number().int().nonnegative(),excerpt:z.string()}))}),
+  'website.revisions':z.object({currentRevision:z.number().int().positive(),items:z.array(z.object({revision:z.number().int().positive(),createdAt:z.string()}))}),
+  'website.preview':z.object({previewUrl:z.url(),revision:z.number().int().positive()}),
   'storage.attachments':z.object({items:z.array(storageAttachmentSchema),nextCursor:z.string().nullable()}),
-  'storage.list':z.object({indexing:z.boolean().optional(),usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean(),attachments:z.array(storageAttachmentSchema),attachmentCursor:z.string().nullable().optional()})),nextCursor:z.string().nullable()}),
+  'storage.list':z.object({indexing:z.boolean().optional(),usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean(),inWebsite:z.boolean().optional(),attachments:z.array(storageAttachmentSchema),attachmentCursor:z.string().nullable().optional()})),nextCursor:z.string().nullable()}),
   'locations.search':z.object({items:z.array(z.object({id:z.string(),label:z.string(),cell:z.string()})),attribution:z.string()}),
   'locations.resolve':areaOutput,
   'locations.meeting_area':z.object({participants:z.array(z.object({personId:id,name:z.string(),handle:z.string().optional(),area:areaOutput})),candidates:z.array(z.object({area:areaOutput,distances:z.array(z.object({personId:id,sameArea:z.boolean(),distanceLabel:z.string(),approximateMiles:z.number().optional()}))})),method:z.string(),notice:z.string()}),
@@ -86,6 +93,8 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'website.publish':'Publish this exact website draft revision on your public username and permanent code addresses.',
+  'website.unpublish':'Take the currently published website offline. The private draft and revision history remain.',
   'spaces.create':'Start a public live-audio Space with this title. People outside your friends can join and listen.',
   'spaces.end':'End this public live-audio Space for everyone.',
   'spaces.respond_speaker':'Grant or decline this person’s microphone access in your public Space.',

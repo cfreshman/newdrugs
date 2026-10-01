@@ -21,7 +21,7 @@ it('links each owned file to all live authorized attachments, including multiple
  await rows('logEntries').insertMany([{_id:'hangout',title:'Walk',date:'2026-09-27',members:['me','other'],invited:[],contributions:[{userId:'me',fileIds:['voice']}]},{_id:'removed-log',members:['me'],deletedAt:'now',contributions:[{userId:'me',fileIds:['voice']}]},{_id:'private-log',members:['other'],contributions:[{userId:'me',fileIds:['voice']}]}]);
  await backfillAttachmentReferences();
  const page=await list(),photo=page.items.find(item=>item.id==='photo')!,voice=page.items.find(item=>item.id==='voice')!;
- expect(photo.attachments.map(item=>item.destination.view)).toEqual(['person','post','chat']);expect(voice.attachments).toEqual([{label:'Hangout: Walk',destination:{view:'log',resourceId:'hangout'},url:'/log/hangout'}]);expect(page.items.find(item=>item.id==='unattached')?.attachments).toEqual([]);
+ expect(photo.attachments.map(item=>item.destination?.view)).toEqual(['person','post','chat']);expect(voice.attachments).toEqual([{label:'Hangout: Walk',destination:{view:'log',resourceId:'hangout'},url:'/log/hangout'}]);expect(page.items.find(item=>item.id==='unattached')?.attachments).toEqual([]);
  expect(buildResourceLinks('storage.list',{},page,actor)).toContainEqual(expect.objectContaining({targetKind:'exact',resourceId:'hangout'}));
  expect((await list({attachedTo:'hangouts'})).items.map(item=>item.id)).toEqual(['voice']);expect((await list({attachedTo:'hangouts',type:'images'})).items).toEqual([]);
  for(const attachedTo of ['profile','posts','chat'])expect((await list({attachedTo})).items.map(item=>item.id)).toEqual(['photo']);

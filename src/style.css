@@ -303,6 +303,7 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .profile-bio { white-space: pre-wrap; overflow-wrap: anywhere; }
 .profile-interests { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; padding: 0; }
 .profile-interests li { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--surface-soft); font-size: var(--text-sm); }
+.profile-website { display: inline-flex; align-items: center; width: max-content; text-decoration: none; margin-top: var(--space-2); }
 .profile-contact { margin-top: var(--space-5); display:flex; align-items:center; flex-wrap:wrap; gap:var(--space-2); }
 .profile-mutual{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px;}.profile-mutual p{margin:0;}.profile-mutual-people{display:flex;align-items:center;flex-wrap:wrap;gap:6px;}.profile-mutual-people a{border-radius:999px;background:var(--surface-soft);color:var(--ink);padding:5px 9px;text-decoration:none;font-size:12px;}
 .profile-contact > :is(p,form) { flex-basis:100%; }

@@ -52,6 +52,7 @@ import { buildResourceLinks } from './resourceLinks';
 import { devApiGate,trustedDevKey } from './devGate';
 import { previewImage } from './linkPreviews';
 import { replyToReview } from './reviewReply';
+import {websiteRequest} from './websiteServing';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
 const limiter = (scope: string, limit: number, windowMs = 60000) => rateLimit({ store: new MongoRateLimitStore(scope), windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
@@ -61,6 +62,7 @@ export function createApp() {
   const app = express();
   app.disable('x-powered-by');
   if (config.production) app.set('trust proxy', 'loopback');
+  app.use(websiteRequest);
   app.use(helmet({ contentSecurityPolicy: config.production ? {
     directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       connectSrc: ["'self'"], workerSrc:["'self'",'blob:'], frameSrc:EMBED_ORIGINS, imgSrc: ["'self'", 'data:','blob:','https:'], mediaSrc:["'self'",'https:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
@@ -69,7 +71,7 @@ export function createApp() {
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '128kb' }), async (req, res) => {
     await stripeWebhook(req.body, req.get('stripe-signature') || ''); res.json({ received: true });
   });
-  app.post('/mcp', limiter('/mcp', 300), express.json({ limit: '128kb' }), authenticate, async (req, res) => {
+  app.post('/mcp', limiter('/mcp', 300), authenticate, express.json({ limit: '2200kb' }), async (req, res) => {
     const actor = requireActor(req);
     if (actor.source === 'browser') throw new AppError(403, 'token_required', 'Connect MCP using an access token.');
     const server = createMcpServer(actor);
@@ -112,7 +114,8 @@ export function createApp() {
     const event=await receiver.receive((req.body as Buffer).toString('utf8'),req.get('Authorization'));
     await callWebhook(event);await spaceWebhook(event);res.json({ok:true});
   });
-  app.use('/api', devApiGate, apiRequestLimits(), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
+  const ordinaryJson=express.json({limit:'32kb'}),websiteJson=express.json({limit:'2200kb'}),websiteSourceLimit=limiter('/api/website/source',30);
+  app.use('/api', devApiGate, apiRequestLimits(), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):ordinaryJson(req,res,next), cookieParser(), csrf, authenticate);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
     if (!req.actor) {

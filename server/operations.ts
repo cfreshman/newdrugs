@@ -13,6 +13,7 @@ import {endCallForConnection} from './calling';
 import {removeSpaceParticipantForBlock,spaceOperation} from './spaces';
 import {enqueueCircleEdge,circleSummaries,circleCandidates,circleMutualIds} from './circle';
 import {hiddenPersonIds,hiddenPeoplePage,isPersonHidden,setPersonHidden} from './peopleHides';
+import {websiteOperation} from './websites';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
 import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
@@ -116,6 +117,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   if (/^(people\.|posts\.|connections\.|messages\.|notifications\.|storage\.|search\.|links\.)/.test(name)) registered(user);
   if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){registered(user);return memoryOperation(name,d,actor,session);}
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
+  if (name.startsWith('website.')) { registered(user); return websiteOperation(name,d,actor,session); }
   if (name.startsWith('make.')) { registered(user); return makeOperation(name,d,actor,session); }
   if (name.startsWith('spaces.')) { registered(user); return spaceOperation(name,d,actor,session); }
   if(name==='automations.validate'){

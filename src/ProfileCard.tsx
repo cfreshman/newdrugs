@@ -17,5 +17,6 @@ export function ProfileCard({ person }: { person: Profile }) {
     {person.area?.label && <p className="quiet small"><LocationLabel label={person.area.label}/></p>}
     {person.bio && <p className="profile-bio">{person.bio}</p>}
     {person.interests.length > 0 && <ul className="profile-interests">{person.interests.map(interest => <li key={interest}>{interest}</li>)}</ul>}
+    {person.websiteUrl&&<a className="solid profile-website" href={person.websiteUrl} target="_blank" rel="noopener noreferrer">Website</a>}
   </article>;
 }

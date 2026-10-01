@@ -7,6 +7,7 @@ export interface Profile {
   interests: string[]; discoverable: boolean;
   area?: import('./geo').CoarseArea | null;
   photos?:string[];
+  websiteUrl?:string;
 }
 export interface Message { pageContext?:import('./pageContext').PageContextCandidate; records?:import('./recordContext').RecordAttachment[];
   id: string; role: 'user' | 'assistant'; text: string; createdAt: string;

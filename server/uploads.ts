@@ -128,6 +128,10 @@ export async function discardUpload(actor:Actor,id:string,session?:ClientSession
 export async function deleteUpload(actor:Actor,id:string,session?:ClientSession){
   const file=await ownUpload(actor.userId,id,session);
   if(file.purpose==='profile_photo'&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile photos are managed by the person in Settings.');
+  const site=await rows<import('./websites').WebsiteDoc>('websites').findOne({_id:actor.userId,$or:[{'assets.fileId':id},{'published.assets.fileId':id}]},{session});
+  if(site){const published=site.published?{...site.published,assets:(site.published.assets||[]).filter(asset=>asset.fileId!==id)}:null;
+    const updated=await rows<import('./websites').WebsiteDoc>('websites').updateOne({_id:actor.userId,revision:site.revision},{$set:{assets:(site.assets||[]).filter(asset=>asset.fileId!==id),published,updatedAt:new Date().toISOString()},$inc:{revision:1}},{session});
+    if(!updated.matchedCount)throw new AppError(409,'website_changed','This website changed. Retry the file deletion.');}
   await rows('attachmentReferences').deleteMany({ownerId:actor.userId,fileId:id},{session});
   await uploads().updateOne({_id:id,userId:actor.userId},{$set:{deletedAt:new Date().toISOString(),ready:false,retained:false,bytes:0,expiresAt:new Date()}},{session});
   await users().updateOne({_id:actor.userId},{$inc:{storageBytes:-file.bytes},$pull:{photos:id}},{session});

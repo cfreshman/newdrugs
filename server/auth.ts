@@ -8,6 +8,7 @@ import { AppError, requireValue } from './errors';
 import type { Profile } from '../shared/types';
 import { grantStarter, starterClaimKey } from './starterPool';
 import type { CoarseArea } from '../shared/geo';
+import {reservedWebsiteLabels,websiteHostLabel} from '../shared/website';
 
 const derive = promisify(scrypt);
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -22,11 +23,13 @@ export interface User {
   inboxPushEnabled?: boolean; chatClearedAt?: string; chatGeneration?: number; internalTestAccount?: boolean; starterGranted?: boolean; starterClaimKey?: string;
   area?: CoarseArea | null;
   photos?:string[];storageBytes?:number;
+  websiteCode?:string;
 }
 export interface Actor { userId: string; source: 'browser' | 'external' | 'agent'; scope: 'read' | 'write'; credentialId?: string; runId?: string; background?: boolean; logAccess?: boolean; privateChat?: boolean; accountActivity?: boolean; webSearch?: boolean }
 declare global { namespace Express { interface Request { actor?: Actor } } }
 export const users = () => rows<User>('users');
-export const profile = (u: User): Profile => ({ id: u._id, handle: u.handle, name: u.name, city: u.area?.label || '', area: u.area || null, photos:u.photos||[], bio: u.bio, interests: u.interests, discoverable: u.discoverable });
+export const profile = (u: User): Profile => ({ id: u._id, handle: u.handle, name: u.name, city: u.area?.label || '', area: u.area || null, photos:u.photos||[], bio: u.bio, interests: u.interests, discoverable: u.discoverable,
+  ...(u.websiteCode&&u.handle?{websiteUrl:config.APP_ENV==='production'?`https://${reservedWebsiteLabels.has(websiteHostLabel(u.handle))?`u-${u.websiteCode}`:websiteHostLabel(u.handle)}.druggie.org/`:`http://localhost:7330/api/website-published/${u.websiteCode}/`}:{}) });
 export const currentUser = async (id: string) => { const user=requireValue(await users().findOne({ _id: id }), 'Your session has expired.'); if(user.suspendedAt)throw new AppError(403,'account_suspended','This account is suspended.');return user; };
 
 export async function passwordHash(password: string) {
