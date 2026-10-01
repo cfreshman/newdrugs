@@ -2,6 +2,8 @@
 
 September 25, 2026. A roadmap study from the current MVP, the founder's instructions, read-only review of Wayfinder/Pangaea and current primary sources. These are proposed directions and experiments, not implementation commitments.
 
+Separate [Codex-authored unconfirmed proposals](codex-proposals/README.md) were added at the founder's request on October 1. They have no founder approval or implementation authorization and are not the active roadmap.
+
 ## Historical study position: v0.9.2
 
 The study below is a possibility map, not a list of still-missing features. Since it was written, production has gained:
