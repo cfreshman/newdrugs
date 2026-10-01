@@ -1,3 +1,5 @@
+import {scrollFromPanelHeader} from './panelHeaderScroll';
+import {ConversationHeader} from './ConversationHeader';
 import {LocationLabel} from './LocationLabel';
 import { DotsThree } from '@phosphor-icons/react';
 import { ContentReport } from './PeopleSafety';
@@ -17,7 +19,7 @@ import { useMessagePlacement } from './useMessagePlacement';
 import { CollapsibleMessage } from './CollapsibleMessage';
 import { useRecordRefresh } from './useRecordRefresh';
 import { captureHistoryAnchor, restoreHistoryAnchor, OlderMessages, useTopPagination } from './ChatHistory';
-import {directMessageLayout,directMessageTimeLabel} from './directMessageGrouping';
+import {directMessageLayout,directMessageTimeLabel,inboxTimeLabel} from './directMessageGrouping';
 import type {CallPage,CallRecord} from '../shared/calling';
 import {useCall} from './CallProvider';
 import './calling.css';
@@ -27,10 +29,18 @@ import {LinkPreviews} from './LinkPreview';
 interface Page<T> { items: T[]; nextCursor: string | null }
 type ExplorePerson=Profile & {undoHidden?:boolean};
 const mutualLine=(person:Profile)=>{const count=person.mutualCount||0,names=person.mutualFriends||[];return `${count} mutual ${count===1?'friend':'friends'}${names.length?`: ${names.map(friend=>friend.name).join(', ')}${count>names.length?` +${count-names.length} more`:''}`:''}`;};
-interface Connection { initialInvitation?:{fromId:string;note:string;createdAt:string}; disconnectedBy?:string; createdAt: string; id: string; members: string[]; fromId: string; toId: string; note: string; status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'disconnected'; unread?: boolean; lastMessage?: { text: string; fromId: string; createdAt: string } }
+interface Connection { initialInvitation?:{fromId:string;note:string;createdAt:string}; disconnectedBy?:string; updatedAt?:string; createdAt: string; id: string; members: string[]; fromId: string; toId: string; note: string; status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'disconnected'; unread?: boolean; lastMessage?: { text: string; fromId: string; createdAt: string } }
 interface DirectMessage { id: string; fromId: string; text: string; createdAt: string; pending?: boolean; failed?: boolean; key?: string; clientId?: string }
 function callDuration(call:CallRecord){if(!call.joinedAt||!call.endedAt)return '';const seconds=Math.max(0,Math.floor((Date.parse(call.endedAt)-Date.parse(call.joinedAt))/1000));if(!Number.isFinite(seconds))return '';const hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60),remainder=seconds%60;return `Called for ${hours?`${hours}h `:''}${minutes?`${minutes}m `:''}${!hours||!minutes?`${remainder}s`:''}`.trim();}
 type Navigate = (destination: Destination) => void;
+function MessageAvatar({person}:{person?:Profile}){
+ const name=person?.name||person?.handle||'?';
+ return <span className="message-avatar" aria-hidden="true">{person?.photos?.[0]?<img src={`/api/files/${encodeURIComponent(person.photos[0])}`} alt=""/>:name.replace(/^@/,'').slice(0,1).toUpperCase()}</span>;
+}
+function MessageName({person}:{person?:Profile}){
+ return <span className="message-person-name"><strong>{person?.name||person?.handle||'Member'}</strong>{person?.name&&person.handle&&<span className="quiet">@{person.handle}</span>}</span>;
+}
+
 
 export function LocationPanel({ user, areaCell, saved }: { user: Profile; areaCell?: string; saved(): Promise<void> }) {
   const [area, setArea] = useState<CoarseArea | null>(user.area || null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -185,25 +195,30 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     }catch(error){setError(errorText(error));}
   };
   const closeCall=async(call:CallRecord)=>{if(callBusy||!callControl)return;setError('');try{await callControl.end(call);await load();}catch(error){setError(errorText(error));}};
+  const inboxItems=inbox?.items.filter(connection => filter === 'all' || ['pending','declined','withdrawn'].includes(connection.status));
   if (!connectionId) return <><nav className="view-tabs" aria-label="Inbox filter"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button><button aria-pressed={filter === 'invites'} onClick={() => setFilter('invites')}>Invitations</button></nav>
-    <div className="inbox-list">{inbox?.items.filter(connection => filter === 'all' || connection.status === 'pending' || connection.status === 'declined' || connection.status === 'withdrawn').map(connection => {
-      const person = inbox.people.find(person => person.id === connection.members.find(id => id !== userId));
-      const personId=person?.id||connection.members.find(id=>id!==userId)!,profileUnavailable=person?.discoverable===false&&!['accepted','pending'].includes(connection.status)&&!(connection.status==='declined'&&connection.toId===userId),personLabel=person?.handle?`@${person.handle}`:person?.name||'View profile';
-      return <article key={connection.id}><div className="inbox-heading">{profileUnavailable?<span className="text-link quiet" aria-disabled="true">{personLabel}</span>:<NavLink className="text-link" to={{view:'person',resourceId:personId}} navigate={navigate}>{personLabel}</NavLink>}{connection.unread && <span className="unread-label">Unread</span>}</div>
-        <p className="inbox-preview">{connection.lastMessage ? `${connection.lastMessage.fromId === userId ? 'You: ' : ''}${connection.lastMessage.text}` : connection.note}</p>
-        {connection.status === 'accepted' ? <NavLink className="text-link" to={{view:'messages',resourceId:connection.id}} navigate={navigate}>Open conversation</NavLink>
-          : connection.status === 'pending' && connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(connection, true)}>Accept invitation</button></div>
-            : connection.status === 'pending' ? <div className="inline-actions"><span className="quiet small">Invitation sent</span><button className="text-link small" disabled={busy} onClick={() => void withdraw(connection)}>Withdraw invitation</button></div>
-              : <span className="quiet small">{connection.status === 'disconnected' ? 'Connection ended' : connection.status === 'withdrawn' ? 'Invitation withdrawn' : 'Invitation declined'}</span>}
-      {connection.status!=='accepted'&&<NavLink className="text-link" to={{view:'messages',resourceId:connection.id}} navigate={navigate}>{connection.initialInvitation?'View conversation history':'View invitation'}</NavLink>}</article>;
-    })}</div>{inbox && !inbox.items.length && <><p className="quiet">No invitations or conversations yet.</p><NavLink className="text-link" to={{view:'people'}} navigate={navigate}>Find people nearby</NavLink></>}
+    <div className="inbox-list dm-inbox-list">{inboxItems?.map(connection => {
+      const person = inbox?.people.find(person => person.id === connection.members.find(id => id !== userId));
+      const invitation=connection.status==='pending',sent=(connection.lastMessage?.fromId||connection.fromId)===userId;
+      const preview=invitation?`${connection.fromId===userId?'You: ':''}${connection.note}`:`${sent?'You: ':''}${connection.lastMessage?.text||connection.note}`;
+      const at=connection.updatedAt||connection.lastMessage?.createdAt||connection.createdAt;
+      return <article className={`dm-inbox-card${connection.unread?' is-unread':''}`} key={connection.id}>
+        <NavLink className="dm-inbox-open" to={{view:'messages',resourceId:connection.id}} navigate={navigate}>
+          <MessageAvatar person={person}/><span className="dm-inbox-content"><span className="dm-inbox-heading"><MessageName person={person}/><time dateTime={at} title={new Date(at).toLocaleString()}>{inboxTimeLabel(at)}</time>{connection.unread&&<span className="dm-unread"><span className="sr-only">Unread</span></span>}</span><span className={`dm-inbox-preview${invitation?' is-invitation':''}`}>{preview}</span></span>
+        </NavLink>
+        {connection.status!=='accepted'&&<div className="dm-inbox-footer">{connection.status === 'pending' && connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(connection, true)}>Accept invitation</button></div>
+          : connection.status === 'pending' ? <><span className="quiet small">Invitation sent</span><button className="text-link small" disabled={busy} onClick={() => void withdraw(connection)}>Withdraw invitation</button></>
+            : <span className="quiet small">{connection.status === 'disconnected' ? 'Connection ended' : connection.status === 'withdrawn' ? 'Invitation withdrawn' : 'Invitation declined'}</span>}</div>}
+      </article>;
+    })}</div>{inbox && !inboxItems?.length && !inbox.nextCursor && <><p className="quiet">{filter==='invites'?'No invitations yet.':'No invitations or conversations yet.'}</p><NavLink className="text-link" to={{view:'people'}} navigate={navigate}>Find people nearby</NavLink></>}
     {inbox?.nextCursor && <button className="text-link" onClick={() => void moreConnections()}>More conversations</button>}{error && <p className="error" role="alert">{error}</p>}</>;
   const other = current?.people.find(person => person.id !== userId);
   const chronologicalMessages=messages?[...messages.items].reverse():[],messageLayout=directMessageLayout(chronologicalMessages),layoutById=new Map(chronologicalMessages.map((message,index)=>[message.id,messageLayout[index]]));
   const visibleCalls=activeCall&&!calls?.items.some(call=>call.id===activeCall.id)?[activeCall,...(calls?.items||[])]:calls?.items||[];
   const timeline=[...chronologicalMessages.map(message=>({kind:'message' as const,id:message.id,createdAt:message.createdAt,message})),...visibleCalls.filter(call=>!messages?.nextCursor||!chronologicalMessages.length||call.createdAt>=chronologicalMessages[0].createdAt).map(call=>({kind:'call' as const,id:call.id,createdAt:call.createdAt,call}))].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const profileUnavailable=Boolean(other&&other.discoverable===false&&!['accepted','pending'].includes(current!.connection.status)&&!(current!.connection.status==='declined'&&current!.connection.toId===userId));
-  return <div className={messages ? 'message-view' : undefined}>{other && <div className="message-view-actions">{profileUnavailable?<span className="text-link quiet" aria-disabled="true">{other.handle?`@${other.handle}`:other.name}</span>:<NavLink className="text-link" to={{view:'person',resourceId:other.id}} navigate={navigate}>{other.handle ? `@${other.handle}` : other.name}</NavLink>}{messages && current?.connection.status==='accepted' && <button type="button" className="call-start" disabled={callBusy||!callControl||activeCall?.status==='waiting'&&activeCall.callerId===userId} onClick={()=>void openCall()}><VideoCamera size={19}/>{activeCall?activeCall.status==='waiting'?activeCall.callerId===userId?'Calling':'Answer call':'Open call':'Video call'}</button>}{messages&&<details className="conversation-menu"><summary aria-label="Conversation actions"><DotsThree size={23}/></summary><div><button type="button" onClick={event=>{setChoosingReport(true);setReporting(null);event.currentTarget.closest('details')?.removeAttribute('open');}}>Report a message</button></div></details>}</div>}
+  const callLabel=activeCall?activeCall.status==='waiting'?activeCall.callerId===userId?'Calling':'Answer call':'Open call':'Video call';
+  return <div className={messages ? 'message-view' : undefined}>{other && <ConversationHeader><div className="message-view-actions" onClick={event=>scrollFromPanelHeader(event,scroller.current)}>{profileUnavailable?<span className="message-person quiet" aria-disabled="true"><MessageAvatar person={other}/><MessageName person={other}/></span>:<NavLink className="message-person" to={{view:'person',resourceId:other.id}} navigate={navigate}><MessageAvatar person={other}/><MessageName person={other}/></NavLink>}{messages && current?.connection.status==='accepted' && <button type="button" className="call-start" aria-label={callLabel} disabled={callBusy||!callControl||activeCall?.status==='waiting'&&activeCall.callerId===userId} onClick={()=>void openCall()}><VideoCamera size={19}/><span className="call-start-label">{callLabel}</span></button>}{messages&&<details className="conversation-menu"><summary aria-label="Conversation actions"><DotsThree size={23}/></summary><div><button type="button" onClick={event=>{setChoosingReport(true);setReporting(null);event.currentTarget.closest('details')?.removeAttribute('open');}}>Report a message</button></div></details>}</div></ConversationHeader>}
     {current && ['pending','declined','withdrawn'].includes(current.connection.status) && <p>{current.connection.note}</p>}
     {current?.connection.status === 'pending' && <>{current.connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(current.connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(current.connection, true)}>Accept invitation</button></div> : <><p className="quiet">Invitation sent. Messages open when they accept.</p><button className="text-link" disabled={busy} onClick={() => void withdraw(current.connection)}>Withdraw invitation</button></>}</>}
     {current?.connection.status === 'declined' && <><p className="quiet">This invitation was declined.</p>{current.connection.toId===userId&&<NavLink to={{view:'person',resourceId:current.connection.fromId}} navigate={navigate}>Send a new invitation</NavLink>}</>}{current?.connection.status==='disconnected'&&<><p className="quiet">This connection has ended. Message history is read-only.</p>{current.connection.disconnectedBy===userId&&<form className="fields" onSubmit={event=>{event.preventDefault();if(!reconnectNote.trim()||busy)return;setBusy(true);void operation('connections.request',{personId:current.connection.members.find(id=>id!==userId),note:reconnectNote.trim()},{confirmed:true}).then(()=>{setReconnectNote('');return load();}).catch(e=>setError(errorText(e))).finally(()=>setBusy(false));}}><label>New invitation<textarea value={reconnectNote} maxLength={500} onChange={event=>setReconnectNote(event.target.value)}/></label><button className="solid" disabled={busy||!reconnectNote.trim()}>Send invitation</button></form>}</>}{current?.connection.status === 'withdrawn' && <p className="quiet">This invitation was withdrawn.</p>}

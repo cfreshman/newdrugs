@@ -24,3 +24,9 @@ export function directMessageTimeLabel(value:string,now=new Date()){
  const calendar=date.toLocaleDateString(undefined,{month:'short',day:'numeric',...(date.getFullYear()===now.getFullYear()?{}:{year:'numeric'})});
  return `${calendar}, ${time}`;
 }
+
+export function inboxTimeLabel(value:string,now=new Date()){
+ const date=new Date(value);if(!Number.isFinite(date.getTime()))return '';
+ if(date.toDateString()===now.toDateString())return date.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+ return date.toLocaleDateString(undefined,{month:'short',day:'numeric',...(date.getFullYear()===now.getFullYear()?{}:{year:'numeric'})});
+}

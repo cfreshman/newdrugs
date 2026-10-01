@@ -735,3 +735,38 @@ button, [role="button"], summary, input[type="button"], input[type="submit"], in
 
 .storage-results{position:relative;min-height:40px;}
 .storage-loading{position:absolute;inset:12px 0 auto;display:flex;justify-content:center;}
+
+/* Messages use a single conversation link, with invitation actions kept separate. */
+.dm-inbox-list > .dm-inbox-card { padding:0; overflow:hidden; }
+.dm-inbox-open { display:grid; grid-template-columns:48px minmax(0,1fr); gap:var(--space-3); padding:var(--card-inset); color:inherit; text-decoration:none; }
+.message-avatar { display:grid; place-items:center; flex:none; width:48px; height:48px; overflow:hidden; border-radius:var(--radius-sm); background:var(--surface); color:var(--ink); font-size:var(--text-input); font-weight:700; }
+.message-avatar img { display:block; width:100%; height:100%; object-fit:cover; }
+.dm-inbox-content { display:flex; flex-direction:column; min-width:0; gap:var(--space-1); }
+.dm-inbox-heading { display:flex; align-items:baseline; gap:var(--space-2); min-width:0; }
+.message-person-name { display:flex; align-items:baseline; flex-wrap:wrap; gap:0 var(--space-1); min-width:0; font-size:var(--text-body); line-height:1.4; overflow-wrap:anywhere; }
+.message-person-name > * { min-width:0; }
+.dm-inbox-heading .message-person-name { flex:1; }
+.dm-inbox-heading time { flex:none; color:var(--muted); font-size:var(--text-xs); white-space:nowrap; }
+.dm-unread { flex:none; align-self:center; width:var(--space-2); height:var(--space-2); border-radius:50%; background:var(--primary); }
+.dm-inbox-preview { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; font-size:var(--text-label); line-height:1.5; color:var(--muted); }
+.dm-inbox-card.is-unread .dm-inbox-preview { color:var(--ink); font-weight:600; }
+.dm-inbox-preview.is-invitation { display:block; color:var(--ink); }
+.dm-inbox-footer { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:var(--space-2); padding:0 var(--card-inset) var(--card-inset); }
+.dm-inbox-footer > .quiet { margin-right:auto; }
+.dm-inbox-footer .review-buttons { margin:0; }
+.message-person { display:flex; align-items:center; gap:var(--space-2); min-width:0; flex:1; color:inherit; text-decoration:none; }
+.message-person .message-avatar { width:40px; height:40px; background:var(--surface-soft); }
+.message-person .message-person-name { flex:1; }
+
+.message-header-host { flex:1; min-width:0; }
+.message-header-host .message-view-actions { flex-wrap:nowrap; width:100%; }
+.message-header-host .message-person-name { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.message-header-host .message-person-name .quiet { margin-left:var(--space-1); }
+.message-header-host .call-start,.message-header-host .conversation-menu { flex:none; }
+.message-header-host .conversation-menu { margin-left:0; }
+@media(max-width:760px){
+ .message-header-host .call-start { width:36px; height:36px; padding:0; justify-content:center; }
+ .message-header-host .call-start-label { display:none; }
+}
+
+.composer-surface-header .message-avatar { background:var(--surface); }

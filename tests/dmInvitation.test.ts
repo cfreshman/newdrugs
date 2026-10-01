@@ -4,7 +4,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { setupDOM } from './dom';
 import { MessagesPanel } from '../src/NativePanels';
 const transport = vi.hoisted(() => ({ operation: vi.fn() }));
-vi.mock('../src/api', async original => ({ ...await original<typeof import('../src/api')>(), operation: transport.operation }));
+vi.mock('../src/api', async original => ({ ...await original<typeof import('../src/api')>(), operation: transport.operation, api: vi.fn(async()=>({items:[],active:null})) }));
 let dom: ReturnType<typeof setupDOM>;
 const connection = { id: 'connection', status: 'accepted', fromId: 'friend', toId: 'me', members: ['friend','me'], note: 'hey want to go for a walk?', createdAt: '2026-09-24T12:00:00.000Z' };
 const message = { id: 'message', connectionId: 'connection', fromId: 'me', text: 'yeah saturday?', createdAt: '2026-09-25T12:00:00.000Z' };

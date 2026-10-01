@@ -298,3 +298,5 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 
 - Upload URLs and shared filenames use file IDs, retaining the actual extension. Original filenames are owner-private metadata available to the owner and their authorized agent through file reads. Never expose them in public/shared media projections or download filenames.
 - Square palette, context and layer controls belong below the canvas; its persistent main toolbar may remain above it.
+
+- Messages uses photo/name/preview rows that open the conversation directly through a real link. Keep invitation notes and separate Accept/Decline/Withdraw controls. Within a DM, the person, call and conversation-menu controls replace the generic Messages title in the panel’s top header, including Agent launcher panels; do not duplicate that row in the message body. The photo/name opens the profile. Mobile uses an icon-only call control, and keyboard opening hides the same top header. Preserve message history, drafts and Back navigation.
