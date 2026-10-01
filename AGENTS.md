@@ -51,6 +51,26 @@ agent-written rules (you are allowed to edit below this line)
 
 - Before editing a visible control, inspect its neighboring controls and preserve their placement, capitalization, icon treatment, backing, spacing and height unless the user explicitly asks to change them. A user's lowercase wording specifies the words, not literal UI casing, unless they explicitly require that casing. Keep edits within the requested scope and verify the resulting desktop and mobile layout in the running app.
 
+### Canonical UI styling
+
+Treat the existing New Drugs UI as one design system. Before adding a control or form, find the same kind of interaction elsewhere in this checkout and copy its structure and classes. Do not design a new button family, card skin, field layout, disabled state or spacing scale for one screen. A visually similar result made with different CSS is still a mismatch.
+
+| Need | Canonical source |
+| --- | --- |
+| Shared tokens, buttons, forms, cards, pills and focus states | `src/style.css` |
+| Dark-theme token overrides | `src/appearance.css` |
+| Main mode layout, panel density and People cards | `src/modes.css` |
+| Human invitation flow and note field | `src/PersonPanel.tsx` |
+| Profile rendering, including image shape and typography | `src/ProfileCard.tsx` |
+| Explore filters and person-card composition | `src/NativePanels.tsx` |
+| Settings rows and option controls | `src/App.tsx` and `src/appearance.css` |
+
+- Use `.solid` for a standalone primary action such as Send invitation, Save or Publish. It uses `--primary`, `--on-primary`, `--primary-hover` and `--radius-control`. `.panel-actions` is a shared row of neutral pills; `.panel-actions .solid` intentionally changes a primary action to a black pill in that row. Do not substitute the row treatment for a standalone primary button.
+- Use `.fields`, its existing `label`/`textarea` rules, and the same form structure as the closest existing flow. For an invitation note on an Explore card, follow the form in `src/PersonPanel.tsx`. Add only the layout needed to fit the card. Use `.text-link` for a quiet ancillary action, `.view-tabs` for mutually exclusive filters, and `.panel-actions` only where that row treatment is already appropriate.
+- Pull color, border, radius, spacing and type from tokens. In particular use `--surface`, `--surface-soft`, `--ink`, `--muted`, `--primary`, `--on-primary`, `--control-black`, `--border`, `--border-width`, `--divider`, `--radius-control`, `--card-inset`, `--panel-inset`, `--space-*` and `--text-*`. Read the dark values in `src/appearance.css` before adding styles. Do not hardcode a new white/black backing or an arbitrary pixel size when a token already serves the purpose.
+- Assign visual roles explicitly through shared classes. Never infer a primary action from `:first-child`, make sibling actions equal-width without precedent, or invent a secondary appearance by styling one button differently. A disabled primary control stays in its primary family and gets a clear disabled state. Keep the requested action's text casing and icon style consistent with adjacent controls.
+- Check the resulting screen against its canonical counterpart at mobile and desktop widths, in light and dark themes. Inspect alignment, tap size, wrapping, enabled/disabled states and the keyboard-open form. If live visual inspection is unavailable, say so and do not claim it passed; source review or a component assertion is not a screenshot review.
+
 - before building any new feature, inspect the relevant current code in the reference app: `../wayfinder` for agent behavior, MCP/CLI, confirmations, uploads, durable runs, and billing; `../pangaea` for social interactions, feeds, profiles, navigation, and UI. trace the relevant flow and read its tests where useful. do not implement from assumptions when the reference code is available.
 
 - New Drugs is a different product, but the user explicitly wants as much of Wayfinder's CLI/MCP/agent implementation and behavior carried over as makes sense here. Use it as the implementation source for the control plane and agent, adapting to New Drugs and the hosted Agents API. Do not transplant its business domain or UI. Do not edit either reference app, run their test suites, restart them, or deploy them as part of work here. Implementation and validation belong in New Drugs.
