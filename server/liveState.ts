@@ -83,7 +83,7 @@ export async function dispatchLiveChange(event:ChangeStreamDocument<Document>){
  if(collection==='chatSearchChunks'){records([owner],{keys:['chat_history']});return;}
  if(collection==='postSaves'){records([owner],{keys:['posts']});return;}
  if(collection==='uploads'){records([owner],{keys:['storage']});return;}
- if(collection==='notifications'){dirty(owner,['notifications']);return;}
+ if(collection==='notifications'){dirty(owner,['notifications']);if(document.connectionId)records([owner],{keys:['connections']});return;}
  if(collection==='ledger'){dirty(owner,['wallet']);return;}
  if(collection==='messages'){dirty(owner,['messages']);return;}
  if(collection==='runs'){

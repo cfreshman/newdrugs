@@ -63,7 +63,7 @@ export function CallProvider({userId,children}:{userId?:string;children:ReactNod
 export function CallStatusControl({fallback}:{fallback:ReactNode}){
  const state=useCall(),call=state?.call;if(!call||!state)return fallback;
  const waiting=call.status==='waiting';
- const contents=<><span className="call-status-label"><strong className="call-status-name">{state.otherName}</strong><span className="call-status-kind">Video call</span></span><span className={`call-progress-circle${waiting?' is-waiting':''}`} aria-hidden="true"/></>;
+ const contents=<><span className="call-status-label"><strong className="call-status-name">{state.otherName}</strong><span className="call-status-kind">Video<span className="call-status-desktop-label"> call</span></span></span><span className={`call-progress-circle${waiting?' is-waiting':''}`} aria-hidden="true"/></>;
  if(waiting)return <NavLink className="call-status-control" to={{view:'messages',resourceId:call.connectionId}} aria-label={`${call.callerId===state.userId?'Calling':'Incoming video call from'} ${state.otherName}`}>{contents}</NavLink>;
  return <button type="button" className="call-status-control" aria-label={`Open video call with ${state.otherName}`} disabled={state.busy} onClick={()=>void state.open(call).catch(()=>{})}>{contents}</button>;
 }

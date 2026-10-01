@@ -98,9 +98,11 @@ export async function searchChat(input: ChatSearchInput, actor: Actor, embedding
     snapshot = requireValue(await snapshots().findOne({ _id: id, userId, expiresAt: { $gt: new Date() } }), 'This search expired. Search again.');
     if (snapshot.identity !== identity || !Number.isSafeInteger(offset) || offset < 0 || offset > snapshot.ranked.length) throw new AppError(409, 'search_changed', 'Start this search again without a cursor.');
   } else {
+    if(actor.source!=='browser'){
     const rateId = `chat:${userId}:${Math.floor(Date.now() / 60000)}`;
     const rate = await rows<{ _id: string; count: number }>('searchRates').findOneAndUpdate({ _id: rateId }, { $inc: { count: 1 }, $set: { expiresAt: new Date(Date.now() + 120000) } }, { upsert: true, returnDocument: 'after' });
     if (rate && rate.count > 20) throw new AppError(429, 'search_rate', 'Give search a moment before trying again.');
+    }
     let vector: number[] | undefined;
     const notices: string[] = [];
     try { vector = await embedding(input.query, 'query', `chat:${userId}`); } catch { notices.push('Semantic search is temporarily unavailable. Showing keyword matches.'); }

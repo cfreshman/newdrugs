@@ -8,7 +8,7 @@ import {publicInvitePreview,inviteMediaMetadata} from './logInvites';
 import {pagePreview,readPagePreviewImage} from './pagePreviews';
 import {renderPagePreview} from '../shared/pagePreview';
 import {readFile} from 'node:fs/promises';
-import {apiRequestLimits} from './requestLimits';
+import {apiRequestLimits,requestRateLimit as limiter} from './requestLimits';
 import {pageContextCandidate} from '../shared/pageContext';
 import {listAdminUsers} from './adminUsers';
 import {mountAdminFrontend} from './adminFrontend';
@@ -22,8 +22,6 @@ import { pushConfigured, pushDevices, saveSubscription, revokePush, subscription
 import express, { type ErrorRequestHandler } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
-import { MongoRateLimitStore } from './rateLimitStore';
 import { z, ZodError } from 'zod';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -58,8 +56,7 @@ import {reservedWebsiteUsername} from '../shared/website';
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
 const availableHandle=credentials.shape.handle.refine(handle=>!reservedWebsiteUsername(handle),'Usernames cannot begin with u_.');
 const registrationCredentials=credentials.extend({handle:availableHandle});
-const limiter = (scope: string, limit: number, windowMs = 60000) => rateLimit({ store: new MongoRateLimitStore(scope), windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
-  message: { error: { code: 'rate_limit', message: 'Please slow down and try again shortly.' } } });
+
 
 export function createApp() {
   const app = express();
@@ -118,7 +115,11 @@ export function createApp() {
     await callWebhook(event);await spaceWebhook(event);res.json({ok:true});
   });
   const ordinaryJson=express.json({limit:'32kb'}),websiteJson=express.json({limit:'2200kb'}),websiteSourceLimit=limiter('/api/website/source',30);
-  app.use('/api', devApiGate, apiRequestLimits(), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):ordinaryJson(req,res,next), cookieParser(), csrf, authenticate);
+  const requestLimits=apiRequestLimits();
+  app.use('/api', devApiGate, cookieParser(), csrf, (req,res,next)=>authenticate(req,res,authError=>{
+    if(authError)delete req.actor;
+    requestLimits(req,res,limitError=>next(limitError||authError));
+  }), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):ordinaryJson(req,res,next));
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
     if (!req.actor) {
@@ -167,7 +168,7 @@ export function createApp() {
     await sendMedia(file,req,res);
   });
   app.get('/api/admin/session', async (req, res) => { res.json(await adminStatus(req)); });
-  app.post('/api/admin/login', limiter('/api/admin/login', 10, 15 * 60000), async (req, res) => {
+  app.post('/api/admin/login', limiter('/api/admin/login', 10, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const data = z.strictObject({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/), password: z.string().min(8).max(128) }).parse(req.body);
     res.json(await signInAdmin(req, res, data.username, data.password));
   });
@@ -182,7 +183,7 @@ export function createApp() {
     const { budgetDollars } = z.strictObject({ budgetDollars: z.number().min(0).max(100000).multipleOf(.01) }).parse(req.body);
     res.json(await setStarterBudget(owner.id, Math.round(budgetDollars * 1e9)));
   });
-  app.post('/api/account/register', limiter('/api/account/register', 15, 15 * 60000), async (req, res) => {
+  app.post('/api/account/register', limiter('/api/account/register', 15, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const actor = browserActor(req);
     const data = registrationCredentials.parse(req.body);
     const user = await currentUser(actor.userId);
@@ -193,7 +194,7 @@ export function createApp() {
     await ensureIntroduction(saved._id);
     res.json({ user: profile(saved) });
   });
-  app.post('/api/account/login', limiter('/api/account/login', 15, 15 * 60000), async (req, res) => {
+  app.post('/api/account/login', limiter('/api/account/login', 15, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const data = credentials.parse(req.body);
     const user = await users().findOne({ handle: data.handle });
     if (!await checkPassword(data.password, user?.passwordHash)) throw new AppError(401, 'credentials', 'That handle and password did not match.');
@@ -202,11 +203,11 @@ export function createApp() {
     await ensureIntroduction(user!._id);
     res.json({ user: profile(user!) });
   });
-  app.post('/api/account/username', limiter('/api/account/username', 10, 15 * 60000), async (req, res) => {
+  app.post('/api/account/username', limiter('/api/account/username', 10, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const actor = browserActor(req), data = z.strictObject({ handle: availableHandle, currentPassword: z.string().min(1).max(128) }).parse(req.body);
     const user = await verifyAccountPassword(actor.userId, data.currentPassword); res.json({ user: profile(await changeUsername(user, data.handle)) });
   });
-  app.post('/api/account/password', limiter('/api/account/password', 10, 15 * 60000), async (req, res) => {
+  app.post('/api/account/password', limiter('/api/account/password', 10, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const actor = browserActor(req), data = z.strictObject({ password: credentials.shape.password, currentPassword: z.string().min(1).max(128) }).parse(req.body);
     const user = await verifyAccountPassword(actor.userId, data.currentPassword); await changeAccountPassword(user, data.password, req.cookies[config.SESSION_COOKIE]); res.json({ ok: true });
   });

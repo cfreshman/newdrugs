@@ -66,7 +66,9 @@ export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed
  const userId=actor.userId,identity=hashText(JSON.stringify([input.query,input.from,input.through,input.personId,input.scope]));let snapshot:Snapshot,offset=0;
  if(input.cursor){const[id,position]=input.cursor.split('.');offset=Number(position);snapshot=requireValue(await rows<Snapshot>('logSearchResults').findOne({_id:id,userId,expiresAt:{$gt:new Date()}}),'This search expired. Search again.');if(snapshot.identity!==identity||!Number.isSafeInteger(offset)||offset<0||offset>snapshot.ranked.length)throw new AppError(409,'search_changed','Start this search again without a cursor.');}
  else{
+  if(actor.source!=='browser'){
   const rate=await rows<{_id:string;count:number}>('searchRates').findOneAndUpdate({_id:`log:${userId}:${Math.floor(Date.now()/60000)}`},{$inc:{count:1},$set:{expiresAt:new Date(Date.now()+120000)}},{upsert:true,returnDocument:'after'});if(rate&&rate.count>20)throw new AppError(429,'search_rate','Give search a moment before trying again.');
+  }
   const must:Record<string,unknown>[]=[{key:'indexVersion',match:{value:LOG_INDEX_VERSION}}];
   if(input.personId)must.push({key:'viewerIds',match:{value:input.personId}});
   if(input.scope==='private')must.push({key:'memberCount',match:{value:1}},{key:'invitedCount',match:{value:0}});

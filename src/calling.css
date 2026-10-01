@@ -35,3 +35,5 @@
 .call-progress-circle{display:block;flex:none;width:22px;height:22px;border:1.5px solid currentColor;border-radius:50%;}
 .call-progress-circle.is-waiting{border-top-color:transparent;animation:call-progress-rotate 1s linear infinite;}
 @keyframes call-progress-rotate{to{transform:rotate(360deg);}}
+
+@media(max-width:760px),(pointer:coarse){.call-status-desktop-label{display:none;}}

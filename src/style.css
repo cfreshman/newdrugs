@@ -353,7 +353,7 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .message-view-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); flex: 0 0 auto; }
 .message-view .direct-messages { flex: 1 1 auto; min-height: 0; max-height: none; margin: 0; padding: var(--space-2) 0; }
 .message-compose { display: flex; align-items: flex-end; gap: var(--space-2); flex: 0 0 auto; }
-.message-compose textarea { flex: 1; min-width: 0; min-height: 48px; max-height: 140px; resize: none; overflow-y: auto; border: 0; border-radius: var(--radius-control); background: var(--surface-soft); padding: var(--space-3); }
+.message-compose textarea { flex: 1; min-width: 0; min-height: 48px; max-height: 140px; resize: none; overflow-y: auto; border: 0; border-radius: var(--radius-control); border-bottom-left-radius:max(var(--radius-control),calc(var(--mode-panel-radius,var(--radius-input)) - var(--panel-inset))); background: var(--surface-soft); padding: var(--space-3); }
 .message-compose .solid { background: var(--control-black); color: var(--on-assistant); flex: 0 0 40px; width: 40px; min-width: 40px; height: 40px; min-height: 40px; border: 0; aspect-ratio: 1; padding: 0; border-radius: 50%; display: grid; place-items: center; }
 .message-compose .solid:hover:enabled { background: var(--control-black); }
 .direct-message-content { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -364,6 +364,8 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .direct-message-content .message.peer { align-self: flex-start; }
 .direct-message-content .message.peer .bubble { background: var(--surface-soft); border-bottom-left-radius: 5px; }
 .direct-message-content .message .website-previews {margin:6px 0 0;max-width:100%;}
+.direct-message-content .message > .bubble { width:fit-content; max-width:100%; }
+.direct-message-content .message.user > .bubble { margin-left:auto; }
 .direct-messages .message .message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message-placement .message.peer .bubble { background: var(--surface-soft); }
 .message-placement .message-compose textarea { height: 100% !important; min-height: 0; max-height: none; }
@@ -759,7 +761,7 @@ button, [role="button"], summary, input[type="button"], input[type="submit"], in
 .message-person .message-person-name { flex:1; }
 
 .message-header-host { flex:1; min-width:0; }
-.message-header-host .message-view-actions { flex-wrap:nowrap; width:100%; }
+.message-header-host .message-view-actions { flex-wrap:nowrap; width:100%; gap:var(--panel-inset); }
 .message-header-host .message-person-name { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .message-header-host .message-person-name .quiet { margin-left:var(--space-1); }
 .message-header-host .call-start,.message-header-host .conversation-menu { flex:none; }
@@ -770,3 +772,6 @@ button, [role="button"], summary, input[type="button"], input[type="submit"], in
 }
 
 .composer-surface-header .message-avatar { background:var(--surface); }
+
+:is(.mode-content-header,.composer-surface-header):has(> .message-header-host) { gap:var(--panel-inset); padding-inline:var(--panel-inset); }
+.message-header-host .message-person { gap:var(--panel-inset); }

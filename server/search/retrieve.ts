@@ -95,9 +95,11 @@ export async function searchPublic(input: SearchInput, actor: Actor, prepared?: 
     if (!Number.isSafeInteger(offset) || offset < 0 || snapshot.identity !== identity(input)) throw new AppError(409,'search_changed','The search changed. Start again without a cursor.');
     return page(snapshot,offset,input.limit,actor);
   }
+  if(actor.source!=='browser'){
   const rateId = `${actor.userId}:${Math.floor(Date.now()/60000)}`;
   const rate = await rows<{_id:string;count:number}>('searchRates').findOneAndUpdate({_id:rateId},{$inc:{count:1},$set:{expiresAt:new Date(Date.now()+120000)}},{upsert:true,returnDocument:'after'});
   if (rate && rate.count > 30) throw new AppError(429,'search_rate','Give search a moment before trying again.');
+  }
   const [blocked, hidden, pending] = await Promise.all([blockedBy(actor.userId),hiddenFor(input,actor.userId),rows('searchOutbox').countDocuments({}, {limit:1})]);
   let release=()=>{};
   try {

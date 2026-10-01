@@ -6,6 +6,8 @@ import {createApp} from '../server/app';
 import {hash,users} from '../server/auth';
 import {ensureStarterPool} from '../server/starterPool';
 import {config} from '../server/config';
+import {MongoRateLimitStore} from '../server/rateLimitStore';
+import type {Options} from 'express-rate-limit';
 let server:Server,origin:string;
 beforeAll(async()=>{await connectDatabase();if(db().databaseName!=='newdrugs_test')throw new Error('Cloud test DB only.');await ensureStarterPool();server=createApp().listen(0,'127.0.0.1');await new Promise<void>(resolve=>server.once('listening',resolve));origin=`http://127.0.0.1:${(server.address() as {port:number}).port}`;});
 afterAll(async()=>{await new Promise<void>(resolve=>server.close(()=>resolve()));if(db().databaseName!=='newdrugs_test')throw new Error('Cloud test DB only.');for(const collection of await db().collections())await collection.deleteMany({});await mongo.close();});
@@ -25,4 +27,12 @@ it('keeps dev UI and anonymous API private while retaining health and authentica
  const cli=await request('/api/operations/identity.get',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}'});expect(cli.status).toBe(200);expect((await cli.json()).data.id).toBe(state.user.id);
  const mcp=await request('/mcp',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'gate-test',version:'1'}}})});expect(mcp.status).toBe(200);
  expect(await users().countDocuments({_id:state.user.id})).toBe(1);
+});
+it('restores a real browser session even after anonymous session creation is rate-limited',async()=>{
+ const guest=await request('/api/session',{method:'POST',headers:{'X-NewDrugs-Dev-Key':config.DEV_ACCESS_KEY}});expect(guest.status).toBe(200);
+ const cookie=guest.headers.get('set-cookie')!.split(';')[0],store=new MongoRateLimitStore('/api/session');store.init({windowMs:15*60000} as Options);
+ for(let i=0;i<31;i++)await store.increment('127.0.0.1');
+ expect((await request('/api/session',{method:'POST',headers:{'X-NewDrugs-Dev-Key':config.DEV_ACCESS_KEY}})).status).toBe(429);
+ for(let i=0;i<3;i++){const response=await request('/api/session',{method:'POST',headers:{Cookie:cookie,'X-NewDrugs-Dev-Key':config.DEV_ACCESS_KEY}});expect(response.status).toBe(200);expect(response.headers.get('set-cookie')).toBeNull();}
+ expect((await request('/api/bootstrap',{headers:{Cookie:cookie,'X-NewDrugs-Dev-Key':config.DEV_ACCESS_KEY}})).status).toBe(200);
 });

@@ -10,6 +10,18 @@ vi.mock('../server/liveSubscriptions',()=>({liveInstance:'node',recordKeys:(valu
 vi.mock('../server/db',()=>({transaction:async(callback:Function)=>callback(undefined),rows:()=>({findOne:async()=>({expiresAt:new Date(Date.now()+60000)})}),db:()=>({watch:()=>({tryNext:async()=>null,close:async()=>state.closeWatch(),async *[Symbol.asyncIterator](){await new Promise<void>(resolve=>{state.closeWatch=resolve;});}})})}));
 import {dispatchLiveChange,streamLiveState,stopLiveState,liveStateMetrics} from '../server/liveState';import {config} from '../server/config';
 afterEach(async()=>{await stopLiveState();state.balances.clear();state.reads=0;});
+it('refreshes DM unread indicators only for the notification owner and interested views',async()=>{
+ const tabs:{owner:string;keys:string;events:string[]}[]=[];
+ for(const [owner,keys] of [['owner','connections'],['owner','posts'],['someone-else','connections']]){
+  const events:string[]=[],emitter=new EventEmitter();tabs.push({owner,keys,events});
+  const response=Object.assign(emitter,{writableLength:0,writableEnded:false,status(){return this;},set(){return this;},flushHeaders(){},write(text:string){events.push(text);return true;},end(){this.writableEnded=true;emitter.emit('close');}});
+  await streamLiveState({actor:{userId:owner,source:'browser'},cookies:{[config.SESSION_COOKIE]:randomUUID()},query:{channel:randomUUID(),records:keys}} as any,response as any);
+ }
+ await dispatchLiveChange({ns:{coll:'notifications'},documentKey:{_id:'call-notice'},fullDocument:{_id:'call-notice',userId:'owner',connectionId:'dm',kind:'call',readAt:new Date().toISOString()}} as any);
+ await vi.waitFor(()=>expect(tabs[0].events.filter(event=>event.startsWith('event: records'))).toHaveLength(1));
+ expect(tabs[0].events.find(event=>event.startsWith('event: records'))).toContain('connections');
+ expect(tabs.slice(1).flatMap(tab=>tab.events.filter(event=>event.startsWith('event: records')))).toEqual([]);
+});
 it('keeps one private Log edit scoped with 1,000 synthetic live connections and shares per-account reads',async()=>{
  const tabs:{owner:string;events:string[]}[]=[];
  for(let i=0;i<1000;i++){

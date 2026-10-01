@@ -4,12 +4,12 @@ import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {MessagesPanel} from '../src/NativePanels';
 import {SocialExperience} from '../src/SocialExperience';
 import {setupDOM} from './dom';
-const transport=vi.hoisted(()=>({operation:vi.fn()}));
-vi.mock('../src/api',async original=>({...await original<typeof import('../src/api')>(),operation:transport.operation,api:vi.fn(async()=>({items:[],active:null}))}));
+const transport=vi.hoisted(()=>({operation:vi.fn(),api:vi.fn()}));
+vi.mock('../src/api',async original=>({...await original<typeof import('../src/api')>(),operation:transport.operation,api:transport.api}));
 const person={id:'friend',name:'Friend Name',handle:'friend',photos:['photo'],discoverable:true};
 const connection={id:'conversation',members:['me','friend'],fromId:'me',toId:'friend',note:'Want to go for a walk?',status:'accepted',createdAt:'2026-10-01T12:00:00Z',unread:true,lastMessage:{fromId:'friend',text:'Saturday works!',createdAt:'2026-10-01T13:00:00Z'}};
 let dom:ReturnType<typeof setupDOM>;
-beforeEach(()=>{dom=setupDOM();transport.operation.mockReset().mockImplementation(async(name:string)=>name==='connections.list'?{items:[connection],people:[person],nextCursor:null}:name==='connections.get'?{connection,people:[person]}:name==='messages.list'?{items:[],nextCursor:null}:{read:true});});
+beforeEach(()=>{dom=setupDOM();transport.api.mockReset().mockResolvedValue({items:[],active:null});transport.operation.mockReset().mockImplementation(async(name:string)=>name==='connections.list'?{items:[connection],people:[person],nextCursor:null}:name==='connections.get'?{connection,people:[person]}:name==='messages.list'?{items:[],nextCursor:null}:{read:true});});
 afterEach(()=>dom.cleanup());
 it('opens a conversation directly from its photo and preview row using a real link',async()=>{
  const navigate=vi.fn();await act(async()=>dom.root.render(createElement(MessagesPanel,{userId:'me',navigate})));
@@ -47,4 +47,19 @@ it('moves only the active DM controls into the top header and restores the inbox
  await act(async()=>header.querySelector<HTMLAnchorElement>('[aria-label="Back"]')!.click());
  expect(header.querySelector('h1')?.textContent).toBe('Messages');expect(header.querySelector('.message-person')).toBeNull();
  expect(dom.container.querySelector('.dm-inbox-list')).toBe(inbox);
+ const reads=transport.operation.mock.calls.filter(([name])=>name==='messages.mark_read').length;
+ await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.dm-inbox-open')!.click());
+ expect(transport.operation.mock.calls.filter(([name])=>name==='messages.mark_read')).toHaveLength(reads+1);
+});
+
+it('reads a new video-call notification while the same DM stays open with no new text message',async()=>{
+ transport.operation.mockImplementation(async(name:string)=>name==='connections.get'?{connection,people:[person]}:name==='messages.list'?{items:[{id:'message',fromId:'friend',text:'Hello',createdAt:connection.createdAt}],nextCursor:null}:{});
+ await act(async()=>dom.root.render(createElement(MessagesPanel,{userId:'me',connectionId:'conversation',navigate:vi.fn()})));
+ expect(transport.operation).toHaveBeenCalledWith('messages.mark_read',{connectionId:'conversation',throughMessageId:'message'});transport.operation.mockClear();
+ transport.api.mockResolvedValue({items:[{id:'new-call',connectionId:'conversation',callerId:'friend',calleeId:'me',status:'ended',createdAt:connection.createdAt}],active:null});
+ await act(async()=>{window.dispatchEvent(new CustomEvent('newdrugs:records',{detail:['calls']}));await new Promise(resolve=>setTimeout(resolve,150));});
+ expect(transport.operation).toHaveBeenCalledWith('messages.mark_read',{connectionId:'conversation',throughMessageId:'message'});
+ expect(transport.operation.mock.calls.some(([name])=>name==='connections.respond'||name==='messages.send')).toBe(false);
+ transport.operation.mockClear();await act(async()=>document.dispatchEvent(new Event('visibilitychange')));
+ expect(transport.operation).toHaveBeenCalledWith('messages.mark_read',{connectionId:'conversation',throughMessageId:'message'});
 });

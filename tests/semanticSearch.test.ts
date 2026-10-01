@@ -26,6 +26,13 @@ async function drain(){for(let i=0;i<100&&await indexOne(async text=>vector(text
 async function search(actor:Actor,input:object={}){return executeOperation('search.query',{query:'bicycle rides',datasets:['profiles'],near,radiusMiles:25,...input},actor) as Promise<SearchResult>;}
 
 describe('public semantic retrieval',()=>{
+ it('keeps browser searches usable when the external-agent search quota is exhausted',async()=>{
+  const owner=await person(''),bike=await person('I cycle on weekends');await drain();
+  const id=`${owner.userId}:${Math.floor(Date.now()/60000)}`;await rows('searchRates').insertOne({_id:id,count:31,expiresAt:new Date(Date.now()+120000)});
+  await expect(search(owner)).rejects.toMatchObject({code:'search_rate'});
+  expect((await search({...owner,source:'browser'})).matches.map(item=>item.entityId)).toContain(bike.userId);
+  expect((await rows('searchRates').findOne({_id:id}))?.count).toBe(32);
+ });
  it('filters hidden profiles before ranking and rechecks saved pages without hiding their posts',async()=>{
   const owner=await person(''),one=await person('I cycle on weekends'),two=await person('I ride a bicycle');
   const post=await executeOperation('posts.create',{text:'bicycle ride'},one,randomUUID(),{confirmed:true}) as {id:string};await drain();

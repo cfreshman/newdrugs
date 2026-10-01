@@ -429,7 +429,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         ...(cursor ? [{ $match: { $or: [{ updatedAt: { $lt: updatedAt } }, { updatedAt, _id: { $lt: cursor._id } }] } }] : []),
         { $sort: { updatedAt: -1, _id: -1 } }, { $limit: limit + 1 },
       ], options).toArray();
-      const unread = await rows('notifications').find({ userId, connectionId: { $in: visible.map(row => row._id) }, kind: 'message', readAt: null }, options).toArray();
+      const unread = await rows('notifications').find({ userId, connectionId: { $in: visible.map(row => row._id) }, kind: {$in:['message','call','connection_accepted']}, readAt: null }, options).toArray();
       for (const row of visible) row.unread = unread.some(notification => notification.connectionId === row._id);
       const ids = visible.flatMap(c => c.members as string[]);
       const people = await users().find({ _id: { $in: ids } }, options).limit(62).toArray();
@@ -509,9 +509,11 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       return publicRow(message);
     }
     case 'messages.mark_read': {
-      await connectionFor(userId, String(d.connectionId), session, true);
+      const connection=requireValue(await rows('connections').findOne({_id:String(d.connectionId),members:userId},options),'This conversation is unavailable.');
+      await notBlocked(userId,(connection.members as string[]).find(id=>id!==userId)!,session);
       if (d.throughMessageId) requireValue(await rows('directMessages').findOne({ _id: String(d.throughMessageId), connectionId: d.connectionId }, options));
-      await rows('notifications').updateMany({ userId, connectionId: d.connectionId, $or: [{ kind: 'connection_accepted' }, ...(d.throughMessageId ? [{ kind: 'message', messageId: { $lte: String(d.throughMessageId) } }] : [])] }, { $set: { readAt: now } }, options);
+      await rows('notifications').updateMany({ userId, connectionId: d.connectionId, readAt:null, createdAt:{$lte:now}, $or: [{ kind: {$in:['connection_accepted','call']} }, ...(d.throughMessageId ? [{ kind: 'message', messageId: { $lte: String(d.throughMessageId) } }] : [])] }, { $set: { readAt: now } }, options);
+      await rows('connections').updateOne({_id:connection._id,toId:userId,status:'pending',notificationReadAt:null},{$set:{notificationReadAt:now}},options);
       return { read: true, throughMessageId: d.throughMessageId };
     }
     case 'notifications.list': {

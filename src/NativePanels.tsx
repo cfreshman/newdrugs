@@ -132,17 +132,20 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
   }, [connectionId]);
   useEffect(() => { setMessages(null);setCalls(null); setReporting(null); setChoosingReport(false); setInbox(null); setCurrent(null); setText(''); setLoadingOlder(false); setOlderError(''); setAwayFromBottom(false); prependAnchor.current = null; following.current = true; readThrough.current = ''; pendingSend.current = null; void load(); return () => { generation.current++; }; }, [load]);
   useRecordRefresh(['connections', 'messages','calls'], load);
+  useLayoutEffect(()=>{if(visible)readThrough.current='';},[visible,connectionId]);
+  const callReadKey=calls?.items.map(call=>call.id).join(',')||'';
   const markRead = useCallback(() => {
-    if (!visible || !connectionId || current?.connection.status !== 'accepted' || document.hidden || !following.current) return;
-    const latest = messages?.items.find(message => !message.pending && !message.failed)?.id || 'empty';
-    if (readThrough.current === latest) return;
-    readThrough.current = latest;
-    void operation('messages.mark_read', { connectionId, ...(latest === 'empty' ? {} : { throughMessageId: latest }) }).catch(error => { readThrough.current = ''; console.error('Conversation read:', error); });
-  }, [connectionId, current?.connection.status, messages?.items[0]?.id, visible]);
+    if (!visible || !connectionId || !current || document.hidden) return;
+    const latest = following.current ? messages?.items.find(message => !message.pending && !message.failed)?.id : undefined;
+    const key=JSON.stringify([latest,current.connection.status,current.connection.updatedAt||current.connection.createdAt,callReadKey]);
+    if (readThrough.current === key) return;
+    readThrough.current = key;
+    void operation('messages.mark_read', { connectionId, ...(latest ? { throughMessageId: latest } : {}) }).catch(error => { if(readThrough.current===key)readThrough.current = ''; console.error('Conversation read:', error); });
+  }, [connectionId, current?.connection.status, current?.connection.updatedAt, current?.connection.createdAt, messages?.items[0]?.id, callReadKey, visible]);
   const rememberPosition=()=>{const node=scroller.current;if(visible&&node)setAwayFromBottom(node.scrollHeight-node.clientHeight-node.scrollTop>24);};
   const followLatest=()=>{const node=scroller.current;if(!node)return;prependAnchor.current=null;following.current=true;node.scrollTop=node.scrollHeight;setAwayFromBottom(false);markRead();};
   useLayoutEffect(() => { if (!visible) return; if (following.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; rememberPosition();markRead(); }, [messages?.items.length, markRead, visible]);
-  useEffect(() => { document.addEventListener('visibilitychange', markRead); return () => document.removeEventListener('visibilitychange', markRead); }, [markRead]);
+  useEffect(() => { const restored=()=>{if(!document.hidden)readThrough.current='';markRead();};document.addEventListener('visibilitychange', restored); return () => document.removeEventListener('visibilitychange', restored); }, [markRead]);
   useLayoutEffect(() => {
     if (!visible || !scroller.current || !content.current) return;
     const observer = new ResizeObserver(() => { if (following.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;rememberPosition(); });

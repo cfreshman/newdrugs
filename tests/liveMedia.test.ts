@@ -33,6 +33,28 @@ it('keeps a video call in the accepted DM and queues room closure when it ends',
  expect((await notificationState('other')).items.find(item=>item.kind==='call')?.read).toBe(true);
 });
 
+it('marks DM calls read without answering them, preserving newer messages and other notification history',async()=>{
+ const started=await startCall('me','me:other'),createdAt='2026-09-30T12:00:00Z';
+ await rows('directMessages').insertMany([{_id:'m1',connectionId:'me:other',fromId:'me',text:'one',createdAt},{_id:'m2',connectionId:'me:other',fromId:'me',text:'two',createdAt}]);
+ await rows('notifications').insertMany([{_id:'new-message',userId:'other',actorId:'me',connectionId:'me:other',kind:'message',messageId:'m2',readAt:null,createdAt},{_id:'unrelated',userId:'other',actorId:'me',connectionId:'different',kind:'call',readAt:null,createdAt},{_id:'other-owner',userId:'me',actorId:'other',connectionId:'me:other',kind:'connection_accepted',readAt:null,createdAt}]);
+ await call('messages.mark_read',{connectionId:'me:other',throughMessageId:'m1'},'other');
+ expect((await rows('notifications').findOne({_id:`call:${started.id}:other`}))?.readAt).toBeTruthy();
+ expect((await rows('calls').findOne({_id:started.id}))?.status).toBe('waiting');
+ for(const id of ['new-message','unrelated','other-owner'])expect((await rows('notifications').findOne({_id:id}))?.readAt).toBeNull();
+ await call('messages.mark_read',{connectionId:'me:other',throughMessageId:'m2'},'other');
+ expect((await rows('notifications').findOne({_id:'new-message'}))?.readAt).toBeTruthy();
+ expect(await rows('notifications').countDocuments()).toBe(4);
+ expect((await notificationState('other')).items.find(item=>item.kind==='call'&&item.callId===started.id)?.read).toBe(true);
+});
+
+it('marks an opened invitation read without accepting it and denies someone outside the conversation',async()=>{
+ await rows('connections').insertOne({_id:'pending',members:['me','other'],fromId:'me',toId:'other',status:'pending',note:'Hi',createdAt:new Date().toISOString()});
+ await call('messages.mark_read',{connectionId:'pending'},'other');
+ expect(await rows('connections').findOne({_id:'pending'})).toMatchObject({status:'pending',notificationReadAt:expect.any(String)});
+ await rows('connections').insertOne({_id:'unrelated',members:['other','stranger'],fromId:'other',toId:'stranger',status:'pending'});
+ await expect(call('messages.mark_read',{connectionId:'unrelated'},'me')).rejects.toMatchObject({status:404});
+});
+
 it('indexes a live talk title and optional description and gates speaking and removal',async()=>{
  let space=await call('spaces.create',{title:'Night walks',description:'Talking about late walks by the ocean.'},'me',true);
  expect((await sourceDocument('spaces',space.id))?.text).toBe('title: Night walks\ndescription: Talking about late walks by the ocean.');

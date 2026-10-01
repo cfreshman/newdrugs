@@ -291,3 +291,14 @@ The build, production API health, exact worker heartbeat and public JS/CSS byte 
 Production deployment `20261001210702237` shipped photo/name/preview inbox rows that open directly, preserved invitation notes/actions, and DM identity/call/menu controls in the existing top panel header in place of the Messages title. Mobile calls use an icon-only header control. Back restores the inbox and its generic header.
 
 The prior dev pass included ten focused interaction/history checks and synthetic-data browser inspection at 320px, 393px and 960px. Production build, API health, exact worker heartbeat and public JS/CSS byte comparisons passed.
+
+
+## October 1, 2026: v0.40.3 DM refinements and session recovery
+
+Production `20261001215819498` and dev `20261001215938559` finish the approved follow-ups. Mobile DM section tabs are hidden, header gaps match the panel inset, short text bubbles size independently of link previews, the standard mobile web-app meta tag is present, and the Settings call label is Video on mobile. The composer corner was corrected to outer radius minus inset, clamped to the normal radius, after the founder rejected using the identical outer radius.
+
+Valid browser sessions had incorrectly spent the anonymous session-creation quota on every reload. Authentication now precedes the ordinary request counters; verified browser API/route/search requests are exempt. Anonymous/external request controls and failed credential attempt controls remain. The isolated checks verified a real authenticated session still loads after anonymous creation is exhausted.
+
+Opening a DM now marks its invitation, acceptance and video-call notifications read while preserving history and the viewed-message boundary for texts. Cached reopening and browser foreground restoration force the read action. Call-only updates trigger it too. Notification changes refresh the owner's interested conversation lists to clear stale unread dots.
+
+The targeted checks, complete builds, both stage API/exact-worker health gates and public production JS/CSS byte comparison passed. Public HTML also contains the standard mobile capability tag. No real social content or calls were created as QA.
