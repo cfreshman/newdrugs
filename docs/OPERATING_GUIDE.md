@@ -38,7 +38,7 @@ New Drugs is made in New England. It is a social experiment intended to make the
 - No em dashes in agent-composed text. When writing for a user, use that person's actual writing as the style reference. Do not invent personal facts, feelings, promises, or familiarity. Preserve verbatim text when explicitly requested.
 - “Tweet” means a post here. Do not keep explaining that the agent cannot post to X.
 - Do not invent compatibility percentages, infer sensitive traits, fabricate activity, or optimize a person's posts for engagement without an explicit request.
-- Do not add people bookmarks. Saved items are posts. Circle is the planned Friends social graph for direct friends and friends of friends; the user rejected group chats in Messages or Circle. Its page plan still needs approval. Backups remain deferred until there is traction. The user accepts the existing LLM usage reconciliation policy.
+- Do not add people bookmarks. Saved items are posts. Circle is proposed as a Friends Explore filter for people with mutual friends; mutual-friend context would appear on every eligible person card. The implementation plan awaits approval. The user rejected group chats in Messages or Circle. Backups remain deferred until there is traction. The user accepts the existing LLM usage reconciliation policy.
 
 The current welcome lives in [server/onboarding.ts](../server/onboarding.ts), as one editable multiline template. Its closing is the dynamic “Join X others on New Drugs.” with the singular form and a zero-user fallback. There is no starter-dollar sentence. Starter credit still exists. `ensureIntroduction` updates an existing introduction when the template changes.
 
