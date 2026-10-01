@@ -277,3 +277,10 @@ The mobile mode switch and Settings control now retain desktop button/icon sizin
 The approved production release brought the previously dev-verified optional device login and the Log image maker from `main` to production. The maker keeps raw layers local through an active entry edit and uploads only its final flattened PNG on Save entry. The Log operation contract now accepts one photo or video plus one voice note per attendee. The Square reference and Logcal source remained read-only. Production v0.34.1 was `20260930134211455`; cloud dev was `20260930134055094`.
 
 The immediate production correction removed the underline from the Agent inbox Automation action and left-aligned mobile drawing-size controls. It shipped as v0.34.2 at `20260930134827130`; cloud dev is `20260930134655256`. The final production API, exact worker heartbeat and required services passed. Public JS/CSS asset bytes matched the local build; public HTML has expected server-rendered page-preview metadata. Public API health passed. No QA hangout, post, DM or paid agent run was created.
+
+
+## October 1, 2026: v0.39.1 approved audit fixes
+
+Production deployment `20261001204613409` shipped private original-filename metadata with ID names in shared projections/downloads, hidden-profile filtering inside semantic and exact retrieval with the explicit agent override, the centered shared Square text default, and native DM calling guidance. Explore cards now show Hide immediately before Add friend, grouped at the right edge with the shared gap. Existing ID storage paths were already correct and were not renamed. The founder excluded the proposed website draft/publication prompt change.
+
+The build, production API health, exact worker heartbeat and public JS/CSS byte comparison passed. Earlier focused filename/privacy/search checks passed in the isolated test database. Browser control was unavailable for the small action-row visual check; no fresh screenshot or physical-device verification is claimed.
