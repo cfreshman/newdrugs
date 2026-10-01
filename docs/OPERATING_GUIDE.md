@@ -15,8 +15,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Working tree | Requested implementation is committed on `main`. Inspect status before editing. |
 | Production | `https://druggie.org`; exact version is in `release.json`, exact deployment is the live `prod/current` target |
 | Cloud dev | `https://dev.druggie.org`; exact deployment is the live `dev/current` target; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, the single visual plus voice-note contribution rule, and the inbox/mobile-control correction. Cloud dev additionally has server-side Make operations, new Log video-upload rejection, the calendar mosaic sizing correction, DM video calls and public audio Spaces under Posts. Production has the imported Log history and no native calling release. Dev does not bump public versions. |
-| Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx are active; both API health checks passed. The dev LiveKit media service is separate and uses dev credentials only. |
+| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, server-side Make operations, new Log video-upload rejection, the calendar mosaic sizing correction, Log List search, DM video calls and public audio Talk under Posts. Dev does not bump public versions. |
+| Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx are active. Each stage has a separate LiveKit service and credentials. Both API health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
 | Outstanding requested work | The larger app upgrade remains paused in its separate worktree. Physical iPhone validation, large capacity measurements and 65 already-broken imported source media references remain known limits, not authorization for new projects. |
@@ -38,7 +38,7 @@ New Drugs is made in New England. It is a social experiment intended to make the
 - No em dashes in agent-composed text. When writing for a user, use that person's actual writing as the style reference. Do not invent personal facts, feelings, promises, or familiarity. Preserve verbatim text when explicitly requested.
 - “Tweet” means a post here. Do not keep explaining that the agent cannot post to X.
 - Do not invent compatibility percentages, infer sensitive traits, fabricate activity, or optimize a person's posts for engagement without an explicit request.
-- Do not add people bookmarks. Saved items are posts. Groups remain deferred. Backups remain deferred until there is traction. The user accepts the existing LLM usage reconciliation policy.
+- Do not add people bookmarks. Saved items are posts. Circles remains an implementation project whose group-chat behavior still needs to be resolved. Backups remain deferred until there is traction. The user accepts the existing LLM usage reconciliation policy.
 
 The current welcome lives in [server/onboarding.ts](../server/onboarding.ts), as one editable multiline template. Its closing is the dynamic “Join X others on New Drugs.” with the singular form and a zero-user fallback. There is no starter-dollar sentence. Starter credit still exists. `ensureIntroduction` updates an existing introduction when the template changes.
 
@@ -70,6 +70,9 @@ Node.js **22 or newer** and npm are required. The server bundle explicitly targe
 | 7880 | Dev LiveKit signaling/API | Droplet, proxied as `https://dev.druggie.org/rtc` |
 | 7881 TCP / 7882 UDP | Dev WebRTC media | Public media transports |
 | 3478 UDP / 5349 TCP | Dev TURN | Public UDP and TLS fallbacks |
+| 7890 | Production LiveKit signaling/API | Droplet, proxied as `https://druggie.org/rtc` |
+| 7891 TCP / 7892 UDP | Production WebRTC media | Public media transports |
+| 3479 UDP / 5350 TCP | Production TURN | Public UDP and TLS fallbacks |
 
 Production and dev share the DigitalOcean droplet at `167.172.21.42` (NYC3), with separate service instances, databases, environment files, and runtime state. MongoDB is a replica set because wallet, receipts, indexing jobs, and other state transitions rely on transactions.
 
