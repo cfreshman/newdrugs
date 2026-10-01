@@ -1,6 +1,6 @@
 # Personal websites
 
-Native personal websites are in production v0.37.1. No personal site is published on the owner account yet. Source references are read-only: `../minnow`, `../pangaea`, and `../wayfinder`.
+Native personal websites are in production v0.37.1. The owner published a site on cloud dev after that release; no owner site is published on production. Source references are read-only: `../minnow`, `../pangaea`, and `../wayfinder`.
 
 ## Product decisions
 
@@ -36,4 +36,4 @@ The founder authorized production deployment. Production v0.37.1 is deployment `
 
 The host has `python3-certbot-dns-digitalocean`, a separate `druggie-sites` certificate for `*.druggie.org` expiring December 30, 2026, and an enabled Certbot timer. A DNS-01 renewal dry run succeeded. `scripts/nginx-sites.conf` is installed as a separate wildcard virtual host; nginx config test and reload passed. It strips Cookie and Authorization headers before proxying to production. The existing app/dev virtual hosts and certificate remain intact. An existing DigitalOcean DNS credential was copied to `/etc/letsencrypt/digitalocean.ini` with root-only mode 600; its exact scope has not been independently audited, and the token value was not printed. No new credential was generated.
 
-Public DNS resolution and TLS verification pass for a wildcard label. Unknown code/draft labels and app API paths under a site hostname return 404, while `druggie.org/api/health` and `dev.druggie.org/api/health` return 200. No real published personal site exists yet, so positive live hostname serving and profile Website-link appearance still require a person to publish a site. A draft does not add a public profile button. Production preview hosts use `draft-<random-token>.druggie.org`; the code host is `u-<code>.druggie.org`.
+Public DNS resolution and TLS verification pass for a wildcard label. Unknown code/draft labels and app API paths under a site hostname return 404, while `druggie.org/api/health` and `dev.druggie.org/api/health` return 200. The owner published a dev site at draft revision 7; its dev profile projection now has a localhost Website link. No real production personal site is published yet, so positive production hostname serving still awaits publication. A draft alone does not add a profile button. Production preview hosts use `draft-<random-token>.druggie.org`; the code host is `u-<code>.druggie.org`.
