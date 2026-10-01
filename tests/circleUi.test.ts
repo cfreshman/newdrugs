@@ -23,9 +23,9 @@ it('shows Friends as disabled and omits Hide on an accepted friend card',async()
  const user={id:'viewer',handle:'viewer',name:'Viewer',city:'',bio:'',interests:[],discoverable:true};
  await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
  const actions=dom.container.querySelector('.person-card-actions')!;
- expect(actions.querySelector<HTMLButtonElement>('button')?.textContent).toBe('Friends');
- expect(actions.querySelector<HTMLButtonElement>('button')?.classList.contains('solid')).toBe(true);
- expect(actions.querySelector<HTMLButtonElement>('button')?.disabled).toBe(true);
+ expect(actions.querySelector<HTMLButtonElement>('button.solid')?.textContent).toBe('Friends');
+ expect(actions.querySelector<HTMLButtonElement>('button.solid')?.classList.contains('solid')).toBe(true);
+ expect(actions.querySelector<HTMLButtonElement>('button.solid')?.disabled).toBe(true);
  expect(actions.textContent).not.toContain('Hide');
 });
 it('opens a human-written invitation note from the card and offers Hide for a non-friend',async()=>{
@@ -33,9 +33,9 @@ it('opens a human-written invitation note from the card and offers Hide for a no
  const user={id:'viewer',handle:'viewer',name:'Viewer',city:'',bio:'',interests:[],discoverable:true};
  await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
  const actions=dom.container.querySelector('.person-card-actions')!;
- expect(actions.textContent).toContain('Friend');expect(actions.textContent).toContain('Hide');
- expect(actions.querySelector<HTMLButtonElement>('button')?.classList.contains('solid')).toBe(true);
- await act(async()=>actions.querySelector<HTMLButtonElement>('button')!.click());
+ expect(actions.textContent).toContain('Add friend');expect(actions.textContent).toContain('Hide');
+ expect(actions.querySelector<HTMLButtonElement>('button.solid')?.classList.contains('solid')).toBe(true);
+ await act(async()=>actions.querySelector<HTMLButtonElement>('button.solid')!.click());
  expect(dom.container.querySelector('.person-card-invite.fields textarea')).not.toBeNull();
  expect(dom.container.querySelector('.person-card-invite>.solid')?.textContent).toBe('Send invitation');
 });
