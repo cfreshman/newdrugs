@@ -1,0 +1,32 @@
+.call-stage{--call-gap:12px;--call-surface:#111;--call-control:#e9e7de;position:fixed;inset:0;z-index:10000;background:#000;color:#fff;container-type:size;overflow:hidden;}
+.call-pair{--call-top:max(12px,env(safe-area-inset-top));--call-right:max(12px,env(safe-area-inset-right));--call-bottom:max(12px,env(safe-area-inset-bottom));--call-left:max(12px,env(safe-area-inset-left));--call-width:calc(100cqw - var(--call-left) - var(--call-right));--call-height:calc(100cqh - var(--call-top) - var(--call-bottom));--call-size:min(var(--call-width),calc((var(--call-height) - var(--call-gap))/2));--call-control-size:clamp(34px,calc(var(--call-size)/7),48px);width:100%;height:100%;display:flex;flex-direction:column-reverse;align-items:center;justify-content:center;gap:var(--call-gap);padding:var(--call-top) var(--call-right) var(--call-bottom) var(--call-left);}
+@container (min-aspect-ratio:1/1){.call-pair{--call-size:min(calc((var(--call-width) - var(--call-gap))/2),var(--call-height));flex-direction:row;}}
+.call-square{position:relative;flex:none;width:var(--call-size);height:var(--call-size);border-radius:16px;overflow:hidden;background:var(--call-surface);}
+.call-square>video{display:block;width:100%;height:100%;}
+.call-local>video{object-fit:cover;transform:scaleX(-1);}
+.call-remote>video{object-fit:contain;}
+.call-square.camera-off>video{visibility:hidden;}
+.call-square>audio{display:none;}
+.call-input-status,.call-waiting{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#8b8b84;font:13px 'Noto Sans',sans-serif;text-align:center;white-space:nowrap;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis;}
+.call-waiting{color:#fffef9;font-size:clamp(14px,calc(var(--call-size)/15),19px);}
+.call-audio-visualizer{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:42%;height:28%;pointer-events:none;}
+.call-controls{position:absolute;z-index:2;bottom:8px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;}
+.call-controls button{display:grid;place-items:center;flex:none;width:var(--call-control-size);height:var(--call-control-size);border:0;border-radius:50%;padding:0;background:var(--call-control);color:#181915;cursor:pointer;}
+.call-controls button.off,.call-controls button.end{background:#d94b3f;color:#fff;}
+.call-controls button:disabled{cursor:wait;opacity:.7;}
+.call-error{position:absolute;left:8px;right:8px;top:8px;margin:0;padding:7px 9px;border-radius:8px;background:rgba(0,0,0,.72);color:#fff;font:13px 'Noto Sans',sans-serif;text-align:center;}
+.message-view-actions .call-start{display:inline-flex;align-items:center;gap:6px;margin:0;padding:8px 12px;min-height:36px;border:0;border-radius:999px;background:var(--surface-soft);color:var(--ink);font-size:var(--text-sm);cursor:pointer;}
+.message-view-actions .call-start:disabled{cursor:wait;}
+.call-message{max-width:min(100%,350px);}
+.call-message-card{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:start;gap:8px 10px;padding:11px 12px;border-radius:18px;background:var(--surface-soft);color:var(--ink);}
+.call-message.user .call-message-card{background:var(--primary);color:#fff;}
+.call-message-card>div:first-of-type{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.call-message-card strong{font-size:13px;font-weight:650;line-height:1.3;overflow-wrap:anywhere;}
+.call-message-card span{font-size:12px;line-height:1.3;opacity:.75;}
+.call-message-actions{grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:3px;}
+.call-message-actions button{border:0;border-radius:999px;padding:7px 12px;min-height:32px;background:var(--surface);color:var(--ink);font-size:12px;cursor:pointer;}
+.call-message.user .call-message-actions button{background:rgba(255,255,255,.2);color:#fff;}
+.call-message-actions button:disabled{opacity:.5;cursor:wait;}
+.incoming-call-banner{position:fixed;z-index:300;top:calc(var(--settings-top) + var(--settings-control-size) + 8px);left:max(6px,env(safe-area-inset-left));max-width:min(380px,calc(100vw - 12px));display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:14px;background:var(--control-black);color:var(--on-assistant);text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.22);font-size:13px;}
+.incoming-call-banner span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.incoming-call-banner strong{margin-left:auto;font-size:12px;}

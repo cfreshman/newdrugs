@@ -77,15 +77,15 @@
 .log-week-label{display:flex;flex-direction:column;gap:2px;font-family:var(--font-ui);font-size:12px;color:var(--ink);text-transform:uppercase;padding-left:2px;}
 .log-weekday-row{width:100%;border:0;border-radius:0;padding-inline:0;display:grid;grid-template-columns:var(--log-week-label) repeat(7,minmax(0,1fr)) var(--log-week-label);gap:1px;border-bottom:1px solid var(--divider);padding-block:7px;background:var(--panel-surface-top);}
 .log-weekday-row .log-weekday{font-family:var(--font-ui);font-size:12px;color:var(--ink);}
-.log-calendar-history .log-calendar{gap:1px;}
-.log-calendar-history .log-day{min-height:0;aspect-ratio:1;padding:0;border:0;border-radius:0;display:grid;place-items:center;background:transparent;color:inherit;text-decoration:none;position:relative;overflow:hidden;}
+.log-calendar-history .log-calendar{gap:1px;grid-template-rows:minmax(0,1fr);}
+.log-calendar-history .log-day{min-height:0;height:100%;padding:0;border:0;border-radius:0;display:grid;place-items:center;background:transparent;color:inherit;text-decoration:none;position:relative;overflow:hidden;}
 .log-calendar-history .log-day[data-today]{box-shadow:none;}
 .log-calendar-history .log-day[data-today] .log-empty-date{color:var(--primary);font-weight:700;}
 .log-empty-date{font:12px var(--font-ui);}
 .log-calendar-history .log-day[data-future]{opacity:.33;}
-.log-day-mosaic{display:flex;flex-wrap:wrap;align-content:center;justify-content:center;width:100%;height:100%;--columns:1;}
+.log-day-mosaic{display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;width:100%;height:100%;--columns:1;}
 .log-day-mosaic[data-columns="2"]{--columns:2;}.log-day-mosaic[data-columns="3"]{--columns:3;}
-.log-day-mosaic>span{display:block;width:calc(100% / var(--columns));aspect-ratio:1;background:var(--primary);overflow:hidden;}
+.log-day-mosaic>span{display:block;flex:0 0 calc(100% / var(--columns));width:calc(100% / var(--columns));height:calc(100% / var(--columns));aspect-ratio:1;background:var(--primary);overflow:hidden;}
 .log-day-mosaic img{display:block;width:100%;height:100%;object-fit:cover;}
 .log-day-special{color:var(--primary);}
 .log-calendar-edge{min-height:40px;display:flex;align-items:center;justify-content:center;gap:8px;padding-block:8px;}

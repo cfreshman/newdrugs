@@ -6,7 +6,7 @@ import { INDEX_VERSION, type SearchDocument } from './model';
 import type { CoarseArea } from '../../shared/geo';
 
 /** Public human text only. Never call this with chats, DMs, or uploads. */
-export async function sourceDocument(kind: 'profiles' | 'posts', entityId: string, session?: ClientSession): Promise<SearchDocument | null> {
+export async function sourceDocument(kind: 'profiles' | 'posts' | 'spaces', entityId: string, session?: ClientSession): Promise<SearchDocument | null> {
   const options = { session };
   if (kind === 'profiles') {
     const user = await users().findOne({ _id: entityId, discoverable: true, suspendedAt:null, handle: { $type: 'string' } }, options);
@@ -15,6 +15,14 @@ export async function sourceDocument(kind: 'profiles' | 'posts', entityId: strin
     const text = `@${user.handle}\n${evidence.map(field => `${field.field}: ${field.text}`).join('\n')}`;
     const sourceHash = hashText(`${INDEX_VERSION}:${text}`), sourceRevision = hashText(JSON.stringify([sourceHash, user.area || null, user.discoverable]));
     return { _id: `profiles:${entityId}`, dataset: 'profiles', entityId, ownerId: entityId, text, evidence, terms: termCounts(text), area: user.area || null, createdAt: user.createdAt, sourceHash, sourceRevision, indexVersion: INDEX_VERSION, indexedAt: '' };
+  }
+  if(kind==='spaces'){
+    const space=await rows('spaces').findOne({_id:entityId,status:'live'},options);
+    if(!space||!await users().findOne({_id:String(space.hostId),suspendedAt:null,handle:{$type:'string'}},options))return null;
+    const description=String(space.description),text=description;
+    const evidence=[{field:'description',text:description,entityId,entityType:'space' as const}];
+    const sourceHash=hashText(`${INDEX_VERSION}:${text}`);
+    return {_id:`spaces:${entityId}`,dataset:'spaces',entityId,ownerId:String(space.hostId),text,evidence,terms:termCounts(text),area:null,createdAt:String(space.createdAt),sourceHash,sourceRevision:hashText(JSON.stringify([sourceHash,space.status])),indexVersion:INDEX_VERSION,indexedAt:''};
   }
   const post = await rows('posts').findOne({ _id: entityId, deletedAt: { $exists: false }, moderatedAt: { $exists: false } }, options);
   if (!post || !await users().findOne({ _id: String(post.userId), suspendedAt:null, handle: { $type: 'string' } }, options)) return null;

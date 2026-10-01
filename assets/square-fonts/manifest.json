@@ -1,0 +1,102 @@
+{
+  "source": "https://github.com/google/fonts",
+  "revision": "9710da1eacb3be272583c3224dcb70f9da6eadbb",
+  "fonts": {
+    "mono": {
+      "file": "mono.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosansmono/NotoSansMono%5Bwdth%2Cwght%5D.ttf",
+      "sha256": "2cb2adb378a8f574213e23df697050b83c54c27df465a2015552740b2769a081",
+      "bytes": 1708408
+    },
+    "sans": {
+      "file": "sans.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf",
+      "sha256": "bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d",
+      "bytes": 2049096
+    },
+    "sansItalic": {
+      "file": "sansItalic.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notosans/NotoSans-Italic%5Bwdth%2Cwght%5D.ttf",
+      "sha256": "58e6e0ebd1931b29a365aa2d3e2ee9a9e831a3af7cf3ad1462d4e72154f0b291",
+      "bytes": 2322640
+    },
+    "serif": {
+      "file": "serif.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notoserif/NotoSerif%5Bwdth%2Cwght%5D.ttf",
+      "sha256": "4d8e6761424656867019081a1a01336f3cb086982682698714054fc33f782713",
+      "bytes": 1887192
+    },
+    "serifItalic": {
+      "file": "serifItalic.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notoserif/NotoSerif-Italic%5Bwdth%2Cwght%5D.ttf",
+      "sha256": "e87acbc6c0efd0d9a20d6a8cbbda2b266c14be3a3a6f5af8ec9d7b2460570ad1",
+      "bytes": 2448496
+    },
+    "anton": {
+      "file": "anton.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/anton/Anton-Regular.ttf",
+      "sha256": "a4ba3a92350ebb031da0cb47630ac49eb265082ca1bc0450442f4a83ab947cab",
+      "bytes": 170812
+    },
+    "bebas": {
+      "file": "bebas.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/bebasneue/BebasNeue-Regular.ttf",
+      "sha256": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73",
+      "bytes": 61400
+    },
+    "bungee": {
+      "file": "bungee.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/bungee/Bungee-Regular.ttf",
+      "sha256": "c4f5361ce120af3e6b9156d0bf379fa19cda2ea0cd18ac01fd99596c6bf66e3f",
+      "bytes": 118996
+    },
+    "caveat": {
+      "file": "caveat.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/caveat/Caveat%5Bwght%5D.ttf",
+      "sha256": "0bdb6b660482d31531b3945849fba5916b3ef8695da7024a9e6b9ee3c4157988",
+      "bytes": 403648
+    },
+    "fredoka": {
+      "file": "fredoka.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/fredoka/Fredoka%5Bwdth%2Cwght%5D.ttf",
+      "sha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8",
+      "bytes": 159184
+    },
+    "orbitron": {
+      "file": "orbitron.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/orbitron/Orbitron%5Bwght%5D.ttf",
+      "sha256": "f42db2dd16e642258e35782916eceb1dcdbea06fb958d77ad71dc5963587e8fd",
+      "bytes": 38576
+    },
+    "pacifico": {
+      "file": "pacifico.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/pacifico/Pacifico-Regular.ttf",
+      "sha256": "5b6c0d5334a7bf77dea52b975c5a0c408878c0f7115ed5b6fb151f634b7bf701",
+      "bytes": 329380
+    },
+    "marker": {
+      "file": "marker.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/apache/permanentmarker/PermanentMarker-Regular.ttf",
+      "sha256": "28f82c8a7943cb8e9d599f8554da1d4fc75dbcf69b9885ad6c0611d20c6946c5",
+      "bytes": 74632
+    },
+    "pixel": {
+      "file": "pixel.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/pressstart2p/PressStart2P-Regular.ttf",
+      "sha256": "034c77f1f05ec89421e4a63f0e3a4ca1ecf852cc6d2bf611f126f275728e017d",
+      "bytes": 118204
+    },
+    "quicksand": {
+      "file": "quicksand.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/quicksand/Quicksand%5Bwght%5D.ttf",
+      "sha256": "39c9b64223561f56aaff6062a6f04063c4fc86809ad6768722c06614d977e1cc",
+      "bytes": 124824
+    },
+    "emoji": {
+      "file": "emoji.ttf",
+      "url": "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf",
+      "sha256": "4d82a18d8d95f60ba883ce242bbadbf84a576e987745dd7ba38d71c67cff2d73",
+      "bytes": 25332736
+    }
+  }
+}

@@ -55,7 +55,8 @@ async function media(userId:string,ids:string[],entryId:string,session?:ClientSe
  const visualIds=new Set<string>(),voiceIds=new Set<string>(),files:Upload[]=[];
  for(const id of ids){
   const file=await ownUpload(userId,id,session);
-  if(!file.ready||!['image/','audio/','video/'].some(prefix=>file.mime.startsWith(prefix))||!['log_media','agent_input'].includes(file.purpose))throw new AppError(422,'log_media','Choose a ready photo, audio recording or video.');
+  if(!file.ready||!['image/','audio/','video/'].some(prefix=>file.mime.startsWith(prefix))||!['log_media','agent_input'].includes(file.purpose))throw new AppError(422,'log_media','Choose a ready photo or audio recording.');
+  if(file.mime.startsWith('video/')&&!await entries().findOne({_id:entryId,contributions:{$elemMatch:{userId,fileIds:id}},deletedAt:{$exists:false}},{session,projection:{_id:1}}))throw new AppError(422,'log_video_upload','Upload a photo or voice note. Add videos as links instead.');
   if(file.logEntryId&&file.logEntryId!==entryId||await entries().findOne({_id:{$ne:entryId},'contributions.fileIds':id,deletedAt:{$exists:false}},{session})||await rows('posts').findOne({fileIds:id,deletedAt:{$exists:false}},{session})||await users().findOne({photos:id},{session}))throw new AppError(422,'log_file_owned','Upload a separate file for this hangout.');
   if(file.mime.startsWith('image/')||file.mime.startsWith('video/'))visualIds.add(id);
   if(file.mime.startsWith('audio/'))voiceIds.add(id);

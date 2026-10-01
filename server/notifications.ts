@@ -19,12 +19,19 @@ export async function notificationState(userId: string, session?: ClientSession,
   const eligibleRecords:Document[]=[...unsuspendedActors('actorId'),{$lookup:{from:'logEntries',localField:'entryId',foreignField:'_id',pipeline:[{$match:{deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]}},...unsuspendedActors('members'),{$project:{title:1}}],as:'logEntry'}},{$match:{$or:[{kind:{$nin:logKinds}},{'logEntry.0':{$exists:true}}]}}];
   const lanes=await notificationLanes(userId,blocked,eligibleRecords,session,before);
   const invitations=[...lanes[0].eligible,...lanes[1].eligible],stored=[...lanes[2].eligible,...lanes[3].eligible];
+  const callIds=stored.filter(row=>row.kind==='call').map(row=>String(row.callId));
+  const callRows=callIds.length?await rows('calls').find({_id:{$in:callIds}},{session,projection:{_id:1,status:1,joinedAt:1}}).toArray():[];
+  const byCall=new Map(callRows.map(row=>[row._id,row]));
   const count=lanes[0].eligible.length+lanes[2].eligible.length;
   const people = await users().find({ _id: { $in: [...invitations.map(row => String(row.fromId)), ...stored.map(row => String(row.actorId))] } }, { session, projection: { name: 1, handle: 1 } }).toArray();
   const label = (id: string) => notificationActor(people.find(person => person._id === id));
   const link = (connectionId: string): ResourceLink => ({ rel: 'open_in_newdrugs', targetKind: 'exact', title: 'Open conversation', url: new URL(destinationPath({ view: 'messages', resourceId: connectionId }), config.uiOrigin).href, resourceType: 'conversation', resourceId: connectionId });
   const items: Notification[] = invitations.map(row => ({ id: `invite:${row._id}`, kind: 'invitation', title: `Invitation from ${label(String(row.fromId))}`, text: String(row.note), createdAt: String(row.createdAt), read: row.status !== 'pending' || Boolean(row.notificationReadAt), connectionId: row._id, link: link(row._id) }));
   for (const row of stored) {
+    if(row.kind==='call'){
+      const call=byCall.get(String(row.callId)),actor=label(String(row.actorId)),active=Boolean(call&&call.status!=='ended');
+      items.push({id:row._id,kind:'call',title:active?`Video call from ${actor}`:call?.joinedAt?`Video call with ${actor}`:`Missed call from ${actor}`,text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),connectionId:String(row.connectionId),callId:String(row.callId),callActive:active,link:link(String(row.connectionId))});continue;
+    }
     if(row.kind==='log_invitation'||row.kind==='log_update'||row.kind==='log_added'){
       const entry=(row.logEntry as Row[])[0];if(!entry)continue;
       items.push({id:row._id,kind:row.kind,title:logNotificationText(row.kind,label(String(row.actorId)),entry.title),text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open Log entry',url:new URL(destinationPath({view:'log',resourceId:entry._id}),config.uiOrigin).href,resourceType:'log_entry',resourceId:entry._id}});continue;

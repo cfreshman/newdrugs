@@ -7,6 +7,7 @@ import type { Login } from './config';
 type Invoke = (name: string, input: unknown, key?: string) => Promise<unknown>;
 export async function uploadLocalFile(login: Login, path: string, invoke: Invoke, key: string = randomUUID(), requestId?: string, purpose:'agent_input'|'log_media'='agent_input') {
   if (!path) throw new Error('Choose a file: newdrugs file-upload <path>.');
+  if (purpose==='log_media'&&/\.(mp4|mov|webm)$/i.test(path)) throw new Error('Upload a photo or voice note. Add videos as links instead.');
   const handle = await open(resolve(path), 'r');
   let bytes: Buffer;
   try {

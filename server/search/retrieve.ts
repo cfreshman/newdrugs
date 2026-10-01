@@ -9,6 +9,7 @@ import { coarsePoint, distanceMeters, METERS_PER_MILE, sharedAreaDistance } from
 import type { SearchConstraints, SearchDataset, SearchMatch, SearchMode, SearchResult, SearchRetrieval } from '../../shared/search';
 import { EMBEDDING_MODEL, DIMENSIONS, INDEX_VERSION, type SearchDocument } from './model';
 import { sourceDocument } from './sources';
+import {spaceOperation} from '../spaces';
 import { getIndex } from './index';
 import { embed } from './embeddings';
 import { bm25, semanticCandidate, diversify, feedbackVector, fuse, hybridRank, hashText, words } from './ranking';
@@ -22,7 +23,7 @@ async function blockedBy(userId: string) { return (await rows('blocks').find({ m
 function within(document: Omit<SearchDocument, 'vector'>, input: SearchInput, actor: Actor, blocked: string[], audience:Awaited<ReturnType<typeof postAudience>> = null) {
   if(audience && (document.dataset==='profiles'||(audience.authorIds&&!audience.authorIds.has(document.ownerId))||(audience.postIds&&!audience.postIds.has(document.entityId))))return false;
   if (blocked.includes(document.ownerId) || (document.dataset === 'profiles' && document.ownerId === actor.userId)) return false;
-  if (!input.datasets.includes(document.dataset) && !(input.datasets.includes('threads') && document.dataset !== 'profiles')) return false;
+  if (!input.datasets.includes(document.dataset) && !(input.datasets.includes('threads') && ['posts','replies'].includes(document.dataset))) return false;
   if (input.authorId && document.ownerId !== input.authorId || input.after && document.createdAt < input.after || input.beforeDate && document.createdAt >= input.beforeDate) return false;
   if (input.interest && !document.evidence.some(item => item.field === 'interests' && item.text.split(', ').includes(input.interest!.toLowerCase()))) return false;
   if (input.near) { if (!document.area) return false; const [lng, lat] = coarsePoint(input.near).coordinates, [otherLng, otherLat] = document.area.point.coordinates; if (distanceMeters([lat,lng], [otherLat,otherLng]) > (input.radiusMiles || 25) * METERS_PER_MILE) return false; }
@@ -34,20 +35,22 @@ async function hydrate(ranked: Ranked[], input: SearchInput, actor: Actor): Prom
   // Bounded parallel canonical reads, never cached result payloads.
   for (let offset = 0; offset < ranked.length; offset += 8) {
     const batch = await Promise.all(ranked.slice(offset,offset+8).map(async rank => {
-      const split = rank.id.indexOf(':'), kind = rank.id.slice(0,split) as 'profiles' | 'posts', entityId = rank.id.slice(split+1);
-      if (!['profiles','posts'].includes(kind)) return null;
+      const split = rank.id.indexOf(':'), kind = rank.id.slice(0,split) as 'profiles' | 'posts' | 'spaces', entityId = rank.id.slice(split+1);
+      if (!['profiles','posts','spaces'].includes(kind)) return null;
       const source = await sourceDocument(kind, entityId);
       if (!source || source.sourceHash !== rank.sourceHash || source.sourceRevision !== rank.sourceRevision || !within(source, input, actor, blocked,audience)) return null;
       let record: unknown;
       if (kind === 'profiles') {
         const person = await users().findOne({ _id: entityId, discoverable: true }); if (!person) return null;
         record = profile(person);
-      } else {
+      } else if(kind==='spaces'){
+        try{record=await spaceOperation('spaces.get',{spaceId:entityId},actor);}catch(error){if(error instanceof AppError&&[403,404,409].includes(error.status))return null;throw error;}
+      }else {
         const post = await rows('posts').findOne({ _id: entityId, deletedAt: { $exists: false } }); if (!post) return null;
         record = (await postCards([post], actor.userId, blocked))[0];
       }
       if (input.near && source.area) { const [lng,lat] = coarsePoint(input.near).coordinates, [otherLng,otherLat] = source.area.point.coordinates; record = { ...(record as object), ...sharedAreaDistance(input.near, source.area.cell, distanceMeters([lat,lng],[otherLat,otherLng])) }; }
-      return { id: source._id, dataset: source.dataset, entityType: kind === 'profiles' ? 'person' : 'post', entityId, ownerId: source.ownerId, score: rank.score,
+      return { id: source._id, dataset: source.dataset, entityType: kind === 'profiles' ? 'person' : kind==='spaces'?'space':'post', entityId, ownerId: source.ownerId, score: rank.score,
         evidence: source.evidence, signals: rank.signals, sourceHash: source.sourceHash, sourceRevision: source.sourceRevision, record } as SearchMatch;
     }));
     results.push(...batch.filter((item): item is SearchMatch => Boolean(item)));
@@ -144,8 +147,8 @@ export async function searchPublic(input: SearchInput, actor: Actor, prepared?: 
 }
 export async function similarPublic(id: string, input: SearchInput, actor: Actor) {
   const split=id.indexOf(':'),kind=id.slice(0,split),entityId=id.slice(split+1);
-  if(!['profiles','posts'].includes(kind))throw new AppError(422,'source','Choose a returned search record.');
-  const source=await sourceDocument(kind as 'profiles'|'posts',entityId),blocked=await blockedBy(actor.userId);
+  if(!['profiles','posts','spaces'].includes(kind))throw new AppError(422,'source','Choose a returned search record.');
+  const source=await sourceDocument(kind as 'profiles'|'posts'|'spaces',entityId),blocked=await blockedBy(actor.userId);
   if(!source||blocked.includes(source.ownerId))throw new AppError(404,'unavailable','This record is unavailable.');
   const stored=await rows<SearchDocument>('searchDocuments').findOne({_id:id,sourceHash:source.sourceHash,indexVersion:INDEX_VERSION});
   const vector=stored?.vector||await embed(source.text,'document');
@@ -171,5 +174,5 @@ export async function explainPublic(retrievalId: string, id: string, actor: Acto
 }
 export async function searchStatus() {
   const [counts,pending,failed]=await Promise.all([rows('searchDocuments').aggregate< {_id:string;count:number}>([{$group:{_id:'$dataset',count:{$sum:1}}}]).toArray(),rows('searchOutbox').countDocuments({status:{$ne:'failed'}}),rows('searchOutbox').countDocuments({status:'failed'})]);
-  return {datasets:['profiles','posts','replies'].map(dataset=>({dataset,count:counts.find(item=>item._id===dataset)?.count||0})),pending,failed,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,capacity:retrievalEnabled()?null:10000,notice:'Public human-written profiles, posts and replies only. Thread searches retrieve individual posts/replies with their own author and source. No DMs, agent chats, files or inferred interests are indexed.'};
+  return {datasets:['profiles','posts','replies','spaces'].map(dataset=>({dataset,count:counts.find(item=>item._id===dataset)?.count||0})),pending,failed,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,capacity:retrievalEnabled()?null:10000,notice:'Public human-written profiles, posts, replies and live Space descriptions only. No DMs, agent chats, files or inferred interests are indexed.'};
 }

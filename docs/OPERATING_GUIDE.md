@@ -15,8 +15,8 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Working tree | Requested implementation is committed on `main`. Inspect status before editing. |
 | Production | `https://druggie.org`; exact version is in `release.json`, exact deployment is the live `prod/current` target |
 | Cloud dev | `https://dev.druggie.org`; exact deployment is the live `dev/current` target; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, the single visual plus voice-note contribution rule, and the inbox/mobile-control correction. Production has the imported Log history. Dev does not bump public versions. |
-| Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx verified active; both API health checks passed. |
+| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, the single visual plus voice-note contribution rule, and the inbox/mobile-control correction. Cloud dev additionally has server-side Make operations, new Log video-upload rejection, the calendar mosaic sizing correction, DM video calls and public audio Spaces under Posts. Production has the imported Log history and no native calling release. Dev does not bump public versions. |
+| Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx are active; both API health checks passed. The dev LiveKit media service is separate and uses dev credentials only. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
 | Outstanding requested work | The larger app upgrade remains paused in its separate worktree. Physical iPhone validation, large capacity measurements and 65 already-broken imported source media references remain known limits, not authorization for new projects. |
@@ -67,6 +67,9 @@ Node.js **22 or newer** and npm are required. The server bundle explicitly targe
 | 7333 | Cloud dev API/MCP | Droplet loopback, behind HTTPS nginx |
 | 7334 | Separate admin Vite frontend | Local machine; user starts and owns it |
 | 7335 | Existing convention for a test MongoDB SSH tunnel | Local forwarding to droplet 7332, not a local database |
+| 7880 | Dev LiveKit signaling/API | Droplet, proxied as `https://dev.druggie.org/rtc` |
+| 7881 TCP / 7882 UDP | Dev WebRTC media | Public media transports |
+| 3478 UDP / 5349 TCP | Dev TURN | Public UDP and TLS fallbacks |
 
 Production and dev share the DigitalOcean droplet at `167.172.21.42` (NYC3), with separate service instances, databases, environment files, and runtime state. MongoDB is a replica set because wallet, receipts, indexing jobs, and other state transitions rely on transactions.
 
@@ -185,6 +188,7 @@ Do not paste unredacted private content from logs. Public production health is `
 | Shared agent behavior | `shared/agentEthos.ts`, `shared/agentWriting.ts`, `shared/agentDiscovery.ts`, `shared/agentSetup.ts` |
 | CLI and MCP | `cli/index.ts`, `cli/config.ts`, `cli/lifecycle.ts`, `cli/search.ts`, `server/mcp.ts`, `server/operationSearch.ts` |
 | Live state | `server/liveState.ts`, `server/privateState.ts`, `src/useLiveState.ts`, `src/useRecordRefresh.ts` |
+| DM calls and public Spaces | `server/calling.ts`, `server/spaces.ts`, `server/liveMediaEffects.ts`, `src/CallStage.tsx`, `src/SpacesPanel.tsx`, `docs/communications/PAIR_VIDEO_REFERENCE.md` |
 | Public semantic search | `server/search/`, `shared/search.ts` |
 | Private chat search | `server/search/chat.ts`, `shared/chatSearch.ts`, `src/ChatSearchPanel.tsx` |
 | Automations, inbox, sleep | `server/automations.ts`, `server/automationSchedule.ts`, `server/backgroundAuthority.ts`, `server/automationNotices.ts`, `server/inbox.ts`, `server/sleep.ts`, `src/AutomationsPanel.tsx`, `src/InboxPanel.tsx` |

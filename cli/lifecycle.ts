@@ -53,10 +53,10 @@ export async function updateInstallation(install:Installation,origin:string,curr
     const manifest=await response.json() as {version?:string;archive?:string;sha256?:string};
     if(typeof manifest.version!=='string'||manifest.archive!=='newdrugs-cli.tgz'||!manifest.sha256||!/^([a-f0-9]{64})$/.test(manifest.sha256))throw new Error('Invalid release manifest.');
     if(!isNewerVersion(manifest.version,current))return 'current';
-    const download=await deps.fetch(new URL('/downloads/newdrugs-cli.tgz',site),{redirect:'error',signal:AbortSignal.timeout(15000)});
+    const download=await deps.fetch(new URL('/downloads/newdrugs-cli.tgz',site),{redirect:'error',signal:AbortSignal.timeout(60000)});
     if(!download.ok||!download.body)throw new Error('The release download is unavailable.');
     const reader=download.body.getReader(),parts:Uint8Array[]=[];let size=0;
-    while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>5*1024*1024){await reader.cancel();throw new Error('The release exceeds the supported size.');}parts.push(value);}
+    while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>64*1024*1024){await reader.cancel();throw new Error('The release exceeds the supported size.');}parts.push(value);}
     const archive=Buffer.concat(parts);if(createHash('sha256').update(archive).digest('hex')!==manifest.sha256)throw new Error('The release checksum did not match.');
     temporary=await mkdtemp(join(tmpdir(),'newdrugs-update-'));const archivePath=join(temporary,'newdrugs-cli.tgz');await writeFile(archivePath,archive,{mode:0o600});
     await deps.install(install,['install','--global','--prefix',install.prefix,archivePath,'--no-audit','--no-fund','--ignore-scripts']);

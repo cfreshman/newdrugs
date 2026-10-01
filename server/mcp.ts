@@ -88,7 +88,9 @@ export function createMcpServer(actor: Actor, authority: ExecutionProof = {}) {
         links = buildResourceLinks(input.operation, input.input, data, actor);
       }
       const result = { ok: true, data, links };
-      return { content: [{ type: 'text', text: JSON.stringify(result) }, ...links.map(link => ({ type: 'resource_link' as const, uri: link.resourceType === 'file' && link.resourceId ? `newdrugs://files/${link.resourceId}` : link.url, name: `newdrugs-${link.resourceType}-${link.resourceId || 'view'}`, title: link.title, description: link.targetKind === 'exact' ? 'Open this exact authorized result in New Drugs.' : 'Open the relevant New Drugs page; this does not focus an individual result.' }))], structuredContent: result };
+      const makePreview=name==='newdrugs_read'&&req.params.arguments?.operation==='make.render'&&data&&typeof data==='object'&&'pngBase64' in data ? data as {pngBase64:string} : null;
+      const summary=makePreview?{...result,data:{...(data as Record<string,unknown>),pngBase64:undefined}}:result;
+      return { content: [{ type: 'text' as const, text: JSON.stringify(summary) }, ...(makePreview?[{type:'image' as const,data:makePreview.pngBase64,mimeType:'image/png'}]:[]), ...links.map(link => ({ type: 'resource_link' as const, uri: link.resourceType === 'file' && link.resourceId ? `newdrugs://files/${link.resourceId}` : link.url, name: `newdrugs-${link.resourceType}-${link.resourceId || 'view'}`, title: link.title, description: link.targetKind === 'exact' ? 'Open this exact authorized result in New Drugs.' : 'Open the relevant New Drugs page; this does not focus an individual result.' }))], structuredContent: summary };
     } catch (error) {
       const result = { ok: false, error: { code: error instanceof AppError ? error.code : 'invalid_request', message: error instanceof Error ? error.message : 'Operation failed.' } };
       return { isError: true, content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };

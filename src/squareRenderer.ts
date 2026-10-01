@@ -3,7 +3,7 @@ import {ensureSquareFonts} from './squareFonts';
 
 export interface TextLayout {size:number;lines:string[]}
 function context(canvas:HTMLCanvasElement){const result=canvas.getContext('2d');if(!result)throw Error('Image editing is unavailable in this browser.');return result;}
-function font(layer:SquareLayer,size:number){return `${layer.italic?'italic ':''}${layer.bold?'700':'400'} ${size}px "${squareFonts[layer.font]}", ${layer.font==='mono'?'monospace':layer.font==='serif'?'serif':'sans-serif'}`;}
+function font(layer:SquareLayer,size:number){return `${layer.italic?'italic ':''}${layer.bold?'700':'400'} ${size}px "${squareFonts[layer.font]}", "Noto Color Emoji", ${layer.font==='mono'?'monospace':layer.font==='serif'?'serif':'sans-serif'}`;}
 function wrap(ctx:CanvasRenderingContext2D,text:string,width:number){
  const lines:string[]=[];
  for(const paragraph of text.split('\n')){let line='';for(const word of paragraph.split(/(\s+)/)){if(line&&ctx.measureText(line+word).width>width){lines.push(line.trimEnd());line='';}if(ctx.measureText(word).width<=width){line+=word;continue;}for(const char of word){if(line&&ctx.measureText(line+char).width>width){lines.push(line);line='';}line+=char;}}lines.push(line.trimEnd());}
@@ -11,13 +11,16 @@ function wrap(ctx:CanvasRenderingContext2D,text:string,width:number){
 }
 
 /** One renderer for the editor and the approved image, without a remote script. */
+export interface SquarePainterPlatform {createCanvas():HTMLCanvasElement;image(src:string):Promise<HTMLImageElement>;fonts(faces:string[]):Promise<void>}
 export class SquarePainter {
  private images=new Map<string,Promise<HTMLImageElement>>();
  private layouts=new Map<string,TextLayout>();
  private bitmap:HTMLCanvasElement|null=null;
- async image(src:string){let promise=this.images.get(src);if(!promise){promise=new Promise<HTMLImageElement>((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(Error('Could not open this image. Try another photo.'));image.src=src;});this.images.set(src,promise);if(this.images.size>32)this.images.delete(this.images.keys().next().value!);}return promise;}
- async prepare(project:SquareProject){const result=new Map<string,HTMLImageElement>(),fonts=new Set(project.layers.filter(layer=>layer.type==='text').map(layer=>font(layer,16)));if(fonts.size)await ensureSquareFonts();await Promise.all([...project.layers.filter(layer=>layer.src).map(async layer=>result.set(layer.src!,await this.image(layer.src!))),...[...fonts].map(value=>document.fonts?.load(value,'New Drugs'))]);if(fonts.size)this.layouts.clear();return result;}
- layoutText(layer:SquareLayer){this.bitmap ||= document.createElement('canvas');return this.text(context(this.bitmap),layer,layer.w*SQUARE_SIZE,layer.h*SQUARE_SIZE);}
+ constructor(private readonly platform?:SquarePainterPlatform){}
+ private createCanvas(){return this.platform?.createCanvas()||document.createElement('canvas');}
+ async image(src:string){let promise=this.images.get(src);if(!promise){promise=this.platform?.image(src)||new Promise<HTMLImageElement>((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(Error('Could not open this image. Try another photo.'));image.src=src;});this.images.set(src,promise);if(this.images.size>32)this.images.delete(this.images.keys().next().value!);}return promise;}
+ async prepare(project:SquareProject){const result=new Map<string,HTMLImageElement>(),fonts=new Set(project.layers.filter(layer=>layer.type==='text').map(layer=>font(layer,16))),fontReady=fonts.size?this.platform?this.platform.fonts([...fonts]):ensureSquareFonts().then(()=>Promise.all([...fonts].map(value=>document.fonts?.load(value,'New Drugs'))).then(()=>{})):Promise.resolve();await Promise.all([fontReady,...project.layers.filter(layer=>layer.src).map(async layer=>result.set(layer.src!,await this.image(layer.src!)))]);if(fonts.size)this.layouts.clear();return result;}
+ layoutText(layer:SquareLayer){this.bitmap ||= this.createCanvas();return this.text(context(this.bitmap),layer,layer.w*SQUARE_SIZE,layer.h*SQUARE_SIZE);}
  private text(ctx:CanvasRenderingContext2D,layer:SquareLayer,width:number,height:number){
   const key=JSON.stringify([layer.text,layer.font,layer.bold,layer.italic,width,height]);let result=this.layouts.get(key);if(result)return result;
   let low=1,high=Math.min(2048,Math.max(1,height/1.1)),lines:string[]=[''];
@@ -27,7 +30,7 @@ export class SquarePainter {
  paint(canvas:HTMLCanvasElement,project:SquareProject,images:Map<string,HTMLImageElement>,drawing?:{id:string;canvas:HTMLCanvasElement}){
   canvas.width=canvas.height=SQUARE_SIZE;const ctx=context(canvas);ctx.clearRect(0,0,SQUARE_SIZE,SQUARE_SIZE);
   ctx.fillStyle=project.color;ctx.fillRect(0,0,SQUARE_SIZE,SQUARE_SIZE);
-  const shadowPad=64;this.bitmap ||= document.createElement('canvas');const bitmap=this.bitmap;bitmap.width=bitmap.height=SQUARE_SIZE+2*shadowPad;const layerContext=context(bitmap);
+  const shadowPad=64;this.bitmap ||= this.createCanvas();const bitmap=this.bitmap;bitmap.width=bitmap.height=SQUARE_SIZE+2*shadowPad;const layerContext=context(bitmap);
   for(const layer of project.layers){
    layerContext.clearRect(0,0,bitmap.width,bitmap.height);layerContext.save();layerContext.translate(shadowPad+(layer.x+layer.w/2)*SQUARE_SIZE,shadowPad+(layer.y+layer.h/2)*SQUARE_SIZE);layerContext.rotate(layer.angle*Math.PI/180);
    const width=layer.w*SQUARE_SIZE,height=layer.h*SQUARE_SIZE,left=-width/2,top=-height/2;
@@ -35,7 +38,7 @@ export class SquarePainter {
    if(layer.type==='shape'||layer.type!=='text'&&layer.background!=='transparent'){layerContext.fillStyle=layer.type==='shape'?layer.color:layer.background;path();layerContext.fill();}
    if(layer.type==='image'||layer.type==='draw'){
     const image=layer.id===drawing?.id?drawing.canvas:layer.src?images.get(layer.src):undefined;
-    if(image){layerContext.save();path();layerContext.clip();const region=layer.crop||{x:0,y:0,w:1,h:1},sourceWidth=image instanceof HTMLImageElement?image.naturalWidth:image.width,sourceHeight=image instanceof HTMLImageElement?image.naturalHeight:image.height;layerContext.imageSmoothingEnabled=true;layerContext.imageSmoothingQuality='high';layerContext.drawImage(image,region.x*sourceWidth,region.y*sourceHeight,region.w*sourceWidth,region.h*sourceHeight,left,top,width,height);layerContext.restore();}
+    if(image){layerContext.save();path();layerContext.clip();const region=layer.crop||{x:0,y:0,w:1,h:1},browserImage=typeof HTMLImageElement!=='undefined'&&image instanceof HTMLImageElement,sourceWidth=browserImage?image.naturalWidth:image.width,sourceHeight=browserImage?image.naturalHeight:image.height;layerContext.imageSmoothingEnabled=true;layerContext.imageSmoothingQuality='high';layerContext.drawImage(image,region.x*sourceWidth,region.y*sourceHeight,region.w*sourceWidth,region.h*sourceHeight,left,top,width,height);layerContext.restore();}
    }else if(layer.type==='text'&&layer.text){
     const layout=this.text(layerContext,layer,width,height);layerContext.font=font(layer,layout.size);layerContext.textBaseline='alphabetic';layerContext.textAlign=layer.align;layerContext.fillStyle=layer.color;
     const first=layerContext.measureText(layout.lines[0]||'M'),last=layerContext.measureText(layout.lines.at(-1)||'M'),ascent=first.actualBoundingBoxAscent||layout.size*.8,descent=last.actualBoundingBoxDescent||layout.size*.2,lineHeight=layout.size*1.1;

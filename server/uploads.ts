@@ -22,6 +22,7 @@ export const uploadRef=(file:Upload):UploadRef=>({id:file._id,name:file.name,pur
 export async function prepareUpload(data:{name:string;bytes:number;sha256:string;purpose:UploadPurpose;requestId?:string},actor:Actor,session?:ClientSession){
   if(actor.source==='agent'||(data.purpose==='profile_photo'&&actor.source!=='browser'))throw new AppError(403,'human_authored','Choose profile photos yourself in the profile editor.');
   if(data.purpose==='log_media'&&!await users().findOne({_id:actor.userId,handle:{$type:'string'}},{session,projection:{_id:1}}))throw new AppError(403,'account_required','Save your account before uploading to Log.');
+  if(data.purpose==='log_media'&&/\.(mp4|mov|webm)$/i.test(data.name))throw new AppError(422,'log_video_upload','Upload a photo or voice note. Add videos as links instead.');
   if(data.requestId)requireValue(await rows('runs').findOne({userId:actor.userId,status:'waiting_for_input','surface.id':data.requestId,'surface.view':'uploads','surface.completed':{$ne:true},cancelRequested:{$ne:true}},{session}),'This upload request is no longer active.');
   const quota=await users().updateOne({_id:actor.userId,$expr:{$lte:[{$add:[{$ifNull:['$storageBytes',0]},data.bytes]},MAX_ACCOUNT_UPLOAD_BYTES]}},{$inc:{storageBytes:data.bytes}},{session});
   if(!quota.matchedCount)throw new AppError(422,'storage_limit','Your uploads have reached the storage limit.');
@@ -53,7 +54,8 @@ async function acceptUploadBytes(actor:Actor,id:string,body:Buffer){
     else if(body.toString('ascii',0,4)==='OggS')mime='audio/ogg';
     else if(body.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]))&&['webm','weba'].includes(extension||''))mime=extension==='weba'?'audio/webm':'video/webm';
     else if(body.toString('ascii',4,8)==='ftyp'&&['mp4','m4a','mov'].includes(extension||''))mime=extension==='m4a'?'audio/mp4':'video/mp4';
-    else throw new AppError(422,'log_media','Choose a JPEG, PNG, WebP, MP3, WAV, Ogg, WebM, M4A or MP4 file.');
+    else throw new AppError(422,'log_media','Choose a photo or voice note file.');
+    if(mime.startsWith('video/'))throw new AppError(422,'log_video_upload','Upload a photo or voice note. Add videos as links instead.');
   }
   else if(body.toString('ascii',0,5)==='%PDF-')mime='application/pdf';
   else {

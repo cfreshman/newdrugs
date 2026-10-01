@@ -36,6 +36,9 @@ import { conversation, executeOperation } from './operations';
 import { operations, describeOperation } from '../shared/catalog';
 import { currentRun, runView, decideApprovals, completeSurface, cancelRun } from './agent';
 import { createMcpServer } from './mcp';
+import {WebhookReceiver} from 'livekit-server-sdk';
+import {callAccess,callHistory,callWebhook,endCall,incomingCall,joinCall,liveMediaReady,startCall} from './calling';
+import {spaceAccess,spaceWebhook} from './spaces';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { ensureStarter, starterPoolStatus, setStarterBudget } from './starterPool';
 import { adminStatus, requireAdmin, signInAdmin, signOutAdmin } from './admin';
@@ -103,6 +106,12 @@ export function createApp() {
   const deviceJson=express.json({limit:'4kb'}),deviceHeaders:express.RequestHandler=(_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'});next();};
   app.post('/api/agent-login/device',devApiGate,limiter('/api/agent-login/device',10,15*60000),deviceJson,authenticate,deviceHeaders,async(req,res)=>{res.json(await startDeviceLogin(deviceStartSchema.parse(req.body)));});
   app.post('/api/agent-login/poll',devApiGate,limiter('/api/agent-login/poll',120),deviceJson,authenticate,deviceHeaders,async(req,res)=>{const data=z.strictObject({device_code:z.string().max(128)}).parse(req.body),result=await pollDeviceLogin(data.device_code);res.status('error' in result?400:200).json(result);});
+  app.post('/api/livekit/webhook',express.raw({type:'application/webhook+json',limit:'64kb'}),async(req,res)=>{
+    if(!liveMediaReady())throw new AppError(503,'calling_unavailable','Live calling is unavailable.');
+    const receiver=new WebhookReceiver(config.LIVEKIT_API_KEY,config.LIVEKIT_API_SECRET);
+    const event=await receiver.receive((req.body as Buffer).toString('utf8'),req.get('Authorization'));
+    await callWebhook(event);await spaceWebhook(event);res.json({ok:true});
+  });
   app.use('/api', devApiGate, apiRequestLimits(), express.json({ limit: '32kb' }), cookieParser(), csrf, authenticate);
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
@@ -118,6 +127,13 @@ export function createApp() {
     res.json({ ...await readLiveState(actor.userId),
       config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
   });
+  app.get('/api/calls/incoming',async(req,res)=>{res.json({call:await incomingCall(browserActor(req).userId)});});
+  app.get('/api/calls/:connectionId',async(req,res)=>{res.json(await callHistory(browserActor(req).userId,z.string().max(100).parse(req.params.connectionId)));});
+  app.post('/api/calls/:connectionId',limiter('/api/calls/start',12),async(req,res)=>{res.json({call:await startCall(browserActor(req).userId,z.string().max(100).parse(req.params.connectionId))});});
+  app.post('/api/calls/:id/join',async(req,res)=>{res.json({call:await joinCall(browserActor(req).userId,z.uuid().parse(req.params.id))});});
+  app.post('/api/calls/:id/end',async(req,res)=>{res.json({call:await endCall(z.uuid().parse(req.params.id),browserActor(req).userId)});});
+  app.post('/api/calls/:id/token',limiter('/api/calls/token',40),async(req,res)=>{res.json(await callAccess(browserActor(req).userId,z.uuid().parse(req.params.id)));});
+  app.post('/api/spaces/:id/token',limiter('/api/spaces/token',40),async(req,res)=>{res.json(await spaceAccess(browserActor(req).userId,z.uuid().parse(req.params.id)));});
   app.post('/api/events/interests',updateLiveInterests);
   app.get('/api/events', streamLiveState);
   app.get('/api/push', async (req, res) => {

@@ -39,10 +39,10 @@ export async function indexOne(embedding = embed) {
 }
 /** Incremental, bounded backfill. A deploy is safe with existing data and can resume after a crash. */
 export async function backfillSearch() {
-  for (const kind of ['profiles', 'posts'] as const) {
+  for (const kind of ['profiles', 'posts', 'spaces'] as const) {
     const state = await rows('searchMeta').findOne({ _id: `backfill:${INDEX_VERSION}:${kind}` });
     if (state?.done) continue;
-    const collection = kind === 'profiles' ? users() : rows('posts');
+    const collection = kind === 'profiles' ? users() : rows(kind==='spaces'?'spaces':'posts');
     const sources = await collection.find({ ...(state?.cursor ? { _id: { $gt: String(state.cursor) } } : {}) }).sort({ _id: 1 }).limit(50).toArray();
     await transaction(async session => {
       for (const source of sources) {

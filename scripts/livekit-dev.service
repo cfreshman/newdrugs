@@ -1,0 +1,14 @@
+[Unit]
+Description=New Drugs dev LiveKit media server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/livekit-server --config /etc/newdrugs/livekit-dev.yaml
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

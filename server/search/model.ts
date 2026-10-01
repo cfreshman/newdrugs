@@ -12,7 +12,7 @@ export interface SearchDocument {
   indexVersion: string; indexedAt: string; rootId?: string;
 }
 export interface SearchJob {
-  _id: string; kind: 'profiles' | 'posts'; entityId: string; revision: string;
+  _id: string; kind: 'profiles' | 'posts' | 'spaces'; entityId: string; revision: string;
   status: 'queued' | 'working' | 'failed'; attempts: number; availableAt: number;
   lease?: string; leaseUntil?: number; error?: string;
 }

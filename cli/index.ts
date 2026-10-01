@@ -2,6 +2,7 @@
 import {parseSearchArgs,searchCatalog,type SearchPage} from './search';
 import {deviceLogin} from './deviceLogin';
 import { randomUUID } from 'node:crypto';
+import {readFile,writeFile} from 'node:fs/promises';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -61,13 +62,14 @@ async function readSecret() {
   });
 }
 function print(result: unknown) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); }
+async function operationInput(value?:string){return value&&!value.startsWith('--')?JSON.parse(value.startsWith('@')?await readFile(value.slice(1),'utf8'):value):{};}
 async function main() {
   if (command === 'uninstall') { await uninstall(args.includes('--yes'),store); return; }
   if (command === 'update') { const state=await maybeAutoUpdate(release.version,store,selectedProfile,true); if(state!=='updated')process.stdout.write(state==='current'?'New Drugs CLI is current.\n':'An update is already running.\n'); return; }
   if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogin --device [--url https://druggie.org] [--name name] [--scope read|write]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input]\nexecute <operation> [JSON input] [--key idempotency-key] [--yes]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogin --device [--url https://druggie.org] [--name name] [--scope read|write]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input or @file.json]\nexecute <operation> [JSON input or @file.json] [--key idempotency-key] [--yes]\nread make.render '{"draftId":"..."}' [--output preview.png]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
     return;
   }
   if (command === 'admin') {
@@ -140,8 +142,13 @@ async function main() {
   if ((command === 'read' && op.kind === 'read') || (command === 'execute' && op.kind === 'write')) {
     const key = op.kind === 'write' ? option('--key') || randomUUID() : undefined;
     if (key) process.stderr.write(`Request key: ${key}\n`);
-    const input = args[2] && !args[2].startsWith('--') ? JSON.parse(args[2]) : {};
-    print(await invoke(login, op.name, input, key, args.includes('--yes')));
+    const input = await operationInput(args[2]);
+    const result=await invoke(login, op.name, input, key, args.includes('--yes')) as {ok?:boolean;data?:{pngBase64?:string}};
+    if(command==='read'&&op.name==='make.render'&&option('--output')){
+      const png=result.data?.pngBase64;if(!result.ok||typeof png!=='string')throw Error('Make did not return a PNG preview.');
+      await writeFile(option('--output')!,Buffer.from(png,'base64'),{flag:'wx',mode:0o600});
+      print({...result,data:{...result.data,pngBase64:undefined,previewPath:option('--output')}});
+    }else print(result);
     return;
   }
   throw new Error('Use read for reads and execute for writes.');

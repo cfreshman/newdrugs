@@ -8,6 +8,9 @@ import {listStorage,storageAttachments} from './storage';
 import type {StorageType,StorageLocation} from '../shared/storage';
 import {defaultPreferences} from '../shared/preferences';
 import {logOperation,logEntryFor,hasSharedHangouts} from './log';
+import {makeOperation,normalizeMakeProject,stageMakePublish} from './make';
+import {endCallForConnection} from './calling';
+import {removeSpaceParticipantForBlock,spaceOperation} from './spaces';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
 import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
@@ -95,6 +98,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   if (/^(people\.|posts\.|connections\.|messages\.|notifications\.|storage\.|search\.|links\.)/.test(name)) registered(user);
   if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){registered(user);return memoryOperation(name,d,actor,session);}
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
+  if (name.startsWith('make.')) { registered(user); return makeOperation(name,d,actor,session); }
+  if (name.startsWith('spaces.')) { registered(user); return spaceOperation(name,d,actor,session); }
   if(name==='automations.validate'){
     registered(user);const validated=validateAutomationConfiguration(d),authority:Actor={userId,source:'agent',scope:'read',background:true,...validated.dataAccess};
     const readableOperations=operations.filter(operation=>operation.kind==='read'&&operationAvailable(authority,operation)).map(operation=>operation.name).sort();
@@ -388,6 +393,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'connections.disconnect': {
       const c = await connectionFor(userId, String(d.connectionId), session);
       const saved = requireValue(await rows('connections').findOneAndUpdate({ _id: c._id, status: 'accepted' }, { $set: { status: 'disconnected', disconnectedBy: userId, disconnectedAt: now, updatedAt: now, initialInvitation: c.initialInvitation || { fromId: c.fromId, note: c.note, createdAt: c.createdAt } } }, { ...options, returnDocument: 'after' }));
+      if(session)await endCallForConnection(c._id,session);
       await rows('notifications').updateMany({ connectionId: c._id, kind: { $in: ['message','connection_accepted'] } }, { $set: { readAt: now } }, options);
       return publicRow(saved);
     }
@@ -450,6 +456,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         if (count >= 1000) throw new AppError(422, 'limit', 'Your block list is full.');
         await rows('blocks').updateOne({ _id: id }, { $setOnInsert: { ownerId: userId, members: [userId, other], pairId: pairId(userId, other), createdAt: now } }, { ...options, upsert: true });
       } else await rows('blocks').deleteOne({ _id: id, ownerId: userId }, options);
+      if(d.blocked&&session){await removeSpaceParticipantForBlock(userId,other,session);await endCallForConnection(pairId(userId,other),session);}
       if(session)await invalidateLogContacts([userId,other],session);
       return { personId: other, blocked: d.blocked };
     }
@@ -515,7 +522,20 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if (name==='profile.update' && typeof parsed.locationCell==='string') await resolveArea(parsed.locationCell);
   if (name==='posts.create' && typeof parsed.areaCell==='string') await resolveArea(parsed.areaCell);
   const fingerprint = hash(canonicalJSON({ name, parsed }));
-  const committed = await transaction(async session => {
+  if(name.startsWith('make.')&&op.kind==='write'){
+    const prior=await rows('receipts').findOne({_id:receiptId});
+    if(prior){
+      if(prior.fingerprint!==fingerprint)throw new AppError(409,'idempotency_conflict','This key was already used for a different action.');
+      requireValue(await users().findOne({_id:actor.userId,suspendedAt:null},{projection:{_id:1}}),'This account is suspended or unavailable.');
+      if(actor.source==='agent'&&!await rows('runs').findOne({_id:proof.runId,userId:actor.userId,lease:proof.lease,leaseUntil:{$gt:Date.now()},status:'running',cancelRequested:{$ne:true}},{projection:{_id:1}}))throw new AppError(409,'stale_run','The task no longer has authority to act.');
+      return prior.result;
+    }
+  }
+  if(name==='make.create'||name==='make.edit')parsed.project=await normalizeMakeProject(parsed.project,actor);
+  let makeFileId:string|undefined;
+  if(name==='make.publish')makeFileId=await stageMakePublish(parsed,actor);
+  let committed:unknown;
+  try{committed = await transaction(async session => {
     if (actor.source === 'agent') {
       const lease = await rows('runs').updateOne({ _id: proof.runId, userId: actor.userId, lease: proof.lease, leaseUntil: { $gt: Date.now() }, status: 'running', cancelRequested: { $ne: true } }, { $set: { lastEffect: idempotencyKey } }, { session });
       if (!lease.matchedCount) throw new AppError(409, 'stale_run', 'The task no longer has authority to act.');
@@ -544,14 +564,15 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
     }
     // Store the same JSON shape that the HTTP/MCP client receives. BSON would
     // otherwise turn nested undefined optional fields into null on a retry.
-    const result = JSON.parse(JSON.stringify(op.outputSchema.parse(await run(name, parsed, actor, session))));
+    const result = JSON.parse(JSON.stringify(op.outputSchema.parse(await run(name,makeFileId?{...parsed,_makeFileId:makeFileId}:parsed, actor, session))));
     if((name.startsWith('agent.memory.')||name==='agent.instructions.update')&&result.saved!==false)await rows('recordEvents').insertOne({_id:randomUUID(),userIds:[actor.userId],payload:{keys:['agent_memory']},expiresAt:new Date(Date.now()+3600000)},{session});
     if(name==='profile.update')await syncSourceAttachments('profile',actor.userId,session);
     if(['posts.create','posts.reply','posts.delete'].includes(name))await syncSourceAttachments('posts',name==='posts.delete'?String(parsed.postId):String(result.id),session);
-    if(name.startsWith('log.')&&(parsed.entryId||result.id)&&!['log.birthday_update','log.preferences_update'].includes(name))await syncSourceAttachments('hangouts',String(parsed.entryId||result.id),session);
+    if((name.startsWith('log.')||name==='make.publish')&&(parsed.entryId||result.id)&&!['log.birthday_update','log.preferences_update'].includes(name))await syncSourceAttachments('hangouts',String(parsed.entryId||result.id),session);
     await rows('receipts').insertOne({ _id: receiptId, userId: actor.userId, operation: name, source: actor.source, fingerprint, fingerprintVersion: 2, result, createdAt: new Date().toISOString() }, { session });
     return result;
-  });
-  if(['files.delete','log.leave','log.delete','log.update','log.contribute'].includes(name)||name==='profile.update'&&parsed.photos)await expireUploads({remote:false}).catch(error=>console.error('Upload deletion cleanup:',error.name));
+  });}catch(error){if(makeFileId)await deleteUpload(actor,makeFileId).catch(()=>{});throw error;}
+  if(makeFileId&&(committed as {imageFileId?:string}).imageFileId!==makeFileId)await deleteUpload(actor,makeFileId).catch(()=>{});
+  if(['files.delete','log.leave','log.delete','log.update','log.contribute','make.publish'].includes(name)||name==='profile.update'&&parsed.photos)await expireUploads({remote:false}).catch(error=>console.error('Upload deletion cleanup:',error.name));
   return committed;
 }

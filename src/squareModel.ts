@@ -5,7 +5,7 @@ export const squareFonts={mono:'Noto Sans Mono',sans:'Noto Sans',serif:'Noto Ser
 const color=z.string().regex(/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i),backing=z.union([color,z.literal('transparent')]);
 const asset=z.string().max(MAX_SQUARE_BYTES).regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/);
 const crop=z.strictObject({x:z.number().min(0).max(1),y:z.number().min(0).max(1),w:z.number().positive().max(1),h:z.number().positive().max(1)}).refine(c=>c.x+c.w<=1.000001&&c.y+c.h<=1.000001,'Keep the crop inside the image.');
-const layerSchema=z.strictObject({
+export const squareLayerSchema=z.strictObject({
  id:z.string().min(1).max(80),type:z.enum(['image','shape','text','draw']),x:z.number().min(-4).max(4),y:z.number().min(-4).max(4),w:z.number().min(1/512).max(8),h:z.number().min(1/512).max(8),
  angle:z.number().min(-180).max(180).default(0),opacity:z.number().min(0).max(1).default(1),src:asset.optional(),color:color.default('#000000'),background:backing.default('transparent'),
  oval:z.boolean().default(false),border:z.boolean().default(false),borderColor:color.default('#000000'),borderWidth:z.number().min(1).max(10).default(1),crop:crop.optional(),
@@ -13,13 +13,14 @@ const layerSchema=z.strictObject({
  outline:z.boolean().default(false),outlineColor:color.default('#000000'),outlineWidth:z.number().min(1).max(10).default(5),
  shadow:z.boolean().default(false),shadowColor:color.default('#000000'),shadowX:z.number().min(-64).max(64).default(24),shadowY:z.number().min(-64).max(64).default(24),
 }).refine(layer=>layer.type!=='image'||Boolean(layer.src),'Choose an image for the layer.');
-const projectSchema=z.strictObject({version:z.literal(1),color,layers:z.array(layerSchema).max(MAX_SQUARE_LAYERS)}).refine(project=>new Set(project.layers.map(layer=>layer.id)).size===project.layers.length,'Layer IDs must be unique.').refine(project=>project.layers.filter(layer=>layer.type==='draw').length<=1,'Use one drawing layer.');
-export type SquareLayer=z.infer<typeof layerSchema>;
-export type SquareProject=z.infer<typeof projectSchema>;
+export const squareProjectSchema=z.strictObject({version:z.literal(1),color,layers:z.array(squareLayerSchema).max(MAX_SQUARE_LAYERS)}).refine(project=>new Set(project.layers.map(layer=>layer.id)).size===project.layers.length,'Layer IDs must be unique.').refine(project=>project.layers.filter(layer=>layer.type==='draw').length<=1,'Use one drawing layer.');
+export type SquareLayer=z.infer<typeof squareLayerSchema>;
+export type SquareProject=z.infer<typeof squareProjectSchema>;
 export const emptySquare=():SquareProject=>({version:1,color:'#ffffff',layers:[]});
-export function squareLayer(type:SquareLayer['type'],data:Partial<SquareLayer>={}):SquareLayer{return layerSchema.parse({id:crypto.randomUUID(),type,x:.1,y:.1,w:.5,h:.5,...(type==='text'?{x:.1,y:.4,w:.8,h:.2}:type==='draw'?{x:0,y:0,w:1,h:1}:{}),...data});}
+export function squareLayer(type:SquareLayer['type'],data:Partial<SquareLayer>={}):SquareLayer{return squareLayerSchema.parse({id:crypto.randomUUID(),type,x:.1,y:.1,w:.5,h:.5,...(type==='text'?{x:.1,y:.4,w:.8,h:.2}:type==='draw'?{x:0,y:0,w:1,h:1}:{}),...data});}
 export function squareBytes(project:SquareProject){return new TextEncoder().encode(JSON.stringify(project)).length;}
 export function checkSquare(project:SquareProject){if(squareBytes(project)>MAX_SQUARE_BYTES)throw Error('This image is too large to edit. Remove a layer or try a smaller photo.');return project;}
+export function parseSquareProject(value:unknown){return checkSquare(squareProjectSchema.parse(value));}
 
 /** Inspect raster headers before asking the browser to decode an imported asset. */
 export function rasterDimensions(bytes:Uint8Array){

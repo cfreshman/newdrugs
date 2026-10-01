@@ -4,6 +4,8 @@ import {billingActivityOutput} from './billingActivity';
 import {storageAttachmentSchema} from './storage';
 import {accountPreferencesSchema} from './preferences';
 import {logOutputs} from './log';
+import {makeDraftOutput,makeDraftSummary,makeRenderOutput,makePublishOutput} from './make';
+import {spaceSchema,spacePageSchema,speakerRequestSchema,speakerRequestsSchema} from './spaces';
 import {timeResolveOutput,timeConvertOutput,timeOverlapOutput} from './utilitySchemas';
 import {customDocumentSchema} from './customMedia';
 import { recordAttachmentSchema } from './recordContext';
@@ -24,11 +26,13 @@ const wallet = z.object({ starterAvailableNanos: z.number().optional(), balanceN
 const upload=z.object({id,name:z.string(),purpose:z.enum(['profile_photo','agent_input','log_media']),bytes:z.number(),mime:z.string(),sha256:z.string(),ready:z.boolean(),uploadUrl:z.string(),url:z.string().optional()});
 const chatMessage = z.object({ id, role: z.enum(['user', 'assistant']), text: z.string(), files:z.array(upload).optional(), inbox:z.array(z.object({id,title:z.string()})).optional(), records:z.array(recordAttachmentSchema).optional(), createdAt: z.string(), source: z.enum(['app', 'external']), status: z.string().optional() });
 export const resourceLinkOutput = z.object({ rel: z.enum(['open_in_newdrugs', 'download']), targetKind: z.enum(['exact', 'surface']), title: z.string(), url: z.url(), resourceType: z.string(), resourceId: z.string().optional() });
-const searchMatch = z.object({ id, dataset:z.enum(['profiles','posts','replies','threads']), entityType:z.enum(['person','post']), entityId:id, ownerId:id, score:z.number(), evidence:z.array(z.object({field:z.string(),text:z.string(),entityId:id,entityType:z.enum(['person','post'])})), signals:z.object({semantic:z.number().optional(),lexical:z.number().optional(),freshness:z.number().optional(),distance:z.number().optional(),diversity:z.number().optional(),exact:z.boolean().optional()}), sourceHash:z.string(),sourceRevision:z.string(),record:z.union([profileOutput,post]) });
+const searchMatch = z.object({ id, dataset:z.enum(['profiles','posts','replies','threads']), entityType:z.enum(['person','post']), entityId:id, ownerId:id, score:z.number(), evidence:z.array(z.object({field:z.string(),text:z.string(),entityId:id,entityType:z.enum(['person','post','space'])})), signals:z.object({semantic:z.number().optional(),lexical:z.number().optional(),freshness:z.number().optional(),distance:z.number().optional(),diversity:z.number().optional(),exact:z.boolean().optional()}), sourceHash:z.string(),sourceRevision:z.string(),record:z.union([profileOutput,post,spaceSchema]) });
 const searchRetrieval = z.object({id,mode:z.enum(['hybrid','semantic','keyword','exact']),model:z.string(),dimensions:z.number(),indexVersion:z.string(),constraints:z.object({scope:z.enum(['public','friends','saved']).optional(),near:z.string().optional(),radiusMiles:z.number().optional(),authorId:z.string().optional(),after:z.string().optional(),beforeDate:z.string().optional()}),candidates:z.number(),incomplete:z.boolean(),notices:z.array(z.string()),indexedAt:z.string().optional(),approximate:z.boolean()});
 const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetrieval,nextCursor:z.string().nullable()});
 export const outputs: Record<string, z.ZodType> = {
   ...logOutputs,
+  'make.create':makeDraftSummary,'make.get':makeDraftOutput,'make.edit':makeDraftSummary,'make.render':makeRenderOutput,'make.publish':makePublishOutput,'make.discard':z.object({discarded:z.literal(true),draftId:z.uuid()}),
+  'spaces.list':spacePageSchema,'spaces.get':spaceSchema,'spaces.create':spaceSchema,'spaces.end':spaceSchema,'spaces.requests':speakerRequestsSchema,'spaces.request_speak':speakerRequestSchema,'spaces.cancel_request':z.object({cancelled:z.literal(true)}),'spaces.respond_speaker':z.object({space:spaceSchema,personId:z.string(),approved:z.boolean()}),'spaces.revoke_speaker':z.object({space:spaceSchema,personId:z.string()}),'spaces.remove_person':z.object({space:spaceSchema,personId:z.string(),removed:z.literal(true)}),
   'access.get':z.object({source:z.enum(['browser','external','agent']),scope:z.enum(['read','write']),background:z.boolean(),credential:z.object({name:z.string(),createdAt:z.string().optional(),expiresAt:z.string().nullable()}).optional(),grants:z.object({logAccess:z.boolean(),privateChat:z.boolean(),accountActivity:z.boolean(),webSearch:z.boolean()}).optional(),operations:z.object({read:z.array(z.string()),write:z.array(z.string()),confirmationRequired:z.array(z.string())})}),
   'account.preferences':accountPreferencesSchema,'account.preferences_update':accountPreferencesSchema,
   'automations.validate':automationValidationSchema,
@@ -67,7 +71,7 @@ export const outputs: Record<string, z.ZodType> = {
   'connections.get': z.object({ connection, people: z.array(profileOutput) }),
   'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.window':z.object({items:z.array(message),targetId:id,connection,people:z.array(profileOutput),olderCursor:id.nullable(),newerCursor:id.nullable()}), 'messages.list': page(message), 'messages.send': message,
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
-  'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
+  'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'call', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added']), title: z.string(), text: z.string(), createdAt: z.string(), connectionId: z.string().optional(), callId:z.string().optional(),callActive:z.boolean().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),
   'people.block': z.object({ personId: id, blocked: z.boolean() }), 'people.report': z.object({ id, status: z.literal('unreviewed') }),
   'people.blocked': page(z.object({ id, personId: id, name: z.string(), handle: z.string().optional(), createdAt: z.string() })),
@@ -79,6 +83,10 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'spaces.create':'Start a public live-audio Space with this title. People outside your friends can join and listen.',
+  'spaces.end':'End this public live-audio Space for everyone.',
+  'spaces.respond_speaker':'Grant or decline this person’s microphone access in your public Space.',
+  'spaces.remove_person':'Remove this person from your Space and prevent them from rejoining it.',
   'agent.instructions.update':'Replace your personal instructions used by future agent runs.',
   'log.add_person':'Add this person to the shared hangout. They can see it and add their own note/photos. Other attendees keep their contributions.',
   'log.join':'Join this shared hangout as yourself. Its attendees can see your participation, and you can log future hangouts together.',
