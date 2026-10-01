@@ -3,7 +3,8 @@ import {randomUUID} from 'node:crypto';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {config} from '../server/config';
 import {users,type User,type Actor} from '../server/auth';
-import {queueLogSearch,indexLogEntry,searchLog,type LogSearchChunk} from '../server/search/log';
+import {queueLogSearch,indexLogEntry,relatedLog,searchLog,type LogSearchChunk} from '../server/search/log';
+import {executeOperation} from '../server/operations';
 import * as backend from '../server/search/backend';
 import {buildResourceLinks} from '../server/resourceLinks';
 const oldUrl=config.QDRANT_URL,vector=Array(512).fill(0).map((_,i)=>i===0?1:0),actor:Actor={userId:'me',source:'external',scope:'read'};
@@ -43,4 +44,20 @@ it('returns indexed text matches before semantic neighbors',async()=>{
  const query=vi.spyOn(backend,'queryRetrieval').mockResolvedValue({lexical:[hit(direct,.2)],dense:[hit(neighbor,.9),hit(direct,.3)]});
  try{const result=await searchLog({query:'sunset',scope:'all',limit:20},actor,async()=>vector);expect(result.items.map(item=>[item.entryId,item.match])).toEqual([[text,'text'],[related,'semantic']]);}
  finally{query.mockRestore();}
+});
+it('finds related Log entries from saved vectors and reauthorizes every result',async()=>{
+ const source=await entry(['me'],'A walk beside the river'),related=await entry(['me'],'Another walk near the water'),foreign=await entry(['other'],'PRIVATE NOTE'),stale=await entry(['me'],'Old note');
+ while(await indexLogEntry(async()=>vector));
+ const chunks=await rows<LogSearchChunk>('logSearchChunks').find({}).toArray();
+ const hit=(row:LogSearchChunk)=>({id:row._id,sourceKey:row.entryId,sourceHash:row.sourceHash,sourceRevision:row.sourceRevision,ownerId:row.ownerId,score:.8});
+ const query=vi.spyOn(backend,'queryRetrieval').mockResolvedValue({lexical:[],dense:chunks.map(hit)});
+ try{
+  await rows('logEntries').updateOne({_id:stale},{$set:{revision:2}});
+  const result=await relatedLog(source,10,actor);
+  expect(result.items.map(item=>item.entryId)).toEqual([related]);
+  expect(JSON.stringify(result)).not.toContain('PRIVATE NOTE');
+  expect(query).toHaveBeenCalledWith('log','me',expect.objectContaining({query:'',vector:expect.any(Array),filter:expect.objectContaining({must_not:expect.arrayContaining([{key:'sourceKey',match:{value:source}}])})}));
+  expect(buildResourceLinks('log.related',{},result,actor)[0]).toMatchObject({targetKind:'exact',resourceId:related});
+  expect((await executeOperation('log.related',{entryId:source},actor,randomUUID()) as typeof result).items.map(item=>item.entryId)).toEqual([related]);
+ }finally{query.mockRestore();}
 });

@@ -69,7 +69,7 @@ export async function queryRetrieval(kind:RetrievalKind,userId:string|undefined,
   const result=await request<{points:{score:number;payload:Record<string,unknown>}[]}>(`/collections/${collection(kind)}/points/query`,'POST',{query,using,filter,limit,with_vector:false,with_payload:['id','sourceHash','sourceRevision','sourceKey','ownerId','messageId','offset'],timeout:8});
   return (result.points||[]).flatMap(point=>{const p=point.payload;if(typeof p?.id!=='string'||typeof p.sourceHash!=='string'||typeof p.sourceRevision!=='string'||typeof p.sourceKey!=='string'||typeof p.ownerId!=='string'||!Number.isFinite(point.score))return [];return [{id:p.id,sourceHash:p.sourceHash,sourceRevision:p.sourceRevision,sourceKey:p.sourceKey,ownerId:p.ownerId,score:point.score,...(typeof p.messageId==='string'?{messageId:p.messageId}:{}),...(typeof p.offset==='number'?{offset:p.offset}:{})}];}) as RetrievalHit[];
  };
- const [lexical,dense]=await Promise.all([lane('lexical',{text:input.query,model:'qdrant/bm25'}),input.vector?lane('dense',input.vector):Promise.resolve([])]);
+ const [lexical,dense]=await Promise.all([input.query.trim()?lane('lexical',{text:input.query,model:'qdrant/bm25'}):Promise.resolve([]),input.vector?lane('dense',input.vector):Promise.resolve([])]);
  return {lexical,dense};
 }
 

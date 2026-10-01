@@ -72,6 +72,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
  ...Object.fromEntries(['agent.instructions.get','agent.instructions.update'].map(name=>[name,[{route:'/settings/instructions',targetKind:'surface' as const,resourceType:'agent_instructions'}]])),
  ...Object.fromEntries(['agent.memory.context','agent.memory.list','agent.memory.get','agent.memory.save','agent.memory.delete'].map(name=>[name,[{route:'/settings/agent',targetKind:'surface' as const,resourceType:'agent_memory'}]])),
  'log.search':[{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'}],
+ 'log.related':[{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'}],
  'log.birthday_get':[{route:'/log/preferences',targetKind:'surface',resourceType:'log_settings'}],
  'log.birthday_update':[{route:'/log/preferences',targetKind:'surface',resourceType:'log_settings'}],
  'log.birthdays':[{route:'/people/[id]',targetKind:'exact',resourceType:'person'}],

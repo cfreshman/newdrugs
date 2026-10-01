@@ -1,4 +1,4 @@
-import {logSearchResult} from './logSearch';
+import {logRelatedResult,logSearchResult} from './logSearch';
 import {memoryOutputs} from './agentMemory';
 import {billingActivityOutput} from './billingActivity';
 import {storageAttachmentSchema} from './storage';
@@ -49,6 +49,7 @@ export const outputs: Record<string, z.ZodType> = {
   'files.delete':z.object({deleted:z.literal(true),id,bytesFreed:z.number()}),
   ...memoryOutputs,
   'log.search':logSearchResult,
+  'log.related':logRelatedResult,
   'storage.attachments':z.object({items:z.array(storageAttachmentSchema),nextCursor:z.string().nullable()}),
   'storage.list':z.object({indexing:z.boolean().optional(),usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean(),attachments:z.array(storageAttachmentSchema),attachmentCursor:z.string().nullable().optional()})),nextCursor:z.string().nullable()}),
   'locations.search':z.object({items:z.array(z.object({id:z.string(),label:z.string(),cell:z.string()})),attribution:z.string()}),

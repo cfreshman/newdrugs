@@ -9,7 +9,7 @@ import {DIMENSIONS,EMBEDDING_MODEL} from './model';
 import {hashText,hybridRank,semanticCandidate} from './ranking';
 import {queryRetrieval,retrievalEnabled} from './backend';
 import {queueRetrieval} from './replication';
-import type {LogSearchInput,LogSearchResult} from '../../shared/logSearch';
+import type {LogRelatedResult,LogSearchInput,LogSearchResult} from '../../shared/logSearch';
 export const LOG_INDEX_VERSION=`private-log-v1:${EMBEDDING_MODEL}:${DIMENSIONS}`;
 export interface LogSearchChunk {_id:string;entryId:string;date:string;ownerId:string;viewerIds:string[];memberCount:number;invitedCount:number;indexVersion:string;sourceHash:string;sourceRevision:string;text:string;snippet:string;vector:number[]}
 interface Job {_id:string;viewerIds?:string[];revision:string;availableAt:number;attempts:number;lease?:string}
@@ -19,12 +19,13 @@ export async function queueLogSearch(entryId:string,session?:ClientSession,viewe
  const viewerIds=[...new Set([...(previous?.viewerIds||[]),...(viewers||source?.members as string[]||[])])];
  await jobs().updateOne({_id:entryId},{$set:{viewerIds,revision:randomUUID(),availableAt:Date.now(),attempts:0},$unset:{lease:''}},{session,upsert:true});
 }
-export function logPassages(row:Row){
+export function logPassages(row:Row,maxPassages=Number.POSITIVE_INFINITY,onePerContribution=false){
  const metadata=[row.title,row.place,...(row.links as string[]||[])].filter(Boolean).join('\n').slice(0,1200),passages:{key:string;text:string;snippet:string}[]=[];
  if(metadata.trim())passages.push({key:'details',text:metadata,snippet:metadata});
  for(const contribution of row.contributions as {userId:string;note:string}[]||[]){
+  if(passages.length>=maxPassages)break;
   if(!(row.members as string[]||[]).includes(contribution.userId)||!contribution.note?.trim())continue;
-  for(let offset=0;offset<contribution.note.length;offset+=1800){const snippet=contribution.note.slice(offset,offset+2000);passages.push({key:`${contribution.userId}:${offset}`,text:snippet,snippet});if(offset+2000>=contribution.note.length)break;}
+  for(let offset=0;offset<contribution.note.length;offset+=1800){const snippet=contribution.note.slice(offset,offset+2000);passages.push({key:`${contribution.userId}:${offset}`,text:snippet,snippet});if(onePerContribution||passages.length>=maxPassages||offset+2000>=contribution.note.length)break;}
  }
  return passages;
 }
@@ -93,4 +94,38 @@ export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed
  }
  const indexing=Boolean(await jobs().findOne({viewerIds:userId},{projection:{_id:1}}))||Boolean(await rows('retrievalJobs').findOne({kind:'log',viewerIds:userId},{projection:{_id:1}}))||!(await rows('logSearchMeta').findOne({_id:LOG_INDEX_VERSION}))?.done;
  return {items,nextCursor:offset<snapshot.ranked.length?`${snapshot._id}.${offset}`:null,mode:snapshot.mode,indexing,notices:[...snapshot.notices,...(indexing?['Recent or older Log entries are still being indexed.']:[])]};
+}
+
+/** Read-only similarity from already indexed Log text. Both source and results are reauthorized. */
+export async function relatedLog(entryId:string,limit:number,actor:Actor):Promise<LogRelatedResult>{
+ if(!retrievalEnabled())throw new AppError(503,'search_unavailable','Log search is not configured yet.');
+ const {logEntryFor}=await import('../log'),source=await logEntryFor(actor.userId,entryId);
+ if(!source.members.includes(actor.userId))throw new AppError(403,'log_member','Join the hangout before finding related memories.');
+ const parts=logPassages(source as unknown as Row,8,true);
+ if(!parts.length)return {sourceEntryId:entryId,items:[],indexing:false,notices:['This entry has no searchable text yet.']};
+ const sourceIds=parts.map(part=>hashText(`${entryId}:${part.key}`));
+ const stored=await chunks().find({_id:{$in:sourceIds},entryId,viewerIds:actor.userId,indexVersion:LOG_INDEX_VERSION,sourceRevision:String(source.revision)}).limit(8).toArray();
+ const sourceParts=parts.flatMap(part=>{const chunk=stored.find(item=>item._id===hashText(`${entryId}:${part.key}`)&&item.sourceHash===hashText(`${LOG_INDEX_VERSION}:${part.text}`));return chunk?[chunk]:[];});
+ const indexing=sourceParts.length<parts.length||Boolean(await jobs().findOne({_id:entryId},{projection:{_id:1}}))||Boolean(await rows('retrievalJobs').findOne({kind:'log',sourceKey:entryId},{projection:{_id:1}}));
+ if(!sourceParts.length)return {sourceEntryId:entryId,items:[],indexing:true,notices:['This entry is still being indexed. Try again shortly.']};
+ const vector=Array<number>(DIMENSIONS).fill(0);let weightTotal=0;
+ for(const chunk of sourceParts){const weight=chunk._id===hashText(`${entryId}:details`)?2:1;weightTotal+=weight;for(let i=0;i<DIMENSIONS;i++)vector[i]+=chunk.vector[i]*weight;}
+ for(let i=0;i<DIMENSIONS;i++)vector[i]/=weightTotal;
+ const magnitude=Math.hypot(...vector);if(!Number.isFinite(magnitude)||magnitude<=0)throw new AppError(503,'search_unavailable','This entry’s search index is unavailable. Try again shortly.');
+ for(let i=0;i<DIMENSIONS;i++)vector[i]/=magnitude;
+ const blocked=(await rows('blocks').find({members:actor.userId},{projection:{members:1}}).limit(1001).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==actor.userId));
+ if(blocked.length>1000)throw new AppError(422,'block_limit','Please contact support about your block list.');
+ let hits;try{hits=(await queryRetrieval('log',actor.userId,{query:'',vector,limit:150,filter:{must:[{key:'indexVersion',match:{value:LOG_INDEX_VERSION}}],must_not:[{key:'sourceKey',match:{value:entryId}},...(blocked.length?[{key:'viewerIds',match:{any:blocked}}]:[])]}})).dense;}catch{throw new AppError(503,'search_unavailable','Log search is temporarily unavailable. Try again shortly.');}
+ const seen=new Set<string>(),candidates=hits.filter(hit=>{if(hit.sourceKey===entryId||hit.score<.23||seen.has(hit.sourceKey))return false;seen.add(hit.sourceKey);return true;}).slice(0,40);
+ const matched=await chunks().find({_id:{$in:candidates.map(hit=>hit.id)},viewerIds:actor.userId,indexVersion:LOG_INDEX_VERSION}).limit(40).toArray(),byId=new Map(matched.map(chunk=>[chunk._id,chunk]));
+ const items:LogRelatedResult['items']=[];
+ for(let offset=0;offset<candidates.length&&items.length<limit;offset+=8){
+  const batch=await Promise.all(candidates.slice(offset,offset+8).map(async hit=>{
+   const chunk=byId.get(hit.id);if(!chunk||chunk.entryId!==hit.sourceKey||chunk.sourceHash!==hit.sourceHash||chunk.sourceRevision!==hit.sourceRevision)return null;
+   try{const row=await logEntryFor(actor.userId,hit.sourceKey);if(!row.members.includes(actor.userId)||String(row.revision)!==hit.sourceRevision)return null;
+    return {entryId:row._id,title:row.title,date:row.date,place:row.place,snippet:chunk.snippet.slice(0,500),score:hit.score};
+   }catch(error){if(error instanceof AppError&&[403,404].includes(error.status))return null;throw error;}
+  }));items.push(...batch.filter((item):item is NonNullable<typeof item>=>Boolean(item)).slice(0,limit-items.length));
+ }
+ return {sourceEntryId:entryId,items,indexing,notices:indexing?['Recent Log changes are still being indexed.']:[]};
 }

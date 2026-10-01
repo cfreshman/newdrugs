@@ -15,7 +15,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Working tree | Requested implementation is committed on `main`. Inspect status before editing. |
 | Production | `https://druggie.org`; exact version is in `release.json`, exact deployment is the live `prod/current` target |
 | Cloud dev | `https://dev.druggie.org`; exact deployment is the live `dev/current` target; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, server-side Make operations, new Log video-upload rejection, the calendar mosaic sizing correction, Log List search, DM video calls and public audio Talk under Posts. Cloud dev additionally has the Circle mutual-friend filter, compact DM link previews and a few navigation/Settings corrections. Dev does not bump public versions. |
+| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, server-side Make operations, new Log video-upload rejection, the calendar mosaic sizing correction, Log List search, DM video calls and public audio Talk under Posts. Cloud dev additionally has the Circle mutual-friend filter, private `log.related` CLI/MCP/agent reads, compact DM link previews and a few navigation/Settings corrections. Dev does not bump public versions. |
 | Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx are active. Each stage has a separate LiveKit service and credentials. Both API health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
@@ -259,6 +259,8 @@ Hosted runs are durable. The host persists run state, tool decisions, review con
 Streaming must work from provider events through durable state and `/api/events` into React. Do not substitute “one moment,” flickering placeholders, or repeatedly restarting fake text. Completed final output appears immediately. Wallet and record changes should refresh through the shared live-state path, not a collection of arbitrary polling timers. Technical errors should not shift the input layout.
 
 The operation catalog is the common contract for UI/CLI/MCP. A feature that changes domain behavior needs validation, authorization, idempotency, exact links, and appropriate reactive invalidation. Utility operations can remain agent/CLI/MCP-only. Add direct UI when it makes sense for the user workflow, not mechanically for every helper; core social actions still need usable manual controls.
+
+`log.related` is a private CLI/MCP/agent read: `newdrugs --profile dev read log.related '{"entryId":"<hangout-id>"}'`. It uses existing indexed text vectors, returns exact authorized Log links, and makes no model call. It needs a joined entry with searchable text and may report that indexing is still underway. There is no Related memories control in the Log UI.
 
 `access.get` reports the current connection scope and filtered operation authority without exposing a token. `messages.window` provides bounded, source-authorized context around one human DM. `automations.validate` uses the same schema and scheduler as creation but makes no change, creates no run and grants no authority. Keep these focused reads separate from generic operation-preview or broad cross-dataset aggregation machinery.
 

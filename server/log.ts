@@ -1,7 +1,7 @@
 import {listLogContacts} from './logContacts';
 import {Temporal} from '@js-temporal/polyfill';
 import {workGate} from './workGate';
-import {searchLog} from './search/log';
+import {relatedLog,searchLog} from './search/log';
 import type {LogSearchInput} from '../shared/logSearch';
 import {publishLogChange} from './recordEvents';
 import {projectInvite} from './logInvites';
@@ -161,6 +161,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  const userId=actor.userId,now=new Date().toISOString();
  if(name==='log.calendar')return calendar(userId,d as any,session);
  if(name==='log.search')return searchLog(d as unknown as LogSearchInput,actor);
+ if(name==='log.related')return relatedLog(String(d.entryId),Number(d.limit),actor);
  if(name==='log.birthday_get'){const row=await rows('logBirthdays').findOne({_id:userId},{session});return {birthday:row?{month:row.month,day:row.day,...(typeof row.year==='number'?{year:row.year}:{})}:null};}
  if(name==='log.birthday_update'){
   if(!d.birthday){await rows('logBirthdays').deleteOne({_id:userId},{session});return {birthday:null};}
