@@ -40,16 +40,17 @@ export async function indexOne(embedding = embed) {
 /** Incremental, bounded backfill. A deploy is safe with existing data and can resume after a crash. */
 export async function backfillSearch() {
   for (const kind of ['profiles', 'posts', 'spaces'] as const) {
-    const state = await rows('searchMeta').findOne({ _id: `backfill:${INDEX_VERSION}:${kind}` });
+    const stateKey=`backfill:${INDEX_VERSION}:${kind==='spaces'?'spaces-title-v2':kind}`;
+    const state = await rows('searchMeta').findOne({ _id: stateKey });
     if (state?.done) continue;
     const collection = kind === 'profiles' ? users() : rows(kind==='spaces'?'spaces':'posts');
-    const sources = await collection.find({ ...(state?.cursor ? { _id: { $gt: String(state.cursor) } } : {}) }).sort({ _id: 1 }).limit(50).toArray();
+    const sources = await collection.find({ ...(kind==='spaces'?{status:'live'}:{}),...(state?.cursor ? { _id: { $gt: String(state.cursor) } } : {}) }).sort({ _id: 1 }).limit(50).toArray();
     await transaction(async session => {
       for (const source of sources) {
         const key = `${kind}:${source._id}`;
-        if (!await rows('searchOutbox').findOne({ _id: key }, { session }) && !await rows('searchDocuments').findOne({ _id: key, indexVersion: INDEX_VERSION }, { session })) await enqueueSearch(kind, source._id, session);
+        if (!await rows('searchOutbox').findOne({ _id: key }, { session }) && (kind==='spaces'||!await rows('searchDocuments').findOne({ _id: key, indexVersion: INDEX_VERSION }, { session }))) await enqueueSearch(kind, source._id, session);
       }
-      await rows('searchMeta').updateOne({ _id: `backfill:${INDEX_VERSION}:${kind}` }, { $set: { cursor: sources.at(-1)?._id || state?.cursor || '', done: sources.length < 50 } }, { upsert: true, session });
+      await rows('searchMeta').updateOne({ _id: stateKey }, { $set: { cursor: sources.at(-1)?._id || state?.cursor || '', done: sources.length < 50 } }, { upsert: true, session });
     });
   }
 }

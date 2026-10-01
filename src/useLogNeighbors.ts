@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import type {LogEntry,LogPage} from '../shared/log';
+import type {LogSearchResult} from '../shared/logSearch';
 import type {LogSequence} from '../shared/navigation';
 import {operation,ApiError} from './api';
 import {cacheLogEntry,cachedLogEntry,preloadLogPhotos} from './logEntryCache';
@@ -31,12 +32,12 @@ export function useLogNeighbors({entryId,userId,visible,context}:{entryId:string
     while(!abort.signal.aborted){
      if(position<0)return null;
      if(position>=current.ids.length){
-      if(direction<0||!current.query||!current.nextCursor||cursors.has(current.nextCursor))return null;
+      if(direction<0||(!current.query&&!current.search)||!current.nextCursor||cursors.has(current.nextCursor))return null;
       cursors.add(current.nextCursor);
-      const before=current.nextCursor,page=await operation<LogPage>('log.list',{...current.query,before,limit:30},{signal:abort.signal});
+      const before=current.nextCursor,page=current.search?await operation<LogSearchResult>('log.search',{...current.search,cursor:before,limit:20},{signal:abort.signal}):await operation<LogPage>('log.list',{...current.query,before,limit:30},{signal:abort.signal});
       if(ticket!==generation.current)return null;
-      current={...current,ids:[...new Set([...current.ids,...page.items.map(entry=>entry.id)])],nextCursor:page.nextCursor===before?null:page.nextCursor};
-      for(const entry of page.items)cacheLogEntry(userId,entry,{persist:false});
+      current={...current,ids:[...new Set([...current.ids,...page.items.map(entry=>'entryId' in entry?entry.entryId:entry.id)])],nextCursor:page.nextCursor===before?null:page.nextCursor};
+      if(!current.search)for(const entry of (page as LogPage).items)cacheLogEntry(userId,entry,{persist:false});
       if(position>=current.ids.length){if(!current.nextCursor)return null;continue;}
      }
      const id=current.ids[position];

@@ -22,7 +22,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   if(name==='log.calendar'){for(const day of data.days||[])for(const row of day.items||[])if(!links.some(link=>link.resourceId===row.id))add({view:'log',resourceId:row.id},row.title||'Open Log entry','exact','log_entry',row.id);return links;}
   if(name==='log.search'){for(const row of rows)if(row.entryId)add({view:'log',resourceId:row.entryId},row.title||'Open Log entry','exact','log_entry',row.entryId);return links;}
   if(name==='make.publish'&&data.entry?.id){add({view:'log',resourceId:data.entry.id},data.entry.title||'Open Log entry','exact','log_entry',data.entry.id);return links;}
-  if(name.startsWith('spaces.')){for(const row of name==='spaces.list'?rows:[object(data.space||data)])if(row.id)add({view:'spaces',resourceId:row.id},row.title||'Open Space','exact','space',row.id);if(!links.length)add({view:'spaces'},'Browse Spaces','surface','spaces');return links;}
+  if(name.startsWith('spaces.')){for(const row of name==='spaces.list'?rows:[object(data.space||data)])if(row.id)add({view:'spaces',resourceId:row.id},row.title||'Open talk space','exact','space',row.id);if(!links.length)add({view:'spaces'},'Browse Talk','surface','spaces');return links;}
   if(name.startsWith('log.')){for(const row of name==='log.neighbors'?[data.previous,data.next].filter(Boolean):rows)if(typeof row.id==='string')add({view:'log',resourceId:row.id},row.title||'Open Log entry','exact','log_entry',row.id);if(!links.length)add({view:'log'},'Open Log','surface','log');return links;}
   if(name==='people.context'){
     if(data.person?.id)links.push(...buildResourceLinks('people.get',{},data.person,actor));
@@ -36,7 +36,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     for (const match of Array.isArray(data.matches) ? data.matches : data.match ? [data.match] : []) {
       if (match.entityType === 'person') add({view:'person',resourceId:match.entityId}, `View ${match.record?.handle ? '@'+match.record.handle : 'profile'}`, 'exact','person',match.entityId);
       if (match.entityType === 'post') add({view:'post',resourceId:match.entityId},'View matched post','exact','post',match.entityId);
-      if (match.entityType === 'space') add({view:'spaces',resourceId:match.entityId},'Join live Space','exact','space',match.entityId);
+      if (match.entityType === 'space') add({view:'spaces',resourceId:match.entityId},'Join live talk space','exact','space',match.entityId);
     }
   } else if (['identity.get', 'profile.update', 'people.get', 'people.search'].includes(name)) {
   if (name === 'identity.get' && !data.handle) { add({ view: 'profile' }, 'Create your account', 'surface', 'account'); return links; }

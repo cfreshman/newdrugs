@@ -32,11 +32,19 @@ export async function incomingCall(userId:string){
  const row=await calls().find({calleeId:userId,active:true,status:'waiting'}).sort({createdAt:-1,_id:-1}).limit(1).next();
  if(!row)return null;try{await connection(userId,row.connectionId);return view(row);}catch{return null;}
 }
+export async function activeCall(userId:string){
+ const row=await calls().find({members:userId,active:true}).sort({createdAt:-1,_id:-1}).limit(1).next();
+ if(!row)return {call:null,otherName:''};
+ try{await connection(userId,row.connectionId);}catch{return {call:null,otherName:''};}
+ const other=await users().findOne({_id:row.callerId===userId?row.calleeId:row.callerId},{projection:{handle:1,name:1}});
+ return {call:view(row),otherName:other?.handle?`@${other.handle}`:String(other?.name||'your friend')};
+}
 export async function startCall(userId:string,connectionId:string){
  if(!liveMediaReady())throw new AppError(503,'calling_unavailable','Live calling is not available yet.');
  return transaction(async session=>{
   const {other,members}=await connection(userId,connectionId,session);
   const existing=await calls().findOne({connectionId,active:true},{session});if(existing)return view(existing);
+  if(await calls().findOne({members:userId,active:true},{session,projection:{_id:1}}))throw new AppError(409,'call_active','End your current call before starting another.');
   const now=new Date().toISOString(),row:CallRow={_id:randomUUID(),connectionId,callerId:userId,calleeId:other,members,active:true,status:'waiting',createdAt:now};
   try{await calls().insertOne(row,{session});}catch(error){if((error as {code?:number}).code===11000)throw new AppError(409,'call_started','A call has already started in this conversation.');throw error;}
   await rows('notifications').insertOne({_id:`call:${row._id}:${other}`,userId:other,actorId:userId,connectionId,callId:row._id,kind:'call',text:'',readAt:null,createdAt:now},{session});
@@ -68,7 +76,7 @@ export async function callAccess(userId:string,id:string):Promise<CallAccess>{
  const row=requireValue(await calls().findOne({_id:id,active:true}),'This call is no longer available.');
  if(!row.members.includes(userId))throw new AppError(404,'not_found','This call is unavailable.');
  await connection(userId,row.connectionId);
- if(userId===row.calleeId&&row.status!=='connected')throw new AppError(409,'call_join','Join the call before opening video.');
+ if(row.status!=='connected')throw new AppError(409,'call_join','Wait for the other person to answer before opening video.');
  const service=liveRoomService();await service.createRoom({name:roomName(id),maxParticipants:2,emptyTimeout:120,departureTimeout:20});
  const owner=requireValue(await users().findOne({_id:userId},{projection:{handle:1,name:1}}));
  const token=new AccessToken(config.LIVEKIT_API_KEY,config.LIVEKIT_API_SECRET,{identity:userId,name:owner.handle?`@${owner.handle}`:String(owner.name||'Member'),ttl:'2m'});

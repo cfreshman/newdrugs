@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Room,RoomEvent,Track} from 'livekit-client';
+import {Squircle} from 'html-squircle/react';
 import {Microphone,MicrophoneSlash,PhoneDisconnect,VideoCamera,VideoCameraSlash} from '@phosphor-icons/react';
 import type {CallAccess} from '../shared/calling';
 import {errorText} from './api';
@@ -20,7 +21,7 @@ function AudioVisualizer({track}:{track?:MediaStreamTrack}){
  return <canvas ref={canvas} className="call-audio-visualizer" role="img" aria-label="Audio activity"/>;
 }
 
-/** The two-square stage follows the Pair Video reference. Call state stays in the DM. */
+/** The two Squircle stage follows the Pair Video reference. */
 export function CallStage({access,otherName,onEnd,onClosed}:{access:CallAccess;otherName:string;onEnd():Promise<void>;onClosed():void}){
  const roomRef=useRef<Room|null>(null),localVideo=useRef<HTMLVideoElement>(null),remoteVideo=useRef<HTMLVideoElement>(null),remoteAudio=useRef<HTMLAudioElement>(null);
  const [connected,setConnected]=useState(false),[peer,setPeer]=useState(false),[mic,setMic]=useState(false),[camera,setCamera]=useState(false),[peerMic,setPeerMic]=useState(false),[peerCamera,setPeerCamera]=useState(false),[localAudioTrack,setLocalAudioTrack]=useState<MediaStreamTrack>(),[remoteAudioTrack,setRemoteAudioTrack]=useState<MediaStreamTrack>(),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -44,8 +45,19 @@ export function CallStage({access,otherName,onEnd,onClosed}:{access:CallAccess;o
   room.on(RoomEvent.Disconnected,()=>{if(active){setConnected(false);onClosed();}});
   void(async()=>{try{
    await room.connect(access.url,access.token);if(!active)return;setConnected(true);sync();
-   try{await room.localParticipant.setMicrophoneEnabled(true);}catch(error){if(active)setError(`Microphone: ${errorText(error)}`);}
-   try{await room.localParticipant.setCameraEnabled(true);}catch(error){if(active)setError(previous=>previous||`Camera: ${errorText(error)}`);}
+   try{
+    const media=await navigator.mediaDevices.getUserMedia({audio:true,video:{facingMode:'user'}});
+    if(!active){media.getTracks().forEach(track=>track.stop());return;}
+    const tracks=[media.getAudioTracks()[0],media.getVideoTracks()[0]];
+    const publications=await Promise.allSettled([
+     room.localParticipant.publishTrack(tracks[0],{source:Track.Source.Microphone}),
+     room.localParticipant.publishTrack(tracks[1],{source:Track.Source.Camera}),
+    ]);
+    publications.forEach((result,index)=>{if(result.status==='rejected'){tracks[index]?.stop();if(active)setError(previous=>previous||`${index?'Camera':'Microphone'}: ${errorText(result.reason)}`);}});
+   }catch{
+    const results=await Promise.allSettled([room.localParticipant.setMicrophoneEnabled(true),room.localParticipant.setCameraEnabled(true)]);
+    results.forEach((result,index)=>{if(result.status==='rejected'&&active)setError(previous=>previous||`${index?'Camera':'Microphone'}: ${errorText(result.reason)}`);});
+   }
    sync();
   }catch(error){if(active){setError(errorText(error));setConnected(false);}}})();
   return()=>{active=false;document.body.style.overflow=previous;roomRef.current=null;void room.disconnect();};
@@ -55,12 +67,12 @@ export function CallStage({access,otherName,onEnd,onClosed}:{access:CallAccess;o
  const leave=async()=>{if(busy)return;setBusy(true);try{await onEnd();onClosed();}catch(error){setError(errorText(error));setBusy(false);}};
  return createPortal(<div className="call-stage" role="dialog" aria-modal="true" aria-label={`Video call with ${otherName}`}>
   <div className="call-pair">
-   <section className={`call-square call-local${camera?'':' camera-off'}`} aria-label="Your video"><video ref={localVideo} muted autoPlay playsInline/>{!camera&&(mic?<AudioVisualizer track={localAudioTrack}/>:<span className="call-input-status">Inputs off</span>)}<div className="call-controls">
+   <Squircle as="section" className={`call-square call-local${camera?'':' camera-off'}`} aria-label="Your video"><video ref={localVideo} muted autoPlay playsInline/>{!camera&&(mic?<AudioVisualizer track={localAudioTrack}/>:<span className="call-input-status">Inputs off</span>)}<div className="call-controls">
     <button type="button" aria-label={mic?'Mute microphone':'Unmute microphone'} title={mic?'Mute microphone':'Unmute microphone'} className={mic?'':'off'} disabled={!connected||busy} onClick={()=>void toggle('mic')}>{mic?<Microphone size={21} weight="bold"/>:<MicrophoneSlash size={21} weight="bold"/>}</button>
     <button type="button" aria-label={camera?'Turn camera off':'Turn camera on'} title={camera?'Turn camera off':'Turn camera on'} className={camera?'':'off'} disabled={!connected||busy} onClick={()=>void toggle('camera')}>{camera?<VideoCamera size={21} weight="bold"/>:<VideoCameraSlash size={21} weight="bold"/>}</button>
     <button type="button" aria-label="End call" title="End call" className="end" disabled={busy} onClick={()=>void leave()}><PhoneDisconnect size={21} weight="bold"/></button>
-   </div>{error&&<p className="call-error" role="alert">{error}</p>}</section>
-   <section className={`call-square call-remote${peerCamera?'':' camera-off'}`} aria-label={`${otherName}'s video`}><video ref={remoteVideo} autoPlay playsInline/><audio ref={remoteAudio} autoPlay/>{!peer?<span className="call-waiting">Waiting for {otherName}</span>:!peerCamera?(peerMic?<AudioVisualizer track={remoteAudioTrack}/>:<span className="call-input-status">Inputs off</span>):null}</section>
+   </div>{error&&<p className="call-error" role="alert">{error}</p>}</Squircle>
+   <Squircle as="section" className={`call-square call-remote${peerCamera?'':' camera-off'}`} aria-label={`${otherName}'s video`}><video ref={remoteVideo} autoPlay playsInline/><audio ref={remoteAudio} autoPlay/>{!peer?<span className="call-waiting">Waiting for {otherName}</span>:!peerCamera?(peerMic?<AudioVisualizer track={remoteAudioTrack}/>:<span className="call-input-status">Inputs off</span>):null}</Squircle>
   </div>
  </div>,document.body);
 }

@@ -19,8 +19,9 @@ export async function sourceDocument(kind: 'profiles' | 'posts' | 'spaces', enti
   if(kind==='spaces'){
     const space=await rows('spaces').findOne({_id:entityId,status:'live'},options);
     if(!space||!await users().findOne({_id:String(space.hostId),suspendedAt:null,handle:{$type:'string'}},options))return null;
-    const description=String(space.description),text=description;
-    const evidence=[{field:'description',text:description,entityId,entityType:'space' as const}];
+    const title=String(space.title||'').trim(),description=String(space.description||'').trim();
+    const evidence=[{field:'title',text:title,entityId,entityType:'space' as const},...(description?[{field:'description',text:description,entityId,entityType:'space' as const}]:[])].filter(item=>item.text);
+    const text=evidence.map(item=>`${item.field}: ${item.text}`).join('\n');
     const sourceHash=hashText(`${INDEX_VERSION}:${text}`);
     return {_id:`spaces:${entityId}`,dataset:'spaces',entityId,ownerId:String(space.hostId),text,evidence,terms:termCounts(text),area:null,createdAt:String(space.createdAt),sourceHash,sourceRevision:hashText(JSON.stringify([sourceHash,space.status])),indexVersion:INDEX_VERSION,indexedAt:''};
   }

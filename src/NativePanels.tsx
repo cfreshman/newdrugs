@@ -1,7 +1,7 @@
 import {LocationLabel} from './LocationLabel';
 import { DotsThree } from '@phosphor-icons/react';
 import { ContentReport } from './PeopleSafety';
-import { Fragment,Suspense,lazy,useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { Fragment,useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { Profile } from '../shared/types';
 import type { CoarseArea } from '../shared/geo';
 import type { Destination } from '../shared/navigation';
@@ -18,15 +18,16 @@ import { CollapsibleMessage } from './CollapsibleMessage';
 import { useRecordRefresh } from './useRecordRefresh';
 import { captureHistoryAnchor, restoreHistoryAnchor, OlderMessages, useTopPagination } from './ChatHistory';
 import {directMessageLayout,directMessageTimeLabel} from './directMessageGrouping';
-import type {CallAccess,CallPage,CallRecord} from '../shared/calling';
+import type {CallPage,CallRecord} from '../shared/calling';
+import {useCall} from './CallProvider';
 import './calling.css';
 import {NavLink} from './NavLink';
 
 interface Page<T> { items: T[]; nextCursor: string | null }
 interface Connection { initialInvitation?:{fromId:string;note:string;createdAt:string}; disconnectedBy?:string; createdAt: string; id: string; members: string[]; fromId: string; toId: string; note: string; status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'disconnected'; unread?: boolean; lastMessage?: { text: string; fromId: string; createdAt: string } }
 interface DirectMessage { id: string; fromId: string; text: string; createdAt: string; pending?: boolean; failed?: boolean; key?: string; clientId?: string }
+function callDuration(call:CallRecord){if(!call.joinedAt||!call.endedAt)return '';const seconds=Math.max(0,Math.floor((Date.parse(call.endedAt)-Date.parse(call.joinedAt))/1000));if(!Number.isFinite(seconds))return '';const hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60),remainder=seconds%60;return `Called for ${hours?`${hours}h `:''}${minutes?`${minutes}m `:''}${!hours||!minutes?`${remainder}s`:''}`.trim();}
 type Navigate = (destination: Destination) => void;
-const CallStage=lazy(()=>import('./CallStage').then(module=>({default:module.CallStage})));
 
 export function LocationPanel({ user, areaCell, saved }: { user: Profile; areaCell?: string; saved(): Promise<void> }) {
   const [area, setArea] = useState<CoarseArea | null>(user.area || null), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -70,9 +71,12 @@ export function PeoplePanel({ user, areaCell, radiusMiles = 25, initialQuery = '
 
 export function MessagesPanel({ userId, connectionId, navigate }: { userId: string; connectionId?: string; navigate: Navigate }) {
   const visible = usePanelVisible();
+  const callControl=useCall();
   const [inbox, setInbox] = useState<(Page<Connection> & { people: Profile[] }) | null>(null), [messages, setMessages] = useState<Page<DirectMessage> | null>(null);
   const [current, setCurrent] = useState<{ connection: Connection; people: Profile[] } | null>(null);
-  const [calls,setCalls]=useState<CallPage|null>(null),[callAccess,setCallAccess]=useState<CallAccess|null>(null),[callBusy,setCallBusy]=useState(false);
+  const [calls,setCalls]=useState<CallPage|null>(null);
+  const callBusy=Boolean(callControl?.busy);
+  const activeCall=callControl?.call&&callControl.call.connectionId===connectionId?callControl.call:calls?.active;
   const [reconnectNote,setReconnectNote]=useState('');
   const [reporting,setReporting]=useState<string|null>(null),[choosingReport,setChoosingReport]=useState(false);
   const [filter, setFilter] = useState<'all' | 'invites'>('all');
@@ -105,7 +109,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
       if (request === generation.current) setError('');
     } catch (error) { if (request === generation.current) { setError(errorText(error)); setCurrent(null); setMessages(null);setCalls(null); } }
   }, [connectionId]);
-  useEffect(() => { setMessages(null);setCalls(null);setCallAccess(null); setReporting(null); setChoosingReport(false); setInbox(null); setCurrent(null); setText(''); setLoadingOlder(false); setOlderError(''); setAwayFromBottom(false); prependAnchor.current = null; following.current = true; readThrough.current = ''; pendingSend.current = null; void load(); return () => { generation.current++; }; }, [load]);
+  useEffect(() => { setMessages(null);setCalls(null); setReporting(null); setChoosingReport(false); setInbox(null); setCurrent(null); setText(''); setLoadingOlder(false); setOlderError(''); setAwayFromBottom(false); prependAnchor.current = null; following.current = true; readThrough.current = ''; pendingSend.current = null; void load(); return () => { generation.current++; }; }, [load]);
   useRecordRefresh(['connections', 'messages','calls'], load);
   const markRead = useCallback(() => {
     if (!visible || !connectionId || current?.connection.status !== 'accepted' || document.hidden || !following.current) return;
@@ -160,16 +164,16 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     catch (error) { setError(errorText(error)); }
   };
   const openCall=async(selected?:CallRecord)=>{
-    if(!connectionId||callBusy)return;setCallBusy(true);setError('');
+    if(!connectionId||callBusy||!callControl)return;setError('');
     try{
-      let call=selected||calls?.active;
-      if(!call)call=(await post<{call:CallRecord}>(`/calls/${encodeURIComponent(connectionId)}`)).call;
-      if(call.status==='ended')return;
-      if(call.calleeId===userId&&call.status==='waiting')call=(await post<{call:CallRecord}>(`/calls/${call.id}/join`)).call;
-      const access=await post<CallAccess>(`/calls/${call.id}/token`);setCallAccess(access);void load();
-    }catch(error){setError(errorText(error));}finally{setCallBusy(false);}
+      const call=selected||activeCall;
+      if(!call)await callControl.start(connectionId,other?.handle?`@${other.handle}`:other?.name||'your friend');
+      else if(call.status==='waiting'&&call.calleeId===userId)await callControl.answer(call);
+      else if(call.status==='connected')await callControl.open(call);
+      void load();
+    }catch(error){setError(errorText(error));}
   };
-  const closeCall=async(call:CallRecord)=>{if(callBusy)return;setCallBusy(true);setError('');try{await post(`/calls/${call.id}/end`);if(callAccess?.call.id===call.id)setCallAccess(null);await load();}catch(error){setError(errorText(error));}finally{setCallBusy(false);}};
+  const closeCall=async(call:CallRecord)=>{if(callBusy||!callControl)return;setError('');try{await callControl.end(call);await load();}catch(error){setError(errorText(error));}};
   if (!connectionId) return <><nav className="view-tabs" aria-label="Inbox filter"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button><button aria-pressed={filter === 'invites'} onClick={() => setFilter('invites')}>Invitations</button></nav>
     <div className="inbox-list">{inbox?.items.filter(connection => filter === 'all' || connection.status === 'pending' || connection.status === 'declined' || connection.status === 'withdrawn').map(connection => {
       const person = inbox.people.find(person => person.id === connection.members.find(id => id !== userId));
@@ -185,9 +189,10 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     {inbox?.nextCursor && <button className="text-link" onClick={() => void moreConnections()}>More conversations</button>}{error && <p className="error" role="alert">{error}</p>}</>;
   const other = current?.people.find(person => person.id !== userId);
   const chronologicalMessages=messages?[...messages.items].reverse():[],messageLayout=directMessageLayout(chronologicalMessages),layoutById=new Map(chronologicalMessages.map((message,index)=>[message.id,messageLayout[index]]));
-  const timeline=[...chronologicalMessages.map(message=>({kind:'message' as const,id:message.id,createdAt:message.createdAt,message})),...(calls?.items||[]).filter(call=>!messages?.nextCursor||!chronologicalMessages.length||call.createdAt>=chronologicalMessages[0].createdAt).map(call=>({kind:'call' as const,id:call.id,createdAt:call.createdAt,call}))].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+  const visibleCalls=activeCall&&!calls?.items.some(call=>call.id===activeCall.id)?[activeCall,...(calls?.items||[])]:calls?.items||[];
+  const timeline=[...chronologicalMessages.map(message=>({kind:'message' as const,id:message.id,createdAt:message.createdAt,message})),...visibleCalls.filter(call=>!messages?.nextCursor||!chronologicalMessages.length||call.createdAt>=chronologicalMessages[0].createdAt).map(call=>({kind:'call' as const,id:call.id,createdAt:call.createdAt,call}))].sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
   const profileUnavailable=Boolean(other&&other.discoverable===false&&!['accepted','pending'].includes(current!.connection.status)&&!(current!.connection.status==='declined'&&current!.connection.toId===userId));
-  return <div className={messages ? 'message-view' : undefined}>{other && <div className="message-view-actions">{profileUnavailable?<span className="text-link quiet" aria-disabled="true">{other.handle?`@${other.handle}`:other.name}</span>:<NavLink className="text-link" to={{view:'person',resourceId:other.id}} navigate={navigate}>{other.handle ? `@${other.handle}` : other.name}</NavLink>}{messages && current?.connection.status==='accepted' && <button type="button" className="call-start" disabled={callBusy} onClick={()=>void openCall()}><VideoCamera size={19}/>{calls?.active?calls.active.callerId===userId?'Open call':'Join call':'Video call'}</button>}{messages&&<details className="conversation-menu"><summary aria-label="Conversation actions"><DotsThree size={23}/></summary><div><button type="button" onClick={event=>{setChoosingReport(true);setReporting(null);event.currentTarget.closest('details')?.removeAttribute('open');}}>Report a message</button></div></details>}</div>}
+  return <div className={messages ? 'message-view' : undefined}>{other && <div className="message-view-actions">{profileUnavailable?<span className="text-link quiet" aria-disabled="true">{other.handle?`@${other.handle}`:other.name}</span>:<NavLink className="text-link" to={{view:'person',resourceId:other.id}} navigate={navigate}>{other.handle ? `@${other.handle}` : other.name}</NavLink>}{messages && current?.connection.status==='accepted' && <button type="button" className="call-start" disabled={callBusy||!callControl||activeCall?.status==='waiting'&&activeCall.callerId===userId} onClick={()=>void openCall()}><VideoCamera size={19}/>{activeCall?activeCall.status==='waiting'?activeCall.callerId===userId?'Calling':'Answer call':'Open call':'Video call'}</button>}{messages&&<details className="conversation-menu"><summary aria-label="Conversation actions"><DotsThree size={23}/></summary><div><button type="button" onClick={event=>{setChoosingReport(true);setReporting(null);event.currentTarget.closest('details')?.removeAttribute('open');}}>Report a message</button></div></details>}</div>}
     {current && ['pending','declined','withdrawn'].includes(current.connection.status) && <p>{current.connection.note}</p>}
     {current?.connection.status === 'pending' && <>{current.connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(current.connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(current.connection, true)}>Accept invitation</button></div> : <><p className="quiet">Invitation sent. Messages open when they accept.</p><button className="text-link" disabled={busy} onClick={() => void withdraw(current.connection)}>Withdraw invitation</button></>}</>}
     {current?.connection.status === 'declined' && <><p className="quiet">This invitation was declined.</p>{current.connection.toId===userId&&<NavLink to={{view:'person',resourceId:current.connection.fromId}} navigate={navigate}>Send a new invitation</NavLink>}</>}{current?.connection.status==='disconnected'&&<><p className="quiet">This connection has ended. Message history is read-only.</p>{current.connection.disconnectedBy===userId&&<form className="fields" onSubmit={event=>{event.preventDefault();if(!reconnectNote.trim()||busy)return;setBusy(true);void operation('connections.request',{personId:current.connection.members.find(id=>id!==userId),note:reconnectNote.trim()},{confirmed:true}).then(()=>{setReconnectNote('');return load();}).catch(e=>setError(errorText(e))).finally(()=>setBusy(false));}}><label>New invitation<textarea value={reconnectNote} maxLength={500} onChange={event=>setReconnectNote(event.target.value)}/></label><button className="solid" disabled={busy||!reconnectNote.trim()}>Send invitation</button></form>}</>}{current?.connection.status === 'withdrawn' && <p className="quiet">This invitation was withdrawn.</p>}
@@ -201,8 +206,8 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
         if(item.kind==='call'){
           const call=item.call,outgoing=call.callerId===userId,active=call.status!=='ended',name=other?.handle?`@${other.handle}`:other?.name||'your friend';
           const heading=call.status==='waiting'?outgoing?`Calling ${name}`:`${name} is calling`:call.status==='connected'?`In a call with ${name}`:`Video call with ${name}`;
-          const detail=call.status==='waiting'?outgoing?'Waiting for them to join':'Join when you’re ready':call.status==='connected'?'Connected':call.joinedAt?'Call ended':outgoing?'Call cancelled':'Missed call';
-          return <article key={`call:${call.id}`} className={`message call-message ${outgoing?'user':'peer'}`} data-call-id={call.id}><div className="call-message-card"><VideoCamera size={22} aria-hidden="true"/><div><strong>{heading}</strong><span>{detail}</span></div>{active&&<div className="call-message-actions"><button type="button" disabled={callBusy} onClick={()=>void openCall(call)}>{call.status==='waiting'&&!outgoing?'Join':'Open'}</button><button type="button" disabled={callBusy} onClick={()=>void closeCall(call)}>{call.status==='waiting'&&!outgoing?'Decline':'End'}</button></div>}</div></article>;
+          const detail=call.status==='waiting'?outgoing?`Waiting for ${name} to answer`:'Answer when you’re ready':call.status==='connected'?'Connected':call.joinedAt?callDuration(call):outgoing?'Call cancelled':'Missed call';
+          return <article key={`call:${call.id}`} className={`message call-message ${outgoing?'user':'peer'}`} data-call-id={call.id}><div className="call-message-card"><VideoCamera size={22} aria-hidden="true"/><div><strong>{heading}</strong><span>{detail}</span></div>{active&&<div className="call-message-actions">{(call.status==='connected'||!outgoing)&&<button type="button" disabled={callBusy} onClick={()=>void openCall(call)}>{call.status==='waiting'?'Answer':'Open'}</button>}<button type="button" disabled={callBusy} onClick={()=>void closeCall(call)}>{call.status==='waiting'?outgoing?'Cancel':'Decline':'End'}</button></div>}</div></article>;
         }
         const message=item.message;
         const selectable=choosingReport&&message.fromId!==userId;
@@ -218,5 +223,5 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
           {message.failed&&<button className="retry-message" disabled={busy} onClick={()=>void send(undefined,message)}>Not sent · retry</button>}
         </article></Fragment>;
       })}</div>
-    </div>{awayFromBottom&&<button className="latest-chat latest-dm" type="button" aria-label="Latest messages" title="Latest messages" onClick={followLatest}><ArrowDown size={22} weight="bold"/></button>}</div>{current?.connection.status==='accepted'&&<form className="message-compose" ref={composer} onSubmit={send}><label className="sr-only" htmlFor="direct-message">Message</label><textarea id="direct-message" ref={input} value={text} maxLength={2000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(event); } }} /><button className="solid" aria-label="Send direct message" disabled={busy || !text.trim()}><ArrowUp size={20} weight="bold" /></button></form>}</>}{error && <p className="error" role="alert">{error}</p>}{callAccess&&<Suspense fallback={null}><CallStage access={callAccess} otherName={other?.handle?`@${other.handle}`:other?.name||'your friend'} onEnd={async()=>{await post(`/calls/${callAccess.call.id}/end`);await load();}} onClosed={()=>{setCallAccess(null);void load();}}/></Suspense>}</div>;
+    </div>{awayFromBottom&&<button className="latest-chat latest-dm" type="button" aria-label="Latest messages" title="Latest messages" onClick={followLatest}><ArrowDown size={22} weight="bold"/></button>}</div>{current?.connection.status==='accepted'&&<form className="message-compose" ref={composer} onSubmit={send}><label className="sr-only" htmlFor="direct-message">Message</label><textarea id="direct-message" ref={input} value={text} maxLength={2000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(event); } }} /><button className="solid" aria-label="Send direct message" disabled={busy || !text.trim()}><ArrowUp size={20} weight="bold" /></button></form>}</>}{error && <p className="error" role="alert">{error}</p>}</div>;
 }

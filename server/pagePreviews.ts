@@ -42,9 +42,9 @@ export async function pagePreview(path:string):Promise<PagePreview>{
   if(value){preview.title=`Post${value.author.handle?` by @${value.author.handle}`:''} (New Drugs)`;preview.description=text(value.row.text)||base.description;preview.private=false;await image('post');}return preview;
  }
  if(destination.view==='spaces'&&id){
-  preview.title='Live Space (New Drugs)';preview.private=true;
+  preview.title='Live Talk (New Drugs)';preview.private=true;
   const space=await rows('spaces').findOne({_id:id,status:'live'},{projection:{hostId:1,title:1,description:1}});
-  if(space&&await users().findOne({_id:String(space.hostId),suspendedAt:null},{projection:{_id:1}})){preview.title=`${text(space.title)} (New Drugs Spaces)`;preview.description=text(space.description)||base.description;preview.private=false;}
+  if(space&&await users().findOne({_id:String(space.hostId),suspendedAt:null},{projection:{_id:1}})){preview.title=`${text(space.title)} (New Drugs Talk)`;preview.description=text(space.description)||base.description;preview.private=false;}
   return preview;
  }
  if(!['chat','feed','people','post_list'].includes(destination.view)||id){preview.private=true;}

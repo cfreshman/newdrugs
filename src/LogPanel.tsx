@@ -2,11 +2,12 @@ import {useLogContacts} from './useLogContacts';
 import {LogMedia} from './LogMedia';
 import {useLogMediaDetail,LogNoteDetailLink} from './LogMediaDetail';
 import {useHorizontalSwipe} from './useHorizontalSwipe';
-import {useOpenLogList} from './logSequence';
+import {useOpenLogList,useOpenLogSearch} from './logSequence';
 import {useLogNeighbors} from './useLogNeighbors';
 import {logImageUrl} from './logImageCache';
 import {logDateLabel as dateLabel} from './logDate';
 import {LogList} from './LogList';
+import {SearchField} from './SearchField';
 import {LogTodayCards} from './LogTodayCards';
 import {addedLogLinks} from '../shared/logLinks';
 import {compactUrlLabel} from '../shared/links';
@@ -20,6 +21,7 @@ import {useEffect,useLayoutEffect,useRef,useState,useMemo,type FormEvent} from '
 import {CalendarDots,SquaresFour,List,Plus,LinkSimple,CaretLeft,CaretRight,LockSimple,Users,Image,Microphone,DownloadSimple,DotsThree,X,CircleNotch} from '@phosphor-icons/react';
 import {Temporal} from '@js-temporal/polyfill';
 import {logFields,logPlainText,rebaseLogDraft,type LogEntry,type LogCalendarTile,type LogFields,type LogPreferences,type LogPage} from '../shared/log';
+import type {LogSearchResult} from '../shared/logSearch';
 import type {Profile} from '../shared/types';
 import type {Destination,LogSequence} from '../shared/navigation';
 import {operation,errorText,ApiError} from './api';
@@ -170,17 +172,28 @@ export function LogDetail({entryId,user,navigate,onSaved,onCancel,onClose,onAdja
 
 export function LogPanel({user,navigate,initialQuery='',date:dayDate,logMonth,logScope,personId:initialPerson,onStateChange}:{date?:string;user:Profile;navigate:Navigate;initialQuery?:string;logMonth?:string;logScope?:Destination['logScope'];personId?:string;onStateChange?(context:Partial<Destination>):void}){
  const openList=useOpenLogList(navigate);
+ const openSearch=useOpenLogSearch(navigate);
  const [optionsOpen,setOptionsOpen]=useState(false),[previews,setPreviews]=useState<LogCalendarTile[]>([]),[listLoaded,setListLoaded]=useState(false);
  const browserRoot=useRef<HTMLDivElement>(null),positions=useRef<Record<string,number>>({}),activeArrangement=useRef<LogPreferences['arrangement']>('calendar');
  const [todayEntries,setTodayEntries]=useState<LogEntry[]>([]),[preferences,setPreferences]=useState<LogPreferences>(emptyPreferences),[scope,setScope]=useState<'all'|'private'|'shared'|'invitations'>(logScope||'all'),[applied,setApplied]=useState(initialQuery),[personId,setPersonId]=useState<string|undefined>(initialPerson),[items,setItems]=useState<LogEntry[]>([]),[cursor,setCursor]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [searchQuery,setSearchQuery]=useState(initialQuery),[searchResult,setSearchResult]=useState<LogSearchResult|null>(null),[searchBusy,setSearchBusy]=useState(false),[searchError,setSearchError]=useState(''),[searchRevision,setSearchRevision]=useState(0),searchTicket=useRef(0);
  const applyPreferences=(value:LogPreferences)=>{if(value.arrangement!==activeArrangement.current){const scroller=browserRoot.current?.closest<HTMLElement>('.composer-view');if(scroller)positions.current[activeArrangement.current]=scroller.scrollTop;activeArrangement.current=value.arrangement;}setPreferences(value);};
  const prefsQueue=useRef<Promise<unknown>>(Promise.resolve()),prefsGeneration=useRef(0),prefsPending=useRef(0),prefsRead=useRef(0);
  const sequence=useRef(0),listPending=useRef(false),listEdge=useRef<HTMLDivElement>(null),visible=usePanelVisible();
- useEffect(()=>{setApplied(initialQuery||'');},[initialQuery]);
+ useEffect(()=>{setApplied(initialQuery||'');setSearchQuery(initialQuery||'');},[initialQuery]);
  useEffect(()=>setScope(logScope||'all'),[logScope]);
  useEffect(()=>setPersonId(initialPerson),[initialPerson]);
  const stateChange=(next:Partial<Destination>)=>onStateChange?.({query:applied||undefined,logScope:scope,personId,logMonth,...next});
  const calendar=preferences.arrangement==='calendar'&&scope!=='invitations';
+ const listView=preferences.arrangement==='list'&&scope!=='invitations';
+ const searching=listView&&Boolean(searchQuery);
+ const searchInput={query:searchQuery,scope:scope==='invitations'?'all':scope,...(personId?{personId}:{})};
+ useEffect(()=>{if(!listView||!searchQuery)return;const ticket=++searchTicket.current;setSearchBusy(true);setSearchError('');setSearchResult(null);
+  void operation<LogSearchResult>('log.search',{...searchInput,limit:20}).then(result=>{if(ticket===searchTicket.current)setSearchResult(result);}).catch(error=>{if(ticket===searchTicket.current)setSearchError(errorText(error));}).finally(()=>{if(ticket===searchTicket.current)setSearchBusy(false);});
+  return()=>{searchTicket.current++;};
+ },[listView,searchQuery,scope,personId,searchRevision]);
+ const moreSearch=async()=>{const next=searchResult?.nextCursor;if(!next||searchBusy)return;const ticket=searchTicket.current;setSearchBusy(true);setSearchError('');try{const page=await operation<LogSearchResult>('log.search',{...searchInput,cursor:next,limit:20});if(ticket===searchTicket.current)setSearchResult(previous=>previous?{...page,items:[...previous.items,...page.items]}:page);}catch(error){if(ticket===searchTicket.current)setSearchError(errorText(error));}finally{if(ticket===searchTicket.current)setSearchBusy(false);}};
+ const searchFor=(query:string)=>{if(!query){setSearchQuery('');setSearchResult(null);setSearchError('');if(applied){setApplied('');onStateChange?.({query:undefined});}return;}if(query===searchQuery)setSearchRevision(value=>value+1);else setSearchQuery(query);};
  const load=async(append=false)=>{if(calendar||listPending.current||append&&!cursor)return;const ticket=++sequence.current;listPending.current=true;setBusy(true);setError('');try{
   const input={scope,...(applied?{query:applied}:{}),...(personId?{personId}:{}),limit:30,...(append&&cursor?{before:cursor}:{})};
   const page=await operation<LogPage>('log.list',input);
@@ -196,7 +209,7 @@ export function LogPanel({user,navigate,initialQuery='',date:dayDate,logMonth,lo
  useLayoutEffect(()=>{const scroller=browserRoot.current?.closest<HTMLElement>('.composer-view');if(!scroller)return;const view=preferences.arrangement;scroller.scrollTop=positions.current[view]||0;},[preferences.arrangement]);
  const loadToday=async()=>{try{const entries:LogEntry[]=[];let before:string|undefined;do{const page=await operation<LogPage>('log.list',{from:new Date().getHours()<8?Temporal.Now.plainDateISO().subtract({days:1}).toString():today(),through:today(),scope:'all',limit:30,...(before?{before}:{})});entries.push(...page.items);before=page.nextCursor||undefined;}while(before);setTodayEntries(entries.reverse());}catch{/* Calendar errors are shown in their own view. */}};
  useEffect(()=>{void loadToday();},[]);
- useRecordRefreshDetails(['log'],change=>{const ids=new Set(change?.log?.map(item=>item.id));setPreviews(previous=>ids.size?previous.filter(item=>!ids.has(item.id)):[]);void loadToday();void load();});
+ useRecordRefreshDetails(['log'],change=>{const ids=new Set(change?.log?.map(item=>item.id));setPreviews(previous=>ids.size?previous.filter(item=>!ids.has(item.id)):[]);void loadToday();void load();if(searchQuery)setSearchRevision(value=>value+1);});
  useEffect(()=>{const target=listEdge.current,scroller=target?.closest<HTMLElement>('.composer-view');if(calendar||!visible||busy||error||!cursor||!target||!scroller||typeof IntersectionObserver==='undefined')return;const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting))void load(true);},{root:scroller,rootMargin:'0px 0px 150px 0px'});observer.observe(target);return()=>observer.disconnect();},[calendar,visible,busy,error,cursor]);
  useRecordRefresh(['log_preferences'],()=>loadPreferences());
  const prefs=async(value:LogPreferences)=>{const generation=++prefsGeneration.current;prefsRead.current++;prefsPending.current++;applyPreferences(value);const next=prefsQueue.current.then(()=>operation<LogPreferences>('log.preferences_update',value));prefsQueue.current=next.catch(()=>{});try{const saved=await next;if(generation===prefsGeneration.current)applyPreferences(saved);}catch(e){if(generation===prefsGeneration.current)setError(errorText(e));}finally{prefsPending.current--;if(!prefsPending.current)void loadPreferences();}};
@@ -206,10 +219,11 @@ export function LogPanel({user,navigate,initialQuery='',date:dayDate,logMonth,lo
 
   {error&&<p className="error" role="alert">{error}</p>}
   {scope!=='invitations'&&<div className="log-retained-calendar" hidden={!calendar}><PanelVisibilityContext.Provider value={visible&&calendar}><LogCalendar key={JSON.stringify([logMonth,scope,applied,personId])} month={logMonth} date={dayDate} onDayChange={date=>onStateChange?.({date})} scope={scope as 'all'|'private'|'shared'} query={applied} personId={personId} jump={value=>stateChange({logMonth:value})} create={date=>navigate({view:'log_compose',date})} onPreviews={setPreviews} seedEntries={items} open={(entry,list,query,cursor)=>list?openList(entry,list,query,cursor):navigate({view:'log',resourceId:entry.id})} openPerson={personId=>navigate({view:'person',resourceId:personId})}/></PanelVisibilityContext.Provider></div>}
-  {!calendar&&(preferences.arrangement==='gallery'&&scope!=='invitations'?<div className="log-gallery">{displayItems.map((entry,index)=><div key={entry.id}><LogTile entry={entry} open={()=>openList(entry,displayItems,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>{(!index||displayItems[index-1].date!==entry.date)&&<time>{Number(entry.date.slice(8))}{!index||displayItems[index-1].date.slice(0,7)!==entry.date.slice(0,7)?` - ${new Date(`${entry.date}T12:00:00`).toLocaleDateString(undefined,{month:'short'})}`:''}</time>}</div>)}</div>:<LogList entries={displayItems} open={entry=>openList(entry,displayItems,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>)}
-  {busy&&!calendar&&!displayItems.length&&<div className="log-loading" role="status" aria-label="Loading entries"><CircleNotch className="spin" size={22}/></div>}
-  {!busy&&!displayItems.length&&!calendar&&listLoaded&&<div className="log-empty"><p>{scope==='invitations'?'No pending invitations.':applied?'No entries match this view.':'No entries yet.'}</p></div>}
-  {!calendar&&<div ref={listEdge}>{cursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}</div>}
+  {listView&&<SearchField label="Search Log" value={searchQuery} onSearch={searchFor}/>}
+  {searching?<div className="log-search-results">{searchError&&<p className="error" role="alert">{searchError}</p>}{searchBusy&&!searchResult&&<div className="log-loading" role="status" aria-label="Searching Log"><CircleNotch className="spin" size={22}/></div>}{searchResult&&<>{(['text','semantic'] as const).map(match=>{const matches=searchResult.items.filter(item=>item.match===match);return matches.length?<section key={match}><h3>{match==='text'?'Text matches':'Related entries'}</h3><div className="log-list">{matches.map(entry=><NavLink key={entry.entryId} to={{view:'log',resourceId:entry.entryId}} navigate={()=>openSearch(entry,searchResult.items,searchInput,searchResult.nextCursor)}><span className="log-list-date">{entry.date.slice(8)}<small>{new Date(`${entry.date}T12:00:00`).toLocaleDateString(undefined,{month:'short'})}</small></span><span><strong>{entry.title||'(untitled)'}</strong><span className="quiet small">{dateLabel(entry.date)}{entry.place?` - ${entry.place}`:''}</span>{entry.snippet&&<span className="log-list-preview">{entry.snippet}</span>}</span></NavLink>)}</div></section>:null;})}{!searchResult.items.length&&<div className="log-empty"><p>No Log entries found.</p></div>}{searchResult.notices.map(notice=><p className="quiet small" key={notice}>{notice}</p>)}{searchResult.nextCursor&&<button className="more-messages" disabled={searchBusy} onClick={()=>void moreSearch()}>More results</button>}</>}</div>:!calendar&&(preferences.arrangement==='gallery'&&scope!=='invitations'?<div className="log-gallery">{displayItems.map((entry,index)=><div key={entry.id}><LogTile entry={entry} open={()=>openList(entry,displayItems,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>{(!index||displayItems[index-1].date!==entry.date)&&<time>{Number(entry.date.slice(8))}{!index||displayItems[index-1].date.slice(0,7)!==entry.date.slice(0,7)?` - ${new Date(`${entry.date}T12:00:00`).toLocaleDateString(undefined,{month:'short'})}`:''}</time>}</div>)}</div>:<LogList entries={displayItems} open={entry=>openList(entry,displayItems,{scope,...(applied?{query:applied}:{}),...(personId?{personId}:{})},cursor)}/>)}
+  {busy&&!calendar&&!searching&&!displayItems.length&&<div className="log-loading" role="status" aria-label="Loading entries"><CircleNotch className="spin" size={22}/></div>}
+  {!busy&&!searching&&!displayItems.length&&!calendar&&listLoaded&&<div className="log-empty"><p>{scope==='invitations'?'No pending invitations.':applied?'No entries match this view.':'No entries yet.'}</p></div>}
+  {!calendar&&!searching&&<div ref={listEdge}>{cursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}</div>}
 
   <LogFloaters><div className="log-home-footer">{todayEntries.length>0&&<LogTodayCards entries={todayEntries} presentation={preferences.todayPresentation||'full'} change={todayPresentation=>void prefs({...preferences,todayPresentation})} open={entry=>openList(entry,todayEntries)}/>}<div className="log-options log-quick-settings" hidden={!optionsOpen}><div className="view-tabs" aria-label="Log view">{([{value:'calendar',label:'Calendar',Icon:CalendarDots},{value:'gallery',label:'Grid',Icon:SquaresFour},{value:'list',label:'List',Icon:List}] as const).map(({value,label,Icon})=><button key={value} type="button" aria-pressed={preferences.arrangement===value} onClick={()=>{void prefs({...preferences,arrangement:value});}}><Icon size={18}/>{label}</button>)}</div><NavLink className="log-more-settings" to={{view:'log_settings'}} navigate={navigate} onClick={()=>setOptionsOpen(false)}>More settings</NavLink></div><div className="log-home-actions panel-actions"><NavLink className="log-scan-button" to={{view:'log_scan'}} navigate={navigate}>Scan</NavLink><NavLink className="log-outline-button" to={{view:'log_compose'}} navigate={navigate}>Log new event</NavLink><button className="log-options-toggle" aria-label="Log view options" aria-expanded={optionsOpen} onClick={()=>setOptionsOpen(value=>!value)}><DotsThree size={22}/></button></div></div></LogFloaters>
 

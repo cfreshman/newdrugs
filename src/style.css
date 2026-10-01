@@ -175,7 +175,7 @@ a { color: inherit; }
 .composer-switcher { position: relative; min-height: 76px; border-radius: var(--radius-input); overflow: hidden; background: var(--surface); }
 .composer-input-layer, .composer-menu-layer { width: 100%; transition: opacity 110ms ease; }
 .composer-menu-layer { position: absolute; inset: 0 0 auto; opacity: 0; visibility: hidden; pointer-events: none; padding: var(--panel-inset); }
-.composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) - var(--orb-spacing) - var(--viewport-top) - max(var(--panel-top-gap),var(--panel-control-gap,0px)))); max-height: var(--panel-available-height); overflow-y: auto; overscroll-behavior: contain; }
+.composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) - var(--orb-spacing) - var(--viewport-top) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); max-height: var(--panel-available-height); overflow-y: auto; overscroll-behavior: contain; }
 .composer-menu-layer { height: 100%; }
 .composer-menu-layer:has(.composer-view:not([hidden]) .composer-surface) { padding: 0; overflow: hidden; }
 .composer-surface { height: 100%; display: flex; flex-direction: column; max-height: var(--panel-available-height); overflow: hidden; font-size: var(--text-body); line-height: 1.6; }
@@ -190,7 +190,7 @@ a { color: inherit; }
 .launcher-open .composer-input-layer { opacity: 0; pointer-events: none; }
 .launcher-open .composer-menu-layer { opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 55ms; }
 .composer-switcher.side-open { overflow: visible; }
-.side-open .composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) + var(--launcher-size) - var(--viewport-top) - max(var(--panel-top-gap),var(--panel-control-gap,0px)))); inset: auto auto calc(-1 * (var(--orb-spacing) + var(--launcher-size))) calc(-100% - 12px); border-radius: var(--radius-input); background: var(--surface); overflow: hidden; }
+.side-open .composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) + var(--launcher-size) - var(--viewport-top) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); inset: auto auto calc(-1 * (var(--orb-spacing) + var(--launcher-size))) calc(-100% - 12px); border-radius: var(--radius-input); background: var(--surface); overflow: hidden; }
 .side-open.launcher-open .composer-input-layer { opacity: 1; pointer-events: auto; }
 .launcher-controls { display: flex; align-items: flex-start; gap: var(--space-2); }
 .reset-panel { cursor: pointer; }

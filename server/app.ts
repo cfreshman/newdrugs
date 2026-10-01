@@ -37,7 +37,7 @@ import { operations, describeOperation } from '../shared/catalog';
 import { currentRun, runView, decideApprovals, completeSurface, cancelRun } from './agent';
 import { createMcpServer } from './mcp';
 import {WebhookReceiver} from 'livekit-server-sdk';
-import {callAccess,callHistory,callWebhook,endCall,incomingCall,joinCall,liveMediaReady,startCall} from './calling';
+import {activeCall,callAccess,callHistory,callWebhook,endCall,incomingCall,joinCall,liveMediaReady,startCall} from './calling';
 import {spaceAccess,spaceWebhook} from './spaces';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { ensureStarter, starterPoolStatus, setStarterBudget } from './starterPool';
@@ -128,6 +128,7 @@ export function createApp() {
       config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
   });
   app.get('/api/calls/incoming',async(req,res)=>{res.json({call:await incomingCall(browserActor(req).userId)});});
+  app.get('/api/calls/active',async(req,res)=>{res.json(await activeCall(browserActor(req).userId));});
   app.get('/api/calls/:connectionId',async(req,res)=>{res.json(await callHistory(browserActor(req).userId,z.string().max(100).parse(req.params.connectionId)));});
   app.post('/api/calls/:connectionId',limiter('/api/calls/start',12),async(req,res)=>{res.json({call:await startCall(browserActor(req).userId,z.string().max(100).parse(req.params.connectionId))});});
   app.post('/api/calls/:id/join',async(req,res)=>{res.json({call:await joinCall(browserActor(req).userId,z.uuid().parse(req.params.id))});});

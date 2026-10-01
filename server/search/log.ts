@@ -57,7 +57,7 @@ async function backfillLogSearch(){
  await transaction(async session=>{for(const row of page){if(!await rows('logSearchSources').findOne({_id:row._id,revision:String(row.revision||0),indexVersion:LOG_INDEX_VERSION},{session})&&!await jobs().findOne({_id:row._id},{session}))await queueLogSearch(row._id,session);}await rows('logSearchMeta').updateOne({_id:LOG_INDEX_VERSION},{$set:{cursor:page.at(-1)?._id||state?.cursor||'',done:page.length<30}},{session,upsert:true});});
 }
 export function startLogSearchWorker(){let stopped=false,pending:Promise<void>|undefined,cycles=0;const tick=()=>{if(stopped||pending||!retrievalEnabled()||!config.aiEnabled)return;pending=(async()=>{if(cycles++%10===0)await backfillLogSearch();for(let i=0;i<4&&!stopped&&await indexLogEntry();i++);})().catch(error=>console.error('Log indexing',{name:error.name})).finally(()=>{pending=undefined;});};const timer=setInterval(tick,2000);tick();return async()=>{stopped=true;clearInterval(timer);await pending;};}
-interface Rank {id:string;sourceHash:string;sourceRevision:string;entryId:string;score:number}
+interface Rank {id:string;sourceHash:string;sourceRevision:string;entryId:string;score:number;match:'text'|'semantic'}
 interface Snapshot {_id:string;userId:string;identity:string;ranked:Rank[];input:LogSearchInput;mode:'hybrid'|'keyword';notices:string[];expiresAt:Date}
 export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed):Promise<LogSearchResult>{
  if(!retrievalEnabled())throw new AppError(503,'search_unavailable','Log search is not configured yet.');
@@ -74,10 +74,12 @@ export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed
   let vector:number[]|undefined;const notices:string[]=[];try{vector=await embedding(input.query,'query',`log:${userId}`);}catch{notices.push('Semantic search is temporarily unavailable. Showing keyword matches.');}
   const blocked=(await rows('blocks').find({members:userId},{projection:{members:1}}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId));
   let lanes;try{lanes=await queryRetrieval('log',userId,{query:input.query,vector,filter:{must,...(blocked.length?{must_not:[{key:'viewerIds',match:{any:blocked}}]}:{})}});}catch{throw new AppError(503,'search_unavailable','Log search is temporarily unavailable. Try again shortly.');}
-  const dense=lanes.dense.filter(item=>semanticCandidate(item.score,lanes.lexical.find(other=>other.id===item.id)?.score)),ranked=vector?hybridRank(dense,lanes.lexical):lanes.lexical;
+  const dense=lanes.dense.filter(item=>semanticCandidate(item.score,lanes.lexical.find(other=>other.id===item.id)?.score));
+  const textIds=new Set(lanes.lexical.map(item=>item.id));
+  const ranked=[...lanes.lexical.map(item=>({...item,match:'text' as const})),...(vector?hybridRank(dense,lanes.lexical).filter(item=>!textIds.has(item.id)).map(item=>({...item,match:'semantic' as const})):[])];
   const metadata=new Map([...lanes.lexical,...dense].map(item=>[item.id,item]));
   // One best matching passage per entry, for variety without hiding the source.
-  const seen=new Set<string>(),selected:Rank[]=[];for(const rank of ranked){const item=metadata.get(rank.id)!;if(seen.has(item.sourceKey))continue;seen.add(item.sourceKey);selected.push({id:item.id,sourceHash:item.sourceHash,sourceRevision:item.sourceRevision,entryId:item.sourceKey,score:rank.score});if(selected.length===100)break;}
+  const seen=new Set<string>(),selected:Rank[]=[];for(const rank of ranked){const item=metadata.get(rank.id)!;if(seen.has(item.sourceKey))continue;seen.add(item.sourceKey);selected.push({id:item.id,sourceHash:item.sourceHash,sourceRevision:item.sourceRevision,entryId:item.sourceKey,score:rank.score,match:rank.match});if(selected.length===100)break;}
   snapshot={_id:randomUUID(),userId,identity,ranked:selected,input,mode:vector?'hybrid':'keyword',notices,expiresAt:new Date(Date.now()+600000)};await rows<Snapshot>('logSearchResults').insertOne(snapshot);const expired=await rows<Snapshot>('logSearchResults').find({userId}).sort({expiresAt:-1,_id:-1}).skip(20).limit(100).project({_id:1}).toArray();if(expired.length)await rows('logSearchResults').deleteMany({_id:{$in:expired.map(row=>row._id)}});
  }
  const items:LogSearchResult['items']=[],{logEntryFor}=await import('../log');
@@ -87,7 +89,7 @@ export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed
   const results=await Promise.all(selected.map(async rank=>{const chunk=stored.find(item=>item._id===rank.id&&item.sourceHash===rank.sourceHash&&item.sourceRevision===rank.sourceRevision);if(!chunk)return null;let row;try{row=await logEntryFor(userId,rank.entryId);}catch(error){if(error instanceof AppError&&[403,404].includes(error.status))return null;throw error;}
    if(!row.members.includes(userId)||String(row.revision)!==rank.sourceRevision||input.personId&&!row.members.includes(input.personId)||input.from&&row.date<input.from||input.through&&row.date>input.through)return null;
    const shared=row.members.length>1||row.invited.length>0;if(input.scope==='shared'&&!shared||input.scope==='private'&&shared)return null;
-   return {entryId:row._id,title:row.title,date:row.date,place:row.place,snippet:chunk.snippet.slice(0,500),score:rank.score};}));items.push(...results.filter((value):value is LogSearchResult['items'][number]=>Boolean(value)));
+   return {entryId:row._id,title:row.title,date:row.date,place:row.place,snippet:chunk.snippet.slice(0,500),score:rank.score,match:rank.match};}));items.push(...results.filter((value):value is LogSearchResult['items'][number]=>Boolean(value)));
  }
  const indexing=Boolean(await jobs().findOne({viewerIds:userId},{projection:{_id:1}}))||Boolean(await rows('retrievalJobs').findOne({kind:'log',viewerIds:userId},{projection:{_id:1}}))||!(await rows('logSearchMeta').findOne({_id:LOG_INDEX_VERSION}))?.done;
  return {items,nextCursor:offset<snapshot.ranked.length?`${snapshot._id}.${offset}`:null,mode:snapshot.mode,indexing,notices:[...snapshot.notices,...(indexing?['Recent or older Log entries are still being indexed.']:[])]};

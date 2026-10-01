@@ -35,3 +35,12 @@ it('filters private retrieval inside the index and reauthorizes stale access bef
   expect((await searchLog({query:'river',scope:'all',limit:20},actor,async()=>vector)).items.some(item=>[shared,foreign].some(id=>id===item.entryId))).toBe(false);
  }finally{query.mockRestore();}
 });
+it('returns indexed text matches before semantic neighbors',async()=>{
+ const text=await entry(['me'],'We watched a sunset'),related=await entry(['me'],'Golden evening by the shore');while(await indexLogEntry(async()=>vector));
+ const documents=await rows<LogSearchChunk>('logSearchChunks').find({entryId:{$in:[text,related]},text:{$regex:'sunset|Golden'}}).toArray();
+ const direct=documents.find(row=>row.entryId===text)!,neighbor=documents.find(row=>row.entryId===related)!;
+ const hit=(row:LogSearchChunk,score:number)=>({id:row._id,sourceKey:row.entryId,sourceHash:row.sourceHash,sourceRevision:row.sourceRevision,ownerId:row.ownerId,score});
+ const query=vi.spyOn(backend,'queryRetrieval').mockResolvedValue({lexical:[hit(direct,.2)],dense:[hit(neighbor,.9),hit(direct,.3)]});
+ try{const result=await searchLog({query:'sunset',scope:'all',limit:20},actor,async()=>vector);expect(result.items.map(item=>[item.entryId,item.match])).toEqual([[text,'text'],[related,'semantic']]);}
+ finally{query.mockRestore();}
+});

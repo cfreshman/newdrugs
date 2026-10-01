@@ -1,9 +1,11 @@
-import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
+import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
+import {RoomServiceClient} from 'livekit-server-sdk';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {users,type User,type Actor} from '../server/auth';
 import {config} from '../server/config';
 import {startCall,joinCall,endCall,callHistory,incomingCall} from '../server/calling';
+import {reconcileSpacePresence,spaceRoomName,spaceWebhook} from '../server/spaces';
 import {executeOperation} from '../server/operations';
 import {sourceDocument} from '../server/search/sources';
 import {notificationState} from '../server/notifications';
@@ -31,9 +33,9 @@ it('keeps a video call in the accepted DM and queues room closure when it ends',
  expect((await notificationState('other')).items.find(item=>item.kind==='call')?.read).toBe(true);
 });
 
-it('indexes only a live Space description and gates speaking and removal',async()=>{
+it('indexes a live talk title and optional description and gates speaking and removal',async()=>{
  let space=await call('spaces.create',{title:'Night walks',description:'Talking about late walks by the ocean.'},'me',true);
- expect((await sourceDocument('spaces',space.id))?.text).toBe('Talking about late walks by the ocean.');
+ expect((await sourceDocument('spaces',space.id))?.text).toBe('title: Night walks\ndescription: Talking about late walks by the ocean.');
  const vector=Array(512).fill(0);vector[0]=1;await indexOne(async()=>vector);
  const matched=await searchPublic({query:'ocean walks',datasets:['spaces'],mode:'semantic',limit:20},actor('other'),vector);
  expect(matched.matches[0]).toMatchObject({dataset:'spaces',entityType:'space',record:{id:space.id,description:'Talking about late walks by the ocean.'}});
@@ -50,6 +52,41 @@ it('indexes only a live Space description and gates speaking and removal',async(
  expect(await sourceDocument('spaces',space.id)).toBeNull();
  expect((await call('spaces.list')).items).toEqual([]);
  expect(await rows('searchOutbox').findOne({_id:`spaces:${space.id}`})).toMatchObject({kind:'spaces'});
+ const titleOnly=await call('spaces.create',{title:'Stargazing'},'me',true);
+ expect((await sourceDocument('spaces',titleOnly.id))?.text).toBe('title: Stargazing');
+});
+it('keeps a Talk space live through a host browser refresh until the room actually closes',async()=>{
+ const space=await call('spaces.create',{title:'Reconnect'},'me',true),room={name:spaceRoomName(space.id)};
+ await spaceWebhook({event:'participant_left',room,participant:{identity:'me'}});
+ expect((await call('spaces.get',{spaceId:space.id})).status).toBe('live');
+ await spaceWebhook({event:'room_finished',room});
+ expect((await rows('spaces').findOne({_id:space.id}))?.status).toBe('ended');
+});
+it('projects connected Talk participants and fences an old leave after a rejoin',async()=>{
+ const space=await call('spaces.create',{title:'Current room'},'me',true),room={name:spaceRoomName(space.id)};
+ await spaceWebhook({event:'participant_joined',room,participant:{identity:'me',sid:'host-1'}});
+ await spaceWebhook({event:'participant_joined',room,participant:{identity:'other',sid:'guest-1'}});
+ let listed=(await call('spaces.list')).items[0];
+ expect([listed.speakingCount,listed.listeningCount]).toEqual([1,1]);
+ expect(listed.presentSpeakers.map((person:any)=>person.id)).toEqual(['me']);
+ await spaceWebhook({event:'participant_left',room,participant:{identity:'other',sid:'guest-1'}});
+ listed=(await call('spaces.list')).items[0];expect([listed.speakingCount,listed.listeningCount]).toEqual([1,0]);
+ await spaceWebhook({event:'participant_joined',room,participant:{identity:'other',sid:'guest-2'}});
+ await spaceWebhook({event:'participant_left',room,participant:{identity:'other',sid:'guest-1'}});
+ listed=(await call('spaces.list')).items[0];expect(listed.listeningCount).toBe(1);
+});
+it('recovers presence for a room that was already open before deployment',async()=>{
+ const space=await call('spaces.create',{title:'Already open'},'me',true);
+ const participants=vi.spyOn(RoomServiceClient.prototype,'listParticipants').mockResolvedValue([{identity:'me',sid:'host-1'}] as any);
+ try{
+  expect((await call('spaces.list',{},'other')).items[0].speakingCount).toBe(0);
+  await reconcileSpacePresence();
+  expect(participants).toHaveBeenCalledWith(spaceRoomName(space.id));
+  expect((await call('spaces.list',{},'other')).items[0].speakingCount).toBe(1);
+  participants.mockResolvedValue([]);
+  await reconcileSpacePresence();
+  expect((await call('spaces.list',{},'other')).items[0].speakingCount).toBe(0);
+ }finally{participants.mockRestore();}
 });
 
 it('ends a private call and removes a listener from a public Space when either person blocks',async()=>{

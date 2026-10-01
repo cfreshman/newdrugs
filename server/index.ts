@@ -16,6 +16,7 @@ import { stopLiveState } from './liveState';
 import { startSearchWorker } from './search/worker';
 import { expireUploads } from './uploads';
 import {startLiveMediaEffectWorker} from './liveMediaEffects';
+import {startSpacePresenceWorker} from './spaces';
 
 await connectDatabase();
 await ensureStarterPool();
@@ -32,6 +33,7 @@ const stopLogSearch = background ? startLogSearchWorker() : async () => {};
 const stopRetrieval = background ? startRetrievalWorker() : async () => {};
 const stopAttachmentReferences = background ? startAttachmentReferenceWorker() : async () => {};
 const stopLiveMediaEffects = background ? startLiveMediaEffectWorker() : async () => {};
+const stopSpacePresence = background ? startSpacePresenceWorker() : async () => {};
 let cleaning = false;
 const uploadCleanup = background ? setInterval(() => { if (cleaning) return; cleaning = true; void expireUploads().catch(error => console.error('Upload cleanup:', error.name)).finally(() => { cleaning = false; }); }, 10000) : undefined;
 const server = config.PROCESS_ROLE !== 'worker' ? createApp().listen(config.PORT, '127.0.0.1', () => {
@@ -44,7 +46,7 @@ let stopping = false;
 const shutdown = async () => {
   if (stopping) return; stopping = true;
   setTimeout(() => process.exit(1), 20000).unref(); clearInterval(uploadCleanup);
-  await Promise.all([stopWorker(),stopWorkerHealth(),stopSearch(),stopPush(),stopChatSearch(),stopLedgerActivity(),stopRetrieval(),stopLogSearch(),stopCalendar(),stopContacts(),stopAttachmentReferences(),stopLiveMediaEffects(),stopLiveState()]);
+  await Promise.all([stopWorker(),stopWorkerHealth(),stopSearch(),stopPush(),stopChatSearch(),stopLedgerActivity(),stopRetrieval(),stopLogSearch(),stopCalendar(),stopContacts(),stopAttachmentReferences(),stopLiveMediaEffects(),stopSpacePresence(),stopLiveState()]);
   if (server) await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
   await mongo.close(); process.exit(0);
 };

@@ -174,5 +174,5 @@ export async function explainPublic(retrievalId: string, id: string, actor: Acto
 }
 export async function searchStatus() {
   const [counts,pending,failed]=await Promise.all([rows('searchDocuments').aggregate< {_id:string;count:number}>([{$group:{_id:'$dataset',count:{$sum:1}}}]).toArray(),rows('searchOutbox').countDocuments({status:{$ne:'failed'}}),rows('searchOutbox').countDocuments({status:'failed'})]);
-  return {datasets:['profiles','posts','replies','spaces'].map(dataset=>({dataset,count:counts.find(item=>item._id===dataset)?.count||0})),pending,failed,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,capacity:retrievalEnabled()?null:10000,notice:'Public human-written profiles, posts, replies and live Space descriptions only. No DMs, agent chats, files or inferred interests are indexed.'};
+  return {datasets:['profiles','posts','replies','spaces'].map(dataset=>({dataset,count:counts.find(item=>item._id===dataset)?.count||0})),pending,failed,model:EMBEDDING_MODEL,dimensions:DIMENSIONS,indexVersion:INDEX_VERSION,capacity:retrievalEnabled()?null:10000,notice:'Public human-written profiles, posts, replies and live Talk titles and descriptions only. No DMs, agent chats, files or inferred interests are indexed.'};
 }
