@@ -44,7 +44,7 @@ Do not optimize for likes/replies/reach by default. Profile text/photos are huma
 
 The primary tabs are **Agent, Posts, Friends, Log**, each with preserved independent navigation, drafts and side-chat state. Read `AGENTS.md` for the accumulated interaction decisions before changing a surface. Match the existing UI instead of redesigning adjacent features.
 
-The October 1 v0.38.1 roadmap drafts were withdrawn because the founder had not approved their ideas before they were written into the repository. The founder then explicitly requested independent Codex-authored proposals marked unconfirmed. They live in [Codex's proposal area](roadmaps/codex-proposals/README.md), separate from approved decisions, with no implementation or deployment authorization. There is still no new approved product direction. The September [roadmap pack](roadmaps/README.md) remains exploratory research; its proposed plans-first sequence was declined.
+The founder rejected the entire October 1 Codex proposal pack and its alternative roadmaps and requested their removal. Those documents have been deleted; do not recover their ideas from Git history as pending or approved work. There is no new approved product direction. The September [roadmap pack](roadmaps/README.md) remains historical exploratory research; its proposed plans-first sequence was declined.
 
 ## Environment and authority
 
