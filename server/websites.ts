@@ -9,6 +9,7 @@ import {acceptUpload,deleteUpload,ownUpload,prepareUpload,retainUploads} from '.
 import {syncSourceAttachments} from './attachmentReferences';
 import {getWebsiteIcon,searchWebsiteIcons,type WebsiteIconWeight} from './websiteIcons';
 import {websiteSourceOperation} from './websiteSources';
+import {inspectWebsiteProject} from './websiteInspect';
 import {fetchPublic,publicUrl} from './publicFetch';
 import {applyWebsiteChange,reservedWebsiteLabel,validateWebsiteFiles,websiteCodeHost,websiteDraftHost,websiteHostLabel,type WebsiteAsset,type WebsiteChange,type WebsiteFile} from '../shared/website';
 
@@ -47,6 +48,7 @@ export async function websiteOperation(name:string,input:Record<string,unknown>,
   await sites().insertOne(site,{session});return summary(site,user.handle);
  }
  const site=await ownSite(actor.userId,session);
+ if(name==='website.inspect')return {revision:site.revision,...inspectWebsiteProject(site.files,site.assets||[])};
  if(name==='website.file'){const file=site.files.find(item=>item.path===input.path);if(!file)throw new AppError(404,'website_file','This website file is unavailable.');const offset=Number(input.offset),limit=Number(input.limit),content=file.content.slice(offset,offset+limit);return {path:file.path,content,revision:site.revision,offset,totalCharacters:file.content.length,nextOffset:offset+content.length<file.content.length?offset+content.length:null};}
  if(name==='website.search'){const query=String(input.query).toLowerCase(),limit=Number(input.limit),items:{path:string;offset:number;excerpt:string}[]=[];for(const file of site.files){const lower=file.content.toLowerCase();let offset=0;while(items.length<limit){const found=lower.indexOf(query,offset);if(found<0)break;items.push({path:file.path,offset:found,excerpt:file.content.slice(Math.max(0,found-90),Math.min(file.content.length,found+query.length+90))});offset=found+Math.max(1,query.length);}if(items.length>=limit)break;}return {revision:site.revision,items};}
  if(name==='website.revisions'){const history=await revisions().find({userId:actor.userId},{session,projection:{revision:1,createdAt:1}}).sort({revision:-1}).limit(10).toArray();return {currentRevision:site.revision,items:history.map(row=>({revision:row.revision,createdAt:row.createdAt}))};}

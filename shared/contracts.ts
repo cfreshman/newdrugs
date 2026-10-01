@@ -53,6 +53,7 @@ export const outputs: Record<string, z.ZodType> = {
   'log.search':logSearchResult,
   'log.related':logRelatedResult,
   'website.get':z.object({site:websiteSummary.nullable()}),
+  'website.inspect':z.object({revision:z.number().int().positive(),pages:z.array(z.string()),files:z.number().int().nonnegative(),assets:z.number().int().nonnegative(),issues:z.array(z.object({path:websitePath,reference:z.string(),kind:z.enum(['missing','unsafe']),message:z.string()})),issuesCapped:z.boolean()}),
   'website.icons.search':z.object({family:z.literal('Phosphor Icons'),version:z.string(),items:z.array(z.object({name:z.string(),slug:z.string(),categories:z.array(z.string()),tags:z.array(z.string())}))}),
   'website.icons.get':z.object({name:z.string(),slug:z.string(),weight:websiteIconWeight,svg:z.string(),license:z.literal('MIT'),source:z.literal('Phosphor Icons')}),
   'website.source.open':websiteSourceSummary,
