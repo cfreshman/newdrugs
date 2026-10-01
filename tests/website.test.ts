@@ -68,6 +68,19 @@ it('keeps named checkpoints beyond ordinary edits and restores one without publi
  await expect(call('website.checkpoint.delete',{checkpointId:saved.id})).rejects.toBeTruthy();
  expect((await call('website.checkpoint.delete',{checkpointId:saved.id},true)).deleted).toBe(true);
 });
+it('saves one bounded public reference source for later ranged inspection',async()=>{
+ const source=Buffer.from('<html><title>Reference</title><h1>Work</h1><a href="/about">About</a><link rel="stylesheet" href="/site.css"></html>');
+ const fetch=vi.spyOn(publicFetch,'fetchPublic').mockResolvedValue({bytes:source,url:'https://example.com/',mime:'text/html'});
+ try{
+  const opened=await call('website.source.open',{url:'https://example.com/'});
+  expect(opened.title).toBe('Reference');expect(opened.links[0].url).toBe('https://example.com/about');
+  expect((await call('website.source.list')).items[0].sourceId).toBe(opened.sourceId);
+  expect((await call('website.source.read',{sourceId:opened.sourceId,offset:13,limit:9})).content).toBe('Reference');
+  expect((await call('website.source.search',{sourceId:opened.sourceId,query:'site.css'})).items).toHaveLength(1);
+  expect((await call('website.source.open',{url:'https://example.com/'})).cached).toBe(true);
+  expect(fetch).toHaveBeenCalledTimes(1);
+ }finally{fetch.mockRestore();}
+});
 it('serves the draft as sandboxed content and removes published bytes on unpublish',async()=>{
  const site=await call('website.create',{files:[{path:'pages/index.html',content:'<link href="../styles/site.css"><img src="../assets/photo.webp"><h1>Draft</h1>'},{path:'styles/site.css',content:'h1{color:red}'}]});
  const token=(await rows('websites').findOne({_id:'owner'}))!.previewToken;
