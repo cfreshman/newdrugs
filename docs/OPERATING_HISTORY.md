@@ -284,3 +284,10 @@ The immediate production correction removed the underline from the Agent inbox A
 Production deployment `20261001204613409` shipped private original-filename metadata with ID names in shared projections/downloads, hidden-profile filtering inside semantic and exact retrieval with the explicit agent override, the centered shared Square text default, and native DM calling guidance. Explore cards now show Hide immediately before Add friend, grouped at the right edge with the shared gap. Existing ID storage paths were already correct and were not renamed. The founder excluded the proposed website draft/publication prompt change.
 
 The build, production API health, exact worker heartbeat and public JS/CSS byte comparison passed. Earlier focused filename/privacy/search checks passed in the isolated test database. Browser control was unavailable for the small action-row visual check; no fresh screenshot or physical-device verification is claimed.
+
+
+## October 1, 2026: v0.39.2 Messages refinement
+
+Production deployment `20261001210702237` shipped photo/name/preview inbox rows that open directly, preserved invitation notes/actions, and DM identity/call/menu controls in the existing top panel header in place of the Messages title. Mobile calls use an icon-only header control. Back restores the inbox and its generic header.
+
+The prior dev pass included ten focused interaction/history checks and synthetic-data browser inspection at 320px, 393px and 960px. Production build, API health, exact worker heartbeat and public JS/CSS byte comparisons passed.
