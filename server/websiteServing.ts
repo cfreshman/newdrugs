@@ -2,7 +2,7 @@ import type {Request,Response,NextFunction} from 'express';
 import {users} from './auth';
 import {config} from './config';
 import {websiteAssetPath,websitePath,websiteHostLabel,reservedWebsiteLabel} from '../shared/website';
-import {websiteByCode,websiteByPreviewToken,type WebsiteDoc} from './websites';
+import {websiteByCode,websiteByPreviewToken,websiteMediaExtension,type WebsiteDoc} from './websites';
 import {uploads} from './uploads';
 import {sendMedia} from './mediaDelivery';
 
@@ -18,7 +18,9 @@ function sourcePath(urlPath:string){
  return null;
 }
 function rewritePreview(content:string,prefix:string,path:string){
- if(path.endsWith('.html'))return content.replace(/\b(href|src|action)=(['"])\/(?!\/)/gi,(_match,attr:string,quote:string)=>`${attr}=${quote}${prefix}/`);
+ if(path.endsWith('.html'))return content
+  .replace(/\b(href|src|action)=(['"])\/(?!\/)/gi,(_match,attr:string,quote:string)=>`${attr}=${quote}${prefix}/`)
+  .replace(/\b(href|src|action)=(['"])(?:\.\.\/)+(styles|scripts|assets)\//gi,(_match,attr:string,quote:string,folder:string)=>`${attr}=${quote}${prefix}/${folder}/`);
  if(path.endsWith('.css'))return content.replace(/url\(\s*(['"]?)\/(?!\/)/gi,(_match,quote:string)=>`url(${quote}${prefix}/`);
  return content;
 }
@@ -31,7 +33,7 @@ async function sendSite(req:Request,res:Response,site:WebsiteDoc,preview:boolean
  // User-authored sites share druggie.org's registrable domain. Give them opaque
  // origins so their scripts cannot set parent-domain cookies or reach app state.
  res.set('Content-Security-Policy',"sandbox allow-scripts allow-forms allow-popups allow-downloads; default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; connect-src 'self' https:");
- if(asset){const upload=await uploads().findOne({_id:asset.fileId,userId:site._id,ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false},mime:'image/webp'});if(!upload)return res.status(404).end();res.set('Content-Disposition','inline');await sendMedia(upload,req,res);return;}
+ if(asset){const upload=await uploads().findOne({_id:asset.fileId,userId:site._id,ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}});if(!upload||!websiteMediaExtension(upload.mime)||!asset.path.endsWith(`.${websiteMediaExtension(upload.mime)}`))return res.status(404).end();res.set('Content-Disposition','inline');await sendMedia(upload,req,res);return;}
  res.set('Content-Type',mime(file!.path));return res.send(prefix?rewritePreview(file!.content,prefix,file!.path):file!.content);
 }
 function hostLabel(host:unknown){if(typeof host!=='string')return null;const match=/^([a-z0-9-]+)\.druggie\.org(?::443)?$/i.exec(host);return match?.[1].toLowerCase()||null;}

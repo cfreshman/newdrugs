@@ -6,8 +6,9 @@ export const WEBSITE_MAX_SOURCE_BYTES=2*1024*1024;
 export const WEBSITE_MAX_PAGES=50;
 export const websitePath=z.string().min(1).max(160).regex(/^(?:pages\/(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.html|styles\/(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.css|scripts\/(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.js|assets\/(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.(?:svg|json|txt))$/);
 export const websiteFile=z.strictObject({path:websitePath,content:z.string().max(WEBSITE_MAX_FILE_BYTES)});
-export const websiteAssetPath=z.string().min(1).max(160).regex(/^assets\/(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.webp$/);
+export const websiteAssetPath=z.string().min(1).max(160).regex(/^assets\/(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.(?:webp|png|jpg|jpeg|gif|mp3|wav|ogg|webm|m4a|mp4|pdf|txt)$/);
 export const websiteAsset=z.strictObject({path:websiteAssetPath,fileId:z.uuid()});
+export const websiteAssetView=websiteAsset.extend({previewUrl:z.url(),publishedUrl:z.url().nullable()});
 export const websiteChange=z.discriminatedUnion('kind',[
  z.strictObject({kind:z.literal('create'),path:websitePath,content:z.string().max(WEBSITE_MAX_FILE_BYTES)}),
  z.strictObject({kind:z.literal('replace'),path:websitePath,oldText:z.string().min(1),newText:z.string()}),
@@ -15,7 +16,7 @@ export const websiteChange=z.discriminatedUnion('kind',[
  z.strictObject({kind:z.literal('delete'),path:websitePath}),
  z.strictObject({kind:z.literal('rename'),path:websitePath,newPath:websitePath}),
 ]);
-export const websiteSummary=z.object({code:z.string(),revision:z.number().int().positive(),files:z.array(z.object({path:websitePath,bytes:z.number().int().nonnegative()})),assets:z.array(websiteAsset),previewUrl:z.url(),stableUrl:z.url(),publicUrl:z.url().nullable(),publishedRevision:z.number().int().positive().nullable(),createdAt:z.string(),updatedAt:z.string()});
+export const websiteSummary=z.object({code:z.string(),revision:z.number().int().positive(),files:z.array(z.object({path:websitePath,bytes:z.number().int().nonnegative()})),assets:z.array(websiteAssetView),previewUrl:z.url(),stableUrl:z.url(),publicUrl:z.url().nullable(),publishedRevision:z.number().int().positive().nullable(),createdAt:z.string(),updatedAt:z.string()});
 export type WebsiteFile=z.infer<typeof websiteFile>;
 export type WebsiteAsset=z.infer<typeof websiteAsset>;
 export type WebsiteChange=z.infer<typeof websiteChange>;

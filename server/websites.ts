@@ -14,11 +14,13 @@ interface WebsiteRevision {_id:string;userId:string;revision:number;files:Websit
 const sites=()=>rows<WebsiteDoc>('websites'),revisions=()=>rows<WebsiteRevision>('websiteRevisions');
 const siteDomain='druggie.org';
 const localOrigin='http://localhost:7330';
+const mediaExtensions:Record<string,string>={'image/webp':'webp','image/png':'png','image/jpeg':'jpg','image/gif':'gif','audio/mpeg':'mp3','audio/wav':'wav','audio/ogg':'ogg','audio/webm':'webm','audio/mp4':'m4a','video/webm':'webm','video/mp4':'mp4','application/pdf':'pdf','text/plain':'txt'};
+export const websiteMediaExtension=(mime:string)=>mediaExtensions[mime]||null;
 
 export function websitePublicUrl(handle:string,code:string){const label=websiteHostLabel(handle);return config.APP_ENV==='production'?`https://${reservedWebsiteLabel(label)?websiteCodeHost(code):label}.${siteDomain}/`:`${localOrigin}/api/website-published/${code}/`;}
 export function websiteStableUrl(code:string){return config.APP_ENV==='production'?`https://${websiteCodeHost(code)}.${siteDomain}/`:`${localOrigin}/api/website-published/${code}/`;}
 export function websitePreviewUrl(token:string){return config.APP_ENV==='production'?`https://${websiteDraftHost(token)}.${siteDomain}/`:`${localOrigin}/api/website-preview/${token}/`;}
-function summary(site:WebsiteDoc,handle:string){return {code:site.code,revision:site.revision,files:site.files.map(file=>({path:file.path,bytes:Buffer.byteLength(file.content)})),assets:site.assets||[],previewUrl:websitePreviewUrl(site.previewToken),stableUrl:websiteStableUrl(site.code),publicUrl:site.published?websitePublicUrl(handle,site.code):null,publishedRevision:site.published?.revision||null,createdAt:site.createdAt,updatedAt:site.updatedAt};}
+function summary(site:WebsiteDoc,handle:string){const previewUrl=websitePreviewUrl(site.previewToken),publicUrl=site.published?websitePublicUrl(handle,site.code):null;return {code:site.code,revision:site.revision,files:site.files.map(file=>({path:file.path,bytes:Buffer.byteLength(file.content)})),assets:(site.assets||[]).map(asset=>({...asset,previewUrl:new URL(asset.path,previewUrl).href,publishedUrl:publicUrl&&site.published?.assets.some(item=>item.path===asset.path&&item.fileId===asset.fileId)?new URL(asset.path,publicUrl).href:null})),previewUrl,stableUrl:websiteStableUrl(site.code),publicUrl,publishedRevision:site.published?.revision||null,createdAt:site.createdAt,updatedAt:site.updatedAt};}
 async function ownSite(userId:string,session?:ClientSession){return requireValue(await sites().findOne({_id:userId},{session}),'Create your website first.');}
 async function saveDraft(site:WebsiteDoc,files:WebsiteFile[],assets:WebsiteAsset[],session?:ClientSession){
  const now=new Date().toISOString();await revisions().insertOne({_id:`${site._id}:${site.revision}`,userId:site._id,revision:site.revision,files:site.files,assets:site.assets||[],createdAt:now},{session});
@@ -49,11 +51,13 @@ export async function websiteOperation(name:string,input:Record<string,unknown>,
  }
  if(name==='website.asset.add'){
   if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Read it again.');
-  const path=String(input.path),fileId=String(input.fileId),assets=site.assets||[];
-  if(assets.length>=20||assets.some(asset=>asset.path===path)||site.files.some(file=>file.path===path))throw new AppError(422,'website_asset','Choose an unused image path; a site can have up to twenty uploaded images.');
+  const fileId=String(input.fileId),assets=site.assets||[];
+  if(assets.some(asset=>asset.fileId===fileId))return summary(site,user.handle);
+  if(assets.length>=20)throw new AppError(422,'website_asset','A website can have up to twenty uploaded media files.');
   const file=await ownUpload(actor.userId,fileId,session);
-  if(!file.ready||file.purpose!=='agent_input'||file.mime!=='image/webp'||file.logEntryId)throw new AppError(422,'website_asset','Choose a ready uploaded image that does not belong to a hangout.');
-  await retainUploads(actor.userId,[fileId],'agent_input',session);
+  const extension=websiteMediaExtension(file.mime);if(!file.ready||!extension)throw new AppError(422,'website_asset','Choose a ready owned upload with a supported media type.');
+  const path=`assets/${fileId}.${extension}`;
+  await retainUploads(actor.userId,[fileId],file.purpose,session);
   const updated=await saveDraft(site,site.files,[...assets,{path,fileId}],session);await syncSourceAttachments('websites',actor.userId,session);return summary(updated,user.handle);
  }
  if(name==='website.asset.remove'){
@@ -64,12 +68,12 @@ export async function websiteOperation(name:string,input:Record<string,unknown>,
  if(name==='website.restore'){
   if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Read it again.');
   const saved=requireValue(await revisions().findOne({_id:`${actor.userId}:${input.fromRevision}`},{session}),'This website revision is unavailable.');
-  for(const asset of saved.assets||[]){const file=await ownUpload(actor.userId,asset.fileId,session);if(!file.ready||file.mime!=='image/webp')throw new AppError(409,'website_asset_missing','A saved image is no longer available. Restore the source files separately.');}
+  for(const asset of saved.assets||[]){const file=await ownUpload(actor.userId,asset.fileId,session);if(!file.ready||!websiteMediaExtension(file.mime))throw new AppError(409,'website_asset_missing','Saved media is no longer available. Restore the source files separately.');}
   const updated=await saveDraft(site,saved.files,saved.assets||[],session);await syncSourceAttachments('websites',actor.userId,session);return summary(updated,user.handle);
  }
  if(name==='website.publish'){
   if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Review the latest draft before publishing.');
-  for(const asset of site.assets||[]){const file=await ownUpload(actor.userId,asset.fileId,session);if(!file.ready||file.mime!=='image/webp')throw new AppError(409,'website_asset_missing','A website image is no longer available. Remove or replace it before publishing.');}
+  for(const asset of site.assets||[]){const file=await ownUpload(actor.userId,asset.fileId,session);if(!file.ready||!websiteMediaExtension(file.mime))throw new AppError(409,'website_asset_missing','Website media is no longer available. Remove or replace it before publishing.');}
   const published={revision:site.revision,files:site.files,assets:site.assets||[],publishedAt:new Date().toISOString()};
   const updated=await sites().updateOne({_id:actor.userId,revision:site.revision},{$set:{published,updatedAt:published.publishedAt}},{session});
   if(!updated.matchedCount)throw new AppError(409,'website_changed','This website changed. Review the latest draft before publishing.');

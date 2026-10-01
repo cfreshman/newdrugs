@@ -55,12 +55,13 @@ it('keeps a stable preview, revisioned draft and separate published snapshot acr
  expect(profile((await users().findOne({_id:'owner'}))!).websiteUrl).toBeUndefined();
 });
 it('serves the draft as sandboxed content and removes published bytes on unpublish',async()=>{
- const site=await call('website.create',{files:[{path:'pages/index.html',content:'<link href="/styles/site.css"><h1>Draft</h1>'},{path:'styles/site.css',content:'h1{color:red}'}]});
+ const site=await call('website.create',{files:[{path:'pages/index.html',content:'<link href="../styles/site.css"><img src="../assets/photo.webp"><h1>Draft</h1>'},{path:'styles/site.css',content:'h1{color:red}'}]});
  const token=(await rows('websites').findOne({_id:'owner'}))!.previewToken;
  const response=()=>{const state={status:200,headers:{} as Record<string,string>,body:''};const res:any={set(name:string|Record<string,string>,value?:string){if(typeof name==='string')state.headers[name]=value||'';else Object.assign(state.headers,name);return this;},status(value:number){state.status=value;return this;},send(value:string){state.body=value;return this;},end(){return this;}};return {state,res};};
  const request=async(path:string)=>{const {state,res}=response();await websiteRequest({method:'GET',path,headers:{host:'localhost:7330'}} as any,res,err=>{throw err;});return state;};
  const preview=await request(`/api/website-preview/${token}/`);
  expect(preview.body).toContain(`/api/website-preview/${token}/styles/site.css`);
+ expect(preview.body).toContain(`/api/website-preview/${token}/assets/photo.webp`);
  expect(preview.headers['Content-Security-Policy']).toContain('sandbox');
  expect(preview.headers['X-Robots-Tag']).toContain('noindex');
  expect((await request(`/api/website-preview/${token}/styles/site.css`)).body).toBe('h1{color:red}');
@@ -73,15 +74,30 @@ it('uses an owned image only after attachment and removes its public reference o
  const site=await call('website.create',{files:[{path:'pages/index.html',content:'<img src="/assets/photo.webp">'}]});
  const fileId=randomUUID();await rows('uploads').insertOne({_id:fileId,userId:'owner',name:'photo.webp',purpose:'agent_input',expectedBytes:5,sourceHash:'hash',bytes:5,mime:'image/webp',sha256:'hash',ready:true,createdAt:new Date().toISOString()});
  await users().updateOne({_id:'owner'},{$set:{storageBytes:5}});
- const attached=await call('website.asset.add',{revision:1,path:'assets/photo.webp',fileId});
- expect(attached.assets).toEqual([{path:'assets/photo.webp',fileId}]);
+ const attached=await call('website.asset.add',{revision:1,fileId});
+ expect(attached.assets[0]).toMatchObject({path:`assets/${fileId}.webp`,fileId});
+ expect(attached.assets[0].previewUrl).toContain(`/assets/${fileId}.webp`);
  const stored=await call('storage.list',{attachedTo:'websites'});expect(stored.items.map((item:{id:string})=>item.id)).toEqual([fileId]);expect(stored.items[0].attachments[0].url).toContain('website-preview');
  await call('website.publish',{revision:2},true);
- expect((await rows('websites').findOne({_id:'owner'}) as any).published.assets).toEqual([{path:'assets/photo.webp',fileId}]);
+ expect((await rows('websites').findOne({_id:'owner'}) as any).published.assets).toEqual([{path:`assets/${fileId}.webp`,fileId}]);
  await deleteUpload(actor,fileId);
  const after=await rows('websites').findOne({_id:'owner'}) as any;
  expect(after.revision).toBe(3);expect(after.assets).toEqual([]);expect(after.published.assets).toEqual([]);
  expect((await call('website.get')).site.code).toBe(site.code);
+});
+it('attaches existing profile and Log media without exposing original filenames',async()=>{
+ await call('website.create',{files:[{path:'pages/index.html',content:'<h1>Media</h1>'}]});
+ const photoId=randomUUID(),audioId=randomUUID();
+ await rows('uploads').insertMany([
+  {_id:photoId,userId:'owner',name:'private-profile-name.webp',purpose:'profile_photo',expectedBytes:5,sourceHash:'hash',bytes:5,mime:'image/webp',sha256:'hash',ready:true,createdAt:new Date().toISOString()},
+  {_id:audioId,userId:'owner',name:'private-log-name.mp3',purpose:'log_media',logEntryId:randomUUID(),expectedBytes:5,sourceHash:'hash',bytes:5,mime:'audio/mpeg',sha256:'hash',ready:true,createdAt:new Date().toISOString()},
+ ]);
+ const photo=await call('website.asset.add',{revision:1,fileId:photoId});
+ const audio=await call('website.asset.add',{revision:2,fileId:audioId});
+ expect(photo.assets[0].path).toBe(`assets/${photoId}.webp`);
+ expect(audio.assets[1].path).toBe(`assets/${audioId}.mp3`);
+ expect(JSON.stringify(audio)).not.toContain('private-profile-name');
+ expect(JSON.stringify(audio)).not.toContain('private-log-name');
 });
 it('serves both public hostnames and moves the friendly one when the username changes',async()=>{
  const site=await call('website.create',{files:[{path:'pages/index.html',content:'<h1>My site</h1>'}]});
