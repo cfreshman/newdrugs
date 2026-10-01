@@ -2,6 +2,8 @@
 
 September 25, 2026. A roadmap study from the current MVP, the founder's instructions, read-only review of Wayfinder/Pangaea and current primary sources. These are proposed directions and experiments, not implementation commitments.
 
+**Current planning proposal, October 1, 2026:** [A way forward from v0.38.1](10-v0.38.1-direction.md) and its [first community runbook](11-first-community-runbook.md). They reconcile the shipped product and the founder's later decisions. The September study below remains useful research, but its original sequence is not the active backlog.
+
 ## Current position: v0.9.2
 
 The study below is a possibility map, not a list of still-missing features. Since it was written, production has gained:
@@ -66,6 +68,8 @@ The no-profit commitment also needs an operating model. Paid AI credit, starter 
 The original study identified guest credit allocation, report handling, older chat access and off-app delivery as immediate gaps. Their current status and the founder's decisions are recorded above. Account export/deletion, stronger moderation actions and operational recovery remain longer-term responsibilities; they are not prerequisites being added to the next feature request.
 
 ## Read the pack in the order useful to you
+
+For a decision about the next work, start with [the current direction](10-v0.38.1-direction.md) and [runbook](11-first-community-runbook.md). The documents below preserve the earlier option study:
 
 1. [Ethos and the actual starting point](01-ethos-and-current-position.md): what is fixed, what is an interpretation, what already works and what gaps matter.
 2. [Eight possible directions](02-possible-directions.md): the experience, first slice, later possibilities, agent role, pilot and failure signal for each path.
