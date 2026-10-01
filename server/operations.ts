@@ -13,7 +13,7 @@ import {endCallForConnection} from './calling';
 import {removeSpaceParticipantForBlock,spaceOperation} from './spaces';
 import {enqueueCircleEdge,circleSummaries,circleCandidates,circleMutualIds} from './circle';
 import {hiddenPersonIds,hiddenPeoplePage,isPersonHidden,setPersonHidden} from './peopleHides';
-import {websiteOperation} from './websites';
+import {stageWebsiteMediaImport,websiteOperation} from './websites';
 import {activitySince} from './activityUtilities';
 import {meetingAreas} from './meetingAreas';
 import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
@@ -605,7 +605,7 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if (name==='profile.update' && typeof parsed.locationCell==='string') await resolveArea(parsed.locationCell);
   if (name==='posts.create' && typeof parsed.areaCell==='string') await resolveArea(parsed.areaCell);
   const fingerprint = hash(canonicalJSON({ name, parsed }));
-  if(name.startsWith('make.')&&op.kind==='write'){
+  if(name.startsWith('make.')&&op.kind==='write'||name==='website.media.import'){
     const prior=await rows('receipts').findOne({_id:receiptId});
     if(prior){
       if(prior.fingerprint!==fingerprint)throw new AppError(409,'idempotency_conflict','This key was already used for a different action.');
@@ -617,6 +617,8 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if(name==='make.create'||name==='make.edit')parsed.project=await normalizeMakeProject(parsed.project,actor);
   let makeFileId:string|undefined;
   if(name==='make.publish')makeFileId=await stageMakePublish(parsed,actor);
+  let websiteFileId:string|undefined;
+  if(name==='website.media.import')websiteFileId=await stageWebsiteMediaImport(parsed,actor);
   let committed:unknown;
   try{committed = await transaction(async session => {
     if (actor.source === 'agent') {
@@ -647,15 +649,16 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
     }
     // Store the same JSON shape that the HTTP/MCP client receives. BSON would
     // otherwise turn nested undefined optional fields into null on a retry.
-    const result = JSON.parse(JSON.stringify(op.outputSchema.parse(await run(name,makeFileId?{...parsed,_makeFileId:makeFileId}:parsed, actor, session))));
+    const result = JSON.parse(JSON.stringify(op.outputSchema.parse(await run(name,{...parsed,...(makeFileId?{_makeFileId:makeFileId}:{}),...(websiteFileId?{_websiteFileId:websiteFileId}:{})}, actor, session))));
     if((name.startsWith('agent.memory.')||name==='agent.instructions.update')&&result.saved!==false)await rows('recordEvents').insertOne({_id:randomUUID(),userIds:[actor.userId],payload:{keys:['agent_memory']},expiresAt:new Date(Date.now()+3600000)},{session});
     if(name==='profile.update')await syncSourceAttachments('profile',actor.userId,session);
     if(['posts.create','posts.reply','posts.delete'].includes(name))await syncSourceAttachments('posts',name==='posts.delete'?String(parsed.postId):String(result.id),session);
     if((name.startsWith('log.')||name==='make.publish')&&(parsed.entryId||result.id)&&!['log.birthday_update','log.preferences_update'].includes(name))await syncSourceAttachments('hangouts',String(parsed.entryId||result.id),session);
     await rows('receipts').insertOne({ _id: receiptId, userId: actor.userId, operation: name, source: actor.source, fingerprint, fingerprintVersion: 2, result, createdAt: new Date().toISOString() }, { session });
     return result;
-  });}catch(error){if(makeFileId)await deleteUpload(actor,makeFileId).catch(()=>{});throw error;}
+  });}catch(error){if(makeFileId)await deleteUpload(actor,makeFileId).catch(()=>{});if(websiteFileId)await deleteUpload(actor,websiteFileId).catch(()=>{});throw error;}
   if(makeFileId&&(committed as {imageFileId?:string}).imageFileId!==makeFileId)await deleteUpload(actor,makeFileId).catch(()=>{});
+  if(websiteFileId&&!(committed as {assets?:{fileId:string}[]}).assets?.some(asset=>asset.fileId===websiteFileId))await deleteUpload(actor,websiteFileId).catch(()=>{});
   if(['files.delete','log.leave','log.delete','log.update','log.contribute','make.publish'].includes(name)||name==='profile.update'&&parsed.photos)await expireUploads({remote:false}).catch(error=>console.error('Upload deletion cleanup:',error.name));
   return committed;
 }

@@ -19,8 +19,8 @@ export const uploads=()=>rows<Upload>('uploads');
 const digest=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const filePath=(id:string)=>{if(!/^[0-9a-f-]{36}$/.test(id))throw new Error('Invalid file identity.');return resolve(config.DATA_DIR,'files',id);};
 export const uploadRef=(file:Upload):UploadRef=>({id:file._id,name:file.name,purpose:file.purpose,bytes:file.bytes,mime:file.mime,sha256:file.sha256,ready:file.ready,uploadUrl:`/api/uploads/${file._id}`,...(file.ready?{url:`/api/files/${file._id}`}:{})});
-export async function prepareUpload(data:{name:string;bytes:number;sha256:string;purpose:UploadPurpose;requestId?:string},actor:Actor,session?:ClientSession){
-  if(actor.source==='agent'||(data.purpose==='profile_photo'&&actor.source!=='browser'))throw new AppError(403,'human_authored','Choose profile photos yourself in the profile editor.');
+export async function prepareUpload(data:{name:string;bytes:number;sha256:string;purpose:UploadPurpose;requestId?:string},actor:Actor,session?:ClientSession,options:{allowWebsiteImport?:boolean}={}){
+  if(actor.source==='agent'&&!options.allowWebsiteImport||(data.purpose==='profile_photo'&&actor.source!=='browser'))throw new AppError(403,'human_authored','Choose profile photos yourself in the profile editor.');
   if(data.purpose==='log_media'&&!await users().findOne({_id:actor.userId,handle:{$type:'string'}},{session,projection:{_id:1}}))throw new AppError(403,'account_required','Save your account before uploading to Log.');
   if(data.purpose==='log_media'&&/\.(mp4|mov|webm)$/i.test(data.name))throw new AppError(422,'log_video_upload','Upload a photo or voice note. Add videos as links instead.');
   if(data.requestId)requireValue(await rows('runs').findOne({userId:actor.userId,status:'waiting_for_input','surface.id':data.requestId,'surface.view':'uploads','surface.completed':{$ne:true},cancelRequested:{$ne:true}},{session}),'This upload request is no longer active.');

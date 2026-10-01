@@ -1,5 +1,5 @@
 import {logRelatedResult,logSearchResult} from './logSearch';
-import {websiteSummary,websitePath} from './website';
+import {websiteSummary,websiteIconWeight,websitePath} from './website';
 import {memoryOutputs} from './agentMemory';
 import {billingActivityOutput} from './billingActivity';
 import {storageAttachmentSchema} from './storage';
@@ -25,6 +25,7 @@ const message = z.object({ id, connectionId: id, fromId: id, text: z.string(), c
 const page = (item: z.ZodType) => z.object({ items: z.array(item), nextCursor: z.string().nullable() });
 const wallet = z.object({ starterAvailableNanos: z.number().optional(), balanceNanos: z.number(), reservedNanos: z.number(), availableNanos: z.number(), entries: z.array(z.object({ id, amountNanos: z.number(), label: z.string(), createdAt: z.string(), details: z.record(z.string(), z.unknown()).optional() })) });
 const upload=z.object({id,name:z.string(),purpose:z.enum(['profile_photo','agent_input','log_media']),bytes:z.number(),mime:z.string(),sha256:z.string(),ready:z.boolean(),uploadUrl:z.string(),url:z.string().optional()});
+const websiteSourceSummary=z.object({sourceId:z.string(),url:z.url(),kind:z.enum(['html','css','javascript']),bytes:z.number().int().nonnegative(),sha256:z.string(),title:z.string(),headings:z.array(z.string()),links:z.array(z.object({url:z.url(),label:z.string()})),resourceUrls:z.array(z.url()),mediaUrls:z.array(z.url()),updatedAt:z.string(),cached:z.boolean()});
 const chatMessage = z.object({ id, role: z.enum(['user', 'assistant']), text: z.string(), files:z.array(upload).optional(), inbox:z.array(z.object({id,title:z.string()})).optional(), records:z.array(recordAttachmentSchema).optional(), createdAt: z.string(), source: z.enum(['app', 'external']), status: z.string().optional() });
 export const resourceLinkOutput = z.object({ rel: z.enum(['open_in_newdrugs', 'download']), targetKind: z.enum(['exact', 'surface']), title: z.string(), url: z.url(), resourceType: z.string(), resourceId: z.string().optional() });
 const searchMatch = z.object({ id, dataset:z.enum(['profiles','posts','replies','threads']), entityType:z.enum(['person','post']), entityId:id, ownerId:id, score:z.number(), evidence:z.array(z.object({field:z.string(),text:z.string(),entityId:id,entityType:z.enum(['person','post','space'])})), signals:z.object({semantic:z.number().optional(),lexical:z.number().optional(),freshness:z.number().optional(),distance:z.number().optional(),diversity:z.number().optional(),exact:z.boolean().optional()}), sourceHash:z.string(),sourceRevision:z.string(),record:z.union([profileOutput,post,spaceSchema]) });
@@ -52,10 +53,21 @@ export const outputs: Record<string, z.ZodType> = {
   'log.search':logSearchResult,
   'log.related':logRelatedResult,
   'website.get':z.object({site:websiteSummary.nullable()}),
-  'website.create':websiteSummary,'website.patch':websiteSummary,'website.asset.add':websiteSummary,'website.asset.remove':websiteSummary,'website.restore':websiteSummary,'website.publish':websiteSummary,'website.unpublish':websiteSummary,
+  'website.icons.search':z.object({family:z.literal('Phosphor Icons'),version:z.string(),items:z.array(z.object({name:z.string(),slug:z.string(),categories:z.array(z.string()),tags:z.array(z.string())}))}),
+  'website.icons.get':z.object({name:z.string(),slug:z.string(),weight:websiteIconWeight,svg:z.string(),license:z.literal('MIT'),source:z.literal('Phosphor Icons')}),
+  'website.source.open':websiteSourceSummary,
+  'website.source.list':z.object({items:z.array(websiteSourceSummary)}),
+  'website.source.read':z.object({sourceId:z.string(),url:z.url(),kind:z.enum(['html','css','javascript']),content:z.string(),offset:z.number().int().nonnegative(),totalCharacters:z.number().int().nonnegative(),nextOffset:z.number().int().nonnegative().nullable()}),
+  'website.source.search':z.object({sourceId:z.string(),items:z.array(z.object({offset:z.number().int().nonnegative(),excerpt:z.string()}))}),
+  'website.create':websiteSummary,'website.patch':websiteSummary,'website.asset.add':websiteSummary,'website.media.import':websiteSummary,'website.asset.remove':websiteSummary,'website.restore':websiteSummary,'website.publish':websiteSummary,'website.unpublish':websiteSummary,
   'website.file':z.object({path:websitePath,content:z.string(),revision:z.number().int().positive(),offset:z.number().int().nonnegative(),totalCharacters:z.number().int().nonnegative(),nextOffset:z.number().int().nonnegative().nullable()}),
   'website.search':z.object({revision:z.number().int().positive(),items:z.array(z.object({path:websitePath,offset:z.number().int().nonnegative(),excerpt:z.string()}))}),
   'website.revisions':z.object({currentRevision:z.number().int().positive(),items:z.array(z.object({revision:z.number().int().positive(),createdAt:z.string()}))}),
+  'website.checkpoints':z.object({items:z.array(z.object({id:z.uuid(),label:z.string(),revision:z.number().int().positive(),createdAt:z.string()}))}),
+  'website.checkpoint.file':z.object({path:websitePath,content:z.string(),revision:z.number().int().positive(),offset:z.number().int().nonnegative(),totalCharacters:z.number().int().nonnegative(),nextOffset:z.number().int().nonnegative().nullable()}),
+  'website.checkpoint.create':z.object({id:z.uuid(),label:z.string(),revision:z.number().int().positive(),createdAt:z.string()}),
+  'website.checkpoint.restore':websiteSummary,
+  'website.checkpoint.delete':z.object({deleted:z.literal(true),checkpointId:z.uuid()}),
   'website.preview':z.object({previewUrl:z.url(),revision:z.number().int().positive()}),
   'storage.attachments':z.object({items:z.array(storageAttachmentSchema),nextCursor:z.string().nullable()}),
   'storage.list':z.object({indexing:z.boolean().optional(),usedBytes:z.number(),limitBytes:z.number(),items:z.array(upload.extend({createdAt:z.string(),attached:z.boolean(),inProfile:z.boolean(),inWebsite:z.boolean().optional(),attachments:z.array(storageAttachmentSchema),attachmentCursor:z.string().nullable().optional()})),nextCursor:z.string().nullable()}),
@@ -95,6 +107,7 @@ export const outputs: Record<string, z.ZodType> = {
 export const consequences: Record<string, string> = {
   'website.publish':'Publish this exact website draft revision on your public username and permanent code addresses.',
   'website.unpublish':'Take the currently published website offline. The private draft and revision history remain.',
+  'website.checkpoint.delete':'Permanently delete this saved website checkpoint. The current draft and published site remain.',
   'spaces.create':'Start a public live-audio Space with this title. People outside your friends can join and listen.',
   'spaces.end':'End this public live-audio Space for everyone.',
   'spaces.respond_speaker':'Grant or decline this person’s microphone access in your public Space.',

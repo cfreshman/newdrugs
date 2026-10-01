@@ -9,6 +9,7 @@ export const websiteFile=z.strictObject({path:websitePath,content:z.string().max
 export const websiteAssetPath=z.string().min(1).max(160).regex(/^assets\/(?:[a-z0-9_-]+\/)*[a-z0-9_-]+\.(?:webp|png|jpg|jpeg|gif|mp3|wav|ogg|webm|m4a|mp4|pdf|txt)$/);
 export const websiteAsset=z.strictObject({path:websiteAssetPath,fileId:z.uuid()});
 export const websiteAssetView=websiteAsset.extend({previewUrl:z.url(),publishedUrl:z.url().nullable()});
+export const websiteIconWeight=z.enum(['thin','light','regular','bold','fill','duotone']);
 export const websiteChange=z.discriminatedUnion('kind',[
  z.strictObject({kind:z.literal('create'),path:websitePath,content:z.string().max(WEBSITE_MAX_FILE_BYTES)}),
  z.strictObject({kind:z.literal('replace'),path:websitePath,oldText:z.string().min(1),newText:z.string()}),

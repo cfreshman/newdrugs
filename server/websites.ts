@@ -1,17 +1,21 @@
-import {randomBytes} from 'node:crypto';
+import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import type {ClientSession} from 'mongodb';
 import type {Actor} from './auth';
 import {users} from './auth';
 import {rows} from './db';
 import {AppError,requireValue} from './errors';
 import {config} from './config';
-import {ownUpload,retainUploads} from './uploads';
+import {acceptUpload,deleteUpload,ownUpload,prepareUpload,retainUploads} from './uploads';
 import {syncSourceAttachments} from './attachmentReferences';
+import {getWebsiteIcon,searchWebsiteIcons,type WebsiteIconWeight} from './websiteIcons';
+import {websiteSourceOperation} from './websiteSources';
+import {fetchPublic,publicUrl} from './publicFetch';
 import {applyWebsiteChange,reservedWebsiteLabel,validateWebsiteFiles,websiteCodeHost,websiteDraftHost,websiteHostLabel,type WebsiteAsset,type WebsiteChange,type WebsiteFile} from '../shared/website';
 
 export interface WebsiteDoc {_id:string;code:string;previewToken:string;revision:number;files:WebsiteFile[];assets:WebsiteAsset[];published?:{revision:number;files:WebsiteFile[];assets:WebsiteAsset[];publishedAt:string}|null;createdAt:string;updatedAt:string}
 interface WebsiteRevision {_id:string;userId:string;revision:number;files:WebsiteFile[];assets:WebsiteAsset[];createdAt:string}
-const sites=()=>rows<WebsiteDoc>('websites'),revisions=()=>rows<WebsiteRevision>('websiteRevisions');
+interface WebsiteCheckpoint {_id:string;userId:string;label:string;revision:number;files:WebsiteFile[];assets:WebsiteAsset[];createdAt:string}
+const sites=()=>rows<WebsiteDoc>('websites'),revisions=()=>rows<WebsiteRevision>('websiteRevisions'),checkpoints=()=>rows<WebsiteCheckpoint>('websiteCheckpoints');
 const siteDomain='druggie.org';
 const localOrigin='http://localhost:7330';
 const mediaExtensions:Record<string,string>={'image/webp':'webp','image/png':'png','image/jpeg':'jpg','image/gif':'gif','audio/mpeg':'mp3','audio/wav':'wav','audio/ogg':'ogg','audio/webm':'webm','audio/mp4':'m4a','video/webm':'webm','video/mp4':'mp4','application/pdf':'pdf','text/plain':'txt'};
@@ -32,6 +36,9 @@ async function saveDraft(site:WebsiteDoc,files:WebsiteFile[],assets:WebsiteAsset
 export async function websiteOperation(name:string,input:Record<string,unknown>,actor:Actor,session?:ClientSession){
  const user=requireValue(await users().findOne({_id:actor.userId},{session}));
  if(!user.handle)throw new AppError(403,'account_required','Save your account before making a website.');
+ if(name==='website.icons.search')return searchWebsiteIcons(String(input.query),Number(input.limit));
+ if(name==='website.icons.get')return getWebsiteIcon(String(input.slug),input.weight as WebsiteIconWeight);
+ if(name.startsWith('website.source.'))return websiteSourceOperation(name,input,actor);
  if(name==='website.get'){const site=await sites().findOne({_id:actor.userId},{session});return {site:site?summary(site,user.handle):null};}
  if(name==='website.create'){
   if(await sites().findOne({_id:actor.userId},{session,projection:{_id:1}}))throw new AppError(409,'website_exists','Your website already exists. Edit its draft.');
@@ -43,15 +50,20 @@ export async function websiteOperation(name:string,input:Record<string,unknown>,
  if(name==='website.file'){const file=site.files.find(item=>item.path===input.path);if(!file)throw new AppError(404,'website_file','This website file is unavailable.');const offset=Number(input.offset),limit=Number(input.limit),content=file.content.slice(offset,offset+limit);return {path:file.path,content,revision:site.revision,offset,totalCharacters:file.content.length,nextOffset:offset+content.length<file.content.length?offset+content.length:null};}
  if(name==='website.search'){const query=String(input.query).toLowerCase(),limit=Number(input.limit),items:{path:string;offset:number;excerpt:string}[]=[];for(const file of site.files){const lower=file.content.toLowerCase();let offset=0;while(items.length<limit){const found=lower.indexOf(query,offset);if(found<0)break;items.push({path:file.path,offset:found,excerpt:file.content.slice(Math.max(0,found-90),Math.min(file.content.length,found+query.length+90))});offset=found+Math.max(1,query.length);}if(items.length>=limit)break;}return {revision:site.revision,items};}
  if(name==='website.revisions'){const history=await revisions().find({userId:actor.userId},{session,projection:{revision:1,createdAt:1}}).sort({revision:-1}).limit(10).toArray();return {currentRevision:site.revision,items:history.map(row=>({revision:row.revision,createdAt:row.createdAt}))};}
+ if(name==='website.checkpoints'){const items=await checkpoints().find({userId:actor.userId},{session,projection:{label:1,revision:1,createdAt:1}}).sort({createdAt:-1,_id:-1}).limit(3).toArray();return {items:items.map(item=>({id:item._id,label:item.label,revision:item.revision,createdAt:item.createdAt}))};}
+ if(name==='website.checkpoint.file'){const checkpoint=requireValue(await checkpoints().findOne({_id:String(input.checkpointId),userId:actor.userId},{session}),'This website checkpoint is unavailable.');const file=checkpoint.files.find(item=>item.path===input.path);if(!file)throw new AppError(404,'website_file','This checkpoint file is unavailable.');const offset=Number(input.offset),limit=Number(input.limit),content=file.content.slice(offset,offset+limit);return {path:file.path,content,revision:checkpoint.revision,offset,totalCharacters:file.content.length,nextOffset:offset+content.length<file.content.length?offset+content.length:null};}
+ if(name==='website.checkpoint.create'){if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Read it again.');if(await checkpoints().countDocuments({userId:actor.userId},{session})>=3)throw new AppError(422,'website_checkpoints','Delete a saved checkpoint before making another.');const checkpoint:WebsiteCheckpoint={_id:randomUUID(),userId:actor.userId,label:String(input.label),revision:site.revision,files:site.files,assets:site.assets||[],createdAt:new Date().toISOString()};await checkpoints().insertOne(checkpoint,{session});return {id:checkpoint._id,label:checkpoint.label,revision:checkpoint.revision,createdAt:checkpoint.createdAt};}
+ if(name==='website.checkpoint.restore'){if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Read it again.');const checkpoint=requireValue(await checkpoints().findOne({_id:String(input.checkpointId),userId:actor.userId},{session}),'This website checkpoint is unavailable.');for(const asset of checkpoint.assets){const file=await ownUpload(actor.userId,asset.fileId,session);if(!file.ready||!websiteMediaExtension(file.mime))throw new AppError(409,'website_asset_missing','Checkpoint media is no longer available.');}const updated=await saveDraft(site,checkpoint.files,checkpoint.assets,session);await syncSourceAttachments('websites',actor.userId,session);return summary(updated,user.handle);}
+ if(name==='website.checkpoint.delete'){const removed=await checkpoints().deleteOne({_id:String(input.checkpointId),userId:actor.userId},{session});if(!removed.deletedCount)throw new AppError(404,'website_checkpoint','This website checkpoint is unavailable.');return {deleted:true,checkpointId:input.checkpointId};}
  if(name==='website.preview')return {previewUrl:websitePreviewUrl(site.previewToken),revision:site.revision};
  if(name==='website.patch'){
   if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Read its current revision and file again.');
   let files:WebsiteFile[];try{files=applyWebsiteChange(site.files,input.change as WebsiteChange);}catch(error){throw new AppError(422,'website_patch',String((error as Error).message));}
   return summary(await saveDraft(site,files,site.assets||[],session),user.handle);
  }
- if(name==='website.asset.add'){
+ if(name==='website.asset.add'||name==='website.media.import'){
   if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Read it again.');
-  const fileId=String(input.fileId),assets=site.assets||[];
+  const fileId=String(input._websiteFileId||input.fileId),assets=site.assets||[];
   if(assets.some(asset=>asset.fileId===fileId))return summary(site,user.handle);
   if(assets.length>=20)throw new AppError(422,'website_asset','A website can have up to twenty uploaded media files.');
   const file=await ownUpload(actor.userId,fileId,session);
@@ -94,3 +106,17 @@ export async function websiteOperation(name:string,input:Record<string,unknown>,
 }
 export async function websiteByCode(code:string){return sites().findOne({code});}
 export async function websiteByPreviewToken(token:string){return sites().findOne({previewToken:token});}
+
+/** Download one chosen public photo before the website write transaction. */
+export async function stageWebsiteMediaImport(input:Record<string,unknown>,actor:Actor){
+ const site=await ownSite(actor.userId);if(site.revision!==input.revision)throw new AppError(409,'website_changed','This website changed. Read it again before importing media.');
+ if((site.assets||[]).length>=20)throw new AppError(422,'website_asset','A website can have up to twenty uploaded media files.');
+ let url:URL;try{url=publicUrl(String(input.url));}catch{throw new AppError(422,'website_media_url','Choose a public HTTPS image URL.');}
+ if(url.protocol!=='https:')throw new AppError(422,'website_media_url','Choose a public HTTPS image URL.');
+ let fetched;try{fetched=await fetchPublic(url.href,'image',AbortSignal.timeout(12000));}catch{throw new AppError(422,'website_media_fetch','That public image could not be imported.');}
+ const extension={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[fetched.mime];
+ if(!extension)throw new AppError(422,'website_media_type','Import a JPEG, PNG or WebP image.');
+ const staged=await prepareUpload({name:`${randomUUID()}.${extension}`,bytes:fetched.bytes.length,sha256:createHash('sha256').update(fetched.bytes).digest('hex'),purpose:'agent_input'},actor,undefined,{allowWebsiteImport:true});
+ try{await acceptUpload(actor,staged.id,fetched.bytes);}catch(error){await deleteUpload(actor,staged.id).catch(()=>{});throw error;}
+ return staged.id;
+}

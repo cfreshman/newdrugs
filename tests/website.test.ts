@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
-import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
+import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
+import sharp from 'sharp';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {users,profile,registerAccount,type Actor,type User} from '../server/auth';
 import {changeUsername} from '../server/account';
@@ -7,6 +8,7 @@ import {executeOperation} from '../server/operations';
 import {websiteRequest} from '../server/websiteServing';
 import {deleteUpload} from '../server/uploads';
 import {config} from '../server/config';
+import * as publicFetch from '../server/publicFetch';
 import {applyWebsiteChange,reservedWebsiteUsername,validateWebsiteFiles,websiteHostLabel} from '../shared/website';
 
 const actor:Actor={userId:'owner',source:'external',scope:'write'};
@@ -54,6 +56,18 @@ it('keeps a stable preview, revisioned draft and separate published snapshot acr
  const offline=await call('website.unpublish',{publishedRevision:2},true);expect(offline.publicUrl).toBeNull();
  expect(profile((await users().findOne({_id:'owner'}))!).websiteUrl).toBeUndefined();
 });
+it('keeps named checkpoints beyond ordinary edits and restores one without publishing',async()=>{
+ await call('website.create',{files:[{path:'pages/index.html',content:'<h1>First</h1>'}]});
+ const saved=await call('website.checkpoint.create',{revision:1,label:'First version'});
+ await call('website.patch',{revision:1,change:{kind:'replace',path:'pages/index.html',oldText:'First',newText:'Second'}});
+ expect((await call('website.checkpoint.file',{checkpointId:saved.id,path:'pages/index.html'})).content).toBe('<h1>First</h1>');
+ expect((await call('website.checkpoints')).items[0].label).toBe('First version');
+ const restored=await call('website.checkpoint.restore',{revision:2,checkpointId:saved.id});
+ expect(restored.revision).toBe(3);expect(restored.publishedRevision).toBeNull();
+ expect((await call('website.file',{path:'pages/index.html'})).content).toBe('<h1>First</h1>');
+ await expect(call('website.checkpoint.delete',{checkpointId:saved.id})).rejects.toBeTruthy();
+ expect((await call('website.checkpoint.delete',{checkpointId:saved.id},true)).deleted).toBe(true);
+});
 it('serves the draft as sandboxed content and removes published bytes on unpublish',async()=>{
  const site=await call('website.create',{files:[{path:'pages/index.html',content:'<link href="../styles/site.css"><img src="../assets/photo.webp"><h1>Draft</h1>'},{path:'styles/site.css',content:'h1{color:red}'}]});
  const token=(await rows('websites').findOne({_id:'owner'}))!.previewToken;
@@ -98,6 +112,19 @@ it('attaches existing profile and Log media without exposing original filenames'
  expect(audio.assets[1].path).toBe(`assets/${audioId}.mp3`);
  expect(JSON.stringify(audio)).not.toContain('private-profile-name');
  expect(JSON.stringify(audio)).not.toContain('private-log-name');
+});
+it('imports one selected public image into owned storage and retries without duplicating it',async()=>{
+ await call('website.create',{files:[{path:'pages/index.html',content:'<h1>Import</h1>'}]});
+ const bytes=await sharp({create:{width:2,height:2,channels:4,background:'#88ccff'}}).png().toBuffer();
+ const fetch=vi.spyOn(publicFetch,'fetchPublic').mockResolvedValue({bytes,url:'https://example.com/photo.png',mime:'image/png'});
+ const key=randomUUID();
+ try{
+  const first=await executeOperation('website.media.import',{revision:1,url:'https://example.com/photo.png'},actor,key) as any;
+  expect(first.assets).toHaveLength(1);expect(first.assets[0].path).toMatch(/^assets\/[a-f0-9-]+\.webp$/);
+  const retry=await executeOperation('website.media.import',{revision:1,url:'https://example.com/photo.png'},actor,key) as any;
+  expect(retry.assets).toEqual(first.assets);expect(fetch).toHaveBeenCalledTimes(1);
+  expect(await rows('uploads').countDocuments({userId:'owner',ready:true})).toBe(1);
+ }finally{fetch.mockRestore();}
 });
 it('serves both public hostnames and moves the friendly one when the username changes',async()=>{
  const site=await call('website.create',{files:[{path:'pages/index.html',content:'<h1>My site</h1>'}]});
