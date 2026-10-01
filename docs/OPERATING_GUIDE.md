@@ -386,7 +386,7 @@ Useful deeper references:
 - [Public semantic implementation](semantic-search-implementation.md), [private chat search](private-chat-search.md), and [search research](semantic-search-plan.md)
 - [Automations and inbox](automations-and-inbox.md), [starter/push/operator notes](starter-push-operator.md)
 - [CLI production audit](reviews/2026-09-26-cli-production-audit.md) and [audit fixes](reviews/2026-09-26-cli-audit-fixes.md)
-- [Current v0.38.1 direction](roadmaps/10-v0.38.1-direction.md) and [first community runbook](roadmaps/11-first-community-runbook.md), proposed for founder review; the older [roadmap study](roadmaps/README.md) is option research rather than a blanket approval to build everything
+- [Current v0.38.1 direction](roadmaps/10-v0.38.1-direction.md) and [build sequence](roadmaps/11-build-sequence.md), proposed for founder review; the older [roadmap study](roadmaps/README.md) is option research rather than a blanket approval to build everything
 
 Older study/plan documents and OPERATING_HISTORY.md are historical. Known superseded statements include saved people, save-paused automation creation, the old Chat history label, restoring a saved browsing mode for bare deep links, a 48px secondary mic, vertical desktop dragging, and earlier mobile gutters. Some public-search docs predate private chat indexing and the current All/Nearby/Friends/Saved post filters. Use the current source and this guide for those decisions.
 
