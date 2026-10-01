@@ -58,7 +58,7 @@
 .mode-welcome p {margin:0 0 22px;}
 .mode-welcome .solid {margin-top:10px;}
 .social-friends {--mode-main:680px;}
-.social-friends .people-list {display:grid;grid-template-columns:repeat(2,minmax(0,260px));gap:var(--space-3);align-items:start;justify-content:start;padding:var(--space-2) 0;}
+.social-friends .people-list {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);align-items:start;padding:var(--space-2) 0;}
 .social-friends .people-list>a {display:flex;flex-direction:column;align-items:stretch;padding:0;overflow:hidden;border-radius:20px;background:var(--surface-soft);text-align:left;gap:0;}
 .social-friends .people-list>a>img {width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:0;}
 .social-friends .people-list>a>span {padding:var(--card-inset);display:flex;flex-direction:column;gap:5px;}
