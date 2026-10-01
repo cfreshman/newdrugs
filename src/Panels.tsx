@@ -61,7 +61,7 @@ export function Account({ data, refresh, close, saved: onSaved, initialMode = 'r
     {!data.user.handle ? <>
       <p>{mode === 'register' ? 'Create an account to meet people, post, message, and use your agent.' : 'Sign in to your account.'}</p>
       <form className="fields" onSubmit={submit}>
-        <label>Handle<input name="handle" required minLength={3} maxLength={24} pattern="[a-zA-Z0-9_]{3,24}" autoComplete="username" autoCapitalize="none" spellCheck={false} /></label>
+        <label>Handle<input name="handle" required minLength={3} maxLength={24} pattern={mode==='register'?'(?![uU]_)[a-zA-Z0-9_]{3,24}':'[a-zA-Z0-9_]{3,24}'} title={mode==='register'?'Usernames cannot begin with u_.':undefined} autoComplete="username" autoCapitalize="none" spellCheck={false} /></label>
         <label>Password<input name="password" type="password" required minLength={8} maxLength={128} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} placeholder="At least 8 characters" /></label>
         {mode === 'register' && <p className="quiet small">Save this in your password manager. Password recovery isn’t available yet.</p>}
         <button className="solid" disabled={busy}>{busy ? 'Saving…' : mode === 'register' ? 'Create account' : 'Sign in'}</button>

@@ -53,8 +53,11 @@ import { devApiGate,trustedDevKey } from './devGate';
 import { previewImage } from './linkPreviews';
 import { replyToReview } from './reviewReply';
 import {websiteRequest} from './websiteServing';
+import {reservedWebsiteUsername} from '../shared/website';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
+const availableHandle=credentials.shape.handle.refine(handle=>!reservedWebsiteUsername(handle),'Usernames cannot begin with u_.');
+const registrationCredentials=credentials.extend({handle:availableHandle});
 const limiter = (scope: string, limit: number, windowMs = 60000) => rateLimit({ store: new MongoRateLimitStore(scope), windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
   message: { error: { code: 'rate_limit', message: 'Please slow down and try again shortly.' } } });
 
@@ -181,7 +184,7 @@ export function createApp() {
   });
   app.post('/api/account/register', limiter('/api/account/register', 15, 15 * 60000), async (req, res) => {
     const actor = browserActor(req);
-    const data = credentials.parse(req.body);
+    const data = registrationCredentials.parse(req.body);
     const user = await currentUser(actor.userId);
     if (user.handle) throw new AppError(409, 'registered', 'Your account is already saved.');
     const encoded = await passwordHash(data.password);
@@ -200,7 +203,7 @@ export function createApp() {
     res.json({ user: profile(user!) });
   });
   app.post('/api/account/username', limiter('/api/account/username', 10, 15 * 60000), async (req, res) => {
-    const actor = browserActor(req), data = z.strictObject({ handle: credentials.shape.handle, currentPassword: z.string().min(1).max(128) }).parse(req.body);
+    const actor = browserActor(req), data = z.strictObject({ handle: availableHandle, currentPassword: z.string().min(1).max(128) }).parse(req.body);
     const user = await verifyAccountPassword(actor.userId, data.currentPassword); res.json({ user: profile(await changeUsername(user, data.handle)) });
   });
   app.post('/api/account/password', limiter('/api/account/password', 10, 15 * 60000), async (req, res) => {

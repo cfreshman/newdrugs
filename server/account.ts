@@ -4,12 +4,14 @@ import { rows, transaction } from './db';
 import { AppError, requireValue } from './errors';
 import { enqueueSearch } from './search/queue';
 import { ensureIntroduction } from './onboarding';
+import {reservedWebsiteUsername} from '../shared/website';
 export async function verifyAccountPassword(userId: string, password: string) {
   const user = requireValue(await users().findOne({ _id: userId, handle: { $type: 'string' } }));
   if (!await checkPassword(password, user.passwordHash)) throw new AppError(401, 'password', 'Your current password did not match.');
   return user;
 }
 export async function changeUsername(user: User, handle: string) {
+  if(reservedWebsiteUsername(handle))throw new AppError(422,'username_reserved','Usernames cannot begin with u_.');
   return transaction(async session => {
     const saved = requireValue(await users().findOneAndUpdate({ _id: user._id, passwordHash: user.passwordHash }, { $set: { handle } }, { session, returnDocument: 'after' }), 'Your account changed. Sign in again.');
     await enqueueSearch('profiles', user._id, session); return saved;

@@ -24,6 +24,8 @@ export function websiteHostLabel(handle:string){return handle.replaceAll('_','-'
 export function websiteCodeHost(code:string){return `u-${code}`;}
 export function websiteDraftHost(token:string){return `draft-${token}`;}
 export const reservedWebsiteLabels=new Set(['dev','www','api','admin','mail','smtp','ftp','mcp','sites','site','preview']);
+export const reservedWebsiteUsername=(handle:string)=>handle.toLowerCase().startsWith('u_');
+export const reservedWebsiteLabel=(label:string)=>reservedWebsiteLabels.has(label)||label.startsWith('u-');
 
 export function validateWebsiteFiles(files:WebsiteFile[]){
  if(files.length>WEBSITE_MAX_FILES)throw Error('This website has too many files.');

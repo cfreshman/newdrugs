@@ -7,7 +7,7 @@ import {AppError,requireValue} from './errors';
 import {config} from './config';
 import {ownUpload,retainUploads} from './uploads';
 import {syncSourceAttachments} from './attachmentReferences';
-import {applyWebsiteChange,reservedWebsiteLabels,validateWebsiteFiles,websiteCodeHost,websiteDraftHost,websiteHostLabel,type WebsiteAsset,type WebsiteChange,type WebsiteFile} from '../shared/website';
+import {applyWebsiteChange,reservedWebsiteLabel,validateWebsiteFiles,websiteCodeHost,websiteDraftHost,websiteHostLabel,type WebsiteAsset,type WebsiteChange,type WebsiteFile} from '../shared/website';
 
 export interface WebsiteDoc {_id:string;code:string;previewToken:string;revision:number;files:WebsiteFile[];assets:WebsiteAsset[];published?:{revision:number;files:WebsiteFile[];assets:WebsiteAsset[];publishedAt:string}|null;createdAt:string;updatedAt:string}
 interface WebsiteRevision {_id:string;userId:string;revision:number;files:WebsiteFile[];assets:WebsiteAsset[];createdAt:string}
@@ -15,7 +15,7 @@ const sites=()=>rows<WebsiteDoc>('websites'),revisions=()=>rows<WebsiteRevision>
 const siteDomain='druggie.org';
 const localOrigin='http://localhost:7330';
 
-export function websitePublicUrl(handle:string,code:string){const label=websiteHostLabel(handle);return config.APP_ENV==='production'?`https://${reservedWebsiteLabels.has(label)?websiteCodeHost(code):label}.${siteDomain}/`:`${localOrigin}/api/website-published/${code}/`;}
+export function websitePublicUrl(handle:string,code:string){const label=websiteHostLabel(handle);return config.APP_ENV==='production'?`https://${reservedWebsiteLabel(label)?websiteCodeHost(code):label}.${siteDomain}/`:`${localOrigin}/api/website-published/${code}/`;}
 export function websiteStableUrl(code:string){return config.APP_ENV==='production'?`https://${websiteCodeHost(code)}.${siteDomain}/`:`${localOrigin}/api/website-published/${code}/`;}
 export function websitePreviewUrl(token:string){return config.APP_ENV==='production'?`https://${websiteDraftHost(token)}.${siteDomain}/`:`${localOrigin}/api/website-preview/${token}/`;}
 function summary(site:WebsiteDoc,handle:string){return {code:site.code,revision:site.revision,files:site.files.map(file=>({path:file.path,bytes:Buffer.byteLength(file.content)})),assets:site.assets||[],previewUrl:websitePreviewUrl(site.previewToken),stableUrl:websiteStableUrl(site.code),publicUrl:site.published?websitePublicUrl(handle,site.code):null,publishedRevision:site.published?.revision||null,createdAt:site.createdAt,updatedAt:site.updatedAt};}

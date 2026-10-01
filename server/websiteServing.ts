@@ -1,13 +1,12 @@
 import type {Request,Response,NextFunction} from 'express';
 import {users} from './auth';
 import {config} from './config';
-import {websiteAssetPath,websitePath,websiteHostLabel,reservedWebsiteLabels} from '../shared/website';
+import {websiteAssetPath,websitePath,websiteHostLabel,reservedWebsiteLabel} from '../shared/website';
 import {websiteByCode,websiteByPreviewToken,type WebsiteDoc} from './websites';
 import {uploads} from './uploads';
 import {sendMedia} from './mediaDelivery';
 
 const mime=(path:string)=>path.endsWith('.html')?'text/html; charset=utf-8':path.endsWith('.css')?'text/css; charset=utf-8':path.endsWith('.js')?'text/javascript; charset=utf-8':path.endsWith('.svg')?'image/svg+xml':path.endsWith('.json')?'application/json; charset=utf-8':'text/plain; charset=utf-8';
-export const reservedWebsiteLabel=(label:string)=>reservedWebsiteLabels.has(label);
 function sourcePath(urlPath:string){
  let value:string;try{value=decodeURIComponent(urlPath).replace(/^\/+/, '');}catch{return null;}
  if(value.includes('\\')||value.includes('\0')||value.includes('//')||value.split('/').some(part=>part==='.'||part==='..'))return null;
@@ -53,7 +52,7 @@ export async function websiteRequest(req:Request,res:Response,next:NextFunction)
   if(config.APP_ENV!=='production')return next();
   const label=hostLabel(req.headers.host);
   if(!websiteDomainHost)return next();
-  if(!label||reservedWebsiteLabel(label))return res.status(404).end();
+  if(!label||reservedWebsiteLabel(label)&&!/^u-[a-f0-9]{16}$/.test(label))return res.status(404).end();
   let site:WebsiteDoc|null=null,previewSite=false;
   if(/^draft-[a-f0-9]{32}$/.test(label)){site=await websiteByPreviewToken(label.slice(6));previewSite=true;}
   else if(/^u-[a-f0-9]{16}$/.test(label))site=await websiteByCode(label.slice(2));

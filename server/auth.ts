@@ -8,7 +8,7 @@ import { AppError, requireValue } from './errors';
 import type { Profile } from '../shared/types';
 import { grantStarter, starterClaimKey } from './starterPool';
 import type { CoarseArea } from '../shared/geo';
-import {reservedWebsiteLabels,websiteHostLabel} from '../shared/website';
+import {reservedWebsiteLabel,reservedWebsiteUsername,websiteHostLabel} from '../shared/website';
 
 const derive = promisify(scrypt);
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -29,7 +29,7 @@ export interface Actor { userId: string; source: 'browser' | 'external' | 'agent
 declare global { namespace Express { interface Request { actor?: Actor } } }
 export const users = () => rows<User>('users');
 export const profile = (u: User): Profile => ({ id: u._id, handle: u.handle, name: u.name, city: u.area?.label || '', area: u.area || null, photos:u.photos||[], bio: u.bio, interests: u.interests, discoverable: u.discoverable,
-  ...(u.websiteCode&&u.handle?{websiteUrl:config.APP_ENV==='production'?`https://${reservedWebsiteLabels.has(websiteHostLabel(u.handle))?`u-${u.websiteCode}`:websiteHostLabel(u.handle)}.druggie.org/`:`http://localhost:7330/api/website-published/${u.websiteCode}/`}:{}) });
+  ...(u.websiteCode&&u.handle?{websiteUrl:config.APP_ENV==='production'?`https://${reservedWebsiteLabel(websiteHostLabel(u.handle))?`u-${u.websiteCode}`:websiteHostLabel(u.handle)}.druggie.org/`:`http://localhost:7330/api/website-published/${u.websiteCode}/`}:{}) });
 export const currentUser = async (id: string) => { const user=requireValue(await users().findOne({ _id: id }), 'Your session has expired.'); if(user.suspendedAt)throw new AppError(403,'account_suspended','This account is suspended.');return user; };
 
 export async function passwordHash(password: string) {
@@ -53,6 +53,7 @@ export async function createGuest(address?: string) {
   return currentUser(user._id);
 }
 export async function registerAccount(userId: string, handle: string, encodedPassword: string, address?: string) {
+  if(reservedWebsiteUsername(handle))throw new AppError(422,'username_reserved','Usernames cannot begin with u_.');
   return transaction(async session => {
     const user = await currentUser(userId);
     if (user.handle) throw new AppError(409, 'registered', 'Your account is already saved.');

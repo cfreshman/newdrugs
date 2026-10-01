@@ -1,12 +1,13 @@
 import {randomUUID} from 'node:crypto';
 import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
 import {connectDatabase,db,mongo,rows} from '../server/db';
-import {users,profile,type Actor,type User} from '../server/auth';
+import {users,profile,registerAccount,type Actor,type User} from '../server/auth';
+import {changeUsername} from '../server/account';
 import {executeOperation} from '../server/operations';
 import {websiteRequest} from '../server/websiteServing';
 import {deleteUpload} from '../server/uploads';
 import {config} from '../server/config';
-import {applyWebsiteChange,validateWebsiteFiles,websiteHostLabel} from '../shared/website';
+import {applyWebsiteChange,reservedWebsiteUsername,validateWebsiteFiles,websiteHostLabel} from '../shared/website';
 
 const actor:Actor={userId:'owner',source:'external',scope:'write'};
 const call=(name:string,input:unknown={},confirmed=false)=>executeOperation(name,input,actor,randomUUID(),{confirmed}) as Promise<any>;
@@ -17,10 +18,18 @@ afterAll(async()=>{await clean();await mongo.close();});
 
 it('validates paths, byte limits and exact single-file replacements',()=>{
  expect(websiteHostLabel('my_site')).toBe('my-site');
+ expect(reservedWebsiteUsername('u_anything')).toBe(true);
+ expect(reservedWebsiteUsername('understory')).toBe(false);
  expect(()=>validateWebsiteFiles([{path:'pages/index.html',content:'Home'},{path:'pages/index.html',content:'Duplicate'}])).toThrow(/different path/);
  expect(()=>validateWebsiteFiles([{path:'../secret.html' as 'pages/index.html',content:'No'}])).toThrow();
  expect(applyWebsiteChange([{path:'pages/index.html',content:'Hello friend'}],{kind:'replace',path:'pages/index.html',oldText:'friend',newText:'world'})[0].content).toBe('Hello world');
  expect(()=>applyWebsiteChange([{path:'pages/index.html',content:'a a'}],{kind:'replace',path:'pages/index.html',oldText:'a',newText:'b'})).toThrow(/not unique/);
+});
+it('reserves the code-host username prefix for new and renamed accounts',async()=>{
+ const owner=(await users().findOne({_id:'owner'}))!;
+ await expect(registerAccount('owner','u_example','encoded')).rejects.toMatchObject({code:'username_reserved'});
+ await expect(changeUsername(owner,'u_example')).rejects.toMatchObject({code:'username_reserved'});
+ expect((await users().findOne({_id:'owner'}))!.handle).toBe('my_site');
 });
 
 it('keeps a stable preview, revisioned draft and separate published snapshot across username changes',async()=>{
@@ -88,5 +97,8 @@ it('serves both public hostnames and moves the friendly one when the username ch
   expect((await request('my-site.druggie.org')).status).toBe(404);
   expect((await request('new-name.druggie.org')).body).toContain('My site');
   expect((await request(`u-${site.code}.druggie.org`)).body).toContain('My site');
+  await users().updateOne({_id:'owner'},{$set:{handle:'u_legacy'}});
+  expect(profile((await users().findOne({_id:'owner'}))!).websiteUrl).toBe(`https://u-${site.code}.druggie.org/`);
+  expect((await request('u-legacy.druggie.org')).status).toBe(404);
  }finally{config.APP_ENV=prior;}
 });
