@@ -15,6 +15,7 @@ interface Relationship { id: string; fromId: string; toId: string; note: string;
 export function PersonPanel({ personId, user, navigate }: { personId: string; user: Profile; navigate(destination: Destination): void }) {
   const [person, setPerson] = useState<Profile | null>(null), [error, setError] = useState('');
   const [connection, setConnection] = useState<Relationship | null | undefined>(undefined), [note, setNote] = useState(''), [busy, setBusy] = useState(false);
+  const [mutualOpen,setMutualOpen]=useState(false),[mutuals,setMutuals]=useState<{items:{id:string;name:string;photoId?:string}[];nextCursor:string|null}|null>(null),[mutualBusy,setMutualBusy]=useState(false),[mutualError,setMutualError]=useState('');
   const [endReview,setEndReview] = useState(false),[safetyMode,setSafetyMode]=useState<'block'|'report'|null>(null);
   const actionMenu=useRef<HTMLDetailsElement>(null);
   useEdgeAwareMenu(actionMenu,Boolean(person));
@@ -30,7 +31,8 @@ export function PersonPanel({ personId, user, navigate }: { personId: string; us
       if (request === generation.current) { setPerson(person); setConnection(relationship.connection); setError(''); }
     } catch (error) { if (request === generation.current) { setPerson(null); setConnection(undefined); setError(errorText(error)); } }
   }, [personId, user.id]);
-  useEffect(() => { setPerson(null); setConnection(undefined); setNote('');setEndReview(false);setSafetyMode(null);closeMenu(); void load(); return () => { generation.current++; }; }, [load]);
+  useEffect(() => { setPerson(null); setConnection(undefined); setNote('');setEndReview(false);setSafetyMode(null);setMutualOpen(false);setMutuals(null);setMutualError('');closeMenu(); void load(); return () => { generation.current++; }; }, [load]);
+  const loadMutuals=async(before?:string)=>{if(mutualBusy)return;setMutualBusy(true);setMutualError('');try{const page=await operation<{items:{id:string;name:string;photoId?:string}[];nextCursor:string|null}>('people.mutuals',{personId,limit:20,...(before?{before}:{})});setMutuals(previous=>before&&previous?{items:[...previous.items,...page.items],nextCursor:page.nextCursor}:page);}catch(cause){setMutualError(errorText(cause));}finally{setMutualBusy(false);}};
   useRecordRefresh(['people', 'connections','log'], load);
   const invite = async (event: FormEvent) => {
     event.preventDefault(); if (!note.trim() || busy) return; setBusy(true); setError('');
@@ -40,7 +42,7 @@ export function PersonPanel({ personId, user, navigate }: { personId: string; us
   const respond = async (accept: boolean) => { if (!connection) return; setBusy(true); setError(''); try { const result = await operation<Relationship>('connections.respond', { connectionId: connection.id, accept }, { confirmed: true }); generation.current++; setConnection(result); } catch (error) { setError(errorText(error)); } finally { setBusy(false); } };
   const disconnect = async () => { if (!connection) return; setBusy(true); try { await operation('connections.disconnect', {connectionId:connection.id}, {confirmed:true}); setEndReview(false); navigate({view:'messages',resourceId:connection.id}); } catch(e) { setError(errorText(e)); } finally { setBusy(false); } };
   const withdraw = async () => { if (!connection) return; setBusy(true); try { await operation('connections.withdraw', { connectionId: connection.id }); await load(); } catch (error) { setError(errorText(error)); } finally { setBusy(false); } };
-  return <>{person && <><ProfileCard person={person} /><div className="profile-contact">
+  return <>{person && <><ProfileCard person={person} />{Boolean(person.mutualCount)&&<div className="profile-mutual"><p className="quiet small">{person.mutualCount} mutual {person.mutualCount===1?'friend':'friends'}</p>{!mutualOpen&&<div className="profile-mutual-people">{person.mutualFriends?.map(friend=><NavLink key={friend.id} to={{view:'person',resourceId:friend.id}} navigate={navigate}>{friend.name}</NavLink>)}</div>}{(person.mutualCount||0)>(person.mutualFriends?.length||0)&&<button type="button" className="text-link" onClick={()=>{setMutualOpen(value=>!value);if(!mutualOpen&&!mutuals)void loadMutuals();}}>{mutualOpen?'Show fewer':'Show all mutual friends'}</button>}{mutualOpen&&<div className="profile-mutual-people">{mutuals?.items.map(friend=><NavLink key={friend.id} to={{view:'person',resourceId:friend.id}} navigate={navigate}>{friend.name}</NavLink>)}{mutuals?.nextCursor&&<button className="text-link" disabled={mutualBusy} onClick={()=>void loadMutuals(mutuals.nextCursor!)}>More mutual friends</button>}</div>}{mutualError&&<p className="error" role="alert">{mutualError}</p>}</div>}<div className="profile-contact">
     {personId === user.id ? <NavLink className="text-link" to={{view:'profile'}} navigate={navigate}>Edit profile</NavLink>
       : !user.handle ? <NavLink className="solid" to={{view:'profile'}} navigate={navigate}>Create an account to connect</NavLink>
         : connection?.status === 'accepted' ? <NavLink className="solid" to={{view:'messages',resourceId:connection.id}} navigate={navigate}>Open messages</NavLink>

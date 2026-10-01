@@ -15,7 +15,7 @@ This is the entry point for operating and continuing work on New Drugs. Read it 
 | Working tree | Requested implementation is committed on `main`. Inspect status before editing. |
 | Production | `https://druggie.org`; exact version is in `release.json`, exact deployment is the live `prod/current` target |
 | Cloud dev | `https://dev.druggie.org`; exact deployment is the live `dev/current` target; local frontend at `http://localhost:7330/log` |
-| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, server-side Make operations, new Log video-upload rejection, the calendar mosaic sizing correction, Log List search, DM video calls and public audio Talk under Posts. Dev does not bump public versions. |
+| Stage parity | Both stages have device login, the Log image maker and its v0.34.3 Square refinements, server-side Make operations, new Log video-upload rejection, the calendar mosaic sizing correction, Log List search, DM video calls and public audio Talk under Posts. Cloud dev additionally has the Circle mutual-friend filter, compact DM link previews and a few navigation/Settings corrections. Dev does not bump public versions. |
 | Services | Both APIs, both separate workers, both Qdrant instances, Mongo and nginx are active. Each stage has a separate LiveKit service and credentials. Both API health checks passed. |
 | Git remote | `origin` is configured. Confirm its destination before a Git push; prior “push” requests were clarified as production deployments. |
 | Git identity | Repository-local `Cyrus <cyrus@freshman.dev>` |
@@ -38,7 +38,7 @@ New Drugs is made in New England. It is a social experiment intended to make the
 - No em dashes in agent-composed text. When writing for a user, use that person's actual writing as the style reference. Do not invent personal facts, feelings, promises, or familiarity. Preserve verbatim text when explicitly requested.
 - “Tweet” means a post here. Do not keep explaining that the agent cannot post to X.
 - Do not invent compatibility percentages, infer sensitive traits, fabricate activity, or optimize a person's posts for engagement without an explicit request.
-- Do not add people bookmarks. Saved items are posts. Circle is proposed as a Friends Explore filter for people with mutual friends; mutual-friend context would appear on every eligible person card. The implementation plan awaits approval. The user rejected group chats in Messages or Circle. Backups remain deferred until there is traction. The user accepts the existing LLM usage reconciliation policy.
+- Do not add people bookmarks. Saved items are posts. Circle is a Friends Explore filter for people with precomputed mutual friends; mutual-friend context appears on every eligible person card. The user rejected group chats in Messages or Circle. Messages use compact previews for ordinary links without Markdown link syntax or embedded players. Backups remain deferred until there is traction. The user accepts the existing LLM usage reconciliation policy.
 
 The current welcome lives in [server/onboarding.ts](../server/onboarding.ts), as one editable multiline template. Its closing is the dynamic “Join X others on New Drugs.” with the singular form and a zero-user fallback. There is no starter-dollar sentence. Starter credit still exists. `ensureIntroduction` updates an existing introduction when the template changes.
 

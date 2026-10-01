@@ -304,6 +304,7 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .profile-interests { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; padding: 0; }
 .profile-interests li { padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--surface-soft); font-size: var(--text-sm); }
 .profile-contact { margin-top: var(--space-5); display:flex; align-items:center; flex-wrap:wrap; gap:var(--space-2); }
+.profile-mutual{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px;}.profile-mutual p{margin:0;}.profile-mutual-people{display:flex;align-items:center;flex-wrap:wrap;gap:6px;}.profile-mutual-people a{border-radius:999px;background:var(--surface-soft);color:var(--ink);padding:5px 9px;text-decoration:none;font-size:12px;}
 .profile-contact > :is(p,form) { flex-basis:100%; }
 .location-picker label { display: flex; flex-direction: column; gap: 7px; }
 .location-actions { margin: var(--space-2) 0; font-size: var(--text-label); }
@@ -360,6 +361,7 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .direct-message-content .message.peer.dm-group-with-previous .bubble { border-top-left-radius: 5px; }
 .direct-message-content .message.peer { align-self: flex-start; }
 .direct-message-content .message.peer .bubble { background: var(--surface-soft); border-bottom-left-radius: 5px; }
+.direct-message-content .message .website-previews {margin:6px 0 0;max-width:100%;}
 .direct-messages .message .message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message-placement .message.peer .bubble { background: var(--surface-soft); }
 .message-placement .message-compose textarea { height: 100% !important; min-height: 0; max-height: none; }

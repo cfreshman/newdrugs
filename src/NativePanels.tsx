@@ -22,8 +22,10 @@ import type {CallPage,CallRecord} from '../shared/calling';
 import {useCall} from './CallProvider';
 import './calling.css';
 import {NavLink} from './NavLink';
+import {LinkPreviews} from './LinkPreview';
 
 interface Page<T> { items: T[]; nextCursor: string | null }
+const mutualLine=(person:Profile)=>{const count=person.mutualCount||0,names=person.mutualFriends||[];return `${count} mutual ${count===1?'friend':'friends'}${names.length?`: ${names.map(friend=>friend.name).join(', ')}${count>names.length?` +${count-names.length} more`:''}`:''}`;};
 interface Connection { initialInvitation?:{fromId:string;note:string;createdAt:string}; disconnectedBy?:string; createdAt: string; id: string; members: string[]; fromId: string; toId: string; note: string; status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'disconnected'; unread?: boolean; lastMessage?: { text: string; fromId: string; createdAt: string } }
 interface DirectMessage { id: string; fromId: string; text: string; createdAt: string; pending?: boolean; failed?: boolean; key?: string; clientId?: string }
 function callDuration(call:CallRecord){if(!call.joinedAt||!call.endedAt)return '';const seconds=Math.max(0,Math.floor((Date.parse(call.endedAt)-Date.parse(call.joinedAt))/1000));if(!Number.isFinite(seconds))return '';const hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60),remainder=seconds%60;return `Called for ${hours?`${hours}h `:''}${minutes?`${minutes}m `:''}${!hours||!minutes?`${remainder}s`:''}`.trim();}
@@ -41,12 +43,12 @@ export function LocationPanel({ user, areaCell, saved }: { user: Profile; areaCe
 }
 
 export function PeoplePanel({ user, areaCell, radiusMiles = 25, initialQuery = '', initialScope, onStateChange, navigate }: { user: Profile; areaCell?: string; radiusMiles?: number; initialQuery?:string; initialScope?:Destination['scope']; onStateChange?(context:Partial<Destination>):void; navigate: Navigate }) {
-  const [people, setPeople] = useState<(Page<Profile> & {retrieval?:SearchRetrieval}) | null>(null), [error, setError] = useState('');
-  const [query,setQuery]=useState(initialQuery ?? ''), [radius,setRadius]=useState(typeof radiusMiles === 'number' && Number.isFinite(radiusMiles) && radiusMiles >= 10 && radiusMiles <= 250 ? radiusMiles : 25), [scope,setScope]=useState<'all'|'nearby'>(initialScope==='all'?'all':areaCell || user.area ? 'nearby' : 'all'); const requestId=useRef(0);
-  useEffect(()=>{setQuery(initialQuery||'');setRadius(radiusMiles);setScope(initialScope==='all'?'all':initialScope==='nearby'||areaCell||user.area?'nearby':'all');},[initialQuery,initialScope,radiusMiles,areaCell]);
+  const [people, setPeople] = useState<(Page<Profile> & {retrieval?:SearchRetrieval;indexing?:boolean}) | null>(null), [error, setError] = useState('');
+  const [query,setQuery]=useState(initialQuery ?? ''), [radius,setRadius]=useState(typeof radiusMiles === 'number' && Number.isFinite(radiusMiles) && radiusMiles >= 10 && radiusMiles <= 250 ? radiusMiles : 25), [scope,setScope]=useState<'all'|'nearby'|'circle'>(initialScope==='all'||initialScope==='circle'?initialScope:areaCell || user.area ? 'nearby' : 'all'); const requestId=useRef(0);
+  useEffect(()=>{setQuery(initialQuery||'');setRadius(radiusMiles);setScope(initialScope==='all'||initialScope==='circle'?initialScope:initialScope==='nearby'||areaCell||user.area?'nearby':'all');},[initialQuery,initialScope,radiusMiles,areaCell]);
   const change=(context:Partial<Destination>)=>onStateChange?.({query,scope,radiusMiles:radius,...context});
   const near = areaCell || user.area?.cell;
-  usePanelLoading((scope==='all'||Boolean(near)) && !people && !error);
+  usePanelLoading((scope!=='nearby'||Boolean(near)) && !people && !error);
   const load = useCallback(async (before?: string) => {
     if (scope==='nearby' && !near) return;
     const request=++requestId.current;
@@ -57,12 +59,12 @@ export function PeoplePanel({ user, areaCell, radiusMiles = 25, initialQuery = '
   useRecordRefresh(['people'], load);
   return <>
     <SearchField label="Search people by interests" value={query} onSearch={value => { if (value === query) void load(); else {setQuery(value);change({query:value});} }}/>
-    <nav className="view-tabs" aria-label="People filter"><button aria-pressed={scope==='nearby'} onClick={()=>{setScope('nearby');change({scope:'nearby'});}}>Nearby</button><button aria-pressed={scope==='all'} onClick={()=>{setScope('all');change({scope:'all'});}}>All people</button></nav>
+    <nav className="view-tabs" aria-label="People filter"><button aria-pressed={scope==='nearby'} onClick={()=>{setScope('nearby');change({scope:'nearby'});}}>Nearby</button><button aria-pressed={scope==='all'} onClick={()=>{setScope('all');change({scope:'all'});}}>All people</button><button aria-pressed={scope==='circle'} onClick={()=>{setScope('circle');change({scope:'circle'});}}>Circle</button></nav>
     {scope==='nearby' && <div className="search-area-controls"><NavLink className="text-link" to={{view:'location'}} navigate={navigate}>{near ? user.area?.cell===near ? <LocationLabel label={user.area.label}/> : 'Change area' : 'Choose your area'}</NavLink>{near && <RadiusSelect value={radius} onChange={value=>{setRadius(value);change({radiusMiles:value});}}/>}</div>}
     {people?.retrieval?.notices.map(notice=><p className="quiet small" key={notice}>{notice}</p>)}
-    {people && !people.items.length && <p className="quiet">{query ? 'No matching profiles found.' : scope==='nearby' ? 'No shared profiles found in this area yet.' : 'No shared profiles yet.'}</p>}
+    {people && !people.items.length && !people.nextCursor && <p className="quiet">{scope==='circle'&&people.indexing?'Updating Circle...':query ? 'No matching profiles found.' : scope==='nearby' ? 'No shared profiles found in this area yet.' : scope==='circle'?'No people with mutual friends yet.':'No shared profiles yet.'}</p>}
     <div className="people-list">{people?.items.map(person => <NavLink key={person.id} to={{view:'person',resourceId:person.id}} navigate={navigate}>
-      {person.photos?.[0] && <img src={`/api/files/${encodeURIComponent(person.photos[0])}`} alt="" />}<span><strong>{person.name || `@${person.handle}`}</strong><span className="quiet small">{person.handle && <><span className="person-handle">@{person.handle}</span>{' · '}</>}<LocationLabel label={person.area?.label}/></span>{person.bio && <span className="person-excerpt">{person.bio}</span>}</span>
+      {person.photos?.[0] && <img src={`/api/files/${encodeURIComponent(person.photos[0])}`} alt="" />}<span><strong>{person.name || `@${person.handle}`}</strong><span className="quiet small">{person.handle && <><span className="person-handle">@{person.handle}</span>{' · '}</>}<LocationLabel label={person.area?.label}/></span>{person.bio && <span className="person-excerpt">{person.bio}</span>}{Boolean(person.mutualCount)&&<span className="person-mutual quiet small"><span className="person-mutual-avatars" aria-hidden="true">{person.mutualFriends?.map(friend=><span key={friend.id}>{friend.photoId?<img src={`/api/files/${encodeURIComponent(friend.photoId)}`} alt=""/>:friend.name.replace(/^@/,'').slice(0,1).toUpperCase()}</span>)}</span><span>{mutualLine(person)}</span></span>}</span>
     </NavLink>)}</div>
     {people?.nextCursor && <button className="text-link" onClick={() => void load(people.nextCursor!)}>More people</button>}
     {error && <p className="error">{error}</p>}
@@ -201,6 +203,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
       {!messages.nextCursor && (current?.connection.initialInvitation?.note || current?.connection.note) && <article className={`message invitation-message ${(current.connection.initialInvitation?.fromId || current.connection.fromId) === userId ? 'user' : 'peer'}`} data-invitation-id={current.connection.id}>
         <small className="invitation-meta">Invitation · <time dateTime={current.connection.initialInvitation?.createdAt || current.connection.createdAt}>{new Date(current.connection.initialInvitation?.createdAt || current.connection.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</time></small>
         <div className="bubble"><CollapsibleMessage text={current.connection.initialInvitation?.note || current.connection.note} assistant={false} social scrollRef={scroller} /></div>
+        <LinkPreviews text={current.connection.initialInvitation?.note || current.connection.note} simple/>
       </article>}
       {timeline.map(item=>{
         if(item.kind==='call'){
@@ -219,6 +222,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
             onKeyDownCapture={selectable?event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();select();}}:undefined}>
             <CollapsibleMessage text={message.text} assistant={false} social scrollRef={scroller}/>
           </div>
+          {!message.failed&&<LinkPreviews text={message.text} simple/>}
           {reporting===message.id&&<ContentReport personId={message.fromId} messageId={message.id} close={()=>setReporting(null)}/>}
           {message.failed&&<button className="retry-message" disabled={busy} onClick={()=>void send(undefined,message)}>Not sent · retry</button>}
         </article></Fragment>;
