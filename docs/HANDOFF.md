@@ -19,6 +19,8 @@ Production v0.45.1 and cloud dev add one enabled/disabled setting per notificati
 
 Source events enter bounded worker pages with exact source and permission checks. Topic watches use a separate indexed Qdrant rule collection and report pending indexing until ready. Removed/revoked Log entries, friendship birthdays, Circle relationships and live Talks are rechecked before display or push. Push still omits DM text and private Log notes. Focused isolated notification, topic, paging, push, Circle/Talk and UI tests passed, as did TypeScript and the dev/production builds, API and exact worker health. A dev-only Qdrant probe verified vector insert/query/delete and was removed. The production public API and frontend asset matched the release after deployment. Live physical-device push presentation and a real person-to-person alert run remain unverified.
 
+A local follow-up after v0.45.1 fixes checkbox flicker in Notification settings: toggling one type updates that check optimistically and disables only that check while it saves; other checks stay interactive. It passed TypeScript and is queued for the next deployment under the founder's no-isolated-fix rollout rule.
+
 ### Included in v0.45.1: leave Talk before entering video
 
 The active Talk is left before a connected one-to-one video call opens. Answering waits for Talk to leave before joining the call; the caller’s automatic stage opening and manual reopening use the same gate. A host ends their Talk and waits for the media disconnect. The call stays unopened if Talk cannot be left, preventing simultaneous capture. The focused call-flow check, TypeScript, deployment builds, API health and worker heartbeats passed.
