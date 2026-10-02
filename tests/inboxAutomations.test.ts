@@ -64,6 +64,29 @@ it('validates automation schedules and data authority without saving or running 
  await expect(executeOperation('automations.validate',{...definition,schedule:{kind:'once',at:'2020-01-01T00:00:00.000Z'}},me)).rejects.toMatchObject({code:'schedule'});
  await expect(executeOperation('automations.validate',{...definition,maxRunNanos:200000000,dailyBudgetNanos:100000000},me)).rejects.toMatchObject({code:'budget'});
 });
+it('gives a private-chat automation current memory, not a deleted TODO or ungranted Log memory',async()=>{
+ const me=await actor();
+ const save=(key:string,content:string,core:boolean)=>executeOperation('agent.memory.save',{key,title:key,content,core,revision:0},me,randomUUID());
+ await save('current_preference','Do not suggest tennis without being asked.',true);
+ await save('radius_todo','The old radius change is pending.',false);
+ await executeOperation('agent.memory.delete',{key:'radius_todo',revision:1},me,randomUUID());
+ await save('open_task','A current task remains open.',false);
+ await rows('agentMemorySlots').insertOne({_id:randomUUID(),userId:me.userId,key:'private_log_note',title:'Private Log note',content:'Diary detail requiring Log access',core:true,sources:[{kind:'log',id:randomUUID()}],sourceProofs:[],revision:1,estimatedTokens:30,updatedAt:new Date().toISOString()});
+ const created=await executeOperation('automations.create',{...definition,privateChat:true,accountActivity:true},me,randomUUID(),{confirmed:true}) as Automation;
+ const {runId}=await executeOperation('automations.run_now',{automationId:created.id,revision:created.revision},me,randomUUID()) as {runId:string};
+ const run=await running(runId),credential:Actor={userId:me.userId,source:'agent',scope:'read',runId,background:true,privateChat:true,accountActivity:true,logAccess:false};
+ const packet=JSON.stringify(await sessionInput(run));
+ expect(packet).toContain('Do not suggest tennis without being asked.');
+ expect(run.memorySnapshot?.availableNotes).toEqual([{key:'open_task',title:'open_task'}]);
+ expect(packet).not.toContain('The old radius change is pending.');
+ expect(packet).not.toContain('Diary detail requiring Log access');
+ const memory=await executeOperation('agent.memory.list',{limit:30},credential) as {items:{key:string}[]};
+ expect(memory.items.map(item=>item.key)).toEqual(['current_preference','open_task']);
+ expect((await executeOperation('agent.memory.get',{key:'open_task'},credential) as any).slot.content).toBe('A current task remains open.');
+ await expect(executeOperation('agent.memory.get',{key:'private_log_note'},credential)).rejects.toMatchObject({status:404});
+ await expect(executeOperation('agent.memory.list',{limit:30},{...credential,privateChat:false})).rejects.toMatchObject({code:'automation_scope'});
+ await expect(executeOperation('agent.memory.save',{key:'intrusion',title:'Intrusion',content:'No',revision:0},credential,randomUUID())).rejects.toMatchObject({code:'automation_scope'});
+});
 it('reports the current credential authority without exposing its secret',async()=>{
  const me=await actor(),access=await executeOperation('access.get',{},me) as any;
  expect(access).toMatchObject({source:'external',scope:'write',background:false,credential:{name:'My connected agent',expiresAt:null}});
