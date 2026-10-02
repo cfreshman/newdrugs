@@ -101,6 +101,50 @@ async function testAudio(who='me'){
  await transaction(async session=>{upload=await prepareUpload({name:'Memory.wav',purpose:'log_media',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')},actor(who),session);});
  await acceptUpload(actor(who),upload.id,bytes);return upload.id as string;
 }
+async function testImage(who='me'){
+ const sharp=(await import('sharp')).default;
+ const bytes=await sharp({create:{width:8,height:8,channels:3,background:'#4477aa'}}).png().toBuffer();let upload:any;
+ await transaction(async session=>{upload=await prepareUpload({name:'Memory.png',purpose:'log_media',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')},actor(who),session);});
+ await acceptUpload(actor(who),upload.id,bytes);return upload.id as string;
+}
+it('patches Log fields independently and deletes only attachments explicitly replaced or cleared',async()=>{
+ const firstImage=await testImage(),secondImage=await testImage(),firstVoice=await testAudio(),secondVoice=await testAudio();
+ let row=await create({place:'Court',links:['https://example.com/path'],recurrence:'anniversary'},{note:'Original note',fileIds:[firstImage,firstVoice]});
+ row=await call('log.update',{...change(row),entry:{title:'Evening tennis',coverFileId:firstImage}});
+ expect(row).toMatchObject({title:'Evening tennis',place:'Court',links:['https://example.com/path'],recurrence:'anniversary',coverFileId:firstImage});
+ row=await call('log.contribute',{...change(row),contribution:{note:'Edited note'}});
+ expect(row.contributors[0]).toMatchObject({note:'Edited note'});
+ expect(row.contributors[0].files.map((file:any)=>file.id)).toEqual([firstImage,firstVoice]);
+ expect((await readUpload(actor(),firstImage)).file.ready).toBe(true);
+ row=await call('log.update',{...change(row),contribution:{imageFileId:secondImage}});
+ expect(row.contributors[0].note).toBe('Edited note');expect(row.contributors[0].files.map((file:any)=>file.id)).toEqual([secondImage,firstVoice]);expect(row.coverFileId).toBeNull();
+ await expect(readUpload(actor(),firstImage)).rejects.toMatchObject({status:404});expect((await readUpload(actor(),firstVoice)).file.ready).toBe(true);
+ row=await call('log.contribute',{...change(row),contribution:{voiceFileId:secondVoice}});
+ expect(row.contributors[0].files.map((file:any)=>file.id)).toEqual([secondImage,secondVoice]);await expect(readUpload(actor(),firstVoice)).rejects.toMatchObject({status:404});
+ row=await call('log.contribute',{...change(row),contribution:{imageFileId:null}});
+ expect(row.contributors[0].files.map((file:any)=>file.id)).toEqual([secondVoice]);expect(row.contributors[0].note).toBe('Edited note');
+ await expect(readUpload(actor(),secondImage)).rejects.toMatchObject({status:404});
+ row=await call('log.update',{...change(row),entry:{title:'',place:'',links:[],recurrence:'none'},contribution:{note:'',voiceFileId:null}});
+ expect(row).toMatchObject({title:'',place:'',links:[],recurrence:'none'});expect(row.contributors[0]).toMatchObject({note:'',files:[]});
+ await expect(readUpload(actor(),secondVoice)).rejects.toMatchObject({status:404});
+});
+it('rejects ambiguous or stale Log patches without changing another field or attendee',async()=>{
+ const image=await testImage(),voice=await testAudio(),otherImage=await testImage('friend');
+ let row=await create({}, {note:'Keep this',fileIds:[image,voice]});
+ row=await call('log.add_person',{...change(row),personId:'friend'},'me',true);
+ row=await call('log.contribute',{...change(row),contribution:{imageFileId:otherImage}},'friend');
+ const originalRevision=row.revision;
+ await expect(call('log.contribute',{entryId:row.id,revision:originalRevision-1,contribution:{note:'Stale'}})).rejects.toMatchObject({code:'log_changed'});
+ await expect(call('log.contribute',{...change(row),contribution:{imageFileId:voice}})).rejects.toMatchObject({code:'log_image'});
+ await expect(call('log.contribute',{...change(row),contribution:{voiceFileId:image}})).rejects.toMatchObject({code:'log_voice'});
+ await expect(call('log.contribute',{...change(row),contribution:{fileIds:[],imageFileId:null}})).rejects.toMatchObject({code:'log_patch'});
+ await expect(call('log.update',{...change(row),entry:{},contribution:{}})).rejects.toMatchObject({code:'log_patch'});
+ await expect(call('log.contribute',{...change(row),contribution:{}})).rejects.toMatchObject({code:'log_patch'});
+ expect((await call('log.get',{entryId:row.id})).revision).toBe(originalRevision);
+ row=await call('log.contribute',{...change(row),contribution:{fileIds:[]}});
+ expect(row.contributors.find((person:any)=>person.userId==='me')).toMatchObject({note:'Keep this',files:[]});
+ expect(row.contributors.find((person:any)=>person.userId==='friend').files.map((file:any)=>file.id)).toEqual([otherImage]);
+});
 it('deletes only the leaving attendee’s attached media, frees quota, and retries safely',async()=>{
  const mine=await testAudio(),theirs=await testAudio('friend');let row=await create({}, {fileIds:[mine]});
  row=await call('log.add_person',{...change(row),personId:'friend'},'me',true);

@@ -18,7 +18,7 @@ import {users,type Actor} from './auth';
 import {AppError,requireValue} from './errors';
 import {uploads,ownUpload,retainUploads,deleteUpload,type Upload} from './uploads';
 import {orderedLogContributions,selectLogCoverUpload} from './logCover';
-import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogList,type LogCalendarPage} from '../shared/log';
+import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogFieldPatch,type LogContributionPatch,type LogList,type LogCalendarPage} from '../shared/log';
 interface LogRow extends LogFields {calendarMonthDay?:string;_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
 const entries=()=>rows<LogRow>('logEntries');
 async function excluded(userId:string,session?:ClientSession){return (await rows('blocks').find({members:userId},{session}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId));}
@@ -89,6 +89,29 @@ function contribution(row:LogRow,userId:string,value:LogContribution){
  const hasContent=Boolean(value.note.trim()||value.fileIds.length),first=!already&&hasContent;
  row.contributions=row.contributions.map(person=>person.userId===userId?{...value,userId,hasContributed:already||hasContent}:person);
  return first;
+}
+async function patchContribution(row:LogRow,userId:string,patch:LogContributionPatch,session?:ClientSession){
+ if(!Object.keys(patch).length)throw new AppError(422,'log_patch','Choose a Log contribution field to change.');
+ if(patch.fileIds!==undefined&&(patch.imageFileId!==undefined||patch.voiceFileId!==undefined))throw new AppError(422,'log_patch','Use fileIds or the individual photo and voice fields, not both.');
+ const own=requireValue(row.contributions.find(person=>person.userId===userId),'Your Log contribution is unavailable.'),previous=[...own.fileIds];
+ let fileIds=patch.fileIds===undefined?[...previous]:patch.fileIds;
+ const mediaChanged=patch.fileIds!==undefined||patch.imageFileId!==undefined||patch.voiceFileId!==undefined;
+ if(patch.imageFileId!==undefined||patch.voiceFileId!==undefined){
+  const files=await uploads().find({_id:{$in:previous},userId},{session,projection:{_id:1,mime:1}}).toArray();
+  const replace=(ids:Set<string>,id:string|null,atStart:boolean)=>{const index=fileIds.findIndex(value=>ids.has(value));fileIds=fileIds.filter(value=>!ids.has(value));if(id)fileIds.splice(index<0?atStart?0:fileIds.length:Math.min(index,fileIds.length),0,id);};
+  if(patch.imageFileId!==undefined){
+   if(patch.imageFileId){const image=await ownUpload(userId,patch.imageFileId,session);if(!image.mime.startsWith('image/'))throw new AppError(422,'log_image','Choose a photo upload for the photo field.');}
+   replace(new Set(files.filter(file=>file.mime.startsWith('image/')||file.mime.startsWith('video/')).map(file=>file._id)),patch.imageFileId,true);
+  }
+  if(patch.voiceFileId!==undefined){
+   if(patch.voiceFileId){const voice=await ownUpload(userId,patch.voiceFileId,session);if(!voice.mime.startsWith('audio/'))throw new AppError(422,'log_voice','Choose an audio upload for the voice note field.');}
+   replace(new Set(files.filter(file=>file.mime.startsWith('audio/')).map(file=>file._id)),patch.voiceFileId,false);
+  }
+ }
+ if(mediaChanged)await media(userId,fileIds,row._id,session);
+ const first=contribution(row,userId,{note:patch.note===undefined?own.note:patch.note,fileIds});
+ if(row.coverFileId&&!row.contributions.some(person=>person.fileIds.includes(row.coverFileId!)))row.coverFileId=null;
+ return {first,removed:previous.filter(id=>!fileIds.includes(id))};
 }
 async function notifyFirstContribution(row:LogRow,actorId:string,session?:ClientSession){for(const member of row.members)if(member!==actorId)await notification(row,actorId,member,'log_update',session);}
 function queryFilter(query:string){return logQueryGroups(query).map(group=>({$and:group.map(term=>{const regex=new RegExp(term.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),match={$or:[{title:regex},{place:regex},{'contributions.note':regex}]};return term.exclude?{$nor:[match]}:match;})}));}
@@ -224,15 +247,16 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  }
  if(!row.members.includes(userId))throw new AppError(403,'log_membership','Accept the invitation before changing this entry.');
  if(name==='log.update'){
-  const previous=row.contributions.find(c=>c.userId===userId)?.fileIds||[],entry=d.entry as LogFields;let first=false;
-  if(d.contribution){const value=d.contribution as LogContribution;await media(userId,value.fileIds,row._id,session);first=contribution(row,userId,value);}
-  if(entry.coverFileId&&(!row.contributions.some(c=>c.fileIds.includes(entry.coverFileId!))||!await uploads().findOne({_id:entry.coverFileId,ready:true,mime:{$regex:'^image/'}},{session})))throw new AppError(422,'log_cover','Choose a photo from this entry’s attachments.');
-  Object.assign(row,entry);if(row.coverFileId&&!row.contributions.some(c=>c.fileIds.includes(row.coverFileId!)))row.coverFileId=null;const result=await save(row,Number(d.revision),actor,session);if(first)await notifyFirstContribution(row,userId,session);await removeMedia(actor,previous.filter(id=>!row.contributions.some(c=>c.fileIds.includes(id))),session);return result;
+  const entry=d.entry as LogFieldPatch|undefined,own=d.contribution as LogContributionPatch|undefined;
+  if(!Object.keys(entry||{}).length&&!Object.keys(own||{}).length)throw new AppError(422,'log_patch','Choose a Log field to change.');
+  const change=own?await patchContribution(row,userId,own,session):{first:false,removed:[] as string[]};
+  if(entry?.coverFileId&&(!row.contributions.some(c=>c.fileIds.includes(entry.coverFileId!))||!await uploads().findOne({_id:entry.coverFileId,ready:true,mime:{$regex:'^image/'}},{session})))throw new AppError(422,'log_cover','Choose a photo from this entry’s attachments.');
+  if(entry)Object.assign(row,entry);if(row.coverFileId&&!row.contributions.some(c=>c.fileIds.includes(row.coverFileId!)))row.coverFileId=null;
+  const result=await save(row,Number(d.revision),actor,session);if(change.first)await notifyFirstContribution(row,userId,session);await removeMedia(actor,change.removed,session);return result;
  }
  if(name==='log.contribute'){
-  const previous=row.contributions.find(c=>c.userId===userId)?.fileIds||[],value=d.contribution as LogContribution;await media(userId,value.fileIds,row._id,session);const first=contribution(row,userId,value);
-  if(row.coverFileId&&!row.contributions.some(c=>c.fileIds.includes(row.coverFileId!)))row.coverFileId=null;
-  const result=await save(row,Number(d.revision),actor,session);if(first)await notifyFirstContribution(row,userId,session);await removeMedia(actor,previous.filter(id=>!value.fileIds.includes(id)),session);return result;
+  const change=await patchContribution(row,userId,d.contribution as LogContributionPatch,session);
+  const result=await save(row,Number(d.revision),actor,session);if(change.first)await notifyFirstContribution(row,userId,session);await removeMedia(actor,change.removed,session);return result;
  }
  if(name==='log.add_person'){
   const personId=String(d.personId);if(row.members.includes(personId))return project(row,userId,session);
