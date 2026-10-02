@@ -9,8 +9,19 @@ import type {StorageType,StorageLocation,StorageAttachment,StoragePage} from '..
 import {MAX_ACCOUNT_UPLOAD_BYTES} from '../shared/uploads';
 import {workGate} from './workGate';
 import {websitePreviewUrl,websitePublicUrl,type WebsiteDoc} from './websites';
+import {AppError} from './errors';
 const referenceGate=workGate(8,256);
 const snippet=(value:unknown)=>typeof value==='string'&&value.trim()?`: ${value.trim().slice(0,64)}${value.trim().length>64?'…':''}`:'';
+type StorageCursor={createdAt:string;id:string};
+async function storageCursor(userId:string,before:string,session?:ClientSession):Promise<StorageCursor>{
+ if(before.startsWith('s2.'))try{
+  const value=JSON.parse(Buffer.from(before.slice(3),'base64url').toString('utf8'));
+  if(typeof value.createdAt==='string'&&value.createdAt.length<=40&&typeof value.id==='string'&&value.id.length<=100)return value;
+ }catch{ /* Invalid cursor below. */ }
+ else {const file=await uploads().findOne({_id:before,userId},{session,projection:{createdAt:1}});if(file?.createdAt)return {createdAt:file.createdAt,id:before};}
+ throw new AppError(422,'storage_cursor','This storage page is unavailable. Start from the first page.');
+}
+const nextStorageCursor=(file:{createdAt:string;_id:string})=>`s2.${Buffer.from(JSON.stringify({createdAt:file.createdAt,id:file._id})).toString('base64url')}`;
 
 async function projectReferences(user:User,refs:AttachmentReference[],session?:ClientSession){
  const selected=(kind:string)=>refs.filter(ref=>ref.kind===kind),postRefs=selected('posts'),chatRefs=selected('chat'),logRefs=selected('hangouts'),websiteRefs=selected('websites');
@@ -40,7 +51,8 @@ export async function storageAttachments(user:User,fileId:string,before?:string,
 export async function listStorage(user:User,{type='all',attachedTo='all',before,limit=30}:{type?:StorageType;attachedTo?:StorageLocation;before?:string;limit?:number},session?:ClientSession):Promise<StoragePage>{
  const media={images:/^image\//,audio:/^audio\//,video:/^video\//};
  const mime=type==='all'?{}:type==='documents'?{mime:{$not:/^(image|audio|video)\//}}:{mime:media[type]};
- const files=await uploads().find({userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false},...mime,...(attachedTo!=='all'?{attachmentKinds:attachedTo}:{}),...(before?{_id:{$lt:before}}:{})},{session}).sort({_id:-1}).limit(limit+1).toArray();
+ const cursor=before?await storageCursor(user._id,before,session):null;
+ const files=await uploads().find({userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false},...mime,...(attachedTo!=='all'?{attachmentKinds:attachedTo}:{}),...(cursor?{$or:[{createdAt:{$lt:cursor.createdAt}},{createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]}:{})},{session}).sort({createdAt:-1,_id:-1}).limit(limit+1).toArray();
  const page=files.slice(0,limit);
  const groups=await Promise.all(page.map(file=>referenceGate.run(()=>attachmentReferences().find({ownerId:user._id,fileId:file._id,...(attachedTo!=='all'?{kind:attachedTo}:{})},{session}).sort({_id:1}).limit(7).toArray())));
  const projected=await projectReferences(user,groups.flat(),session);
@@ -48,5 +60,5 @@ export async function listStorage(user:User,{type='all',attachedTo='all',before,
  const items=page.map((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);return {...ownedUploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)),inWebsite:refs.some(ref=>ref.kind==='websites'),attachments,attachmentCursor:refs.length>6?refs[5]._id:null};})
   .filter((file,index)=>attachedTo==='all'||groups[index].length>6||groups[index].some(ref=>ref.kind===attachedTo&&projected.has(ref._id)));
  const indexing=await rows('attachmentReferenceMeta').countDocuments({done:true},{session})<5;
- return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items,indexing,nextCursor:files.length>limit?page.at(-1)!._id:null};
+ return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items,indexing,nextCursor:files.length>limit?nextStorageCursor(page.at(-1)!):null};
 }

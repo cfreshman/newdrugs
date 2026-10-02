@@ -45,7 +45,7 @@ export const outputs: Record<string, z.ZodType> = {
   'inbox.publish': inboxItemSchema, 'inbox.get': inboxItemSchema, 'inbox.mark_read': inboxItemSchema, 'inbox.archive': inboxItemSchema,
   'inbox.list': page(inboxItemSchema), 'inbox.delete': z.object({ deleted: z.literal(true) }),
   'links.text':z.object({url:z.string(),text:z.string()}),
-  'links.preview': z.object({custom:customDocumentSchema.optional(), url: z.string(), hostname: z.string(), title: z.string(), description: z.string(), imageUrl: z.string().optional(),kind:z.literal('image').optional(),embed:z.object({provider:z.string(),src:z.string(),height:z.number(),video:z.boolean().optional()}).optional() }),
+  'links.preview': z.object({custom:customDocumentSchema.optional(), url: z.string(), hostname: z.string(), title: z.string(), description: z.string(), imageUrl: z.string().optional(),kind:z.enum(['image','video']).optional(),embed:z.object({provider:z.string(),src:z.string(),height:z.number(),video:z.boolean().optional()}).optional() }),
   'files.prepare':upload,'files.get':upload,'files.list':z.object({items:z.array(upload)}),
   'files.discard':z.object({discarded:z.literal(true),id}),
   'files.delete':z.object({deleted:z.literal(true),id,bytesFreed:z.number()}),

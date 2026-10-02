@@ -41,6 +41,13 @@ describe('public preview fetch boundary', () => {
     response(200, { 'content-type': 'image/svg+xml' }, '<svg/>');
     await expect(fetchPublic('https://example.com/image', 'image', AbortSignal.timeout(1000))).rejects.toThrow();
   });
+  it('classifies a direct video from its MIME type without buffering the file',async()=>{
+    response(200,{'content-type':'video/mp4','content-length':'900000000'},'video bytes');
+    const result=await fetchPublic('https://media.example.com/clip.mp4','preview',AbortSignal.timeout(1000));
+    expect(result.mime).toBe('video/mp4');expect(result.bytes).toHaveLength(0);
+    response(200,{'content-type':'text/html'},'<title>Watch</title>');
+    expect((await fetchPublic('https://media.example.com/watch','preview',AbortSignal.timeout(1000))).bytes.toString()).toContain('Watch');
+  });
 });
 it('uses OG then Twitter then ordinary head metadata, resolves relative images and ignores body forgeries', () => {
   expect(pageMetadata('<head><title>Fallback &amp; title</title><meta content="OG &amp; title" property="og:title"><meta name="twitter:description" content="A description"><meta property="og:image" content="../photo.png"><meta property="og:url" content="https://evil.example/"></head><body><meta property="og:title" content="Wrong"></body>', 'https://example.com/articles/post')).toEqual({ title: 'OG & title', description: 'A description', image: 'https://example.com/photo.png' });

@@ -432,7 +432,7 @@ describe('chat interaction integration', () => {
     expect(location.pathname).toBe('/compose');
     const input=dom.container.querySelector<HTMLTextAreaElement>('.social-posts .composer-view:not([hidden]) textarea')!;
     act(()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'A preserved post draft');input.dispatchEvent(new Event('input',{bubbles:true}));});
-    await act(async()=>[...dom.container.querySelectorAll<HTMLAnchorElement>('.social-posts .mode-sidebar nav a')].find(x=>x.textContent==='Your profile')!.click());dom.frame();
+    await act(async()=>[...dom.container.querySelectorAll<HTMLAnchorElement>('.social-posts .mode-sidebar nav a')].find(x=>x.textContent==='Profile')!.click());dom.frame();
     expect(location.pathname).toBe('/posts/people/user');
     await travel('back');expect(location.pathname).toBe('/compose');expect(input.value).toBe('A preserved post draft');expect(input.closest<HTMLElement>('.composer-view')!.hidden).toBe(false);
     await travel('back');expect(location.pathname).toBe('/feed');
@@ -440,6 +440,26 @@ describe('chat interaction integration', () => {
     await travel('forward');expect(location.pathname).toBe('/posts/people/user');
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch [aria-label="Friends"]')!.click());dom.frame();expect(location.pathname).toBe('/nearby');
     await travel('back');expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe('posts');expect(location.pathname).toBe('/posts/people/user');
+  });
+  it('opens New Post on the Posts stack and returns to the preserved feed',async()=>{
+    await mount();await load();dom.frame();
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.mode-switch [aria-label="Posts"]')!.click());dom.frame();
+    const posts=dom.container.querySelector('.social-posts')!;
+    await act(async()=>posts.querySelector<HTMLAnchorElement>('[aria-label="New post"]')!.click());dom.frame();
+    expect(location.pathname).toBe('/compose');
+    expect(posts.querySelector('.mode-content-header [aria-label="Back"]')).not.toBeNull();
+    const input=posts.querySelector<HTMLTextAreaElement>('.composer-view:not([hidden]) textarea')!;
+    act(()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'Draft to keep');input.dispatchEvent(new Event('input',{bubbles:true}));});
+    await act(async()=>posts.querySelector<HTMLAnchorElement>('.mode-content-header [aria-label="Back"]')!.click());dom.frame();
+    expect(location.pathname).toBe('/feed');
+    await act(async()=>posts.querySelector<HTMLAnchorElement>('.mode-compose-button')!.click());dom.frame();
+    expect(location.pathname).toBe('/compose');expect(input.value).toBe('Draft to keep');
+    const original=transport.operation.getMockImplementation()!;
+    transport.operation.mockImplementation((name:string,...args:unknown[])=>name==='posts.create'?Promise.resolve({id:'new-post',text:'Draft to keep'}):original(name,...args));
+    await act(async()=>input.closest<HTMLFormElement>('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));dom.frame();
+    expect(location.pathname).toBe('/posts/new-post');
+    await act(async()=>posts.querySelector<HTMLAnchorElement>('.mode-content-header [aria-label="Back"]')!.click());dom.frame();
+    expect(location.pathname).toBe('/feed');
   });
   it('serializes feed filters and restores them through Back without resetting the scroll node',async()=>{
     history.replaceState(null,'','/feed');await mount();await load();dom.frame();

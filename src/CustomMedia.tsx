@@ -9,12 +9,12 @@ import {loadLinkPreview} from './linkPreviewCache';
 import {operation} from './api';
 
 function Media(props:{src:string;kind:'audio'|'video';active:boolean;muted?:boolean;autoplay?:boolean}){return props.kind==='audio'?<AudioPlayer key={props.src} src={props.src} active={props.active}/>:<VideoMedia src={props.src} active={props.active} muted={props.muted} autoplay={props.autoplay}/>;}
-function VideoMedia({src,active,muted=false,autoplay=false}:{src:string;active:boolean;muted?:boolean;autoplay?:boolean}){
+export function VideoMedia({src,active,muted=false,autoplay=false,onError}:{src:string;active:boolean;muted?:boolean;autoplay?:boolean;onError?:()=>void}){
  const ref=useRef<HTMLMediaElement|null>(null);
  useEffect(()=>{const node=ref.current!;const hide=()=>{if(document.hidden)node.pause();};const other=(event:Event)=>{if((event as CustomEvent).detail!==node&&!node.muted)node.pause();};document.addEventListener('visibilitychange',hide);window.addEventListener('newdrugs:media-play',other);return()=>{node.pause();document.removeEventListener('visibilitychange',hide);window.removeEventListener('newdrugs:media-play',other);};},[src]);
  useEffect(()=>{if(!active)ref.current?.pause();},[active]);
  const play=()=>{if(ref.current&&!ref.current.muted)window.dispatchEvent(new CustomEvent('newdrugs:media-play',{detail:ref.current}));};
- return <video ref={node=>{ref.current=node;}} controls playsInline preload="metadata" muted={muted} autoPlay={active&&autoplay&&muted} src={src} onPlay={play}/>;
+ return <video ref={node=>{ref.current=node;}} controls playsInline preload="metadata" muted={muted} autoPlay={active&&autoplay&&muted} src={src} onPlay={play} onError={onError}/>;
 }
 function Artwork({src,alt,onDimensions}:{src:string;alt:string;onDimensions?:(size:{width:number;height:number})=>void}){
  const image=useRef<HTMLImageElement>(null);

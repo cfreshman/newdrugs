@@ -44,12 +44,14 @@ export async function fetchPublic(value: string, kind: 'page' | 'image' | 'previ
         return;
       }
       const mime = (response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-      const html=['text/html','application/xhtml+xml'].includes(mime),image=['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(mime);
+      const html=['text/html','application/xhtml+xml'].includes(mime),image=['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(mime),video=kind==='preview'&&['video/mp4','video/webm','video/ogg','video/quicktime'].includes(mime);
       const siteSource=['text/css','text/javascript','application/javascript','application/x-javascript','text/plain'].includes(mime)||html||['application/octet-stream',''].includes(mime)&&/\.(?:css|m?js)$/.test(url.pathname);
-      const allowed=kind==='manifest'?(/(?:^|[+/])json$/.test(mime)||['text/plain','application/octet-stream','application/muse','application/cif','application/pops'].includes(mime)):kind==='site_source'?siteSource:kind==='text'?['text/plain','text/markdown'].includes(mime):kind==='page'?html:kind==='image'?image:html||image;
-      if (status !== 200 || !allowed || response.headers['content-encoding'] && response.headers['content-encoding'] !== 'identity' || Number(response.headers['content-length']) > limit) {
+      const allowed=kind==='manifest'?(/(?:^|[+/])json$/.test(mime)||['text/plain','application/octet-stream','application/muse','application/cif','application/pops'].includes(mime)):kind==='site_source'?siteSource:kind==='text'?['text/plain','text/markdown'].includes(mime):kind==='page'?html:kind==='image'?image:html||image||video;
+      if (status !== 200 || !allowed || response.headers['content-encoding'] && response.headers['content-encoding'] !== 'identity' || !video&&Number(response.headers['content-length']) > limit) {
         response.destroy(); reject(new Error('Unsupported preview response.')); return;
       }
+      // Classify direct video from headers without downloading it into the API.
+      if(video){response.destroy();resolve({bytes:Buffer.alloc(0),url:url.href,mime});return;}
       const chunks: Buffer[] = []; let size = 0;
       response.on('data', (chunk: Buffer) => { size += chunk.length; if (size > limit) response.destroy(new Error('Preview too large.')); else chunks.push(chunk); });
       response.on('error', reject);

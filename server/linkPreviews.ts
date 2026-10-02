@@ -54,7 +54,7 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
 
   let url: URL;
   try { url = publicUrl(value); } catch { throw new AppError(422, 'preview_url', 'Choose a public HTTP or HTTPS link.'); }
-  const id = hash(`rich-v3:${url.href}`), existing = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } }, { projection: { image: 0 } });
+  const id = hash(`rich-v4:${url.href}`), existing = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } }, { projection: { image: 0 } });
   if (existing) return { ...existing.preview, url: value };
   if (pending.has(id)) return { ...await pending.get(id)!, url: value };
   const fallback: LinkPreview = { url: url.href, hostname: url.hostname, title: url.hostname, description: '',...(providerEmbed(url.href)?{embed:providerEmbed(url.href)!}:{}) };
@@ -75,7 +75,8 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
       }else{
 
       let imageResponse:Awaited<ReturnType<typeof fetchPublic>>|undefined;
-      if(page.mime.startsWith('image/')){preview={...fallback,kind:'image',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Image')};imageResponse=page;success=true;}
+      if(page.mime.startsWith('video/')){preview={...fallback,kind:'video',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Video')};success=true;}
+      else if(page.mime.startsWith('image/')){preview={...fallback,kind:'image',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Image')};imageResponse=page;success=true;}
       else{
         const metadata=pageMetadata(page.bytes.toString('utf8'),page.url);
         const embed=providerEmbed(page.url)||metadata.embed;

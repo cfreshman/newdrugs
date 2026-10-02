@@ -12,7 +12,7 @@ async function clean(){if(db().databaseName!=='newdrugs_test')throw Error('Isola
 beforeAll(async()=>{await connectDatabase();if(db().databaseName!=='newdrugs_test')throw Error('Isolated database required');});
 beforeEach(async()=>{await clean();const user:User={_id:'me',handle:'me',name:'Me',bio:'',city:'',cityKey:'',interests:[],discoverable:true,balanceNanos:1e9,reservedNanos:0,storageBytes:500,createdAt:new Date().toISOString()};await users().insertMany([user,{...user,_id:'other',handle:'other'}]);});
 afterAll(async()=>{await clean();await mongo.close();});
-async function file(id:string,mime='image/webp',userId='me'){await rows('uploads').insertOne({_id:id,userId,name:id,mime,purpose:'agent_input',ready:true,retained:true,bytes:100,createdAt:'2026-09-27',sha256:'hash'});}
+async function file(id:string,mime='image/webp',userId='me',createdAt='2026-09-27'){await rows('uploads').insertOne({_id:id,userId,name:id,mime,purpose:'agent_input',ready:true,retained:true,bytes:100,createdAt,sha256:'hash'});}
 const list=(input:Record<string,unknown>={})=>executeOperation('storage.list',input,actor) as Promise<StoragePage>;
 it('links each owned file to all live authorized attachments, including multiple uses',async()=>{
  await file('photo');await file('voice','audio/webm');await file('unattached');await users().updateOne({_id:'me'},{$set:{photos:['photo']}});
@@ -30,10 +30,21 @@ it('links each owned file to all live authorized attachments, including multiple
 it('filters before pagination, keeps global quota totals, and never returns another account’s files',async()=>{
  for(const [id,mime] of [['z','image/webp'],['y','audio/webm'],['x','image/webp'],['w','video/mp4'],['v','text/plain'],['u','application/pdf']])await file(id,mime);
  await file('other-photo','image/webp','other');await rows('uploads').updateOne({_id:'u'},{$set:{deletedAt:'now'}});
- const first=await list({type:'images',limit:1});expect(first.items.map(item=>item.id)).toEqual(['z']);expect(first.usedBytes).toBe(500);expect(first.nextCursor).toBe('z');
+ const first=await list({type:'images',limit:1});expect(first.items.map(item=>item.id)).toEqual(['z']);expect(first.usedBytes).toBe(500);expect(first.nextCursor).toMatch(/^s2\./);
  const next=await list({type:'images',limit:1,before:first.nextCursor});expect(next.items.map(item=>item.id)).toEqual(['x']);expect(next.nextCursor).toBeNull();
  expect((await list({type:'audio'})).items.map(item=>item.id)).toEqual(['y']);expect((await list({type:'video'})).items.map(item=>item.id)).toEqual(['w']);expect((await list({type:'documents'})).items.map(item=>item.id)).toEqual(['v']);
  await expect(list({type:'invalid'})).rejects.toBeDefined();
+});
+it('orders uploads by creation time, breaks ties by ID, and keeps a stable page boundary',async()=>{
+ await file('z','image/webp','me','2026-09-01T00:00:00.000Z');
+ await file('a','image/webp','me','2026-10-02T00:00:00.000Z');
+ await file('b','image/webp','me','2026-09-20T00:00:00.000Z');
+ await file('m','image/webp','me','2026-10-02T00:00:00.000Z');
+ const first=await list({limit:2});expect(first.items.map(item=>item.id)).toEqual(['m','a']);expect(first.nextCursor).toMatch(/^s2\./);
+ await file('n','image/webp','me','2026-10-03T00:00:00.000Z');
+ const second=await list({limit:2,before:first.nextCursor!});expect(second.items.map(item=>item.id)).toEqual(['b','z']);expect(second.nextCursor).toBeNull();
+ expect((await list({limit:2,before:'a'})).items.map(item=>item.id)).toEqual(['b','z']);
+ await expect(list({before:'s2.invalid'})).rejects.toMatchObject({code:'storage_cursor'});
 });
 
 it('bounds initial attachment links and pages subsequent uses without scanning source history',async()=>{

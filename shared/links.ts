@@ -3,7 +3,7 @@ import tlds from 'tlds' with {type:'json'};
 import type {CustomDocument} from './customMedia';
 import type {ProviderEmbed} from './postLinks';
 export interface TextLink { url: string; start: number; end: number }
-export interface LinkPreview { url: string; hostname: string; title: string; description: string; imageUrl?: string; kind?:'image'; embed?:ProviderEmbed;custom?:CustomDocument }
+export interface LinkPreview { url: string; hostname: string; title: string; description: string; imageUrl?: string; kind?:'image'|'video'; embed?:ProviderEmbed;custom?:CustomDocument }
 
 const parser=new LinkifyIt({fuzzyLink:true,fuzzyIP:false,fuzzyEmail:false,urlAuth:true}).tlds(tlds).add('ftp:',null).add('mailto:',null);
 
