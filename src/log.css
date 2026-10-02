@@ -312,6 +312,7 @@
 .log-day-picker .log-day-choice :is(img,.log-choice-placeholder){width:48px;height:48px;border-radius:2px;}
 .log-day-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-body);}
 .log-day-card>.log-day-previous,.log-day-card>.log-day-next{position:absolute;top:50%;transform:translateY(-50%);width:var(--log-day-arrow-size);height:var(--log-day-arrow-size);padding:0;}
+.log-day-card>.log-day-guard{opacity:0;pointer-events:all;}
 .log-day-card>.log-day-previous{right:calc(100% + var(--log-day-arrow-gap));}.log-day-card>.log-day-next{left:calc(100% + var(--log-day-arrow-gap));}
 @media(max-width:760px),(pointer:coarse){
  .log-day-card{width:min(400px,calc(100% - 2 * var(--log-day-edge-gap)));}

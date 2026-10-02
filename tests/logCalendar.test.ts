@@ -19,6 +19,37 @@ it('uses consecutive descending Sunday weeks across leap days and year boundarie
 it('keeps scrolling through empty years and appends without replacing existing week nodes or scroll',async()=>{await mount();const weeks=()=>[...dom.container.querySelectorAll<HTMLElement>('[data-week]')];expect(dom.container.querySelector('[data-week-count]')?.getAttribute('data-week-count')).toBe('52');expect(weeks().length).toBeLessThan(40);const first=weeks()[0],scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;scroller.scrollTop=1234;await act(async()=>edge().fire());expect(dom.container.querySelector('[data-week-count]')?.getAttribute('data-week-count')).toBe('104');expect(weeks().length).toBeLessThan(40);expect(weeks()[0]).toBe(first);expect(scroller.scrollTop).toBe(1234);await act(async()=>edge().fire());expect(dom.container.querySelector('[data-week-count]')?.getAttribute('data-week-count')).toBe('156');expect(weeks().length).toBeLessThan(40);const ranges=api.operation.mock.calls.filter(call=>call[0]==='log.calendar').map(call=>call[1]);expect(ranges.length).toBeLessThan(12);for(const range of ranges)expect(Temporal.PlainDate.from(range.from).until(Temporal.PlainDate.from(range.through)).days).toBeLessThan(42);expect(api.operation.mock.calls.some(call=>call[0]==='log.list')).toBe(false);});
 it('does not drain annual pages or all recurring entries to render the calendar',async()=>{await mount();expect(api.operation.mock.calls.some(call=>call[0]==='log.list')).toBe(false);expect(api.operation.mock.calls.filter(call=>call[0]==='log.calendar').length).toBeGreaterThan(0);});
 it('makes occupied days one mosaic target and opens a chooser for multiple entries',async()=>{const date=Temporal.Now.plainDateISO().toString();const entry=(id:string)=>({id,date,title:id,recurrence:'none',contributors:[{name:'Me',note:'note',files:[]}],createdAt:'2026-01-01T00:00:00Z'});api.operation.mockImplementation(async(name,input)=>name==='log.calendar'?calendarPage(input,[entry('one'),entry('two')]):{items:name==='log.list'?[entry('one'),entry('two')]:[],nextCursor:null});await mount();const day=dom.container.querySelector<HTMLButtonElement>('.log-day:has(.log-day-mosaic)')!;expect(day.querySelectorAll('.log-day-mosaic>span')).toHaveLength(2);expect(day.querySelector('button')).toBeNull();await act(async()=>day.click());expect(dom.container.querySelector('.log-day-picker')?.textContent).toContain('one');expect(dom.container.querySelector('.log-day-picker')?.textContent).toContain('two');});
+it('keeps a day arrow clickable during neighbor lookup, then hides it at the end',async()=>{
+ const today=Temporal.Now.plainDateISO(),a=today.subtract({days:10}).toString(),b=today.subtract({days:9}).toString(),c=today.subtract({days:8}).toString();
+ const entries=[{id:'a1',date:a,title:'First',createdAt:'2026-01-01T00:00:00Z'},{id:'a2',date:a,title:'Second',createdAt:'2026-01-01T01:00:00Z'},{id:'b',date:b,title:'Middle',createdAt:'2026-01-02T00:00:00Z'},{id:'c',date:c,title:'Last',createdAt:'2026-01-03T00:00:00Z'}];
+ let finishFirst!:(page:any)=>void,finishNext!:(page:any)=>void;
+ api.operation.mockImplementation((name,input)=>{
+  if(name==='log.calendar')return Promise.resolve(calendarPage(input,entries));
+  if(name!=='log.list')return Promise.resolve({items:[],nextCursor:null});
+  if(input.calendarDay)return Promise.resolve({items:entries.filter(entry=>entry.date===input.calendarDay),nextCursor:null});
+  const match=input.order==='oldest'?[a,b,c].find(date=>date>=input.from):[c,b,a].find(date=>date<=input.through);
+  if(input.order==='oldest'&&input.from===b)return new Promise(resolve=>{finishFirst=resolve;});
+  if(input.order==='oldest'&&input.from===c)return new Promise(resolve=>{finishNext=resolve;});
+  return Promise.resolve({items:match?[{id:`day:${match}`,date:match}]:[],nextCursor:null});
+ });
+ await mount();
+ const first=dom.container.querySelector<HTMLElement>('.log-day:has(.log-day-mosaic>span:nth-child(2))')!;
+ await act(async()=>first.click());
+ const firstPending=dom.container.querySelector<HTMLButtonElement>('.log-day-next[data-pending]')!;expect(firstPending).toBeTruthy();
+ await act(async()=>{firstPending.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,button:0}));firstPending.click();});
+ expect(dom.container.querySelector('.log-day-picker')?.getAttribute('aria-label')).toBe(`Entries for ${a}`);
+ await act(async()=>finishFirst({items:[{id:'day:b',date:b}],nextCursor:null}));
+ expect(dom.container.querySelector('.log-day-picker')?.getAttribute('aria-label')).toBe(`Entries for ${b}`);
+ const pending=dom.container.querySelector<HTMLButtonElement>('.log-day-next[data-pending]')!;expect(pending).toBeTruthy();
+ await act(async()=>{pending.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,button:0}));pending.click();});
+ expect(dom.container.querySelector('.log-day-picker')?.getAttribute('aria-label')).toBe(`Entries for ${b}`);
+ await act(async()=>finishNext({items:[{id:'day:c',date:c}],nextCursor:null}));
+ expect(dom.container.querySelector('.log-day-picker')?.getAttribute('aria-label')).toBe(`Entries for ${c}`);
+ const guard=dom.container.querySelector<HTMLElement>('.log-day-next.log-day-guard')!;expect(guard).toBeTruthy();
+ expect(dom.container.querySelector('.log-day-next[aria-label="Next day"]')).toBeNull();
+ await act(async()=>guard.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,button:0})));
+ expect(dom.container.querySelector('.log-day-picker')?.getAttribute('aria-label')).toBe(`Entries for ${c}`);
+});
 
 it('shows a birthday marker and opens that person without creating a synthetic hangout',async()=>{const date=Temporal.Now.plainDateISO().add({days:1}),openPerson=vi.fn();api.operation.mockImplementation(async(name)=>name==='log.birthdays'?{items:[{personId:'friend',name:'Friend',month:date.month,day:date.day}]}:{items:[],nextCursor:null});await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogCalendar,{...props,openPerson}))));const button=[...dom.container.querySelectorAll<HTMLButtonElement>('.log-day')].find(button=>button.getAttribute('aria-label')?.includes("Friend's birthday"))!;expect(button).toBeTruthy();await act(async()=>button.click());expect(openPerson).toHaveBeenCalledWith('friend');expect(api.operation.mock.calls.some(call=>call[0]==='log.create')).toBe(false);});
 

@@ -17,5 +17,5 @@ export function useLogDayNeighbors(date:string|null,filters:Partial<LogList>,act
   void Promise.all([through?read({through,order:'newest'}):Promise.resolve(null),from?read({from,order:'oldest'}):Promise.resolve(null)]).then(([previous,next])=>{if(ticket===current.current)setDays({date,previous:previous&&previous<date?previous:null,next:next&&next>date?next:null});}).catch(error=>{if(!controller.signal.aborted){console.error('Log day navigation:',error instanceof Error?error.message:'Unavailable');if(ticket===current.current)setDays({date,previous:null,next:null});}});
   return()=>{current.current++;controller.abort();};
  },[date,signature,active,revision]);
- return days.date===date?days:{date,previous:null,next:null};
+ return days.date===date?{...days,pending:false}:{date,previous:null,next:null,pending:active&&Boolean(date)};
 }

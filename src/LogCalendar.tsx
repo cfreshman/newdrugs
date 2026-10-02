@@ -39,12 +39,18 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
  const [anchor]=useState(()=>logWeekStart(month?Temporal.PlainDate.from(`${month}-01`).add({months:1}).subtract({days:1}):today));
  const [birthdays,setBirthdays]=useState<BirthdayPerson[]>([]),[ownBirthday,setOwnBirthday]=useState<OwnBirthday|null>(null);
  const [weeks,setWeeks]=useState(LOG_WEEK_BATCH),[selectedDay,setSelectedDay]=useState<string|null>(initialDay||null),[wanted,setWanted]=useState([0,1]);
+ const pendingDayIntent=useRef<'previous'|'next'|null>(null);
  useLayoutEffect(()=>setSelectedDay(initialDay||null),[initialDay]);
- const changeDay=useCallback((date:string|null)=>{setSelectedDay(date);actions.current.onDayChange?.(date||undefined);},[]);
+ const changeDay=useCallback((date:string|null)=>{pendingDayIntent.current=null;setSelectedDay(date);actions.current.onDayChange?.(date||undefined);},[]);
  const closeDay=useCallback(()=>changeDay(null),[changeDay]);
  const chooseEntry=useCallback((entry:LogEntry|LogCalendarTile)=>{changeDay(null);openEntry(entry);},[changeDay,openEntry]);
  const filters={scope,...(query?{query}:{}),...(personId?{personId}:{})};
  const neighboringDays=useLogDayNeighbors(selectedDay,filters,visible&&Boolean(selectedDay));
+ useEffect(()=>{
+  if(!selectedDay||neighboringDays.date!==selectedDay||neighboringDays.pending)return;
+  const intent=pendingDayIntent.current;pendingDayIntent.current=null;
+  if(intent&&neighboringDays[intent])changeDay(neighboringDays[intent]);
+ },[selectedDay,neighboringDays.date,neighboringDays.pending,neighboringDays.previous,neighboringDays.next,changeDay]);
  const {days:calendarDays,busy,error,retry,cachedChunks}=useLogCalendarData(anchor,today.toString(),filters,wanted,visible);
  useEffect(()=>{actions.current.onPreviews?.([...new Map([...calendarDays.values()].flatMap(day=>day.items).map(entry=>[entry.id,entry])).values()]);},[calendarDays]);
  const append=()=>setWeeks(value=>value+LOG_WEEK_BATCH);
@@ -117,6 +123,6 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
   <LogCalendarHeader><button type="button" className="log-weekday-row" aria-label="Scroll calendar to top" onClick={()=>root.current?.closest<HTMLElement>('.composer-view')?.scrollTo({top:0,behavior:'smooth'})}><span/>{['S','M','T','W','T','F','S'].map((day,index)=><span className="log-weekday" key={index}>{day}</span>)}<span/></button></LogCalendarHeader>
   {grid}
   <div ref={sentinel} className="log-calendar-edge" aria-live="polite">{busy?<CircleNotch className="spin spinner-immediate" size={22} aria-label="Loading older weeks"/>:error?<><p className="error">{error}</p><button onClick={retry}>Try again</button></>:<button onClick={append}>Older weeks</button>}</div>
-  {selectedDay&&<LogDayDialog active={visible} anchor={root} close={closeDay} previous={neighboringDays.previous?()=>changeDay(neighboringDays.previous):undefined} next={neighboringDays.next?()=>changeDay(neighboringDays.next):undefined} previousTo={neighboringDays.previous?{view:'log',date:neighboringDays.previous,logScope:scope,query:query||undefined,personId}:undefined} nextTo={neighboringDays.next?{view:'log',date:neighboringDays.next,logScope:scope,query:query||undefined,personId}:undefined}><LogCalendarDay key={selectedDay} date={selectedDay} today={today.toString()} filters={filters} previews={onDay(selectedDay)} openPreview={chooseEntry} open={chooseEntry}>{birthdaysOn(selectedDay).map(person=><NavLink className="log-day-choice" key={`birthday:${person.personId}`} to={{view:'person',resourceId:person.personId}} navigate={()=>showPerson(person.personId)}><Cake size={24}/><span>{person.handle||person.name}’s birthday</span></NavLink>)}</LogCalendarDay></LogDayDialog>}
+  {selectedDay&&<LogDayDialog active={visible} anchor={root} close={closeDay} previous={neighboringDays.previous?()=>changeDay(neighboringDays.previous):undefined} next={neighboringDays.next?()=>changeDay(neighboringDays.next):undefined} pendingPrevious={neighboringDays.pending?()=>{pendingDayIntent.current='previous';}:undefined} pendingNext={neighboringDays.pending?()=>{pendingDayIntent.current='next';}:undefined} previousTo={neighboringDays.previous?{view:'log',date:neighboringDays.previous,logScope:scope,query:query||undefined,personId}:undefined} nextTo={neighboringDays.next?{view:'log',date:neighboringDays.next,logScope:scope,query:query||undefined,personId}:undefined}><LogCalendarDay key={selectedDay} date={selectedDay} today={today.toString()} filters={filters} previews={onDay(selectedDay)} openPreview={chooseEntry} open={chooseEntry}>{birthdaysOn(selectedDay).map(person=><NavLink className="log-day-choice" key={`birthday:${person.personId}`} to={{view:'person',resourceId:person.personId}} navigate={()=>showPerson(person.personId)}><Cake size={24}/><span>{person.handle||person.name}’s birthday</span></NavLink>)}</LogCalendarDay></LogDayDialog>}
  </div>;
 }
