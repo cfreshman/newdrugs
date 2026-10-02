@@ -56,6 +56,38 @@ it('removes only the safe-area inset when iOS shrinks both heights, and restores
   expect(node.style.getPropertyValue('--orb-size')).toBe('');
   expect(node.style.getPropertyValue('--orb-radius')).toBe('');
 });
+it('restores the mobile viewport when the closing keyboard sends no final resize', () => {
+  vi.useFakeTimers();
+  try {
+    document.documentElement.style.setProperty('--safe-area-bottom', '34px');
+    act(() => dom.root.render(createElement(Probe)));
+    const node = dom.container.firstElementChild as HTMLElement;
+    act(() => { dom.container.querySelector('textarea')!.focus(); vi.stubGlobal('innerHeight', 360); viewport.height = 360; viewport.offsetTop = 240; viewport.dispatchEvent(new Event('resize')); });
+    expect(node.style.getPropertyValue('--viewport-height')).toBe('360px');
+    act(() => dom.container.querySelector('textarea')!.blur());
+    act(() => vi.advanceTimersByTime(500));
+    expect(controls.keyboardOpen).toBe(false);
+    expect(node.style.getPropertyValue('--viewport-height')).toBe('844px');
+    expect(node.style.getPropertyValue('--viewport-top')).toBe('0px');
+    expect(node.style.getPropertyValue('--safe-area-bottom')).toBe('');
+    act(() => viewport.dispatchEvent(new Event('resize')));
+    expect(node.style.getPropertyValue('--viewport-height')).toBe('844px');
+  } finally { vi.useRealTimers(); }
+});
+it('reads recovered viewport values after blur even without a resize event', () => {
+  vi.useFakeTimers();
+  try {
+    act(() => dom.root.render(createElement(Probe)));
+    const node = dom.container.firstElementChild as HTMLElement;
+    act(() => { dom.container.querySelector('textarea')!.focus(); viewport.height = 360; viewport.offsetTop = 240; viewport.dispatchEvent(new Event('resize')); });
+    act(() => dom.container.querySelector('textarea')!.blur());
+    viewport.height = 844;viewport.offsetTop = 0;
+    act(() => vi.advanceTimersByTime(500));
+    expect(controls.keyboardOpen).toBe(false);
+    expect(node.style.getPropertyValue('--viewport-height')).toBe('844px');
+    expect(node.style.getPropertyValue('--viewport-top')).toBe('0px');
+  } finally { vi.useRealTimers(); }
+});
 it('does not mistake pinch zoom or browser chrome for the keyboard', () => {
   document.documentElement.style.setProperty('--safe-area-bottom', '34px');
   act(() => dom.root.render(createElement(Probe)));
