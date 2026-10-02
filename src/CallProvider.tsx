@@ -25,7 +25,7 @@ function chime(context:AudioContext,frequency:number,at:number,volume:number){
  tone.connect(gain);gain.connect(context.destination);tone.start(at);tone.stop(at+.33);tone.onended=()=>{tone.disconnect();gain.disconnect();};
 }
 
-export function CallProvider({userId,children}:{userId?:string;children:ReactNode}){
+export function CallProvider({userId,beforeEnter,children}:{userId?:string;beforeEnter?:()=>Promise<void>;children:ReactNode}){
  const [active,setActive]=useState<ActiveCall>({call:null,otherName:''}),[access,setAccess]=useState<CallAccess|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const generation=useRef(0),autoOpen=useRef<string|null>(null),entering=useRef(false);
  const audioContext=useRef<AudioContext|null>(null),[audioReady,setAudioReady]=useState(false);
@@ -50,10 +50,10 @@ export function CallProvider({userId,children}:{userId?:string;children:ReactNod
   const ring=()=>{if(count>=10){if(timer)clearInterval(timer);return;}if(document.hidden||context.state!=='running')return;count++;const at=context.currentTime+.02;chime(context,incoming?523.25:440,at,.024);chime(context,incoming?659.25:523.25,at+.22,.018);};
   ring();timer=setInterval(ring,period);return()=>clearInterval(timer);
  },[active.call?.id,active.call?.status,audioReady,userId]);
- const enter=async(call:CallRecord)=>{if(entering.current)return;entering.current=true;setBusy(true);setError('');try{const granted=await post<CallAccess>(`/calls/${call.id}/token`);if(granted.call.status==='connected')setAccess(granted);}catch(cause){setError(errorText(cause));throw cause;}finally{entering.current=false;setBusy(false);}};
+ const enter=async(call:CallRecord)=>{if(entering.current)return;entering.current=true;setBusy(true);setError('');try{await beforeEnter?.();const granted=await post<CallAccess>(`/calls/${call.id}/token`);if(granted.call.status==='connected')setAccess(granted);}catch(cause){setError(errorText(cause));throw cause;}finally{entering.current=false;setBusy(false);}};
  useEffect(()=>{const call=active.call;if(!call||call.status!=='connected'||autoOpen.current!==call.id||access||entering.current)return;autoOpen.current=null;void enter(call).catch(()=>{});},[active.call?.id,active.call?.status,access]);
  const start=async(connectionId:string,otherName:string)=>{if(busy)return;setBusy(true);setError('');try{const {call}=await post<{call:CallRecord}>(`/calls/${encodeURIComponent(connectionId)}`);generation.current++;autoOpen.current=call.callerId===userId&&call.status==='waiting'?call.id:null;setActive({call,otherName});changed();void refresh();}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};
- const answer=async(call:CallRecord)=>{if(busy)return;setBusy(true);setError('');try{const result=await post<{call:CallRecord}>(`/calls/${call.id}/join`);generation.current++;setActive(previous=>({...previous,call:result.call}));changed();const granted=await post<CallAccess>(`/calls/${call.id}/token`);setAccess(granted);void refresh();}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};
+ const answer=async(call:CallRecord)=>{if(busy)return;setBusy(true);setError('');try{await beforeEnter?.();const result=await post<{call:CallRecord}>(`/calls/${call.id}/join`);generation.current++;setActive(previous=>({...previous,call:result.call}));changed();const granted=await post<CallAccess>(`/calls/${call.id}/token`);setAccess(granted);void refresh();}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};
  const open=async(call:CallRecord)=>{if(call.status!=='connected'||busy)return;await enter(call);};
  const end=async(call:CallRecord)=>{if(busy)return;setBusy(true);setError('');try{await post(`/calls/${call.id}/end`);generation.current++;autoOpen.current=null;setAccess(previous=>previous?.call.id===call.id?null:previous);setActive(previous=>previous.call?.id===call.id?{call:null,otherName:''}:previous);changed();void refresh();}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};
  const value:CallControls={...active,userId,busy,error,start,answer,open,end};
