@@ -1,5 +1,6 @@
 import { textLinks } from '../shared/links';
 import { enqueueInboxPush } from './push';
+import {notificationEnabled} from './notificationSettings';
 import { randomUUID } from 'node:crypto';
 import type { ClientSession } from 'mongodb';
 import { rows } from './db';
@@ -43,8 +44,10 @@ export async function publishInbox(userId: string, data: { title: string; body: 
   if (await inboxRows().countDocuments({ userId }, { session, limit: 2000 }) >= 2000) throw new AppError(409, 'inbox_full', 'Your agent inbox is full. Delete old updates to make room.');
   const row: InboxRow = { _id: randomUUID(), userId: owner._id, ...data, producer, createdAt: new Date().toISOString(), readAt: null, archivedAt: null, ...origin };
   await inboxRows().insertOne(row, { session });
-  await rows('notifications').insertOne({ _id: `inbox:${row._id}`, userId, actorId: userId, kind: 'agent_update', inboxId: row._id, title: row.title, text: 'An agent update is ready.', readAt: null, createdAt: row.createdAt }, { session });
-  if (owner.inboxPushEnabled) await enqueueInboxPush(userId, row._id, session);
+  if(await notificationEnabled(userId,'agent_update',session)){
+    await rows('notifications').insertOne({ _id: `inbox:${row._id}`, userId, actorId: userId, kind: 'agent_update', inboxId: row._id, title: row.title, text: 'An agent update is ready.', readAt: null, createdAt: row.createdAt }, { session });
+    await enqueueInboxPush(userId, row._id, session);
+  }
   return inboxView(row);
 }
 export async function inboxOperation(name: string, data: Record<string, unknown>, actor: Actor, session?: ClientSession) {

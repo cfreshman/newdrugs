@@ -27,6 +27,7 @@ import { retainUploads, ownUpload, fileInput } from './uploads';
 import { AGENT_WRITING_POLICY } from '../shared/agentWriting';
 import { AGENT_ETHOS } from '../shared/agentEthos';
 import { AGENT_DISCOVERY_POLICY } from '../shared/agentDiscovery';
+import {enqueueReviewPush} from './push';
 import { LOCATION_METHOD } from '../shared/geo';
 
 const instructions = `You are the agent in New Drugs, a social app made in New England. Help the person connect with real people and act on their requests. Be brief, specific and natural. No sales pitch, canned onboarding, therapy jargon, fake people or engagement bait.
@@ -85,6 +86,7 @@ async function update(run: RunRecord, values: Partial<RunRecord>) {
 }
 async function release(run: RunRecord, status: RunRecord['status'], delay = 800) {
   await update(run, { status, nextAttempt: Date.now() + delay, leaseUntil: 0 });
+  if(status==='waiting_for_approval')await enqueueReviewPush(run.userId,run._id).catch(error=>console.error('Review push:',error instanceof Error?error.name:'Error'));
 }
 export async function decideApprovals(userId: string, runId: string, revision: number, decisions: { id: string; approved: boolean }[]) {
   return transaction(async session => {

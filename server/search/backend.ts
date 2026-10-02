@@ -15,6 +15,7 @@ export type RetrievalCondition=Record<string,unknown>;
 export interface RetrievalFilter {must?:RetrievalCondition[];must_not?:RetrievalCondition[];should?:RetrievalCondition[]}
 export const retrievalEnabled=()=>Boolean(config.QDRANT_URL);
 const gate=workGate(8,128),initializing=new Map<string,Promise<void>>();
+const notificationCollection=()=>`${config.SEARCH_NAMESPACE}_${config.APP_ENV}_notification_rules_v1`;
 const collection=(kind:RetrievalKind)=>`${config.SEARCH_NAMESPACE}_${config.APP_ENV}_${kind==='public'?'public':'private'}_v2`;
 export function retrievalPointId(id:string){const hex=createHash('sha256').update(id).digest('hex').slice(0,32);return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;}
 async function request<T>(path:string,method='GET',body?:unknown):Promise<T>{
@@ -26,6 +27,21 @@ async function request<T>(path:string,method='GET',body?:unknown):Promise<T>{
   if(!response.ok)throw Error(`retrieval_http_${response.status}`);
   const value=await response.json() as {result:T};return value.result;
  });
+}
+export async function ensureNotificationRuleCollection(){
+ const name=notificationCollection(),key=`${config.QDRANT_URL}:${name}`;
+ let pending=initializing.get(key);if(pending)return pending;
+ pending=(async()=>{const exists=await request<{exists:boolean}>(`/collections/${name}/exists`);if(!exists.exists)await request(`/collections/${name}`,'PUT',{vectors:{size:DIMENSIONS,distance:'Cosine',on_disk:true},on_disk_payload:true,hnsw_config:{on_disk:true,max_indexing_threads:1}});await request(`/collections/${name}/index?wait=true`,'PUT',{field_name:'kind',field_schema:'keyword'});})().catch(error=>{initializing.delete(key);throw error;});initializing.set(key,pending);return pending;
+}
+export async function upsertNotificationRuleVector(id:string,kind:string,vector:number[]){
+ if(vector.length!==DIMENSIONS||!vector.every(Number.isFinite))throw Error('notification_vector_invalid');
+ await ensureNotificationRuleCollection();await request(`/collections/${notificationCollection()}/points?wait=true&ordering=strong`,'PUT',{points:[{id:retrievalPointId(`notification:${id}`),vector,payload:{id,kind}}]});
+}
+export async function deleteNotificationRuleVector(id:string){await ensureNotificationRuleCollection();await request(`/collections/${notificationCollection()}/points/delete?wait=true&ordering=strong`,'POST',{points:[retrievalPointId(`notification:${id}`)]});}
+export async function matchNotificationRules(kind:string,vector:number[],offset=0,limit=50){
+ if(vector.length!==DIMENSIONS||!vector.every(Number.isFinite))throw Error('notification_vector_invalid');
+ await ensureNotificationRuleCollection();const result=await request<{points:{score:number;payload:{id?:string}}[]}>(`/collections/${notificationCollection()}/points/query`,'POST',{query:vector,filter:{must:[{key:'kind',match:{value:kind}}]},score_threshold:0.55,offset,limit,with_payload:['id'],with_vector:false,params:{hnsw_ef:128},timeout:8});
+ return result.points.flatMap(point=>typeof point.payload?.id==='string'&&Number.isFinite(point.score)?[{id:point.payload.id,score:point.score}]:[]);
 }
 export async function ensureRetrievalCollection(kind:RetrievalKind){
  const name=collection(kind),key=`${config.QDRANT_URL}:${name}`;

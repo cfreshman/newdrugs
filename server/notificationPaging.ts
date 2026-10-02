@@ -13,8 +13,8 @@ export async function notificationLanes(userId:string,blocked:string[],recordSta
  let positions:Position[]=[null,null,null,null];
  if(before){try{const cursor=cursorSchema.parse(JSON.parse(Buffer.from(before,'base64url').toString()));if(cursor.userId!==userId)throw Error();positions=cursor.positions;}catch{throw new AppError(422,'notification_cursor','Reload notifications.');}}
  const specs:{collection:string;filter:Filter<Row>;stages:Document[];invites:boolean}[]=[
-  {collection:'connections',filter:{toId:userId,status:'pending',notificationReadAt:null},stages:[{$match:{fromId:{$nin:blocked}}},...unsuspendedActors('fromId')],invites:true},
-  {collection:'connections',filter:{toId:userId},stages:[{$match:{fromId:{$nin:blocked},$or:[{status:{$ne:'pending'}},{notificationReadAt:{$ne:null}}]}},...unsuspendedActors('fromId')],invites:true},
+  {collection:'connections',filter:{toId:userId,status:'pending',notificationReadAt:null,notificationEnabled:{$ne:false}},stages:[{$match:{fromId:{$nin:blocked}}},...unsuspendedActors('fromId')],invites:true},
+  {collection:'connections',filter:{toId:userId,notificationEnabled:{$ne:false}},stages:[{$match:{fromId:{$nin:blocked},$or:[{status:{$ne:'pending'}},{notificationReadAt:{$ne:null}}]}},...unsuspendedActors('fromId')],invites:true},
   {collection:'notifications',filter:{userId,readAt:null},stages:[{$match:{actorId:{$nin:blocked}}},...recordStages],invites:false},
   {collection:'notifications',filter:{userId},stages:[{$match:{actorId:{$nin:blocked},readAt:{$ne:null}}},...recordStages],invites:false},
  ];

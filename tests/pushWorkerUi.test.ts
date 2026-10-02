@@ -23,6 +23,13 @@ it('keeps Log destinations and generic hangout notices in push',async()=>{
 it('keeps the generic first-contribution push text without revealing the note',async()=>{
  const events:Record<string,(event:any)=>void>={},showNotification=vi.fn().mockResolvedValue(undefined);runInNewContext(code,{URL,self:{location:{origin:'https://druggie.org'},addEventListener:(name:string,fn:(event:any)=>void)=>{events[name]=fn;},registration:{showNotification}}});let work:Promise<void>|undefined;events.push({data:{json:()=>({url:'/log/hangout-id',body:'Someone added to a hangout.'})},waitUntil:(p:Promise<void>)=>{work=p;}});await work;expect(showNotification).toHaveBeenCalledWith('Notification',expect.objectContaining({body:'Someone added to a hangout.',data:{path:'/log/hangout-id'}}));
 });
+it('shows the named Circle person and exact profile destination for an alert',async()=>{
+ const events:Record<string,(event:any)=>void>={},showNotification=vi.fn().mockResolvedValue(undefined);
+ runInNewContext(code,{URL,self:{location:{origin:'https://druggie.org'},addEventListener:(name:string,fn:(event:any)=>void)=>{events[name]=fn;},registration:{showNotification}}});
+ const icon='/api/files/12345678-1234-4234-8234-123456789abc';let work:Promise<void>|undefined;
+ events.push({data:{json:()=>({kind:'alert',url:'/people/me',body:'@me is in your Circle. 2 mutual friends: @friend',icon})},waitUntil:(promise:Promise<void>)=>{work=promise;}});await work;
+ expect(showNotification).toHaveBeenCalledWith('Notification',expect.objectContaining({body:'@me is in your Circle. 2 mutual friends: @friend',icon,data:{path:'/people/me'}}));
+});
 
 it('opens the notification panel on a cold push launch while retaining the exact destination',async()=>{
  const events:Record<string,(event:any)=>void>={},openWindow=vi.fn().mockResolvedValue(undefined);runInNewContext(code,{URL,self:{location:{origin:'https://druggie.org'},addEventListener:(name:string,fn:(event:any)=>void)=>{events[name]=fn;},clients:{matchAll:async()=>[],openWindow}}});let work:Promise<void>|undefined;

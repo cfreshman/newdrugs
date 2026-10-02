@@ -3,6 +3,7 @@ import type {ClientSession} from 'mongodb';
 import {rows,transaction} from './db';
 import {users} from './auth';
 import {AppError} from './errors';
+import {enqueueNotificationEvent} from './notificationEvents';
 
 interface Edge {_id:string;members:string[];status:string}
 interface Path {_id:string;pairId:string;members:string[];via:string;edgeIds:string[]}
@@ -34,7 +35,7 @@ async function addPage(job:Job){
    if(blockedIds.has(neighbor.edgeId)||!availableIds.has(neighbor.id))continue;
    const members=[other,neighbor.id].sort(),pairId=circlePairId(other,neighbor.id),_id=`${pairId}:${via}`;
    const inserted=await paths().updateOne({_id},{$setOnInsert:{pairId,members,via,edgeIds:[job.edgeId,neighbor.edgeId]}},{upsert:true,session});
-   if(inserted.upsertedCount)await pairs().updateOne({_id:pairId},[{
+   if(inserted.upsertedCount){const updated=await pairs().findOneAndUpdate({_id:pairId},[{
     $set:{
      members,
      mutualCount:{$add:[{$ifNull:['$mutualCount',0]},1]},
@@ -43,7 +44,9 @@ async function addPage(job:Job){
       in:{$cond:[{$in:[via,'$$prior']},'$$prior',{$slice:[{$concatArrays:['$$prior',[via]]},3]}]},
      }},
     },
-   }],{upsert:true,session});
+   }],{upsert:true,session,returnDocument:'after'});
+    if(updated?.mutualCount)for(const recipientId of members)await enqueueNotificationEvent('circle_new',members.find(id=>id!==recipientId)!,members.find(id=>id!==recipientId)!,session,{recipientId,mutualCount:updated.mutualCount});
+   }
   }
   if(page.length<50){
    if(job.phase===1)await jobs().deleteOne({_id:job._id},{session});

@@ -7,6 +7,7 @@ import {appearanceMode} from './appearance';
 import {ownBirthdaySchema} from './logBirthday';
 import {logCodeSchema} from './logJoining';
 import {logDate,logFields,logFieldPatch,logContribution,logContributionPatch,logListInput,logPreferencesSchema} from './log';
+import {notificationType,notificationRule} from './notificationSettings';
 import {makeProjectInput} from './make';
 import {activityInput,timeResolveInput,timeConvertInput,timeOverlapInput} from './utilitySchemas';
 import {postLinksSchema} from './postLinks';
@@ -195,6 +196,12 @@ export const operations = [
   operation('activity.since','read','Catch up on incoming social activity since a timestamp: received invitations, current responses to invitations you sent, received DMs, and likes/replies to your posts. Paginated by event time with a fixed until boundary. Snippets are capped and labeled when truncated. Uses current authorized source records, not an immutable audit log; removed, rescinded, blocked and moderated events are omitted. Does not expose private AI chat or agent inbox. Does not mark anything read. Background agents need accountActivity.',activityInput.shape),
   operation('notifications.list', 'read', 'Read up to 100 recent notifications, including read message/reaction/reply notifications and resolved invitations, with exact app destinations. Unread items come first; read items remain clickable history. Follow nextCursor as before to read another bounded page, including when a page is empty. unread counts eligible unread candidates examined for this page, not all history; unreadCapped means it is only a lower bound. Conversation message notifications are grouped by conversation.', {before:z.string().max(4000).optional()}),
   operation('notifications.read', 'write', 'Mark one notification read without deleting it from history. Reading an invitation does not accept or decline it. Required agent reviews remain unread until resolved.', { notificationId: z.string().min(1).max(200) }),
+  operation('notifications.preferences','read','Read which notification types are enabled. Enabled events appear in Notifications and also reach devices with push permission.',{}),
+  operation('notifications.preference_set','write','Enable or disable one notification type for future events. Existing history remains. Enabled events also reach devices with push permission.',{type:notificationType,enabled:z.boolean()}),
+  operation('notifications.rules','read','List your saved exact notification watches, newest first. Follow nextCursor as before. Rules are private to your account. No semantic People-match alerts or duplicate in-room Talk alerts are offered.',{before:z.string().max(200).optional()}),
+  operation('notifications.rule_create','write','Create one private notification watch for a person opening a Talk or posting, a new Talk/post matching a topic, a chosen thread, Circle, birthday, Log anniversary, low credit or high storage. Each rule starts enabled. Person watches use stable IDs. This does not notify the watched person.',{rule:notificationRule}),
+  operation('notifications.rule_set','write','Enable or disable one saved notification watch, using its current revision.',{ruleId:z.uuid(),revision:z.number().int().positive(),enabled:z.boolean()}),
+  operation('notifications.rule_delete','write','Delete one saved notification watch by ID and current revision. It does not delete past notifications.',{ruleId:z.uuid(),revision:z.number().int().positive()}),
   operation('people.block', 'write', 'Block or unblock someone. Blocking prevents contact and hides their profile and posts from you.', { personId: id, blocked: z.boolean() }),
   operation('people.blocked', 'read', 'List people you have blocked so you can manage your own block list. Does not expose who has blocked you.', { ...page }),
   operation('people.report', 'write', 'Report a person, optionally attaching one exact postId or received messageId as evidence. Only that submitted content is shared with the operator, not the rest of a conversation. Does not claim a human has reviewed it.', { personId: id, reason: text(1000), postId:id.optional(), messageId:id.optional() }),

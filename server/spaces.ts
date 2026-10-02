@@ -10,6 +10,7 @@ import {AppError,requireValue} from './errors';
 import {liveMediaReady,liveRoomService} from './calling';
 import {queueLiveMediaEffect} from './liveMediaEffects';
 import {enqueueSearch} from './search/queue';
+import {enqueueNotificationEvent} from './notificationEvents';
 
 interface SpaceRow {_id:string;title:string;description:string;hostId:string;status:'live'|'ended';revision:number;createdAt:string;endedAt?:string;speakerIds:string[];hostOffer?:{id:string;toId:string;createdAt:string;expiresAt:string}}
 interface PresenceRow {_id:string;spaceId:string;userId:string;sid:string;joinedAt:string}
@@ -54,9 +55,13 @@ export async function spaceOperation(name:string,d:Record<string,unknown>,actor:
  if(name==='spaces.create'){
   if(!liveMediaReady())throw new AppError(503,'spaces_unavailable','Live Talk is not available yet.');
   if(await spaces().findOne({hostId:userId,status:'live'},{session,projection:{_id:1}}))throw new AppError(409,'space_active','End your current Talk space before opening another.');
+  if(session)await rows<{_id:string;revision:number;lastFirstAt?:string}>('notificationFences').updateOne({_id:'talk-live'},{$inc:{revision:1}},{upsert:true,session});
+  const firstLive=!await spaces().findOne({status:'live'},{session,projection:{_id:1}}),fence=firstLive?await rows<{_id:string;lastFirstAt?:string}>('notificationFences').findOne({_id:'talk-live'},{session}):null;
+  const announceFirst=firstLive&&(!fence?.lastFirstAt||Date.now()-Date.parse(fence.lastFirstAt)>=15*60000);
+  if(announceFirst&&session)await rows<{_id:string;lastFirstAt:string}>('notificationFences').updateOne({_id:'talk-live'},{$set:{lastFirstAt:now}},{session});
   const row:SpaceRow={_id:randomUUID(),hostId:userId,title:String(d.title).trim(),description:String(d.description).trim(),status:'live',revision:1,createdAt:now,speakerIds:[userId]};
   try{await spaces().insertOne(row,{session});}catch(error){if((error as {code?:number}).code===11000)throw new AppError(409,'space_active','End your current Talk space before opening another.');throw error;}
-  if(session)await enqueueSearch('spaces',row._id,session);
+  if(session){await enqueueSearch('spaces',row._id,session);await enqueueNotificationEvent('talk_open',userId,row._id,session);if(announceFirst)await enqueueNotificationEvent('talk_first_live',userId,row._id,session);}
   return project(row,userId,session);
  }
  const row=await owned(userId,String(d.spaceId),session);
@@ -116,6 +121,7 @@ export async function spaceOperation(name:string,d:Record<string,unknown>,actor:
   await event([userId,offer.toId],session);return project(row,userId,session);
  }
  if(name==='spaces.end'){
+  if(session)await rows<{_id:string;revision:number}>('notificationFences').updateOne({_id:'talk-live'},{$inc:{revision:1}},{upsert:true,session});
   row.status='ended';row.endedAt=now;delete row.hostOffer;row.revision++;await spaces().replaceOne({_id:row._id,revision:Number(d.revision)},row,{session});await presence().deleteMany({spaceId:row._id},{session});await event(row.speakerIds,session);if(session){await queueLiveMediaEffect('close',spaceRoomName(row._id),session);await enqueueSearch('spaces',row._id,session);}return project(row,userId,session);
  }
  const personId=String(d.personId);
@@ -171,7 +177,7 @@ export async function spaceWebhook(signal:{event:string;room?:{name?:string};par
  // A browser refresh briefly disconnects the host. Keep the space until its
  // explicit end or LiveKit's empty-room departure timeout.
  if(signal.event==='room_finished'){
-  await transaction(async session=>{const current=await spaces().findOne({_id:id,status:'live'},{session});if(!current)return;const now=new Date().toISOString(),present=await presence().find({spaceId:id},{session,projection:{userId:1}}).limit(101).toArray();await spaces().updateOne({_id:id,status:'live'},{$set:{status:'ended',endedAt:now},$unset:{hostOffer:''},$inc:{revision:1}},{session});await presence().deleteMany({spaceId:id},{session});await event([...current.speakerIds,...present.map(person=>person.userId)],session);await queueLiveMediaEffect('close',spaceRoomName(id),session);await enqueueSearch('spaces',id,session);});
+  await transaction(async session=>{const current=await spaces().findOne({_id:id,status:'live'},{session});if(!current)return;await rows<{_id:string;revision:number}>('notificationFences').updateOne({_id:'talk-live'},{$inc:{revision:1}},{upsert:true,session});const now=new Date().toISOString(),present=await presence().find({spaceId:id},{session,projection:{userId:1}}).limit(101).toArray();await spaces().updateOne({_id:id,status:'live'},{$set:{status:'ended',endedAt:now},$unset:{hostOffer:''},$inc:{revision:1}},{session});await presence().deleteMany({spaceId:id},{session});await event([...current.speakerIds,...present.map(person=>person.userId)],session);await queueLiveMediaEffect('close',spaceRoomName(id),session);await enqueueSearch('spaces',id,session);});
  }
 }
 /** Reconcile a bounded page of live rooms with LiveKit. Webhooks keep presence

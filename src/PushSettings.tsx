@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, post, errorText } from './api';
 
-type State = { inboxPush?: boolean; publicKey: string | null; devices: { deviceId: string }[] };
+type State = { publicKey: string | null; devices: { deviceId: string }[] };
 function deviceId() {
   const previous = localStorage.getItem('nd-push-device');
   if (previous && /^[0-9a-f-]{36}$/i.test(previous)) return previous;
@@ -54,13 +54,12 @@ export function PushSettings({ userId }: { userId: string }) {
     } catch (reason) { setError(errorText(reason)); }
     finally { setBusy(false); }
   };
-  return <div className="push-settings"><strong>Messages & invitations</strong>
+  return <div className="push-settings"><strong>Device notifications</strong>
     {ios && !standalone ? <p className="quiet">Add New Drugs to your Home Screen, then open it there to enable notifications.</p>
       : !supported ? <p className="quiet">Push notifications aren’t supported in this browser.</p>
         : !id ? <p className="quiet">Allow browser storage to enable notifications.</p>
           : state && !state.publicKey ? <p className="quiet">Push notifications aren’t available yet.</p>
             : <button className="solid" disabled={!ready || busy} onClick={() => void toggle()}>{busy ? 'Saving…' : enabled ? 'Turn off on this device' : 'Enable notifications'}</button>}
-    {state && <label className="inbox-push-choice"><input type="checkbox" checked={Boolean(state.inboxPush)} onChange={event => { const value = event.target.checked; void post('/push/preferences', { inboxPush: value }).then(() => setState(current => current && { ...current, inboxPush: value })).catch(reason => setError(errorText(reason))); }} />Also notify me about agent inbox updates</label>}
     {error && <p role="status" className="quiet">{error}</p>}
   </div>;
 }

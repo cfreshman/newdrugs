@@ -64,11 +64,12 @@ export async function registerAccount(userId: string, handle: string, encodedPas
   });
 }
 const cookieName = config.SESSION_COOKIE;
-export async function newSession(res: Response, userId: string, req?: Request) {
+export async function newSession(res: Response, userId: string, req?: Request, notifyLogin=false) {
   const token = randomBytes(32).toString('base64url');
   await rows('sessions').insertOne({ _id: hash(token), userId, expiresAt: new Date(Date.now() + 30 * 86400000) });
   if (req?.cookies?.[cookieName]) await endSession(hash(req.cookies[cookieName]));
   res.cookie(cookieName, token, { httpOnly: true, secure: config.production, sameSite: 'lax', maxAge: 30 * 86400000, path: '/' });
+  if(req&&notifyLogin)void (async()=>{const {notificationEnabled}=await import('./notificationSettings');if(!await notificationEnabled(userId,'security_login'))return;const {deliverDirectAlert}=await import('./notificationEvents');await deliverDirectAlert(userId,userId,'account',userId,'New sign-in to your account','',`security_login:${hash(token)}`);})().catch(error=>console.error('Sign-in notification:',error instanceof Error?error.name:'Error'));
 }
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
   try {

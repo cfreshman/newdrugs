@@ -146,9 +146,8 @@ export function createApp() {
   app.get('/api/events', streamLiveState);
   app.get('/api/push', async (req, res) => {
     const actor = browserActor(req), user = await currentUser(actor.userId);
-    res.json({ inboxPush: Boolean(user.inboxPushEnabled), publicKey: pushConfigured() ? config.VAPID_PUBLIC_KEY : null, devices: user.handle ? (await pushDevices(user._id)).items : [] });
+    res.json({ publicKey: pushConfigured() ? config.VAPID_PUBLIC_KEY : null, devices: user.handle ? (await pushDevices(user._id)).items : [] });
   });
-  app.post('/api/push/preferences', async (req, res) => { const actor = browserActor(req); const data = z.strictObject({ inboxPush: z.boolean() }).parse(req.body); await users().updateOne({ _id: actor.userId }, { $set: { inboxPushEnabled: data.inboxPush } }); res.json(data); });
   app.post('/api/push/subscribe', async (req, res) => {
     const actor = browserActor(req);
     res.json(await saveSubscription(actor.userId, hash(req.cookies[config.SESSION_COOKIE]), subscriptionSchema.parse(req.body)));
@@ -199,7 +198,7 @@ export function createApp() {
     const user = await users().findOne({ handle: data.handle });
     if (!await checkPassword(data.password, user?.passwordHash)) throw new AppError(401, 'credentials', 'That handle and password did not match.');
     if(user!.suspendedAt)throw new AppError(403,'account_suspended','This account is suspended.');
-    await newSession(res, user!._id, req);
+    await newSession(res, user!._id, req, true);
     await ensureIntroduction(user!._id);
     res.json({ user: profile(user!) });
   });

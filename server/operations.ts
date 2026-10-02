@@ -28,7 +28,7 @@ import { wakeRun } from './sleep';
 import { backgroundCanRead, assertBackgroundAuthority,operationAvailable } from './backgroundAuthority';
 import { inboxOperation, validateInboxLinks, ownInbox } from './inbox';
 import { enqueueChatSearch, searchChat } from './search/chat';
-import { enqueuePush, pushDevices, revokePush } from './push';
+import { enqueuePush,enqueueStoredPush, pushDevices, revokePush } from './push';
 import { ObjectId, type ClientSession, type Document } from 'mongodb';
 import { operations } from '../shared/catalog';
 import { rows, transaction, type Row } from './db';
@@ -42,6 +42,9 @@ import {prepareUpload,ownUpload,ownedUploadRef,uploads,retainUploads,discardUplo
 import { MAX_ACCOUNT_UPLOAD_BYTES } from '../shared/uploads';
 import type {UploadPurpose} from '../shared/uploads';
 import { notificationState, notifyConnection } from './notifications';
+import {notificationEnabled,notificationPreferences,setNotificationPreference,listNotificationRules,createNotificationRule,setNotificationRule,deleteNotificationRule} from './notificationSettings';
+import {enqueueNotificationEvent} from './notificationEvents';
+import type {NotificationType} from '../shared/notificationSettings';
 import { postCards } from './postProjection';
 import { linkPreview,linkText } from './linkPreviews';
 import { retainPostPhotos } from './uploads';
@@ -384,7 +387,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       await rows<{_id:string;interactionRevision:number}>('posts').updateOne({_id:post._id},{$inc:{interactionRevision:1}},options);
       const id=hash(`${userId}:${post._id}`),noticeId=hash(`post_like:${userId}:${post._id}`);
       if(d.liked){await rows('postLikes').updateOne({_id:id},{$setOnInsert:{userId,postId:post._id,createdAt:now}},{...options,upsert:true});
-        if(post.userId!==userId)await rows('notifications').updateOne({_id:noticeId},{$setOnInsert:{userId:post.userId,actorId:userId,kind:'post_like',postId:post._id,text:String(post.text).slice(0,180),readAt:null,createdAt:now}},{...options,upsert:true});
+        if(post.userId!==userId&&await notificationEnabled(String(post.userId),'post_like',session)){const inserted=await rows('notifications').updateOne({_id:noticeId},{$setOnInsert:{userId:post.userId,actorId:userId,kind:'post_like',postId:post._id,text:String(post.text).slice(0,180),readAt:null,createdAt:now}},{...options,upsert:true});if(inserted.upsertedCount)await enqueueStoredPush(String(post.userId),userId,post._id,'post_like',noticeId,session);}
       }else{await rows('postLikes').deleteOne({_id:id},options);await rows('notifications').deleteOne({_id:noticeId},options);}
       return (await postCards([post],userId,await blockedIds(userId,session),session))[0];
     }
@@ -393,7 +396,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const fileIds = await retainPostPhotos(userId, d.fileIds as string[], session);
       await rows<{_id:string;interactionRevision:number}>('posts').updateOne({_id:parent._id},{$inc:{interactionRevision:1}},options);
       const reply={_id:nextId(),userId,text:d.text,links:normalizedPostLinks(d.links),fileIds,parentId:parent._id,rootId:parent.rootId||parent._id,city:'',area:null,createdAt:now};await rows('posts').insertOne(reply,options);await enqueueSearch('posts',reply._id,session!);
-      if(parent.userId!==userId)await rows('notifications').insertOne({_id:hash(`post_reply:${reply._id}`),userId:parent.userId,actorId:userId,kind:'post_reply',postId:reply._id,text:String(d.text).slice(0,180),readAt:null,createdAt:now},options);
+      if(session)await enqueueNotificationEvent('post_reply',userId,reply._id,session,{parentId:parent._id,rootId:String(reply.rootId)});
+      if(parent.userId!==userId&&await notificationEnabled(String(parent.userId),'post_reply',session)){const noticeId=hash(`post_reply:${reply._id}`);await rows('notifications').insertOne({_id:noticeId,userId:parent.userId,actorId:userId,kind:'post_reply',postId:reply._id,text:String(d.text).slice(0,180),readAt:null,createdAt:now},options);await enqueueStoredPush(String(parent.userId),userId,reply._id,'post_reply',noticeId,session);}
       return (await postCards([reply],userId,await blockedIds(userId,session),session))[0];
     }
     case 'posts.create': {
@@ -404,6 +408,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const post = { _id: nextId(), userId, text: d.text, links:normalizedPostLinks(d.links),fileIds, area, city:area?.label||'', createdAt: now };
       await rows('posts').insertOne(post, options);
       await enqueueSearch('posts',post._id,session!);
+      if(session)await enqueueNotificationEvent('post_create',userId,post._id,session);
       return (await postCards([post],userId,[],session))[0];
     }
     case 'posts.delete': {
@@ -458,9 +463,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if (existing && ['pending','accepted'].includes(String(existing.status))) return publicRow(existing);
       if (existing?.status === 'declined' && existing.toId !== userId) throw new AppError(409, 'invitation_declined', 'This person declined. They can choose to invite you instead.');
       if (existing?.status === 'disconnected' && existing.disconnectedBy !== userId) throw new AppError(409, 'connection_ended', 'This person ended the connection. They can choose to invite you again.');
-      const connection = { _id: id, members: [userId, other], fromId: userId, toId: other, note: d.note, status: 'pending', createdAt: now, updatedAt: now, ...(existing?.initialInvitation ? { initialInvitation: existing.initialInvitation } : {}) };
+      const enabled=await notificationEnabled(other,'invitation',session);
+      const connection = { _id: id, members: [userId, other], fromId: userId, toId: other, note: d.note, status: 'pending', notificationEnabled:enabled, createdAt: now, updatedAt: now, ...(existing?.initialInvitation ? { initialInvitation: existing.initialInvitation } : {}) };
       await rows('connections').replaceOne({ _id: id }, connection, { ...options, upsert: true });
-      await enqueuePush(other, userId, id, 'invitation', now, session);
+      if(enabled)await enqueuePush(other, userId, id, 'invitation', now, session);
       return publicRow(connection);
     }
     case 'connections.respond': {
@@ -522,6 +528,12 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const items = state.items.filter(item => item.kind !== 'agent_update' && item.kind !== 'automation_status' && item.kind !== 'review');
       return {items,unread:items.filter(item=>!item.read).length,unreadCapped:state.unreadCapped,nextCursor:state.nextCursor};
     }
+    case 'notifications.preferences':return notificationPreferences(userId,session);
+    case 'notifications.preference_set':return setNotificationPreference(userId,d.type as NotificationType,Boolean(d.enabled),session);
+    case 'notifications.rules':return listNotificationRules(userId,d.before as string|undefined,session);
+    case 'notifications.rule_create':return createNotificationRule(userId,d.rule,session);
+    case 'notifications.rule_set':return setNotificationRule(userId,String(d.ruleId),Number(d.revision),Boolean(d.enabled),session);
+    case 'notifications.rule_delete':return deleteNotificationRule(userId,String(d.ruleId),Number(d.revision),session);
     case 'notifications.read': {
       const id = String(d.notificationId);
       if (id.startsWith('inbox:')) await rows('agentInbox').updateOne({ _id: id.slice(6), userId }, { $set: { readAt: now } }, options);

@@ -8,6 +8,8 @@ import {rows,transaction} from './db';
 import {users} from './auth';
 import {AppError,requireValue} from './errors';
 import {queueLiveMediaEffect} from './liveMediaEffects';
+import {notificationEnabled} from './notificationSettings';
+import {enqueueStoredPush} from './push';
 
 interface CallRow extends Omit<CallRecord,'id'> {_id:string;members:string[];active:boolean}
 const calls=()=>rows<CallRow>('calls');
@@ -47,7 +49,7 @@ export async function startCall(userId:string,connectionId:string){
   if(await calls().findOne({members:userId,active:true},{session,projection:{_id:1}}))throw new AppError(409,'call_active','End your current call before starting another.');
   const now=new Date().toISOString(),row:CallRow={_id:randomUUID(),connectionId,callerId:userId,calleeId:other,members,active:true,status:'waiting',createdAt:now};
   try{await calls().insertOne(row,{session});}catch(error){if((error as {code?:number}).code===11000)throw new AppError(409,'call_started','A call has already started in this conversation.');throw error;}
-  await rows('notifications').insertOne({_id:`call:${row._id}:${other}`,userId:other,actorId:userId,connectionId,callId:row._id,kind:'call',text:'',readAt:null,createdAt:now},{session});
+  if(await notificationEnabled(other,'call',session)){const noticeId=`call:${row._id}:${other}`;await rows('notifications').insertOne({_id:noticeId,userId:other,actorId:userId,connectionId,callId:row._id,kind:'call',text:'',readAt:null,createdAt:now},{session});await enqueueStoredPush(other,userId,connectionId,'call',noticeId,session);}
   await event(members,session);return view(row);
  });
 }
