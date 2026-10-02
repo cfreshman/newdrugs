@@ -120,6 +120,7 @@ export async function websiteOperation(name:string,input:Record<string,unknown>,
 }
 export async function websiteByCode(code:string){return sites().findOne({code});}
 export async function websiteByPreviewToken(token:string){return sites().findOne({previewToken:token});}
+export async function websitePreviewRevision(token:string){return sites().findOne({previewToken:token},{projection:{_id:1,revision:1}});}
 
 /** Download one chosen public photo before the website write transaction. */
 export async function stageWebsiteMediaImport(input:Record<string,unknown>,actor:Actor){

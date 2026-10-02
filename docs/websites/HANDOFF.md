@@ -20,6 +20,10 @@ Native personal websites are in production v0.38.1. The owner has published a si
 
 The shared catalog has `website.get`, `website.inspect`, `website.create`, `website.file`, `website.search`, `website.patch`, `website.asset.add`, `website.asset.remove`, `website.revisions`, `website.restore`, `website.preview`, `website.publish`, and `website.unpublish`. The existing CLI and MCP expose these operations. Draft and published source are separate Mongo snapshots. Source and uploaded asset paths are validated, and writes require the current revision. The profile button is present only while published.
 
+### Open draft preview refresh (queued)
+
+A local change after v0.45.2 adds a small refresh script to draft HTML responses. An open, visible preview checks a token-scoped revision endpoint every three seconds and reloads its current path when the saved revision changes. Returning to a hidden preview checks immediately. The stable preview URL is unchanged; published pages receive no script. The revision endpoint reads only the indexed token, site revision and active owner, not the site source, and uses no-store/CORS headers for the preview's sandboxed origin. Missing or revoked drafts reload to their 404 page. TypeScript and a focused isolated website check passed for localhost and draft-host routes, revision change, script behavior and published separation. Deployment remains queued under the no-isolated-fix rule.
+
 ### Website deletion
 
 Production v0.41.1 (`20261002102636429`) and cloud dev `20261002102151097` add `website.delete` to the hosted Agent, CLI and MCP. No real account's website was deleted during this work.

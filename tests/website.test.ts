@@ -57,6 +57,41 @@ it('keeps a stable preview, revisioned draft and separate published snapshot acr
  const offline=await call('website.unpublish',{publishedRevision:2},true);expect(offline.publicUrl).toBeNull();
  expect(profile((await users().findOne({_id:'owner'}))!).websiteUrl).toBeUndefined();
 });
+it('updates an open draft preview from its current revision without changing published pages',async()=>{
+ const site=await call('website.create',{files:[{path:'pages/index.html',content:'<html><body>First</body></html>'}]});
+ const token=(await rows('websites').findOne({_id:'owner'}))!.previewToken;
+ const request=async(host:string,path:string)=>{const state={status:200,body:'',headers:{} as Record<string,string>};const res:any={set(name:string|Record<string,string>,value?:string){if(typeof name==='string')state.headers[name]=value||'';else Object.assign(state.headers,name);return this;},status(value:number){state.status=value;return this;},send(value:string){state.body=value;return this;},end(){return this;}};await websiteRequest({method:'GET',path,headers:{host}} as any,res,err=>{throw err;});return state;};
+ const preview=await request('localhost:7330',`/api/website-preview/${token}/`);
+ expect(preview.body).toContain('First<script data-newdrugs-preview-refresh>');
+ expect(preview.body).toContain(`/api/website-preview/${token}/__newdrugs_revision`);
+ expect(preview.headers['Content-Security-Policy']).toContain('http://localhost:7330');
+ const statusPath=`/api/website-preview/${token}/__newdrugs_revision`;
+ expect(JSON.parse((await request('localhost:7330',statusPath)).body)).toEqual({revision:1});
+ await call('website.patch',{revision:1,change:{kind:'write',path:'pages/index.html',content:'<html><body>Second</body></html>'}});
+ const status=await request('localhost:7330',statusPath);
+ expect(JSON.parse(status.body)).toEqual({revision:2});
+ expect(status.headers['Cache-Control']).toBe('no-store');
+ expect(status.headers['Access-Control-Allow-Origin']).toBe('*');
+ const script=preview.body.match(/<script data-newdrugs-preview-refresh>(.*?)<\/script>/s)?.[1];
+ expect(script).toBeTruthy();
+ let tick:(()=>Promise<void>)|undefined;const reload=vi.fn();
+ new Function('document','window','fetch','location','setInterval',script!)(
+  {visibilityState:'visible',addEventListener:()=>{}},{addEventListener:()=>{}},
+  async()=>({status:200,ok:true,json:async()=>JSON.parse(status.body)}),{reload},
+  (callback:()=>Promise<void>)=>{tick=callback;},
+ );
+ await tick?.();expect(reload).toHaveBeenCalledTimes(1);
+ expect((await request('localhost:7330',`/api/website-preview/${token}/`)).body).toContain('Second<script data-newdrugs-preview-refresh>');
+ await call('website.publish',{revision:2},true);
+ const prior=config.APP_ENV;config.APP_ENV='production';
+ try{
+  const hosted=await request(`draft-${token}.druggie.org`,'/');
+  expect(hosted.body).toContain('endpoint="/__newdrugs_revision"');
+  expect(JSON.parse((await request(`draft-${token}.druggie.org`,'/__newdrugs_revision')).body)).toEqual({revision:2});
+  expect((await request(`u-${site.code}.druggie.org`,'/')).body).not.toContain('data-newdrugs-preview-refresh');
+  expect((await request('draft-'+ '0'.repeat(32)+'.druggie.org','/__newdrugs_revision')).status).toBe(404);
+ }finally{config.APP_ENV=prior;}
+});
 it('keeps named checkpoints beyond ordinary edits and restores one without publishing',async()=>{
  await call('website.create',{files:[{path:'pages/index.html',content:'<h1>First</h1>'}]});
  const saved=await call('website.checkpoint.create',{revision:1,label:'First version'});
