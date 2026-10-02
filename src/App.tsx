@@ -1,3 +1,4 @@
+import {agentDockAvailable,useAgentDockAvailability} from './agentDockLayout';
 import {ConversationHeaderProvider,ConversationHeaderHost} from './ConversationHeader';
 import {AgentMemoryPanel} from './AgentMemoryPanel';
 import {rememberAuthReturn,readAuthReturn,clearAuthReturn} from './authReturn';
@@ -141,9 +142,11 @@ export function App() {
   const inputForm = useRef<HTMLFormElement>(null);
   const page = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const {available:dockAvailable,belowControls}=useAgentDockAvailability(page,available=>{if(mode!=='agent'&&agentDockOpen){if(!available)tabWorkspaces.current[mode]=captureWorkspace();else scroll.restore(tabWorkspaces.current[mode]?.scroll||null);}});
+  const agentDockVisible=agentDockOpen&&dockAvailable;
   const { style, sideBySide, keyboardOpen, ...dragHandlers } = useChatPosition(composer, Boolean(data), launcherOpen && Boolean(panelSpace === 'composer' ? panel : underlay?.panel), launcherOpen);
   useMobileInputFocus(page, Boolean(data));
-  const dockStyle=useAgentDockGeometry(page,mode!=='agent'&&agentDockOpen,`${mode}:${keyboardOpen}`);
+  const dockStyle=useAgentDockGeometry(page,mode!=='agent'&&agentDockVisible,`${mode}:${keyboardOpen}`);
   const inputOccupied = launcherOpen && !sideBySide;
   const effectiveDrag={...dragHandlers,draggable:mode==='agent'&&dragHandlers.draggable};
   const launcherDrag = useControlDrag(effectiveDrag);
@@ -153,7 +156,7 @@ export function App() {
     panelHistory:typeof panelHistory;panelReset:number;underlay:ComposerScreen|null;lastComposer:ComposerScreen|null;
     attachments:UploadRef[];inboxAttachments:InboxAttachment[];recordAttachments:RecordContext[];scroll:ReturnType<typeof scroll.capture>;
   }>>>({});
-  useTopPagination(scroll.transcript, { enabled: Boolean(data) && (mode==='agent'||agentDockOpen) && !inputOccupied && !(panel && panelSpace === 'modal') && !chatHistory.error, hasMore: Boolean(chatHistory.cursor), count: messages.length, scope: data?.user.id, load: chatHistory.loadOlder });
+  useTopPagination(scroll.transcript, { enabled: Boolean(data) && (mode==='agent'||agentDockVisible) && !inputOccupied && !(panel && panelSpace === 'modal') && !chatHistory.error, hasMore: Boolean(chatHistory.cursor), count: messages.length, scope: data?.user.id, load: chatHistory.loadOlder });
   usePageBoundaryScroll(page,Boolean(data));
   usePageChatScroll(page, scroll.transcript, Boolean(data)&&mode==='agent', Boolean(panel && panelSpace === 'modal') || inputOccupied, scroll.onScroll);
   const seenSurfaces = useRef(new Set<string>());
@@ -256,7 +259,7 @@ export function App() {
     return () => cancelAnimationFrame(frame);
   }, [Boolean(data), panel, panelSpace, launcherOpen]);
   const placeMessage = useMessagePlacement(inputForm, scroll.transcript, data?.user.id, Boolean(panel && panelSpace === 'modal') || inputOccupied);
-  const captureWorkspace=()=>({dockOpen:agentDockOpen,draft,launcherOpen,panel,panelSpace,panelContext,panelHistory,panelReset,underlay,lastComposer:lastComposer.current,attachments,inboxAttachments,recordAttachments,scroll:mode==='agent'||agentDockOpen?scroll.capture():tabWorkspaces.current[mode]?.scroll||null});
+  const captureWorkspace=()=>({dockOpen:agentDockOpen,draft,launcherOpen,panel,panelSpace,panelContext,panelHistory,panelReset,underlay,lastComposer:lastComposer.current,attachments,inboxAttachments,recordAttachments,scroll:mode==='agent'||agentDockVisible?scroll.capture():tabWorkspaces.current[mode]?.scroll||null});
   const changeMode=(next:AppMode)=>{
     if(next===mode){
       if(next==='agent'){setLauncherOpen(false);if(chatHistory.windowed)chatHistory.returnLatest();scroll.follow();}
@@ -284,13 +287,14 @@ export function App() {
     if(next==='agent'&&!saved?.launcherOpen)requestAnimationFrame(()=>textarea.current?.focus({preventScroll:true}));
   };
   const closeAgent=()=>{tabWorkspaces.current[mode]=captureWorkspace();setAgentDockOpen(false);};
-  const showAgent=()=>{scroll.restore(tabWorkspaces.current[mode]?.scroll||null);setAgentDockOpen(true);requestAnimationFrame(()=>textarea.current?.focus({preventScroll:true}));};
-  const socialNavigate=(destination:Destination)=>{if(mode==='agent')return;setSocialRequests(previous=>({...previous,[mode]:{id:++routeRequestId.current,destination}}));setPanel(null);setPanelHistory([]);setUnderlay(null);setLauncherOpen(false);if(window.matchMedia('(max-width: 760px)').matches)setAgentDockOpen(false);};
+  const showAgent=()=>{if(!agentDockAvailable()){changeMode('agent');return;}scroll.restore(tabWorkspaces.current[mode]?.scroll||null);setAgentDockOpen(true);requestAnimationFrame(()=>textarea.current?.focus({preventScroll:true}));};
+  const socialNavigate=(destination:Destination)=>{if(mode==='agent')return;setSocialRequests(previous=>({...previous,[mode]:{id:++routeRequestId.current,destination}}));setPanel(null);setPanelHistory([]);setUnderlay(null);setLauncherOpen(false);};
   const revealConversation=()=>{setPanel(null);setPanelHistory([]);setUnderlay(null);setLauncherOpen(false);if(mode!=='agent')showAgent();};
-  const askAbout=(context:RecordContext)=>{if(mode!=='agent'&&window.matchMedia('(max-width: 760px)').matches){pendingAgentTask.current={kind:'record',record:context};changeMode('agent');return;}setRecordAttachments(previous=>[...previous.filter(item=>item.kind!==context.kind||item.id!==context.id),context].slice(-3));if(mode!=='agent')showAgent();else if(!sideBySide)setLauncherOpen(false);requestAnimationFrame(()=>textarea.current?.focus({preventScroll:true}));};
+  const askAbout=(context:RecordContext)=>{if(mode!=='agent'&&!agentDockAvailable()){pendingAgentTask.current={kind:'record',record:context};changeMode('agent');return;}setRecordAttachments(previous=>[...previous.filter(item=>item.kind!==context.kind||item.id!==context.id),context].slice(-3));if(mode!=='agent')showAgent();else if(!sideBySide)setLauncherOpen(false);requestAnimationFrame(()=>textarea.current?.focus({preventScroll:true}));};
   const open = (next: Panel, context: Omit<Destination, 'view'> = {}, space: 'modal' | 'composer' = 'modal') => {
     if (data?.user.id !== identity.current) return;
     if(next&&mode!=='agent'&&BROWSER_VIEWS.has(next)&&data?.user.handle){socialNavigate({...context,view:next as Destination['view']});return;}
+    if(next&&mode!=='agent'&&space==='composer'&&!agentDockAvailable()){pendingAgentDestination.current={...context,view:next as Destination['view']};changeMode('agent');return;}
     if(mode!=='agent'&&space==='composer')setAgentDockOpen(true);
     if (next && requiresSavedAccount(next, context) && !data?.user.handle) { setAfterAccount({ panel: next, context, space }); next = 'account'; context = {}; setAccountMode('register'); }
     dictation.stop();
@@ -325,7 +329,7 @@ export function App() {
     if(mode!=='agent'&&BROWSER_VIEWS.has(destination.view)){socialNavigate(destination);return;}
     if (destination.view === 'settings') { open('settings'); return; }
     if (destination.view === 'chat') {
-      if(mode!=='agent'&&window.matchMedia('(max-width: 760px)').matches){pendingAgentDestination.current=destination;changeMode('agent');return;}
+      if(mode!=='agent'&&!agentDockAvailable()){pendingAgentDestination.current=destination;changeMode('agent');return;}
       if(destination.resourceId)void openChatMessage(destination.resourceId).catch(e=>logError(errorText(e)));
       else{setChatRoute(undefined);if(mode!=='agent')revealConversation();else void closePanel().then(()=>setLauncherOpen(false));chatHistory.returnLatest();scroll.follow();}
       return;
@@ -395,14 +399,14 @@ export function App() {
     return () => navigator.serviceWorker.removeEventListener('message', receive);
   });
   const prepareAgentHandoff=(destination:Destination)=>{
-    if(!BROWSER_VIEWS.has(destination.view)||window.matchMedia('(max-width: 760px), (pointer: coarse)').matches)return;
+    if(!BROWSER_VIEWS.has(destination.view)||!agentDockAvailable())return;
     const target=destination.mode||(mode==='agent'&&destination.view.startsWith('log')?'log':mode);
     if(target==='agent')return;
     if(target===mode){setAgentDockOpen(true);requestAnimationFrame(()=>scroll.follow());}
     else pendingHandoffDock.current=target;
   };
   const navigateFromAgent=(destination:Destination)=>{prepareAgentHandoff(destination);navigate(destination);};
-  useLayoutEffect(()=>{if(pendingHandoffDock.current!==mode)return;pendingHandoffDock.current=null;if(!window.matchMedia('(max-width: 760px), (pointer: coarse)').matches){setAgentDockOpen(true);requestAnimationFrame(()=>scroll.follow());}},[mode]);
+  useLayoutEffect(()=>{if(pendingHandoffDock.current!==mode)return;pendingHandoffDock.current=null;if(agentDockAvailable()){setAgentDockOpen(true);requestAnimationFrame(()=>scroll.follow());}},[mode]);
   const openRunSurface = (active: RunView) => {
     if (!active.surface) return;
     if (!(surfaceViews as readonly string[]).includes(active.surface.view)) { logError(`Unknown app destination: ${active.surface.view}`); return; }
@@ -429,7 +433,7 @@ export function App() {
     if (surface) { try { const matches = (surface.view === 'profile' && panel === 'account') || surface.view === panel; await post(`/runs/${surface.runId}/surface`, { id: surface.id, saved: saved && matches, fileIds }); await refresh(); } catch (e) { logError(errorText(e)); } setSurface(null); }
   };
   const openChatMessage = async (messageId: string) => {
-    if(mode!=='agent'&&window.matchMedia('(max-width: 760px)').matches){pendingAgentDestination.current={view:'chat',resourceId:messageId};changeMode('agent');return;}
+    if(mode!=='agent'&&!agentDockAvailable()){pendingAgentDestination.current={view:'chat',resourceId:messageId};changeMode('agent');return;}
     if (!data?.user.handle) { setPendingChatJump(messageId); open('account'); return; }
     if (!await chatHistory.jump(messageId)) return;
     if(mode!=='agent')revealConversation();
@@ -500,13 +504,13 @@ export function App() {
   useEffect(() => { if (needsAccount && panel) { setAfterAccount({ panel, context: panelContext, space: panelSpace }); setPanel('account'); setPanelContext({}); setAccountMode('register'); } }, [needsAccount, panel]);
   const panelTitle = needsAccount ? 'Create an account' : panel === 'account' ? data?.user.handle ? 'Profile' : accountMode === 'login' ? 'Sign in' : 'Create an account' : panel === 'agents' && panelContext.resourceId === 'device' ? 'Connect agent' : panel ? surfaceTitles[panel] : '';
   const discussUpdate=(item:InboxItem)=>{
-    if(mode!=='agent'&&window.matchMedia('(max-width: 760px)').matches){pendingAgentTask.current={kind:'discuss',item};changeMode('agent');return;}
+    if(mode!=='agent'&&!agentDockAvailable()){pendingAgentTask.current={kind:'discuss',item};changeMode('agent');return;}
     setInboxAttachments(prior=>[...prior.filter(value=>value.id!==item.id),{id:item.id,title:item.title}].slice(-3));
     if(mode!=='agent')revealConversation();else void closePanel();
     chatHistory.returnLatest();scroll.follow();
   };
   const sendExample=(prompt:string)=>{
-    if(mode!=='agent'&&window.matchMedia('(max-width: 760px)').matches){pendingAgentTask.current={kind:'example',prompt};changeMode('agent');return;}
+    if(mode!=='agent'&&!agentDockAvailable()){pendingAgentTask.current={kind:'example',prompt};changeMode('agent');return;}
     if(mode!=='agent'){revealConversation();requestAnimationFrame(()=>void send(undefined,prompt,undefined,true));}
     else void closePanel().then(()=>send(undefined,prompt,undefined,true));
   };
@@ -522,7 +526,7 @@ export function App() {
         <NavLink to={{view:'credits'}}><CreditCard size={23}/>Billing</NavLink>
         <NavLink to={{view:'agents'}}><Plugs size={23}/>Connected agents</NavLink>
         <div className="settings-utilities settings-donate-row"><a href="https://fuckingdonate.co/@cyrus" target="_blank" rel="noopener noreferrer"><Heart size={21}/>Donate</a>{data?.user.handle&&<button onClick={()=>void post('/account/logout').then(()=>location.reload()).catch(e=>logError(errorText(e)))}><SignOut size={21}/>Log out</button>}</div>
-        <p className="settings-credit"><a href="https://freshman.dev" target="_blank" rel="noopener noreferrer">Made by Cyrus Freshman</a></p>
+        <p className="settings-credit"><a href="https://freshman.dev" target="_blank" rel="noopener noreferrer">Made by Cyrus Freshman</a><span className="settings-version">v{release.version}</span></p>
       </nav> : !data ? <p>Connecting…</p> : panel === 'appearance'||panel==='preferences' ? <PreferencesPanel value={data.preferences||defaultPreferences} changed={preferences=>{liveRevision.current++;setData(previous=>previous&&preferences.revision>=(previous.preferences?.revision||0)?{...previous,preferences}:previous);}}/>
         : panel==='agent_instructions'?<AgentMemoryPanel section="instructions"/> : panel==='agent_memory'?<AgentMemoryPanel/> : panel==='account_menu'?<nav className="settings-menu" aria-label="Account">{data.user.handle?<NavLink to={{view:'account_settings'}}><LockKey size={23}/>Sign-in &amp; security</NavLink>:<button onClick={()=>{setAccountMode('login');navigatePanel('account');}}><LockKey size={23}/>Sign in</button>}{data.user.handle&&<><NavLink to={{view:'blocked'}}><Shield size={23}/>Blocked people</NavLink><NavLink to={{view:'hidden_people'}}><EyeSlash size={23}/>Hidden people</NavLink><NavLink to={{view:'storage'}}><HardDrives size={23}/>Storage</NavLink></>}</nav> : panel === 'credits' ? <Credits data={data} onAccount={() => navigatePanel('account')} onConnect={() => navigatePanel('agents')} />
         : panel === 'account_settings' && data.user.handle ? <AccountSettings user={data.user} refresh={refresh} cleared={async () => { try{for(const tab of ['agent','friends','posts','log'])localStorage.removeItem(tab==='agent'?`nd-draft:${data.user.id}`:`nd-draft:${data.user.id}:${tab}`);}catch{}for(const saved of Object.values(tabWorkspaces.current)){saved.draft='';saved.attachments=[];saved.inboxAttachments=[];saved.recordAttachments=[];saved.scroll=null;}setDraft(''); setRecordAttachments([]); setInboxAttachments([]); setAttachments([]); setSubmitting(false); setRun(null); submission.current = null; chatHistory.returnLatest(); await refresh(); scroll.follow(); }} />
@@ -562,9 +566,9 @@ export function App() {
   const workspaceAncestors=[...(composerScreen?.history.map(screen=>`${mode}:${composerScreen.reset}:${screenKey(screen)}`)||[]),...Object.entries(tabWorkspaces.current).filter(([tab])=>tab!==mode).flatMap(([tab,saved])=>[workspaceViewKey(tab as AppMode,saved.lastComposer),...(saved.lastComposer?.history.map(screen=>`${tab}:${saved.lastComposer!.reset}:${screenKey(screen)}`)||[])])];
   const dictationControl=<div className="dictation-slot"><Orb hideIcon={inputOccupied || Boolean(draft.trim())} active={dictation.active && !inputOccupied} listening={dictation.listening} finishing={dictation.finishing} canSend={Boolean(draft.trim()) && Boolean(data)} busy={sendBusy}
           onTap={() => { if (!inputOccupied) dictation.start(); }} onCancel={dictation.cancel} onSend={() => { void dictation.finish().then(text => { void send(undefined, text); }); }} {...effectiveDrag} /></div>;
-  return <CallProvider userId={data?.user.id}><TalkContext.Provider value={talk}><ExperienceContext.Provider value={{mode,changeMode,ask:askAbout,media:(items,index)=>setMedia({items,index}),navigate}}><NavigationContext.Provider value={navigate}><div className="app" inert={Boolean(media)} data-mode={mode} data-standalone={standalone||undefined} data-agent-dock={agentDockOpen||undefined} data-talk-active={Boolean(talk.space&&talk.room)||undefined} style={style} data-keyboard-open={keyboardOpen || undefined} ref={page} onKeyDown={event => { if (event.key === 'Escape' && launcherOpen && !event.defaultPrevented) { event.preventDefault(); void closePanel(); } }}>
+  return <CallProvider userId={data?.user.id}><TalkContext.Provider value={talk}><ExperienceContext.Provider value={{mode,changeMode,ask:askAbout,media:(items,index)=>setMedia({items,index}),navigate}}><NavigationContext.Provider value={navigate}><div className="app" inert={Boolean(media)} data-mode={mode} data-standalone={standalone||undefined} data-agent-dock={agentDockVisible||undefined} data-panel-below-controls={mode!=='agent'&&belowControls||undefined} data-talk-active={Boolean(talk.space&&talk.room)||undefined} style={style} data-keyboard-open={keyboardOpen || undefined} ref={page} onKeyDown={event => { if (event.key === 'Escape' && launcherOpen && !event.defaultPrevented) { event.preventDefault(); void closePanel(); } }}>
     <Atmosphere/><div className="grain" aria-hidden="true" />
-    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockOpen} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockOpen} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={startAccount}/>)}{mode!=='agent'&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockOpen} inert={mode!=='agent'&&!agentDockOpen}>
+    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockVisible} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockVisible} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={startAccount}/>)}{mode!=='agent'&&dockAvailable&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockVisible} inert={mode!=='agent'&&!agentDockVisible}>
       <div className="conversation" data-fade-top={mode==='agent'&&scroll.fadedTop || undefined} ref={scroll.transcript} role="log" aria-label="Your conversation" aria-live="polite" aria-relevant="additions text" onScroll={scroll.onScroll}>
         <div className="conversation-content" ref={scroll.content}>
           <OlderMessages hasMore={Boolean(chatHistory.cursor)} loading={chatHistory.loading} error={chatHistory.error} retry={() => void chatHistory.loadOlder()} />
@@ -577,7 +581,7 @@ export function App() {
       </div>
       <div className="composer-area" ref={composer}>
         {!inputOccupied && (scroll.awayFromBottom || chatHistory.windowed) && <button className="latest-chat" type="button" aria-label="Latest messages" title="Latest messages" onClick={() => { if (chatHistory.windowed) chatHistory.returnLatest(); scroll.follow(); }}><ArrowDown size={22} weight="bold" /></button>}
-        <ComposerPanel open={launcherOpen} sideBySide={sideBySide} obscured={Boolean(panel && panelSpace === 'modal')} dragging={launcherDrag.dragging} extentKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${style['--viewport-top' as keyof typeof style]}:${talk.space?.id||''}:${talk.expanded}`} contentKey={composerScreen?screenKey(composerScreen):'launcher'} input={<form className={`composer ${dictation.listening ? 'is-listening' : ''} ${attachments.length || inboxAttachments.length ? 'has-files' : ''}`} ref={inputForm} onSubmit={send}>
+        <ComposerPanel open={launcherOpen} sideBySide={sideBySide} obscured={Boolean(panel && panelSpace === 'modal')||mode!=='agent'&&!agentDockVisible} dragging={launcherDrag.dragging} extentKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${style['--viewport-top' as keyof typeof style]}:${talk.space?.id||''}:${talk.expanded}`} contentKey={composerScreen?screenKey(composerScreen):'launcher'} input={<form className={`composer ${dictation.listening ? 'is-listening' : ''} ${attachments.length || inboxAttachments.length ? 'has-files' : ''}`} ref={inputForm} onSubmit={send}>
           <label htmlFor="thought" className="sr-only">Message your agent</label>
           <textarea id="thought" ref={textarea} value={draft} maxLength={6000} rows={2} enterKeyHint="send" onChange={e => setDraft(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
@@ -592,7 +596,7 @@ export function App() {
       {mode!=='agent'&&<footer className="agent-dock-footer"><button onClick={()=>changeMode('agent')} title="Open Agent mode"><Robot size={21}/>Agent</button><div className="agent-dock-actions">{dictationControl}<button className="agent-dock-close" aria-label="Close agent" onClick={closeAgent}><X size={21}/></button></div></footer>}
       {mode==='agent'&&talk.space&&talk.room&&<TalkDock/>}
     </main>
-    <div className="settings-controls"><span className="app-version">v{release.version}</span><CallStatusControl fallback={<button className="settings-button" data-update-available={availableRelease||undefined} aria-label={`${availableRelease?`App update ${availableRelease} available${hasUnreadNotifications?`, Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:''}`:hasUnreadNotifications&&panel!=='notifications'?`Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:'Settings'}, ${balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))} ${!data.user.handle && data.wallet.starterAvailableNanos ? 'starter credit available after signup' : 'credit balance'}`} onClick={reopenSettings}><span>{balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))}</span>{availableRelease?<><Star size={22} weight="fill"/><span className="notification-count update-indicator" aria-hidden="true">{hasUnreadNotifications?notificationBadge:''}</span></>:hasUnreadNotifications&&panel!=='notifications'?<><Bell size={22}/><span className="notification-count" aria-hidden="true">{notificationBadge}</span></>:<GearSix size={22}/>}</button>}/></div></>}
+    <div className="settings-controls"><CallStatusControl fallback={<button className="settings-button" data-update-available={availableRelease||undefined} aria-label={`${availableRelease?`App update ${availableRelease} available${hasUnreadNotifications?`, Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:''}`:hasUnreadNotifications&&panel!=='notifications'?`Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:'Settings'}, ${balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))} ${!data.user.handle && data.wallet.starterAvailableNanos ? 'starter credit available after signup' : 'credit balance'}`} onClick={reopenSettings}><span>{balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))}</span>{availableRelease?<><Star size={22} weight="fill"/><span className="notification-count update-indicator" aria-hidden="true">{hasUnreadNotifications?notificationBadge:''}</span></>:hasUnreadNotifications&&panel!=='notifications'?<><Bell size={22}/><span className="notification-count" aria-hidden="true">{notificationBadge}</span></>:<GearSix size={22}/>}</button>}/></div></>}
     <div ref={talk.audioHost} hidden aria-hidden="true"/>
     {settingsSnapshot&&<Dialog key={`settings:${settingsSnapshot.userId}`} visible={settingsVisible} title={settingsSnapshot.title} close={()=>{resumeSettings.current=false;void closePanel();}} back={settingsSnapshot.history.length?backPanel:undefined}>{settingsSnapshot.content}</Dialog>}
     {panel && panelSpace === 'modal' && !settingsViews.has(panel) && <Dialog placement="task" title={panelTitle} close={() => void closePanel()} back={panelHistory.length ? backPanel : undefined}>{panelContent}</Dialog>}

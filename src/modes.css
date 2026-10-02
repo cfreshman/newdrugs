@@ -1,5 +1,5 @@
 /* Three primary experiences. The original Agent composition stays intact. */
-.app { --mode-switch-clearance:24px; --mode-collapsed-width:188px; --mode-collapsed-button-width:43px; --agent-min-width:320px; --agent-dock-gutter:12px; --agent-dock-gap:16px; --mode-header-height:56px; --mode-gutter: 20px; --mode-top: 12px; --mode-bottom: max(16px,calc(6px + var(--safe-area-bottom))); --panel-safe-bottom:0px; --mode-sidebar: 184px; --mode-main: 680px; --mode-rail: 252px; --mode-gap: 20px; }
+.app { --mode-switch-clearance:24px; --mode-collapsed-width:188px; --mode-collapsed-button-width:43px; --agent-min-width:320px; --agent-dock-gutter:var(--settings-right); --agent-dock-gap:16px; --mode-header-height:56px; --mode-gutter: var(--settings-right); --mode-top: 12px; --mode-bottom: max(var(--mode-gutter),var(--safe-area-bottom)); --panel-safe-bottom:0px; --mode-sidebar: 184px; --mode-main: 680px; --mode-min-width:520px; --mode-rail: 252px; --mode-gap: 20px; }
 .mode-switch { position:fixed;z-index:8;top:12px;left:12px;display:flex;align-items:center;padding:4px;gap:2px;border-radius:999px;background:var(--glass);backdrop-filter:blur(22px);color:var(--ink);width:var(--mode-expanded-width,max-content);transition:width 140ms ease;overflow:hidden;box-shadow:0 2px 12px #24243206; }
 .mode-switch>a,.mode-measure-item {display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 13px;white-space:nowrap;border-radius:999px;background:transparent;color:inherit;text-decoration:none;font-size:13px;line-height:20px;flex:none;}
 .mode-switch>a[aria-current=page] {background:var(--ink);color:var(--inverse-ink);}
@@ -78,7 +78,7 @@
 .app[data-keyboard-open=true] .mode-switch {visibility:hidden;pointer-events:none;}
 .app[data-keyboard-open=true] .social-experience {top:calc(var(--viewport-top,0px) + var(--mode-top));bottom:auto;height:calc(var(--viewport-height,100dvh) - 2 * var(--mode-top));}
 .app[data-keyboard-open=true] .mode-content-header,.app[data-keyboard-open=true] .mode-mobile-nav {display:none;}
-@media(max-width:1200px){.app {--mode-rail:0px;--mode-sidebar:164px;}.social-experience {grid-template-columns:var(--mode-sidebar) minmax(0,var(--mode-main));}.mode-context-rail {display:none;}.social-friends {--mode-main:680px;}}
+@media(max-width:1200px){.app {--mode-rail:0px;--mode-sidebar:172px;}.social-experience {grid-template-columns:var(--mode-sidebar) minmax(0,var(--mode-main));}.mode-context-rail {display:none;}.social-friends {--mode-main:680px;}}
 @media(max-width:760px){.app {--settings-right:max(6px,env(safe-area-inset-right));--mode-gutter:6px;--mode-top:12px;--mode-bottom:calc(12px + var(--safe-area-bottom));--mode-gap:0px;}.social-experience {display:flex;}.mode-sidebar,.mode-context-rail {display:none;}.mode-main {--mode-panel-radius:20px;flex:1;border-radius:var(--mode-panel-radius);}.mode-content-header {padding:6px var(--panel-inset);}.mode-content-header h1 {font-size:18px;}.mode-mobile-nav {display:flex;flex:none;gap:3px;overflow:auto;padding:0 var(--panel-inset) 8px;}.mode-mobile-nav a {white-space:nowrap;border-radius:999px;background:transparent;color:inherit;text-decoration:none;padding:8px 11px;font-size:12px;}.mode-mobile-nav a[aria-current=page] {background:var(--surface-soft);font-weight:700;}.mode-page {padding:0 var(--panel-inset) var(--panel-inset);}.mode-page .view-tabs {margin:0 calc(-1 * var(--panel-inset));padding-inline:var(--panel-inset);}.mode-page .post-text {font-size:14px;}.social-friends .people-list {grid-template-columns:1fr;gap:14px;}.social-friends .people-list>a>img {max-height:300px;}.app:not([data-mode=agent]) .workspace {top:72px;right:12px;bottom:calc(12px + var(--safe-area-bottom));width:calc(100% - 24px);}.app:not([data-mode=agent])[data-keyboard-open=true] .workspace {top:calc(var(--viewport-top,0px) + var(--mode-top));bottom:auto;height:calc(var(--viewport-height,100dvh) - 2 * var(--mode-top));}.mode-page-compose .post-composer textarea {font-size:16px;}.mode-welcome {font-size:14px;}}
 
 .mode-page-person .profile-card:has(.profile-gallery) { display:grid; grid-template-columns:minmax(0,280px) minmax(0,1fr); column-gap:20px; align-items:start; }
@@ -160,4 +160,13 @@
   .app:not([data-agent-dock=true]) .social-experience {
     grid-template-columns:var(--mode-sidebar) minmax(0,var(--mode-main)) var(--mode-sidebar);
   }
+}
+
+/* Keep desktop navigation and fill the remaining width only when the usual columns no longer fit. */
+@media(min-width:761px){
+ .app[data-panel-below-controls=true] .social-experience {
+  --panel-under-controls:1;
+  grid-template-columns:var(--mode-sidebar) minmax(0,1fr);
+  justify-content:stretch;
+ }
 }

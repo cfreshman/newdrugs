@@ -49,19 +49,25 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('.device-approval')).toBeNull();
   });
 
-  it('covers the mobile content panel while preserving the underlying social screen', async () => {
-    vi.stubGlobal('matchMedia', (query:string) => ({matches:query.includes('760'),media:query,addEventListener(){},removeEventListener(){}}));
-    await mount(); await load();
-    expect(dom.container.querySelector('.mode-switch')?.getAttribute('data-collapsed')).toBe('true');
+  it('uses the Agent tab instead of offering a secondary panel on a narrow screen',async()=>{
+    await mount();await load();
     await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.mode-switch a[aria-label="Posts"]')!.click());
     const social=dom.container.querySelector('.social-posts');
+    expect(dom.container.querySelector('.agent-dock-toggle')).toBeNull();expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(true);
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.mode-switch a[aria-label="Agent"]')!.click());
+    expect(dom.container.querySelector<HTMLElement>('.workspace')!.hidden).toBe(false);expect(dom.container.querySelector('.social-posts')).toBe(social);
+  });
+  it('hides side chat before the desktop panel gets narrow and restores its draft when widened',async()=>{
+    vi.stubGlobal('innerWidth',1600);await mount();await load();
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.mode-switch a[aria-label="Posts"]')!.click());
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.agent-dock-toggle')!.click());
-    const dock=dom.container.querySelector<HTMLElement>('.workspace')!;
-    const bounds=dom.container.querySelector('.social-posts .mode-main')!.getBoundingClientRect();
-    expect(dock.hidden).toBe(false);expect(dock.style.left).toBe(`${bounds.left}px`);expect(dock.style.top).toBe(`${bounds.top}px`);expect(dock.style.width).toBe(`${bounds.width}px`);expect(dock.style.height).toBe(`${bounds.height}px`);
-    expect(dom.container.querySelector('.conversation')?.hasAttribute('data-fade-top')).toBe(false);
-    await act(async()=>dom.container.querySelector<HTMLButtonElement>('[aria-label="Close agent"]')!.click());
-    expect(dock.hidden).toBe(true);expect(dom.container.querySelector('.social-posts')).toBe(social);
+    const workspace=dom.container.querySelector<HTMLElement>('.workspace')!,input=dom.container.querySelector<HTMLTextAreaElement>('#thought')!;
+    act(()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,'Keep this side-chat draft');input.dispatchEvent(new Event('input',{bubbles:true}));});
+    expect(workspace.hidden).toBe(false);
+    act(()=>{vi.stubGlobal('innerWidth',1000);window.dispatchEvent(new Event('resize'));});
+    expect(workspace.hidden).toBe(true);expect(dom.container.querySelector('.app')?.hasAttribute('data-agent-dock')).toBe(false);expect(dom.container.querySelector('.agent-dock-toggle')).toBeNull();
+    act(()=>{vi.stubGlobal('innerWidth',1600);window.dispatchEvent(new Event('resize'));});
+    expect(workspace.hidden).toBe(false);expect(input.value).toBe('Keep this side-chat draft');expect(dom.container.querySelector('.app')?.getAttribute('data-agent-dock')).toBe('true');
   });
   it.each(['Friends','Posts'])('opens location and subsequent profile editing visibly in %s mode',async(mode)=>{
     await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,area:{cell:'852a3313fffffff',label:'East Providence area, Rhode Island, US',point:{type:'Point',coordinates:[-71.3,41.8]}}}}));
@@ -100,6 +106,7 @@ describe('chat interaction integration', () => {
     await select('Posts');expect(posts.querySelector('h1')?.textContent).toBe('Posts');
   });
   it('restores independent agent panel, draft and tool state for each tab',async()=>{
+    vi.stubGlobal('innerWidth',1600);
     await mount();await load();
     const select=async(mode:string)=>act(async()=>dom.container.querySelector<HTMLAnchorElement>(`.mode-switch a[aria-label="${mode}"]`)!.click());
     const write=(text:string)=>act(()=>{const input=dom.container.querySelector<HTMLTextAreaElement>('#thought')!;Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));});
@@ -231,7 +238,7 @@ describe('chat interaction integration', () => {
     await load(); dom.frame();
     expect(dom.container.querySelector('textarea')).not.toBeNull();
     expect(dom.container.querySelector('.settings-button')?.textContent).toBe('$1.00');
-    expect(dom.container.querySelector('.app-version')?.textContent).toBe(`v${release.version}`);
+    expect(dom.container.querySelector('.settings-controls .app-version')).toBeNull();
     expect(dom.container.querySelector('.settings-button')?.hasAttribute('data-update-available')).toBe(false);
   });
   it('offers a priority reload only after the open page observes a newer server release',async()=>{
@@ -241,8 +248,8 @@ describe('chat interaction integration', () => {
     await act(async()=>chat.resolve({run:active}));
     const settings=dom.container.querySelector<HTMLButtonElement>('.settings-button')!;
     expect(settings.dataset.updateAvailable).toBe('99.0.0');expect(settings.getAttribute('aria-label')).toContain('App update 99.0.0 available');expect(settings.querySelector('.notification-count')?.textContent).toBe('3');
-    expect(dom.container.querySelector('.app-version')?.textContent).toBe(`v${release.version}`);
-    await act(async()=>settings.click());const update=dom.container.querySelector<HTMLButtonElement>('.settings-menu>button')!;
+    expect(dom.container.querySelector('.settings-controls .app-version')).toBeNull();
+    await act(async()=>settings.click());expect(dom.container.querySelector('.settings-credit .settings-version')?.textContent).toBe(`v${release.version}`);const update=dom.container.querySelector<HTMLButtonElement>('.settings-menu>button')!;
     expect(update.classList.contains('settings-update')).toBe(true);expect(update.textContent).toBe('Reload to apply app update');
   });
   it('clears the draft and inserts its message immediately while the request is still pending', async () => {
@@ -448,6 +455,7 @@ describe('chat interaction integration', () => {
     await travel('back');expect(page.querySelector('.view-tabs [aria-pressed="true"]')?.textContent).toBe('All');
   });
   it('applies a linked search to an already open People panel and scrolls that panel from the title',async()=>{
+    vi.stubGlobal('innerWidth',1600);
     await mount();await act(async()=>bootstrap.resolve({...initial,messages:[{id:'search-link',role:'assistant',text:'[Find gardens](/nearby?q=gardening&scope=all)',createdAt:new Date().toISOString(),source:'app'}]}));dom.frame();
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.mode-switch [aria-label="Posts"]')!.click());
     const page=dom.container.querySelector('.social-posts')!;
@@ -553,5 +561,5 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('textarea')?.value).toBe('Keep this draft');
     expect(dom.container.querySelector('.connection-setup')).toBeNull();
   });
-it('opens the destination agent sidepanel for a desktop agent handoff',async()=>{sessionStorage.setItem('nd-client','browser');await mount();await act(async()=>bootstrap.resolve({...initial,run:{...active,status:'waiting_for_input',surface:{id:'desktop-handoff',view:'log',resourceId:'resource',waiting:true}}}));expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe('log');expect(dom.container.querySelector('.app')?.getAttribute('data-agent-dock')).toBe('true');expect(dom.container.querySelector('.workspace')?.hasAttribute('hidden')).toBe(false);});
+it('opens the destination agent sidepanel for a desktop agent handoff',async()=>{vi.stubGlobal('innerWidth',1600);sessionStorage.setItem('nd-client','browser');await mount();await act(async()=>bootstrap.resolve({...initial,run:{...active,status:'waiting_for_input',surface:{id:'desktop-handoff',view:'log',resourceId:'resource',waiting:true}}}));expect(dom.container.querySelector('.app')?.getAttribute('data-mode')).toBe('log');expect(dom.container.querySelector('.app')?.getAttribute('data-agent-dock')).toBe('true');expect(dom.container.querySelector('.workspace')?.hasAttribute('hidden')).toBe(false);});
 });

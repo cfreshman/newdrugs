@@ -302,3 +302,10 @@ Valid browser sessions had incorrectly spent the anonymous session-creation quot
 Opening a DM now marks its invitation, acceptance and video-call notifications read while preserving history and the viewed-message boundary for texts. Cached reopening and browser foreground restoration force the read action. Call-only updates trigger it too. Notification changes refresh the owner's interested conversation lists to clear stale unread dots.
 
 The targeted checks, complete builds, both stage API/exact-worker health gates and public production JS/CSS byte comparison passed. Public HTML also contains the standard mobile capability tag. No real social content or calls were created as QA.
+
+
+## October 2, 2026: v0.40.4 desktop width handling
+
+Production `20261002051927197` and dev `20261002051803454` retain the desktop sidebar through intermediate widths. Mode labels collapse when that preserves full panel height. Once the original columns cannot fit a 520px main panel with side chat, the side chat hides and the main panel immediately expands to the shared right gutter below the top controls. The 760px mobile breakpoint remains. Side-chat state and drafts restore when widened. The loaded version moved from the page controls into the Settings credit row.
+
+Nine focused checks and a 14-width browser sweep passed, including the user's narrow desktop size, the closed-chat full-height state, draft restoration and Settings version alignment. Both builds, API/exact-worker health gates and public production asset comparisons passed.

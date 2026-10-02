@@ -12,9 +12,10 @@ export function ModeSwitcher({mode,change,chat,chatVisible,layoutKey}:{mode:AppM
    if(!root.current||!measure.current)return;
    const width=measure.current.getBoundingClientRect().width,box=root.current.getBoundingClientRect();
    const buffer=parseFloat(getComputedStyle(root.current).getPropertyValue('--mode-switch-clearance'))||24;
-   const main=document.querySelector<HTMLElement>('.social-experience:not([hidden]) .mode-main')?.getBoundingClientRect();
-   // Main panels may already be lowered to avoid the switch; use their horizontal bounds to avoid a feedback loop.
-   const crowded=Boolean(main&&main.width>0&&main.right>box.left&&main.left<box.left+width+buffer);
+   const mainElement=document.querySelector<HTMLElement>('.social-experience:not([hidden]) .mode-main'),main=mainElement?.getBoundingClientRect();
+   // A panel deliberately below the top row leaves room for the labels. Otherwise keep the existing collapse rule.
+   const belowControls=Boolean(mainElement&&getComputedStyle(mainElement).getPropertyValue('--panel-under-controls').trim()==='1');
+   const crowded=Boolean(!belowControls&&main&&main.width>0&&main.right>box.left&&main.left<box.left+width+buffer);
    const compact=crowded||window.matchMedia('(max-width: 760px)').matches||Boolean(chatVisible&&chat.current&&modeSwitchIntersects(chat.current.getBoundingClientRect(),box,width+buffer));
    setFullWidth(width);setCollapsed(compact);
    const visibleWidth=compact?(window.matchMedia('(max-width: 760px)').matches?180:188):width;
@@ -26,6 +27,6 @@ export function ModeSwitcher({mode,change,chat,chatVisible,layoutKey}:{mode:AppM
   const mutations=new MutationObserver(schedule);if(chat.current)mutations.observe(chat.current,{childList:true,subtree:true,characterData:true});
   document.addEventListener('scroll',schedule,true);window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);
   return()=>{cancelAnimationFrame(frame);observer.disconnect();mutations.disconnect();document.removeEventListener('scroll',schedule,true);window.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('resize',schedule);};
- },[chat,chatVisible,layoutKey]);
+ },[mode,chat,chatVisible,layoutKey]);
  return <><nav ref={root} className="mode-switch" aria-label="New Drugs mode" data-collapsed={collapsed||undefined} data-over-panel={overPanel||undefined} style={fullWidth?{'--mode-expanded-width':`${fullWidth}px`} as React.CSSProperties:undefined}>{modes.map(value=>{const Icon=icons[value];return <a key={value} href={hrefs[value]} aria-label={MODE_LABELS[value]} aria-current={mode===value?'page':undefined} title={MODE_LABELS[value]} onClick={event=>{if(plainLinkClick(event)){event.preventDefault();change(value);}}}><Icon size={19} weight={mode===value?'fill':'regular'}/><span>{MODE_LABELS[value]}</span></a>;})}</nav><div className="mode-switch mode-switch-measure" ref={measure} aria-hidden="true" inert>{modes.map(value=>{const Icon=icons[value];return <span className="mode-measure-item" key={value}><Icon size={19}/><span>{MODE_LABELS[value]}</span></span>;})}</div></>;
 }
