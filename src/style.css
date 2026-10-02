@@ -29,6 +29,8 @@
   --divider: #dce1e8;
   --divider-soft: #e7eaf0;
   --danger: #b33834;
+  --mic-on: #258852;
+  --on-mic-on: #fff;
   --selection: #6599f54a;
   --backdrop: #19273d5c;
   --panel-shadow: 0 18px 65px #16223c40;
@@ -505,6 +507,9 @@ blockquote { font-family: var(--font-ui); }
   :root { --chat-gutter: 12px; --panel-top-gap: calc(var(--settings-top) + var(--settings-control-size) + var(--top-control-gap)); }
 
   .orb, .launcher-button { cursor: pointer; touch-action: manipulation; }
+}
+@media (max-width: 760px) {
+  :root { --chat-gutter: var(--mobile-page-gutter, 6px); }
 }
 
 @media (max-width: 639px), (pointer: coarse) {

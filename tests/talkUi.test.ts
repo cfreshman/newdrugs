@@ -35,3 +35,11 @@ it('shows connected speakers to someone outside the room, not everyone with spea
  expect(dom.container.querySelectorAll('.space-speaker-peek>span')).toHaveLength(1);
  expect(dom.container.querySelector('.space-speaker-peek>span')?.getAttribute('title')).toBe('@me');
 });
+it('joins a Talk space directly from its list card',async()=>{
+ api.operation.mockImplementation(async(name:string)=>name==='spaces.list'?{items:[{id:'talk-1',title:'Night walks',description:'',hostName:'@me',speakerIds:['me'],speakers:[{id:'me',name:'@me'}],speakingCount:1,presentSpeakers:[{id:'me',name:'@me'}]}],nextCursor:null}:null);
+ const join=vi.fn().mockResolvedValue(undefined);
+ await act(async()=>dom.root.render(createElement(TalkContext.Provider,{value:{room:null,join} as any,children:createElement(TalkComposeProvider,{children:createElement(Harness)})})));
+ expect(dom.container.querySelector('.space-list-card .space-list-open')).not.toBeNull();
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.space-list-actions button')!.click());
+ expect(join).toHaveBeenCalledWith('talk-1');
+});

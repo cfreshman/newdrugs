@@ -34,7 +34,7 @@ const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetr
 export const outputs: Record<string, z.ZodType> = {
   ...logOutputs,
   'make.create':makeDraftSummary,'make.get':makeDraftOutput,'make.edit':makeDraftSummary,'make.render':makeRenderOutput,'make.publish':makePublishOutput,'make.discard':z.object({discarded:z.literal(true),draftId:z.uuid()}),
-  'spaces.list':spacePageSchema,'spaces.get':spaceSchema,'spaces.create':spaceSchema,'spaces.end':spaceSchema,'spaces.requests':speakerRequestsSchema,'spaces.request_speak':speakerRequestSchema,'spaces.cancel_request':z.object({cancelled:z.literal(true)}),'spaces.respond_speaker':z.object({space:spaceSchema,personId:z.string(),approved:z.boolean()}),'spaces.revoke_speaker':z.object({space:spaceSchema,personId:z.string()}),'spaces.remove_person':z.object({space:spaceSchema,personId:z.string(),removed:z.literal(true)}),
+  'spaces.list':spacePageSchema,'spaces.get':spaceSchema,'spaces.create':spaceSchema,'spaces.end':spaceSchema,'spaces.offer_host':spaceSchema,'spaces.cancel_host_offer':spaceSchema,'spaces.accept_host':spaceSchema,'spaces.decline_host':spaceSchema,'spaces.requests':speakerRequestsSchema,'spaces.request_speak':speakerRequestSchema,'spaces.cancel_request':z.object({cancelled:z.literal(true)}),'spaces.respond_speaker':z.object({space:spaceSchema,personId:z.string(),approved:z.boolean()}),'spaces.revoke_speaker':z.object({space:spaceSchema,personId:z.string()}),'spaces.remove_person':z.object({space:spaceSchema,personId:z.string(),removed:z.literal(true)}),
   'access.get':z.object({source:z.enum(['browser','external','agent']),scope:z.enum(['read','write']),background:z.boolean(),credential:z.object({name:z.string(),createdAt:z.string().optional(),expiresAt:z.string().nullable()}).optional(),grants:z.object({logAccess:z.boolean(),privateChat:z.boolean(),accountActivity:z.boolean(),webSearch:z.boolean()}).optional(),operations:z.object({read:z.array(z.string()),write:z.array(z.string()),confirmationRequired:z.array(z.string())})}),
   'account.preferences':accountPreferencesSchema,'account.preferences_update':accountPreferencesSchema,
   'automations.validate':automationValidationSchema,
@@ -113,6 +113,7 @@ export const consequences: Record<string, string> = {
   'website.checkpoint.delete':'Permanently delete this saved website checkpoint. The current draft and published site remain.',
   'spaces.create':'Start a public live-audio Space with this title. People outside your friends can join and listen.',
   'spaces.end':'End this public live-audio Space for everyone.',
+  'spaces.accept_host':'Become host of this live Talk space. You gain moderation and End controls; the prior host remains a speaker and everyone stays connected.',
   'spaces.respond_speaker':'Grant or decline this person’s microphone access in your public Space.',
   'spaces.remove_person':'Remove this person from your Space and prevent them from rejoining it.',
   'agent.instructions.update':'Replace your personal instructions used by future agent runs.',

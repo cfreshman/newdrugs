@@ -8,10 +8,11 @@ const mocks=vi.hoisted(()=>({operation:vi.fn(),post:vi.fn(),rooms:[] as unknown[
 vi.mock('../src/api',async original=>({...await original<typeof import('../src/api')>(),operation:mocks.operation,post:mocks.post}));
 vi.mock('livekit-client',()=>{
  class Room{
-  localParticipant={identity:'me',name:'Me',isMicrophoneEnabled:false,audioTrackPublications:new Map(),setMicrophoneEnabled:async(value:boolean)=>{this.localParticipant.isMicrophoneEnabled=value;}};
-  remoteParticipants=new Map();
+ localParticipant={identity:'me',name:'Me',isMicrophoneEnabled:false,audioTrackPublications:new Map(),setMicrophoneEnabled:async(value:boolean)=>{this.localParticipant.isMicrophoneEnabled=value;}};
+ remoteParticipants=new Map();
+  events=new Map<string,()=>void>();
   constructor(){mocks.rooms.push(this);}
-  async connect(){}async startAudio(){}async disconnect(){}on(){return this;}removeAllListeners(){}
+  async connect(){}async startAudio(){}async disconnect(){}on(name:string,handler:()=>void){this.events.set(name,handler);return this;}removeAllListeners(){this.events.clear();}
  }
  return {Room,RoomEvent:{ParticipantConnected:'connected',ParticipantDisconnected:'disconnected',ParticipantPermissionsChanged:'permissions',ActiveSpeakersChanged:'speaking',TrackSubscribed:'subscribed',TrackUnsubscribed:'unsubscribed',Disconnected:'closed'},Track:{Kind:{Audio:'audio'}}};
 });
@@ -29,6 +30,14 @@ it('rejoins the saved Talk space with its microphone state after a refresh',asyn
  expect(dom.container.querySelector('[data-mic]')?.textContent).toBe('on');
  await act(async()=>dom.root.render(null));
  await act(async()=>dom.root.render(createElement(Harness)));
+ expect(mocks.post).toHaveBeenCalledTimes(2);
+ expect(dom.container.querySelector('[data-space]')?.textContent).toBe(id);
+});
+it('rejoins the saved Talk space after a hard media disconnect',async()=>{
+ sessionStorage.setItem('nd-talk-space:me',JSON.stringify({id,mic:true}));
+ await act(async()=>{dom.root.render(createElement(Harness));await new Promise(resolve=>setTimeout(resolve,10));});
+ expect(mocks.post).toHaveBeenCalledTimes(1);
+ await act(async()=>{(mocks.rooms[0] as {events:Map<string,()=>void>}).events.get('closed')?.();await new Promise(resolve=>setTimeout(resolve,10));});
  expect(mocks.post).toHaveBeenCalledTimes(2);
  expect(dom.container.querySelector('[data-space]')?.textContent).toBe(id);
 });

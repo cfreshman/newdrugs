@@ -10,7 +10,7 @@ const readDimensions = (keyboard = false): ChatDimensions => {
   const css = getComputedStyle(document.documentElement);
   const gap = parseFloat(css.getPropertyValue('--chat-gutter')) || 12;
   return { width: innerWidth < 640 ? readViewport().width : parseFloat(css.getPropertyValue('--chat-width')) || 600,
-    gutter: gap + Math.max(parseFloat(css.getPropertyValue('--safe-area-left')) || 0, parseFloat(css.getPropertyValue('--safe-area-right')) || 0),
+    gutter: Math.max(gap, parseFloat(css.getPropertyValue('--safe-area-left')) || 0, parseFloat(css.getPropertyValue('--safe-area-right')) || 0),
     radius: keyboard ? (parseFloat(css.getPropertyValue('--launcher-size')) || 48) / 2 : parseFloat(css.getPropertyValue('--orb-radius')) || 36,
     bottomGutter: gap + (keyboard ? 0 : parseFloat(css.getPropertyValue('--safe-area-bottom')) || 0) };
 };

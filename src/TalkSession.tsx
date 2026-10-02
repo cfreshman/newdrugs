@@ -11,6 +11,7 @@ interface TalkSession {
  setExpanded(value:boolean):void;create(title:string,description:string):Promise<void>;join(id:string,unmute?:boolean):Promise<void>;
  leave():Promise<void>;end():Promise<void>;toggleMic():Promise<void>;request():Promise<void>;
  respond(personId:string,approve:boolean):Promise<void>;revoke(personId:string):Promise<void>;remove(personId:string):Promise<void>;share():Promise<void>;refresh():Promise<void>;startAudio():Promise<void>;
+ offerHost(personId:string):Promise<void>;cancelHostOffer():Promise<void>;acceptHost():Promise<void>;declineHost():Promise<void>;
 }
 export const TalkContext=createContext<TalkSession|null>(null);
 export const useTalk=()=>useContext(TalkContext);
@@ -23,6 +24,7 @@ function forgetSession(userId?:string){if(!userId)return;try{sessionStorage.remo
 export function useTalkSession(userId?:string):TalkSession{
  const [space,setSpace]=useState<Space|null>(null),[room,setRoom]=useState<Room|null>(null),[members,setMembers]=useState<Participant[]>([]),[speaking,setSpeaking]=useState<Set<string>>(new Set()),[requests,setRequests]=useState<{personId:string;name:string}[]>([]);
  const [mic,setMic]=useState(false),[audioBlocked,setAudioBlocked]=useState(false),[expanded,setExpanded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
+ const [reconnectAttempt,setReconnectAttempt]=useState(0);
  const audioHost=useRef<HTMLDivElement>(null),activeSession=useRef<{id:string;role:Space['myRole'];requests:Set<string>}|null>(null),generation=useRef(0),livekit=useRef<typeof import('livekit-client')|null>(null);
  const refresh=useCallback(async()=>{
   const session=activeSession.current;if(!session)return;const ticket=++generation.current;
@@ -30,14 +32,15 @@ export function useTalkSession(userId?:string):TalkSession{
    const next=await operation<Space>('spaces.get',{spaceId:session.id});
    if(ticket!==generation.current||activeSession.current!==session)return;
    if(next.status==='ended'){forgetSession(userId);void room?.disconnect();activeSession.current=null;setSpace(null);setRoom(null);return;}
-   if(session.role!=='speaker'&&next.myRole==='speaker')playTalkSound('approved');
+   if(session.role==='listener'&&next.myRole==='speaker')playTalkSound('approved');
+   const becameHost=session.role!=='host'&&next.myRole==='host';
    session.role=next.myRole;setSpace(next);
    if(next.myRole==='host'){
     const pending=(await operation<{items:{personId:string;name:string}[]}>('spaces.requests',{spaceId:session.id})).items;
     if(ticket!==generation.current||activeSession.current!==session)return;
-    if(pending.some(item=>!session.requests.has(item.personId)))playTalkSound('request');
+    if(!becameHost&&pending.some(item=>!session.requests.has(item.personId)))playTalkSound('request');
     session.requests=new Set(pending.map(item=>item.personId));setRequests(pending);
-   }
+   }else{session.requests.clear();setRequests([]);}
   }catch(cause){if(ticket===generation.current)setError(errorText(cause));}
  },[room,userId]);
  useRecordRefresh(['spaces'],refresh);
@@ -52,7 +55,7 @@ export function useTalkSession(userId?:string):TalkSession{
   sync();for(const participant of room.remoteParticipants.values())for(const publication of participant.audioTrackPublications.values())if(publication.track)audio(publication.track);
   return()=>{document.removeEventListener('pointerdown',unlockTalkSounds);room.removeAllListeners();for(const element of audioHost.current?.children||[])element.remove();void room.disconnect();};
  },[room,refresh]);
- useEffect(()=>{if(userId){const saved=readSession(userId);if(saved&&!room&&!activeSession.current)void join(saved.id,saved.mic).catch(()=>{});return;}activeSession.current=null;void room?.disconnect();setRoom(null);setSpace(null);},[userId]);
+ useEffect(()=>{if(!userId){activeSession.current=null;void room?.disconnect();setRoom(null);setSpace(null);return;}if(room||activeSession.current)return;const saved=readSession(userId);if(!saved)return;const attempt=()=>void join(saved.id,saved.mic).catch(()=>setReconnectAttempt(value=>value+1));if(!reconnectAttempt){attempt();return;}const timer=setTimeout(attempt,Math.min(reconnectAttempt*1000,10000));return()=>clearTimeout(timer);},[userId,room,reconnectAttempt]);
  const join=async(id:string,unmute=false)=>{
   if(room){if(space?.id===id){setExpanded(true);return;}throw Error('Leave the current Talk space before joining another.');}
   unlockTalkSounds();setBusy(true);setError('');let next:Room|null=null;
@@ -62,7 +65,7 @@ export function useTalkSession(userId?:string):TalkSession{
    let initialRequests:{personId:string;name:string}[]=[];
    if(access.space.myRole==='host')try{initialRequests=(await operation<{items:{personId:string;name:string}[]}>('spaces.requests',{spaceId:id})).items;}catch{}
    activeSession.current={id,role:access.space.myRole,requests:new Set(initialRequests.map(item=>item.personId))};
-   setRequests(initialRequests);setRoom(next);setSpace(access.space);setExpanded(false);
+   setRequests(initialRequests);setRoom(next);setSpace(access.space);setExpanded(false);setReconnectAttempt(0);
    try{await next.startAudio();setAudioBlocked(false);}catch{setAudioBlocked(true);}
    if(unmute&&access.space.myRole==='host')try{await next.localParticipant.setMicrophoneEnabled(true);setMic(next.localParticipant.isMicrophoneEnabled);}catch(cause){setError(`Microphone: ${errorText(cause)}`);}
    if(userId)rememberSession(userId,id,next.localParticipant.isMicrophoneEnabled);
@@ -77,7 +80,12 @@ export function useTalkSession(userId?:string):TalkSession{
  const respond=async(personId:string,approve:boolean)=>{if(!space)return;setBusy(true);setError('');try{const value=await operation<{space:Space}>('spaces.respond_speaker',{spaceId:space.id,revision:space.revision,personId,approve},{confirmed:true});setSpace(value.space);await refresh();}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};
  const revoke=async(personId:string)=>{if(!space)return;setBusy(true);setError('');try{const value=await operation<{space:Space}>('spaces.revoke_speaker',{spaceId:space.id,revision:space.revision,personId});setSpace(value.space);}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};
  const remove=async(personId:string)=>{if(!space)return;setBusy(true);setError('');try{const value=await operation<{space:Space}>('spaces.remove_person',{spaceId:space.id,revision:space.revision,personId},{confirmed:true});setSpace(value.space);}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};
+ const hostAction=async(name:'spaces.offer_host'|'spaces.cancel_host_offer'|'spaces.accept_host'|'spaces.decline_host',extra:Record<string,string>={})=>{if(!space)return;setBusy(true);setError('');try{const value=await operation<Space>(name,{spaceId:space.id,revision:space.revision,...extra},{confirmed:name==='spaces.accept_host'});setSpace(value);await refresh();changed();}catch(cause){setError(errorText(cause));await refresh();throw cause;}finally{setBusy(false);}};
+ const offerHost=(personId:string)=>hostAction('spaces.offer_host',{personId});
+ const cancelHostOffer=()=>space?.hostOffer?hostAction('spaces.cancel_host_offer',{offerId:space.hostOffer.id}):Promise.resolve();
+ const acceptHost=()=>space?.hostOffer?hostAction('spaces.accept_host',{offerId:space.hostOffer.id}):Promise.resolve();
+ const declineHost=()=>space?.hostOffer?hostAction('spaces.decline_host',{offerId:space.hostOffer.id}):Promise.resolve();
  const share=async()=>{if(!space)return;const url=new URL(`/spaces/${space.id}`,location.origin).href;try{if(navigator.share)await navigator.share({title:space.title,url});else{await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),2000);}}catch(cause){if((cause as Error).name!=='AbortError')setError(errorText(cause));}};
  const startAudio=async()=>{if(!room)return;try{await room.startAudio();setAudioBlocked(false);}catch(cause){setError(errorText(cause));}};
- return {space,room,members,speaking,requests,mic,audioBlocked,expanded,busy,error,copied,audioHost,setExpanded,create,join,leave,end,toggleMic,request,respond,revoke,remove,share,refresh,startAudio};
+ return {space,room,members,speaking,requests,mic,audioBlocked,expanded,busy,error,copied,audioHost,setExpanded,create,join,leave,end,toggleMic,request,respond,revoke,remove,offerHost,cancelHostOffer,acceptHost,declineHost,share,refresh,startAudio};
 }
