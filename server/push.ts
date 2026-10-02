@@ -48,7 +48,7 @@ export async function enqueuePush(userId: string, actorId: string, connectionId:
   if (!pushConfigured()) return;
   await outbox().updateOne({ _id: hash(`${kind}:${eventId}:${userId}`) }, { $setOnInsert: { userId, actorId, connectionId, kind, eventId, status: 'pending', availableAt: Date.now() + 1500, attempts: 0, delivered: [], expiresAt: new Date(Date.now() + 86400000) } }, { session, upsert: true });
 }
-export async function enqueueLogPush(userId:string,actorId:string,entryId:string,revision:number,session?:ClientSession,kind:'log_invitation'|'log_added'|'log_update'='log_invitation'){
+export async function enqueueLogPush(userId:string,actorId:string,entryId:string,revision:number,session:ClientSession|undefined,kind:'log_added'|'log_update'){
   if(!pushConfigured())return;
   await outbox().updateOne({_id:hash(`log:${entryId}:${revision}:${userId}`)},{$setOnInsert:{userId,actorId,connectionId:entryId,kind,eventId:String(revision),status:'pending',availableAt:Date.now()+1500,attempts:0,delivered:[],expiresAt:new Date(Date.now()+86400000)}},{session,upsert:true});
 }
@@ -67,6 +67,7 @@ export async function enqueueStoredPush(userId:string,actorId:string,resourceId:
 export async function enqueueReviewPush(userId:string,runId:string){if(!pushConfigured()||!await notificationEnabled(userId,'review'))return;await outbox().updateOne({_id:hash(`review:${runId}`)},{$setOnInsert:{userId,actorId:userId,connectionId:runId,kind:'review',eventId:runId,status:'pending',availableAt:Date.now()+1500,attempts:0,delivered:[],expiresAt:new Date(Date.now()+86400000)}},{upsert:true});}
 export async function pushStillRelevant(event: { userId: unknown; actorId: unknown; connectionId: unknown; kind: unknown; eventId: unknown }) {
   const userId = String(event.userId), actorId = String(event.actorId), connectionId = String(event.connectionId);
+  if(event.kind==='log_invitation')return false;
   const type=notificationType.safeParse(event.kind);if(type.success&&!await notificationEnabled(userId,type.data))return false;
   if(event.kind==='review')return Boolean(await users().findOne({_id:userId,activeRun:String(event.eventId)})&&await rows('runs').findOne({_id:String(event.eventId),userId,status:'waiting_for_approval'}));
   if (event.kind === 'automation_status') return Boolean(await rows('notifications').findOne({_id:String(event.eventId),userId,readAt:null}));
@@ -81,7 +82,7 @@ export async function pushStillRelevant(event: { userId: unknown; actorId: unkno
   if(['connection_accepted','call','post_like','post_reply','alert'].includes(String(event.kind))){
     const notice=await rows('notifications').findOne({_id:String(event.eventId),userId,readAt:null});if(!notice)return false;
     if(await isPersonHidden(userId,actorId))return false;
-    if(notice.alertType==='security_login'||notice.alertType==='security_credential')if(!await notificationEnabled(userId,notice.alertType))return false;
+    if(notice.alertType==='security_login'||notice.alertType==='security_credential')return false;
     if(notice.ruleId&&!await rows('notificationRules').findOne({_id:String(notice.ruleId),userId,enabled:true},{projection:{_id:1}}))return false;
     if(event.kind==='post_like'||event.kind==='post_reply')return Boolean(await rows('posts').findOne({_id:connectionId,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{projection:{_id:1}}));
     if(event.kind==='alert'){

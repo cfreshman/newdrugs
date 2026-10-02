@@ -15,8 +15,8 @@ export async function notificationLanes(userId:string,blocked:string[],recordSta
  const specs:{collection:string;filter:Filter<Row>;stages:Document[];invites:boolean}[]=[
   {collection:'connections',filter:{toId:userId,status:'pending',notificationReadAt:null,notificationEnabled:{$ne:false}},stages:[{$match:{fromId:{$nin:blocked}}},...unsuspendedActors('fromId')],invites:true},
   {collection:'connections',filter:{toId:userId,notificationEnabled:{$ne:false}},stages:[{$match:{fromId:{$nin:blocked},$or:[{status:{$ne:'pending'}},{notificationReadAt:{$ne:null}}]}},...unsuspendedActors('fromId')],invites:true},
-  {collection:'notifications',filter:{userId,readAt:null},stages:[{$match:{actorId:{$nin:blocked}}},...recordStages],invites:false},
-  {collection:'notifications',filter:{userId},stages:[{$match:{actorId:{$nin:blocked},readAt:{$ne:null}}},...recordStages],invites:false},
+  {collection:'notifications',filter:{userId,readAt:null,kind:{$ne:'log_invitation'},alertType:{$nin:['security_login','security_credential']}},stages:[{$match:{actorId:{$nin:blocked}}},...recordStages],invites:false},
+  {collection:'notifications',filter:{userId,kind:{$ne:'log_invitation'},alertType:{$nin:['security_login','security_credential']}},stages:[{$match:{actorId:{$nin:blocked},readAt:{$ne:null}}},...recordStages],invites:false},
  ];
  const lanes:NotificationLane[]=[];
  // Sessions may be transactional, so do not execute parallel commands on them.

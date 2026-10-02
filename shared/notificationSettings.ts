@@ -2,19 +2,18 @@ import {z} from 'zod';
 
 export const notificationType=z.enum([
  'invitation','connection_accepted','message','call','post_like','post_reply',
- 'log_added','log_update','log_invitation','review','agent_update','automation_status',
- 'talk_first_live','security_login','security_credential',
+ 'log_added','log_update','review','agent_update','automation_status',
+ 'talk_first_live',
 ]);
 export type NotificationType=z.infer<typeof notificationType>;
 export const notificationPreference=z.object({type:notificationType,enabled:z.boolean()});
 export const notificationPreferences=z.object({items:z.array(notificationPreference)});
-export const existingNotificationTypes:NotificationType[]=['invitation','connection_accepted','message','call','post_like','post_reply','log_added','log_update','log_invitation','review','agent_update','automation_status','security_login','security_credential'];
+export const existingNotificationTypes:NotificationType[]=['invitation','connection_accepted','message','call','post_like','post_reply','log_added','log_update','review','agent_update','automation_status'];
 export const notificationTypeLabels:Record<NotificationType,string>={
  invitation:'Friend invitations',connection_accepted:'Accepted invitations',message:'Messages',call:'Video calls',
  post_like:'Likes on your posts',post_reply:'Replies to your posts',log_added:'Added to a hangout',
- log_update:'New hangout contributions',log_invitation:'Log invitations',review:'Agent reviews',
+ log_update:'New hangout contributions',review:'Agent reviews',
  agent_update:'Agent inbox',automation_status:'Automation status',talk_first_live:'First live Talk',
- security_login:'New sign-ins',security_credential:'New connected agents',
 };
 
 export const notificationRule=z.discriminatedUnion('kind',[

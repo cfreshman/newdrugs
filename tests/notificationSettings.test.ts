@@ -110,12 +110,15 @@ it('reminds only current friends of birthdays and the owner of Log anniversaries
  await rows('connections').updateOne({_id:'friend:me'},{$set:{status:'disconnected'}});
  expect((await notificationState('me')).items.some(item=>item.kind==='alert'&&item.link.resourceType==='person')).toBe(false);
 });
-it('records a connected-agent security alert unless its type is disabled',async()=>{
+it('omits legacy Log invitations and unsolicited account alerts',async()=>{
+ const types=(await call('notifications.preferences')).items.map((item:any)=>item.type);
+ expect(types).not.toContain('log_invitation');
+ expect(types).not.toContain('security_login');
+ expect(types).not.toContain('security_credential');
  await transaction(session=>insertAgentToken('me',{name:'Codex',scope:'read',expiresInDays:null},session));
- expect((await notificationState('me')).items.find(item=>item.kind==='alert')?.title).toBe('New connected agent: Codex');
- await call('notifications.preference_set',{type:'security_credential',enabled:false});
- await transaction(session=>insertAgentToken('me',{name:'Another agent',scope:'read',expiresInDays:null},session));
- expect((await notificationState('me')).items.filter(item=>item.kind==='alert')).toHaveLength(1);
+ expect((await notificationState('me')).items).toHaveLength(0);
+ await rows('notifications').insertOne({_id:'old-sign-in',userId:'me',actorId:'me',kind:'alert',alertType:'security_login',resourceType:'account',resourceId:'me',title:'New sign-in to your account',text:'',readAt:null,createdAt:new Date().toISOString()});
+ expect((await notificationState('me')).items).toHaveLength(0);
 });
 it('sends the same enabled post notification to a device without post text',async()=>{
  const saved={publicKey:config.VAPID_PUBLIC_KEY,privateKey:config.VAPID_PRIVATE_KEY};config.VAPID_PUBLIC_KEY='fixture';config.VAPID_PRIVATE_KEY='fixture';

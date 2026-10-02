@@ -198,7 +198,7 @@ export function createApp() {
     const user = await users().findOne({ handle: data.handle });
     if (!await checkPassword(data.password, user?.passwordHash)) throw new AppError(401, 'credentials', 'That handle and password did not match.');
     if(user!.suspendedAt)throw new AppError(403,'account_suspended','This account is suspended.');
-    await newSession(res, user!._id, req, true);
+    await newSession(res, user!._id, req);
     await ensureIntroduction(user!._id);
     res.json({ user: profile(user!) });
   });
