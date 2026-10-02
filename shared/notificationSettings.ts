@@ -12,7 +12,7 @@ export const existingNotificationTypes:NotificationType[]=['invitation','connect
 export const notificationTypeLabels:Record<NotificationType,string>={
  invitation:'Friend invitations',connection_accepted:'Accepted invitations',message:'Messages',call:'Video calls',
  post_like:'Likes on your posts',post_reply:'Replies to your posts',log_added:'Added to a hangout',
- log_update:'New hangout contributions',review:'Agent reviews',
+ log_update:'First contribution from another attendee',review:'Agent reviews',
  agent_update:'Agent inbox',automation_status:'Automation status',talk_first_live:'First live Talk',
 };
 
