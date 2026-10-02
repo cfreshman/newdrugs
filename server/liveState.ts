@@ -63,10 +63,10 @@ export async function dispatchLiveChange(event:ChangeStreamDocument<Document>){
   const fields='updateDescription' in event?[...Object.keys(event.updateDescription.updatedFields||{}),...(event.updateDescription.removedFields||[])]:[];
   if(!document||document.suspendedAt){for(const listener of [...groups.get(key)?.listeners||[]])listener.close(true);}
   if(fields.some(field=>/^(name|handle|photos|suspendedAt)(\.|$)/.test(field))){records(await logViewers(key),{keys:['log','people']});publicRecords(['posts']);}
-  if(document?.discoverable||fields.includes('discoverable')||fields.includes('suspendedAt'))publicRecords(['people']);
+  if(document?.discoverable||fields.includes('discoverable')||fields.includes('suspendedAt')||fields.includes('websiteCode'))publicRecords(['people']);
   const changed=new Set<LiveTopic>();
   if(!fields.length)topics.forEach(topic=>changed.add(topic));
-  if(fields.some(field=>/^(name|handle|bio|interests|photos|area|city|discoverable)(\.|$)/.test(field)))changed.add('user');
+  if(fields.some(field=>/^(name|handle|bio|interests|photos|area|city|discoverable|websiteCode)(\.|$)/.test(field)))changed.add('user');
   if(fields.some(field=>/^(balanceNanos|reservedNanos|starter)/.test(field)))changed.add('wallet');
   if(fields.some(field=>/^preferences/.test(field)))changed.add('preferences');
   if(fields.includes('activeRun'))changed.add('run');if(fields.includes('chatGeneration'))changed.add('messages');

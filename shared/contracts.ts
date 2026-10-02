@@ -53,6 +53,7 @@ export const outputs: Record<string, z.ZodType> = {
   'log.search':logSearchResult,
   'log.related':logRelatedResult,
   'website.get':z.object({site:websiteSummary.nullable()}),
+  'website.delete':z.object({deleted:z.literal(true),siteId:z.string()}),
   'website.inspect':z.object({revision:z.number().int().positive(),pages:z.array(z.string()),files:z.number().int().nonnegative(),assets:z.number().int().nonnegative(),issues:z.array(z.object({path:websitePath,reference:z.string(),kind:z.enum(['missing','unsafe']),message:z.string()})),issuesCapped:z.boolean()}),
   'website.icons.search':z.object({family:z.literal('Phosphor Icons'),version:z.string(),items:z.array(z.object({name:z.string(),slug:z.string(),categories:z.array(z.string()),tags:z.array(z.string())}))}),
   'website.icons.get':z.object({name:z.string(),slug:z.string(),weight:websiteIconWeight,svg:z.string(),license:z.literal('MIT'),source:z.literal('Phosphor Icons')}),
@@ -106,6 +107,7 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'website.delete':'Permanently delete your website, including its draft, saved revisions, checkpoints and published copy. Its preview and public pages will stop working. Uploaded media stays in Storage.',
   'website.publish':'Publish this exact website draft revision on your public username and permanent code addresses.',
   'website.unpublish':'Take the currently published website offline. The private draft and revision history remain.',
   'website.checkpoint.delete':'Permanently delete this saved website checkpoint. The current draft and published site remain.',

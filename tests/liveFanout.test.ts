@@ -1,7 +1,7 @@
 import {EventEmitter} from 'node:events';import {randomUUID} from 'node:crypto';
 import {it,expect,vi,afterEach} from 'vitest';
-const state=vi.hoisted(()=>({balances:new Map<string,number>(),reads:0,closeWatch:()=>{}}));
-vi.mock('../server/auth',()=>({browserActor:(req:any)=>req.actor,hash:(value:string)=>value,profile:(user:any)=>({id:user._id}),users:()=>({findOne:async({ _id}:any)=>{state.reads++;return {_id,name:_id,balanceNanos:state.balances.get(_id)||0,reservedNanos:0};}})}));
+const state=vi.hoisted(()=>({balances:new Map<string,number>(),websites:new Map<string,string>(),reads:0,closeWatch:()=>{}}));
+vi.mock('../server/auth',()=>({browserActor:(req:any)=>req.actor,hash:(value:string)=>value,profile:(user:any)=>({id:user._id,websiteUrl:user.websiteCode}),users:()=>({findOne:async({ _id}:any)=>{state.reads++;return {_id,name:_id,websiteCode:state.websites.get(_id),balanceNanos:state.balances.get(_id)||0,reservedNanos:0};}})}));
 vi.mock('../server/wallet',()=>({wallet:async(userId:string)=>({balanceNanos:state.balances.get(userId)||0,reservedNanos:0,availableNanos:0,entries:[]}),runs:()=>({findOne:async()=>null})}));
 vi.mock('../server/agent',()=>({runView:(value:unknown)=>value}));
 vi.mock('../server/operations',()=>({conversationPage:async()=>({items:[],nextCursor:null})}));
@@ -9,7 +9,25 @@ vi.mock('../server/notifications',()=>({notificationState:async()=>({unread:0,it
 vi.mock('../server/liveSubscriptions',()=>({liveInstance:'node',recordKeys:(value:string)=>value.split(','),liveLeases:()=>({deleteOne:async()=>{},deleteMany:async()=>{},bulkWrite:async()=>{}}),acquireLiveLease:async(userId:string,sessionId:string,channel:string,keys:string[])=>({_id:channel,userId,sessionId,channel,keys,connectionId:channel,instance:'node'})}));
 vi.mock('../server/db',()=>({transaction:async(callback:Function)=>callback(undefined),rows:()=>({findOne:async()=>({expiresAt:new Date(Date.now()+60000)})}),db:()=>({watch:()=>({tryNext:async()=>null,close:async()=>state.closeWatch(),async *[Symbol.asyncIterator](){await new Promise<void>(resolve=>{state.closeWatch=resolve;});}})})}));
 import {dispatchLiveChange,streamLiveState,stopLiveState,liveStateMetrics} from '../server/liveState';import {config} from '../server/config';
-afterEach(async()=>{await stopLiveState();state.balances.clear();state.reads=0;});
+afterEach(async()=>{await stopLiveState();state.balances.clear();state.websites.clear();state.reads=0;});
+it('removes a deleted website link from owner state and refreshes interested profile views',async()=>{
+ state.websites.set('owner','https://my-site.druggie.org/');
+ const tabs:{owner:string;keys:string;events:string[]}[]=[];
+ for(const [owner,keys] of [['owner','people'],['viewer','people'],['unrelated','posts']]){
+  const events:string[]=[],emitter=new EventEmitter();tabs.push({owner,keys,events});
+  const response=Object.assign(emitter,{writableLength:0,writableEnded:false,status(){return this;},set(){return this;},flushHeaders(){},write(text:string){events.push(text);return true;},end(){this.writableEnded=true;emitter.emit('close');}});
+  await streamLiveState({actor:{userId:owner,source:'browser'},cookies:{[config.SESSION_COOKIE]:randomUUID()},query:{channel:randomUUID(),records:keys}} as any,response as any);
+ }
+ expect(tabs[0].events.some(event=>event.includes('https://my-site.druggie.org/'))).toBe(true);
+ tabs.forEach(tab=>{tab.events.length=0;});state.websites.delete('owner');
+ await dispatchLiveChange({ns:{coll:'users'},documentKey:{_id:'owner'},fullDocument:{_id:'owner',discoverable:false},updateDescription:{updatedFields:{},removedFields:['websiteCode']}} as any);
+ await vi.waitFor(()=>{
+  expect(tabs[0].events.some(event=>event.startsWith('event: state')&&event.includes('"user":{"id":"owner"}'))).toBe(true);
+  expect(tabs.slice(0,2).every(tab=>tab.events.some(event=>event.startsWith('event: records')&&event.includes('people')))).toBe(true);
+ });
+ expect(tabs[1].events.some(event=>event.startsWith('event: state'))).toBe(false);
+ expect(tabs[2].events).toEqual([]);
+});
 it('refreshes DM unread indicators only for the notification owner and interested views',async()=>{
  const tabs:{owner:string;keys:string;events:string[]}[]=[];
  for(const [owner,keys] of [['owner','connections'],['owner','posts'],['someone-else','connections']]){
