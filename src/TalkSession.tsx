@@ -45,12 +45,12 @@ export function useTalkSession(userId?:string):TalkSession{
  },[room,userId]);
  useRecordRefresh(['spaces'],refresh);
  useEffect(()=>{if(!space)return;const timer=setInterval(()=>void refresh(),10000);return()=>clearInterval(timer);},[space?.id,refresh]);
- useEffect(()=>{if(!room||!livekit.current)return;const {RoomEvent,Track}=livekit.current;
+ useEffect(()=>{if(!room||!livekit.current)return;const {RoomEvent,Track,DisconnectReason}=livekit.current;
   const sync=()=>setMembers([room.localParticipant,...room.remoteParticipants.values()]);
   const audio=(track:RemoteTrack)=>{if(track.kind!==Track.Kind.Audio||!audioHost.current)return;const element=track.attach();audioHost.current.append(element);sync();};
   const remove=(track:RemoteTrack)=>{for(const element of track.detach())element.remove();sync();};
   room.on(RoomEvent.ParticipantConnected,sync).on(RoomEvent.ParticipantDisconnected,sync).on(RoomEvent.ParticipantPermissionsChanged,()=>{sync();void refresh();}).on(RoomEvent.ActiveSpeakersChanged,people=>setSpeaking(new Set(people.map(person=>person.identity)))).on(RoomEvent.TrackSubscribed,audio).on(RoomEvent.TrackUnsubscribed,remove).on(RoomEvent.TrackPublished,sync).on(RoomEvent.TrackUnpublished,sync).on(RoomEvent.TrackMuted,sync).on(RoomEvent.TrackUnmuted,sync).on(RoomEvent.LocalTrackPublished,sync).on(RoomEvent.LocalTrackUnpublished,sync);
-  room.on(RoomEvent.Disconnected,()=>{activeSession.current=null;setRoom(null);setSpace(null);setMic(false);});
+  room.on(RoomEvent.Disconnected,reason=>{if([DisconnectReason.CLIENT_INITIATED,DisconnectReason.DUPLICATE_IDENTITY,DisconnectReason.PARTICIPANT_REMOVED,DisconnectReason.ROOM_DELETED,DisconnectReason.ROOM_CLOSED].some(value=>value===reason))forgetSession(userId);activeSession.current=null;setRoom(null);setSpace(null);setMic(false);});
   document.addEventListener('pointerdown',unlockTalkSounds,{passive:true});
   sync();for(const participant of room.remoteParticipants.values())for(const publication of participant.audioTrackPublications.values())if(publication.track)audio(publication.track);
   return()=>{document.removeEventListener('pointerdown',unlockTalkSounds);room.removeAllListeners();for(const element of audioHost.current?.children||[])element.remove();void room.disconnect();};
