@@ -1,6 +1,6 @@
 import {AudioPlayer} from './AudioPlayer';
-import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
-import {CaretLeft,CaretRight} from '@phosphor-icons/react';
+import {useEffect,useLayoutEffect,useRef,useState,type CSSProperties,type ReactNode,type RefObject} from 'react';
+import {CaretLeft,CaretRight,Play} from '@phosphor-icons/react';
 import type {CustomDocument,MuseDocument,CifDocument,PopsDocument} from '../shared/customMedia';
 import {customMediaKind} from '../shared/customMedia';
 import {useExperience} from './ExperienceContext';
@@ -8,13 +8,25 @@ import {LinkedText} from './LinkedText';
 import {loadLinkPreview} from './linkPreviewCache';
 import {operation} from './api';
 
-function Media(props:{src:string;kind:'audio'|'video';active:boolean;muted?:boolean;autoplay?:boolean}){return props.kind==='audio'?<AudioPlayer key={props.src} src={props.src} active={props.active}/>:<VideoMedia src={props.src} active={props.active} muted={props.muted} autoplay={props.autoplay}/>;}
-export function VideoMedia({src,active,muted=false,autoplay=false,onError}:{src:string;active:boolean;muted?:boolean;autoplay?:boolean;onError?:()=>void}){
+function Media(props:{src:string;kind:'audio'|'video';active:boolean;muted?:boolean;autoplay?:boolean}){return props.kind==='audio'?<AudioPlayer key={props.src} src={props.src} active={props.active}/>:<PosterVideo src={props.src} active={props.active} muted={props.muted} autoplay={props.autoplay}/>;}
+export function VideoMedia({src,active,muted=false,autoplay=false,onError,poster,videoRef,onLoadedMetadata,onPlay}:{src:string;active:boolean;muted?:boolean;autoplay?:boolean;onError?:()=>void;poster?:string;videoRef?:RefObject<HTMLVideoElement|null>;onLoadedMetadata?:(video:HTMLVideoElement)=>void;onPlay?:()=>void}){
  const ref=useRef<HTMLMediaElement|null>(null);
  useEffect(()=>{const node=ref.current!;const hide=()=>{if(document.hidden)node.pause();};const other=(event:Event)=>{if((event as CustomEvent).detail!==node&&!node.muted)node.pause();};document.addEventListener('visibilitychange',hide);window.addEventListener('newdrugs:media-play',other);return()=>{node.pause();document.removeEventListener('visibilitychange',hide);window.removeEventListener('newdrugs:media-play',other);};},[src]);
  useEffect(()=>{if(!active)ref.current?.pause();},[active]);
- const play=()=>{if(ref.current&&!ref.current.muted)window.dispatchEvent(new CustomEvent('newdrugs:media-play',{detail:ref.current}));};
- return <video ref={node=>{ref.current=node;}} controls playsInline preload="metadata" muted={muted} autoPlay={active&&autoplay&&muted} src={src} onPlay={play} onError={onError}/>;
+ const play=()=>{onPlay?.();if(ref.current&&!ref.current.muted)window.dispatchEvent(new CustomEvent('newdrugs:media-play',{detail:ref.current}));};
+ return <video ref={node=>{ref.current=node;if(videoRef)videoRef.current=node;}} controls playsInline preload="metadata" muted={muted} autoPlay={active&&autoplay&&muted} src={src} poster={poster} onPlay={play} onError={onError} onLoadedMetadata={event=>onLoadedMetadata?.(event.currentTarget)}/>;
+}
+export function PosterVideo({src,active,poster,className='',muted=false,autoplay=false,onError}:{src:string;active:boolean;poster?:string;className?:string;muted?:boolean;autoplay?:boolean;onError?:()=>void}){
+ const video=useRef<HTMLVideoElement>(null),[started,setStarted]=useState(false),[ratio,setRatio]=useState(16/9),[fetchedPoster,setFetchedPoster]=useState<string|undefined>(),[posterBroken,setPosterBroken]=useState(false);
+ useEffect(()=>{setStarted(false);setRatio(16/9);},[src]);
+ useEffect(()=>{setFetchedPoster(undefined);if(poster||!active||!/^https?:\/\//.test(src))return;let cancelled=false;void loadLinkPreview(src).then(preview=>{if(!cancelled&&preview.kind==='video')setFetchedPoster(preview.imageUrl);}).catch(()=>{});return()=>{cancelled=true;};},[src,active,poster]);
+ const imageUrl=poster||fetchedPoster;
+ useEffect(()=>setPosterBroken(false),[imageUrl]);
+ const style={'--video-ratio':ratio} as CSSProperties;
+ return <div className={`poster-video ${className}`} style={style} data-embed-interactive onClick={event=>event.stopPropagation()}>
+  <VideoMedia src={src} active={active} poster={imageUrl} muted={muted} autoplay={autoplay} videoRef={video} onError={onError} onPlay={()=>setStarted(true)} onLoadedMetadata={node=>{if(node.videoWidth&&node.videoHeight)setRatio(node.videoWidth/node.videoHeight);}}/>
+  {!started&&<button className="poster-video-start" type="button" aria-label="Play video" onClick={event=>{event.stopPropagation();void video.current?.play().catch(()=>{});}}>{imageUrl&&!posterBroken&&<img src={imageUrl} alt="" onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight)setRatio(image.naturalWidth/image.naturalHeight);}} onError={()=>setPosterBroken(true)}/>}<span className="poster-video-play"><Play size={23} weight="fill"/></span></button>}
+ </div>;
 }
 function Artwork({src,alt,onDimensions}:{src:string;alt:string;onDimensions?:(size:{width:number;height:number})=>void}){
  const image=useRef<HTMLImageElement>(null);

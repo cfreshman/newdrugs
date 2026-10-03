@@ -59,6 +59,8 @@ The project uses React, TypeScript, Vite, Express, and MongoDB. **New Drugs does
 
 Node.js **22 or newer** and npm are required. The server bundle explicitly targets `node22`. Preserve that build target: targeting ES2023 previously stripped JSON import attributes needed by the TLD package and broke server startup.
 
+The host also needs Ubuntu's `ffmpeg` package for bounded first-frame WebP posters of public video links and existing Log videos. `scripts/provision-host.sh` installs it. The API passes verified local bytes to ffmpeg, never an external URL; if decoding fails, the UI shows a neutral play tile and the video stays playable.
+
 | Port | Purpose | Owner/location |
 | --- | --- | --- |
 | 7330 | Main Vite frontend | Local machine; user starts and owns it |

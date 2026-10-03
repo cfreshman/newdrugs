@@ -10,6 +10,7 @@ import { rows } from './db';
 import { hash } from './auth';
 import { AppError } from './errors';
 import { fetchPublic, publicUrl } from './publicFetch';
+import {videoPoster} from './videoFrame';
 import type { LinkPreview } from '../shared/links';
 
 const clean = (value: string, max: number) => value.replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -54,7 +55,7 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
 
   let url: URL;
   try { url = publicUrl(value); } catch { throw new AppError(422, 'preview_url', 'Choose a public HTTP or HTTPS link.'); }
-  const id = hash(`rich-v4:${url.href}`), existing = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } }, { projection: { image: 0 } });
+  const id = hash(`rich-v6:${url.href}`), existing = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } }, { projection: { image: 0 } });
   if (existing) return { ...existing.preview, url: value };
   if (pending.has(id)) return { ...await pending.get(id)!, url: value };
   const fallback: LinkPreview = { url: url.href, hostname: url.hostname, title: url.hostname, description: '',...(providerEmbed(url.href)?{embed:providerEmbed(url.href)!}:{}) };
@@ -64,7 +65,7 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
   if (rate!.count > 40 || pending.size >= 6) throw new AppError(429, 'preview_busy', 'Link previews are busy. Try again shortly.');
   const job = (async () => {
     let preview = fallback, image: Buffer | undefined, success = false;
-    const signal = AbortSignal.timeout(10000);
+    const signal = AbortSignal.timeout(15000);
     try {
       const customKind=customMediaKind(url.href);
       const page=await fetchPublic(url.href,customKind?'manifest':'preview',signal);
@@ -75,7 +76,14 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
       }else{
 
       let imageResponse:Awaited<ReturnType<typeof fetchPublic>>|undefined;
-      if(page.mime.startsWith('video/')){preview={...fallback,kind:'video',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Video')};success=true;}
+      if(page.mime.startsWith('video/')){
+        preview={...fallback,kind:'video',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Video')};success=true;
+        try{
+          const source=await fetchPublic(page.url,'video_poster',signal);
+          image=await videoPoster(source.bytes,source.mime);
+          preview.imageUrl=`/api/link-previews/${id}/image`;
+        }catch{/* Keep the playable video with a neutral play tile. */}
+      }
       else if(page.mime.startsWith('image/')){preview={...fallback,kind:'image',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Image')};imageResponse=page;success=true;}
       else{
         const metadata=pageMetadata(page.bytes.toString('utf8'),page.url);
@@ -95,7 +103,8 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
       const oldest = await cache().find({}, { projection: { _id: 1 } }).sort({ expiresAt: 1 }).limit(50).toArray();
       await cache().deleteMany({ _id: { $in: oldest.map(row => row._id) } });
     }
-    await cache().replaceOne({ _id: id }, { preview, ...(image ? { image: new Binary(image) } : {}), expiresAt: new Date(Date.now() + (success ? 86400000 : 300000)) }, { upsert: true });
+    const ttl=success?(preview.kind==='video'&&!image?3600000:86400000):300000;
+    await cache().replaceOne({ _id: id }, { preview, ...(image ? { image: new Binary(image) } : {}), expiresAt: new Date(Date.now() + ttl) }, { upsert: true });
     return preview;
   })();
   pending.set(id, job);

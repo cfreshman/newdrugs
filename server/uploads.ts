@@ -167,6 +167,7 @@ export async function deleteMediaFiles(remote=true){
   for(const job of pending){if(job.storage&&!remote)continue;try{
     if(job.storage)await deleteObjectFile(job.storage as ObjectLocation);
     await unlink(filePath(job._id)).catch(error=>{if(error.code!=='ENOENT')throw error;});
+    await (await import('./videoPosters')).deleteUploadPoster(job._id);
     await rows('mediaDeletes').deleteOne({_id:job._id});
   }catch{await rows<{_id:string;attempts:number;availableAt:number}>('mediaDeletes').updateOne({_id:job._id},{$inc:{attempts:1},$set:{availableAt:Date.now()+Math.min(3600000,1000*2**Math.min(Number(job.attempts||0),12))}});}}
 }

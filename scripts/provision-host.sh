@@ -5,7 +5,7 @@ test "$(id -u)" = 0
 test "$(. /etc/os-release; printf '%s' "$VERSION_ID")" = 24.04
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl gnupg xz-utils g++ make python3 nginx certbot python3-certbot-nginx
+apt-get install -y -qq ca-certificates curl gnupg xz-utils g++ make python3 nginx certbot python3-certbot-nginx ffmpeg
 if ! command -v node >/dev/null; then
   nd_install_dir=$(mktemp -d)
   cd "$nd_install_dir"

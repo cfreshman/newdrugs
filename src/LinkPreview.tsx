@@ -5,7 +5,7 @@ import {useExperience} from './ExperienceContext';
 import {BROWSER_VIEWS} from '../shared/experience';
 import {Globe} from '@phosphor-icons/react';
 import {loadLinkPreview,cachedLinkPreview} from './linkPreviewCache';
-import {CustomMedia,VideoMedia} from './CustomMedia';
+import {CustomMedia,PosterVideo} from './CustomMedia';
 import {textLinks,type LinkPreview as Preview} from '../shared/links';
 import {attachmentUrl,providerEmbed} from '../shared/postLinks';
 import {destinationPath,parseDestination} from '../shared/navigation';
@@ -32,7 +32,7 @@ function WebsiteCard({url,draft,depth,simple=false}:{url:string;draft:boolean;de
     {visible&&near&&<iframe src={embed.src} title={`${embed.provider}: ${preview?.title||'player'}`} loading="eager" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"/>}
   </div><a className="attachment-source" href={url} target="_blank" rel="noopener noreferrer">{preview?.title&&preview.title!==hostname?preview.title:`Open in ${embed.provider}`}</a></>
   :!simple&&preview?.kind==='image'&&preview.imageUrl?<><PostPhotos photos={[{id:`link:${url}`,name:preview.title||'Linked image',url:preview.imageUrl}]}/><a className="attachment-source" href={url} target="_blank" rel="noopener noreferrer">{hostname}</a></>
-  :preview?.kind==='video'&&!videoBroken?<><div className="linked-video"><VideoMedia src={url} active={visible&&near} onError={()=>setVideoBroken(true)}/></div><a className="attachment-source" href={url} target="_blank" rel="noopener noreferrer">{hostname}</a></>
+  :preview?.kind==='video'&&!videoBroken?<><PosterVideo className="linked-video" src={url} active={visible&&near} poster={preview.imageUrl} onError={()=>setVideoBroken(true)}/><a className="attachment-source" href={url} target="_blank" rel="noopener noreferrer">{hostname}</a></>
   :<a className="website-card" href={target?destinationPath(target):url} target={destination?undefined:'_blank'} rel="noopener noreferrer" onClick={event=>{if(destination&&navigate&&event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){event.preventDefault();navigate(target||destination);}}} aria-label={preview?.title?`${preview.title}, ${hostname}`:hostname}>
     <span className="website-image">{preview?.imageUrl&&!broken?<img src={preview.imageUrl} alt="" loading="lazy" onError={()=>setBroken(true)}/>:<Globe size={28} weight="light"/>}</span>
     <span className="website-copy"><span className="website-host">{hostname}</span><strong>{preview?.title||hostname}</strong><span className="website-description">{preview?.description||new URL(url).pathname.replace(/^\//,'')}</span></span>

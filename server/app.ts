@@ -49,6 +49,7 @@ import { streamLiveState, readLiveState } from './liveState';
 import { buildResourceLinks } from './resourceLinks';
 import { devApiGate,trustedDevKey } from './devGate';
 import { previewImage } from './linkPreviews';
+import {uploadVideoPoster} from './videoPosters';
 import { replyToReview } from './reviewReply';
 import {websiteRequest} from './websiteServing';
 import {reservedWebsiteUsername} from '../shared/website';
@@ -95,6 +96,12 @@ export function createApp() {
   app.get('/api/log-invites/:code/media/:fileId',previewGate,limiter('/api/log-invites/:code/media/:fileId', 300),async(req,res)=>{
     const file=await inviteMediaMetadata(String(req.params.code),String(req.params.fileId));
     res.set({'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'});await sendMedia(file,req,res);
+  });
+  app.get('/api/log-invites/:code/media/:fileId/poster',previewGate,limiter('/api/log-invites/:code/media/:fileId/poster', 120),async(req,res)=>{
+    const code=String(req.params.code),id=String(req.params.fileId),file=await inviteMediaMetadata(code,id);
+    const image=await uploadVideoPoster({userId:file.userId,source:'external',scope:'read'},id);
+    await inviteMediaMetadata(code,id);
+    res.set({'Content-Type':'image/webp','Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow','X-Content-Type-Options':'nosniff'}).send(image);
   });
   app.get('/api/page-preview',previewGate,limiter('/api/page-preview', 180),async(req,res)=>{
     const path=z.string().max(2048).parse(req.query.path||'/');res.set('Cache-Control','no-store').json(await pagePreview(path));
@@ -165,6 +172,10 @@ export function createApp() {
     const file=await uploadMetadata(requireActor(req),String(req.params.id),true);
     res.set('Content-Disposition',`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`);
     await sendMedia(file,req,res);
+  });
+  app.get('/api/files/:id/poster',async(req,res)=>{
+    const image=await uploadVideoPoster(requireActor(req),String(req.params.id));
+    res.set({'Content-Type':'image/webp','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}).send(image);
   });
   app.get('/api/admin/session', async (req, res) => { res.json(await adminStatus(req)); });
   app.post('/api/admin/login', limiter('/api/admin/login', 10, 15 * 60000, {credentialAttempts:true}), async (req, res) => {

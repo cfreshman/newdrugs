@@ -4,6 +4,7 @@ import type {Destination} from '../shared/navigation';
 import type {MediaItem} from './ExperienceContext';
 import {loadedPhotoPreview} from './PostPhotos';
 import {logImageUrl} from './logImageCache';
+import {logVideoPoster} from './logVideoPoster';
 import {isEditableLogTarget,observeLogLayerGeometry} from './LogModal';
 import {logMediaEntries,logImageBase,boundLogImage,pinchLogImage,type LogMediaSource,type LogMediaEntry,type LogImageSize,type LogImageTransform} from './logMediaDetailModel';
 import {AgentMarkdown} from './AgentMarkdown';
@@ -82,9 +83,9 @@ function LogDetailImage({file,preview,previous,next,zoom}:{file:NonNullable<LogM
 }
 
 function LogDetailVideo({file,active}:{file:NonNullable<LogMediaEntry['file']>;active:boolean}){
- const ref=useRef<HTMLVideoElement>(null),[loaded,setLoaded]=useState(false),[failed,setFailed]=useState(false);
+ const ref=useRef<HTMLVideoElement>(null),[failed,setFailed]=useState(false);
  useEffect(()=>{const node=ref.current;if(!active)node?.pause();return()=>node?.pause();},[active]);
- return <div className="log-media-detail-visual"><video ref={ref} src={file.url} controls playsInline muted loop autoPlay={active} preload={active?'metadata':'none'} onLoadedData={()=>setLoaded(true)} onError={()=>setFailed(true)}/>{!loaded&&!failed&&<span className="log-media-loading" role="status" aria-label="Loading video"><CircleNotch className="spin" size={26}/></span>}{failed&&<p className="quiet" role="status">Video unavailable</p>}</div>;
+ return <div className="log-media-detail-visual"><video ref={ref} src={file.url} poster={logVideoPoster(file.url,file.id)} controls playsInline muted loop autoPlay={active} preload={active?'metadata':'none'} onError={()=>setFailed(true)}/>{failed&&<p className="quiet" role="status">Video unavailable</p>}</div>;
 }
 
 export function LogMediaDetail({source,entries,selection,select,active,anchor,navigate,back,close}:{source:LogMediaSource;entries:LogMediaEntry[];selection:Selection;select(selection:Selection):void;active:boolean;anchor:RefObject<HTMLElement|null>;navigate:Navigate;back():void;close():void}){
