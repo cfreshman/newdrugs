@@ -108,6 +108,7 @@ export function App() {
   const [recordAttachments,setRecordAttachments]=useState<RecordContext[]>([]);
   const [media,setMedia]=useState<{items:MediaItem[];index:number}|null>(null);
   const workspaceRef=useRef<HTMLElement>(null);
+  const agentTalkSlot=useRef<HTMLDivElement>(null);
   const [data, setData] = useState<Bootstrap | null>(null);
   const talk=useTalkSession(data?.user.id);
   const [availableRelease,setAvailableRelease]=useState<string|null>(null),releaseState=useRef<AppReleaseState>({observed:null,available:null});
@@ -160,7 +161,7 @@ export function App() {
   useTopPagination(scroll.transcript, { enabled: Boolean(data) && (mode==='agent'||agentDockVisible) && !inputOccupied && !(panel && panelSpace === 'modal') && !chatHistory.error, hasMore: Boolean(chatHistory.cursor), count: messages.length, scope: data?.user.id, load: chatHistory.loadOlder });
   usePageBoundaryScroll(page,Boolean(data));
   usePageChatScroll(page, scroll.transcript, Boolean(data)&&mode==='agent', Boolean(panel && panelSpace === 'modal') || inputOccupied, scroll.onScroll);
-  const seenSurfaces = useRef(new Set<string>());
+  const seenSurfaces = useRef(new Set<string>()),seenTalkCreates=useRef(new Set<string>());
   const dictation = useDictation(draft, setDraft, logError);
   const busy = submitting || Boolean(run && !['completed', 'cancelled', 'failed', 'sleeping'].includes(run.status));
   const reviewing = run?.status === 'waiting_for_approval' && run.approvals.some(action => action.status === 'pending');
@@ -321,9 +322,10 @@ export function App() {
   };
   const backPanel = () => { const previous = panelHistory.at(-1); if (previous) { setPanel(previous.panel); setPanelContext(previous.context); setPanelHistory(history => history.slice(0, -1)); } else if (panelSpace === 'composer') setPanel(null); };
   const navigate = (destination: Destination) => {
+    if(destination.view==='spaces'&&destination.mode==='agent')destination={...destination,mode:'posts'};
     if(panel&&panelSpace==='modal'&&settingsViews.has(panel)&&!settingsViews.has(destination.view==='profile'?'account':destination.view))resumeSettings.current=true;
     if(mode==='agent'&&['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
-    if(mode==='agent'&&destination.view==='spaces'&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'posts'}};changeMode('posts');return;}
+    if(mode==='agent'&&destination.view==='spaces'){pendingRoute.current={destination:{...destination,mode:'posts'}};changeMode('posts');return;}
     if(destination.mode&&destination.mode!==mode){pendingRoute.current={destination};changeMode(destination.mode);return;}
     const {mode:_mode,...local}=destination;destination=local;
     if(destination.view==='chat_history'&&destination.resourceId)destination={...destination,view:'chat'};
@@ -416,7 +418,7 @@ export function App() {
     setSurface({ runId: active.id, id: active.surface.id, view: active.surface.view });
     const view = active.surface.view as Destination['view'];
     prepareAgentHandoff({...cleanDestinationContext(active.surface),view});
-    if(AGENT_VIEWS.has(view)||['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(view)){navigate({...cleanDestinationContext(active.surface),view});return;}
+    if(view==='spaces'||AGENT_VIEWS.has(view)||['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(view)){navigate({...cleanDestinationContext(active.surface),view});return;}
     open(view === 'profile' ? 'account' : view as Exclude<Panel, null>, cleanDestinationContext(active.surface), inlineViews.has(view) ? 'composer' : 'modal');
   };
   useEffect(() => {
@@ -424,6 +426,20 @@ export function App() {
     try { if (sessionStorage.getItem(`nd-surface:${run.surface.id}`)) return; } catch { /* Optional storage. */ }
     openRunSurface(run);
   }, [run?.surface?.id, clientId]);
+  useEffect(()=>{
+    if(!run||run.clientId!==clientId||!data?.user.id)return;
+    for(const action of run.approvals){
+      if(action.operation!=='spaces.create'||action.status!=='approved')continue;
+      const result=action.result as {ok?:boolean;data?:{id?:unknown;hostId?:unknown}}|undefined,id=result?.data?.id;
+      if(result?.ok!==true||typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id)||result.data?.hostId!==data.user.id)continue;
+      const key=`${run.id}:${action.id}`;
+      if(seenTalkCreates.current.has(key))continue;
+      try{if(sessionStorage.getItem(`nd-talk-created:${key}`)){seenTalkCreates.current.add(key);continue;}sessionStorage.setItem(`nd-talk-created:${key}`,'1');}catch{}
+      seenTalkCreates.current.add(key);
+      if(talk.space?.id===id&&talk.room)continue;
+      void talk.join(id,true).catch(cause=>{seenTalkCreates.current.delete(key);try{sessionStorage.removeItem(`nd-talk-created:${key}`);}catch{}logError(errorText(cause));});
+    }
+  },[run?.id,run?.revision,clientId,data?.user.id]);
   const closePanel = async (saved = false, fileIds: string[] = []) => {
     if (data?.user.id !== identity.current) return;
     setAfterAccount(null);
@@ -596,8 +612,9 @@ export function App() {
         <span id="orb-hint" className="sr-only">{dictation.active ? 'Cancel on the left or send on the right. Either clears the draft.' : effectiveDrag.draggable ? 'Tap to dictate. Drag sideways to move chat, or use left and right arrow keys while focused.' : 'Tap to dictate.'}</span>
       </div>
       {mode!=='agent'&&<footer className="agent-dock-footer"><button onClick={()=>changeMode('agent')} title="Open Agent mode"><Robot size={21}/>Agent</button><div className="agent-dock-actions">{dictationControl}<button className="agent-dock-close" aria-label="Close agent" onClick={closeAgent}><X size={21}/></button></div></footer>}
-      {mode==='agent'&&talk.space&&talk.room&&<TalkDock/>}
+      {mode==='agent'&&talk.space&&talk.room&&<div ref={agentTalkSlot} className="talk-dock-slot" data-expanded={talk.expanded||undefined} aria-hidden="true"/>}
     </main>
+    {mode==='agent'&&talk.space&&talk.room&&<TalkDock anchor={agentTalkSlot}/>}
     <div className="settings-controls"><CallStatusControl fallback={<button className="settings-button" data-update-available={availableRelease||undefined} aria-label={`${availableRelease?`App update ${availableRelease} available${hasUnreadNotifications?`, Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:''}`:hasUnreadNotifications&&panel!=='notifications'?`Notifications, ${notificationsCapped?'at least ':''}${unreadNotifications} updates`:'Settings'}, ${balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))} ${!data.user.handle && data.wallet.starterAvailableNanos ? 'starter credit available after signup' : 'credit balance'}`} onClick={reopenSettings}><span>{balanceLabel(data.wallet.balanceNanos + (!data.user.handle ? data.wallet.starterAvailableNanos || 0 : 0))}</span>{availableRelease?<><Star size={22} weight="fill"/><span className="notification-count update-indicator" aria-hidden="true">{hasUnreadNotifications?notificationBadge:''}</span></>:hasUnreadNotifications&&panel!=='notifications'?<><Bell size={22}/><span className="notification-count" aria-hidden="true">{notificationBadge}</span></>:<GearSix size={22}/>}</button>}/></div></>}
     <div ref={talk.audioHost} hidden aria-hidden="true"/>
     {settingsSnapshot&&<Dialog key={`settings:${settingsSnapshot.userId}`} visible={settingsVisible} title={settingsSnapshot.title} close={()=>{resumeSettings.current=false;void closePanel();}} back={settingsSnapshot.history.length?backPanel:undefined}>{settingsSnapshot.content}</Dialog>}

@@ -1,4 +1,4 @@
-import {useEffect,useState,type MouseEvent} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState,type MouseEvent,type RefObject} from 'react';
 import {CaretDown,CaretUp,Hand,Info,Microphone,MicrophoneSlash,PhoneDisconnect,ShareNetwork,Waveform} from '@phosphor-icons/react';
 import {useTalk} from './TalkSession';
 import {NavLink,plainLinkClick} from './NavLink';
@@ -13,8 +13,17 @@ function TalkElapsedTime({startedAt}:{startedAt:string}){
  const clock=hours?`${hours}:${String(minutes%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`:`${minutes}:${String(seconds%60).padStart(2,'0')}`;
  return <time className="talk-live-time" dateTime={startedAt}>Live {clock}</time>;
 }
-export function TalkDock(){
+export function TalkDock({anchor}:{anchor?:RefObject<HTMLElement|null>}={}){
  const talk=useTalk(),[infoOpen,setInfoOpen]=useState(false),[selected,setSelected]=useState<{id:string;name:string;speaker:boolean}|null>(null);
+ const dock=useRef<HTMLElement>(null);
+ useLayoutEffect(()=>{
+  const node=dock.current,slot=anchor?.current,parent=slot?.parentElement;if(!node||!slot||!parent)return;
+  let frame=0;const sync=()=>{frame=0;const fullscreen=node.hasAttribute('data-expanded')&&window.matchMedia('(max-width:760px) and (max-height:820px)').matches;if(fullscreen){for(const name of ['left','top','width','height'])node.style.removeProperty(name);return;}const rect=slot.getBoundingClientRect();node.style.left=`${rect.left}px`;node.style.top=`${rect.top}px`;node.style.width=`${rect.width}px`;node.style.height=`${rect.height}px`;};
+  const schedule=()=>{if(!frame)frame=requestAnimationFrame(sync);};
+  const resize=new ResizeObserver(schedule),position=new MutationObserver(schedule);resize.observe(slot);resize.observe(parent);position.observe(parent,{attributes:true,attributeFilter:['style','class']});
+  window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);window.visualViewport?.addEventListener('scroll',schedule);sync();
+  return()=>{cancelAnimationFrame(frame);resize.disconnect();position.disconnect();window.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('scroll',schedule);};
+ },[anchor,talk?.expanded]);
  if(!talk?.space||!talk.room)return null;
  const {space,members,speaking,requests,mic,audioBlocked,expanded,busy,error,copied}=talk,role=space.myRole||'listener',canSpeak=role==='host'||role==='speaker';
  const participants=members.filter(person=>person.identity),speakers=participants.filter(person=>space.speakerIds.includes(person.identity)),listeners=participants.filter(person=>!space.speakerIds.includes(person.identity));
@@ -25,7 +34,7 @@ export function TalkDock(){
  const profileTo=(id:string)=>({view:'person' as const,resourceId:id});
  const personButton=(person:typeof members[number],speaker:boolean)=>{const name=person.name||'Member';return <button type="button" className="space-person-open" aria-label={`Options for ${name}`} aria-expanded={selected?.id===person.identity} onClick={()=>setSelected(current=>current?.id===person.identity?null:{id:person.identity,name,speaker})}>{avatar(name,photo(person.metadata))}<strong>{name}</strong></button>;};
  const personMenu=()=>{if(!selected)return null;const canManage=role==='host'&&selected.id!==space.hostId,card=space.participantCards?.find(person=>person.id===selected.id),name=card?.name||selected.name,handle=card?.handle?`@${card.handle}`:undefined;return <div className="space-person-menu"><div className="space-person-menu-head"><strong>{name}</strong>{handle&&<small>{handle}</small>}</div><div className="space-person-actions">{profileIds.has(selected.id)?<NavLink to={profileTo(selected.id)} onClick={openProfile}>View profile</NavLink>:<span className="quiet">Profile unavailable</span>}{canManage&&selected.speaker&&!space.hostOffer&&<button type="button" disabled={busy} onClick={()=>{action(talk.offerHost(selected.id));setSelected(null);}}>Offer host</button>}{canManage&&selected.speaker&&<button type="button" disabled={busy} onClick={()=>{action(talk.revoke(selected.id));setSelected(null);}}>Remove mic</button>}{canManage&&<button type="button" disabled={busy} onClick={()=>{action(talk.remove(selected.id));setSelected(null);}}>Remove from talk</button>}<button type="button" onClick={()=>setSelected(null)}>Close</button></div></div>;};
- return <section className="talk-dock" data-expanded={expanded||undefined} aria-label={`Talk space: ${space.title}`}>
+ return <section ref={dock} className="talk-dock" data-expanded={expanded||undefined} aria-label={`Talk space: ${space.title}`}>
   <div className="talk-dock-bar"><button className="talk-dock-title" type="button" aria-expanded={expanded} onClick={()=>talk.setExpanded(!expanded)}><Waveform size={20}/><span><strong>{space.title}</strong>{!expanded&&(space.hostOffer?.toId===talk.room.localParticipant.identity?<small className="talk-host-notice">Host offer · Open to respond</small>:<small className="talk-compact-presence"><span className="talk-presence-group"><span className="talk-compact-avatars">{speakers.slice(0,3).map(person=><span key={person.identity} title={person.name||'Speaker'}>{avatar(person.name||'Member',photo(person.metadata))}</span>)}</span><span>{speakers.length} speaking</span></span>{listeners.length>0&&<span className="talk-presence-group"><span className="talk-compact-avatars">{listeners.slice(0,3).map(person=><span key={person.identity} title={person.name||'Listener'}>{avatar(person.name||'Member',photo(person.metadata))}</span>)}</span><span>{listeners.length} listening</span></span>}</small>)}</span></button>
    {audioBlocked&&<button type="button" className="talk-dock-audio" onClick={()=>action(talk.startAudio())}>Hear audio</button>}
    <button type="button" className="talk-dock-icon talk-hangup" aria-label={role==='host'?'End talk space':'Leave talk space'} disabled={busy} onClick={()=>action(role==='host'?talk.end():talk.leave())}><PhoneDisconnect size={21}/></button>
