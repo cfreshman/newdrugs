@@ -52,6 +52,14 @@ it('retains chronological neighbors for direct calendar and deep-link opens',asy
  await act(async()=>dom.root.render(createElement(Harness,{id:'a'})));
  expect(value.list).toBe(false);expect(value.neighbors.previous?.id).toBe('older');expect(value.neighbors.next?.id).toBe('newer');
 });
+it('keeps filtered calendar navigation chronological within its filters',async()=>{
+ const context:LogSequence={key:'calendar-filter',ids:['a'],filters:{scope:'shared',query:'garden',personId:'friend'}};
+ await act(async()=>dom.root.render(createElement(Harness,{id:'a',context})));
+ expect(api.operation).toHaveBeenCalledWith('log.neighbors',{entryId:'a',...context.filters},{signal:expect.anything()});
+ expect(value.list).toBe(false);
+ expect(value.neighbors.previous?.id).toBe('older');
+ expect(value.sequence()?.filters).toEqual(context.filters);
+});
 it('keeps list context out of share URLs and stays in the Agent workspace when opening its profile list',async()=>{
  const navigate=vi.fn();function Open(){const open=useOpenLogList(navigate);return createElement('button',{onClick:()=>open(entry('a') as any,[entry('a'),entry('b')] as any)},'Open');}
  await act(async()=>dom.root.render(createElement(ExperienceContext.Provider,{value:{mode:'agent'} as any},createElement(Open))));

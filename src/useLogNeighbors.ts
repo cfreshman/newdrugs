@@ -11,7 +11,7 @@ import {useRecordRefresh} from './useRecordRefresh';
 export function useLogNeighbors({entryId,userId,visible,context}:{entryId:string;userId:string;visible:boolean;context?:LogSequence}){
  const [neighbors,setNeighbors]=useState<{previous:LogEntry|null;next:LogEntry|null}>({previous:null,next:null}),[pending,setPending]=useState(false);
  const sequence=useRef<LogSequence|undefined>(readLogSequence(context)),generation=useRef(0),controller=useRef<AbortController|null>(null),[refresh,setRefresh]=useState(0);
- const list=Boolean(context);
+ const list=Boolean(context&&!context.filters);
  useRecordRefresh(['log','people'],()=>{if(visible)setRefresh(value=>value+1);});
  useEffect(()=>{
   const ticket=++generation.current;controller.current?.abort();const abort=new AbortController();controller.current=abort;
@@ -24,6 +24,7 @@ export function useLogNeighbors({entryId,userId,visible,context}:{entryId:string
   const remember=(entry:LogEntry)=>{cacheLogEntry(userId,entry);preloadLogPhotos(entry);};
   const run=async()=>{
    if(!context){const result=await operation<{previous:LogEntry|null;next:LogEntry|null}>('log.neighbors',{entryId},{signal:abort.signal});if(ticket!==generation.current)return;for(const entry of [result.previous,result.next])if(entry)remember(entry);setNeighbors(result);return;}
+   if(initial?.filters){const result=await operation<{previous:LogEntry|null;next:LogEntry|null}>('log.neighbors',{entryId,...initial.filters},{signal:abort.signal});if(ticket!==generation.current)return;for(const entry of [result.previous,result.next])if(entry)remember(entry);setNeighbors(result);return;}
    if(!initial||index<0)return;
    let current={...initial,ids:[...initial.ids]};const unavailable=new Set<string>(),cursors=new Set<string>();
    if(current.query?.calendarDay&&current.nextCursor===undefined){const page=await operation<LogPage>('log.list',{...current.query,limit:30},{signal:abort.signal});if(ticket!==generation.current)return;current={...current,ids:[...new Set([...page.items.map(item=>item.id),...current.ids])],nextCursor:page.nextCursor};for(const item of page.items)cacheLogEntry(userId,item,{persist:false});}

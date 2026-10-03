@@ -235,9 +235,13 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  }
  const row=['log.delete','log.leave'].includes(name)?requireValue(await entries().findOne({_id:String(d.entryId),members:userId,deletedAt:{$exists:false}},{session}),'This Log entry is unavailable.'):await logEntryFor(userId,String(d.entryId),session);
  if(name==='log.neighbors'){
-  const allowed=await access(userId,session),result:{previous:LogEntry|null;next:LogEntry|null}={previous:null,next:null};
+  const filters:Filter<LogRow>[]=[await access(userId,session),{members:userId}],result:{previous:LogEntry|null;next:LogEntry|null}={previous:null,next:null};
+  if(d.scope==='private')filters.push({members:{$size:1},invited:{$size:0}});
+  if(d.scope==='shared')filters.push({$or:[{'members.1':{$exists:true}},{'invited.0':{$exists:true}}]});
+  if(d.personId)filters.push({members:String(d.personId)});
+  const groups=await queryFilter(String(d.query||''),userId,session);if(groups.length)filters.push({$or:groups});
   for(const direction of ['previous','next'] as const){const comparison=direction==='previous'?'$lt':'$gt',order=direction==='previous'?-1:1;
-   const adjacent=(await visibleEntries({$and:[allowed,{members:userId},{$or:[{date:{[comparison]:row.date}},{date:row.date,createdAt:{[comparison]:row.createdAt}},{date:row.date,createdAt:row.createdAt,_id:{[comparison]:row._id}}]}]},session,{date:order,createdAt:order,_id:order},1))[0];if(adjacent)result[direction]=await project(adjacent,userId,session);
+   const adjacent=(await visibleEntries({$and:[...filters,{$or:[{date:{[comparison]:row.date}},{date:row.date,createdAt:{[comparison]:row.createdAt}},{date:row.date,createdAt:row.createdAt,_id:{[comparison]:row._id}}]}]},session,{date:order,createdAt:order,_id:order},1))[0];if(adjacent)result[direction]=await project(adjacent,userId,session);
   }return result;
  }
 

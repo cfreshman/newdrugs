@@ -43,8 +43,9 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
  useLayoutEffect(()=>setSelectedDay(initialDay||null),[initialDay]);
  const changeDay=useCallback((date:string|null)=>{pendingDayIntent.current=null;setSelectedDay(date);actions.current.onDayChange?.(date||undefined);},[]);
  const closeDay=useCallback(()=>changeDay(null),[changeDay]);
- const chooseEntry=useCallback((entry:LogEntry|LogCalendarTile)=>{changeDay(null);openEntry(entry);},[changeDay,openEntry]);
  const filters={scope,...(query?{query}:{}),...(personId?{personId}:{})};
+ const filtered=scope!=='all'||Boolean(query||personId);
+ const chooseEntry=useCallback((entry:LogEntry|LogCalendarTile)=>{changeDay(null);openEntry(entry,undefined,filtered?filters:undefined);},[changeDay,openEntry,scope,query,personId]);
  const neighboringDays=useLogDayNeighbors(selectedDay,filters,visible&&Boolean(selectedDay));
  useEffect(()=>{
   if(!selectedDay||neighboringDays.date!==selectedDay||neighboringDays.pending)return;
@@ -111,7 +112,7 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
      <div className="log-calendar" style={{height:estimateSize()}}>{days.map(day=>{const date=day.toString(),entries=onDay(date),birthdays=birthdaysOn(date),special=entries.length>0&&entries.every(entry=>entry.date!==date),label=birthdays.length?`${dateLabel(date)}: ${birthdays.map(person=>`${person.handle||person.name}'s birthday`).join(', ')}${entries.length?`, ${entries.length} entries`:''}`:entries.length?`${dateLabel(date)}: ${entries.length===1?entries[0].title||'one entry':`${entries.length} entries`}`:`Add entry for ${dateLabel(date)}`,content=<>{special?<Star className="log-day-special" weight="fill" size={20}/>:entries.length?<span className="log-day-mosaic" data-columns={entries.length===1?1:entries.length<=4?2:3}>{entries.slice(0,9).map(entry=>{const image=entry.cover;return <span key={entry.id}>{image&&<img src={logImageUrl(image.url)} alt="" loading="lazy"/>}</span>;})}</span>:birthdays.length?<Cake className="log-day-special" size={20}/>:<span className="log-empty-date">{day.day}</span>}{birthdays.length>0&&entries.length>0&&<Cake className="log-birthday-mark" size={15}/>}</>;
       const state={className:'log-day',...(date===today.toString()?{'data-today':true}:{}),...(Temporal.PlainDate.compare(day,today)>0&&!entries.length&&!birthdays.length?{'data-future':true}:{}),'aria-label':label};
       if(birthdays.length===1&&!entries.length)return <NavLink key={date} {...state} to={{view:'person',resourceId:birthdays[0].personId}} navigate={()=>showPerson(birthdays[0].personId)}>{content}</NavLink>;
-      if(entries.length===1&&!birthdays.length)return <NavLink key={date} {...state} to={{view:'log',resourceId:entries[0].id}} navigate={()=>openEntry(entries[0])}>{content}</NavLink>;
+      if(entries.length===1&&!birthdays.length)return <NavLink key={date} {...state} to={{view:'log',resourceId:entries[0].id}} navigate={()=>openEntry(entries[0],undefined,filtered?filters:undefined)}>{content}</NavLink>;
       if(calendarDays.has(date)&&!entries.length&&!birthdays.length)return <NavLink key={date} {...state} to={{view:'log_compose',date}} navigate={()=>createEntry(date)}>{content}</NavLink>;
       return <NavLink key={date} {...state} to={{view:'log',date,logScope:scope,query:query||undefined,personId}} navigate={()=>changeDay(date)}>{content}</NavLink>;
      })}</div><div className="log-week-right" aria-label={age?`${age.years} years${age.months?`, ${age.months} months`:""}`:undefined}>{age?.label}</div>

@@ -4,7 +4,7 @@ import {logSearchInput,type LogSearchResult,type LogSearchInput} from '../shared
 import type {Destination,LogSequence} from '../shared/navigation';
 import {useExperience} from './ExperienceContext';
 import {primeLogEntry} from './logEntryCache';
-const sequenceSchema=z.object({key:z.string().min(1).max(100),ids:z.array(z.string().min(1).max(150)),query:z.object(logListInput).omit({before:true,limit:true}).partial().optional(),search:z.object(logSearchInput).omit({cursor:true,limit:true}).optional(),nextCursor:z.string().max(1500).nullable().optional()});
+const sequenceSchema=z.object({key:z.string().min(1).max(100),ids:z.array(z.string().min(1).max(150)),query:z.object(logListInput).omit({before:true,limit:true}).partial().optional(),search:z.object(logSearchInput).omit({cursor:true,limit:true}).optional(),filters:z.object({scope:z.enum(['all','private','shared']),query:z.string().max(300).optional(),personId:z.string().max(100).optional()}).optional(),nextCursor:z.string().max(1500).nullable().optional()});
 export function readLogSequence(value:unknown):LogSequence|undefined{const parsed=sequenceSchema.safeParse(value);return parsed.success?{...parsed.data,ids:[...new Set(parsed.data.ids)]}:undefined;}
 export function useOpenLogList(navigate:(destination:Destination)=>void){
  const experience=useExperience();
