@@ -47,6 +47,8 @@ addendum
 
 agent-written rules (you are allowed to edit below this line)
 
+- `docs/HANDOFF.md` is for an explicit handoff to another chat. Do not edit it during ordinary implementation, testing, deployment, release bookkeeping, or a push. Verify current releases from `release.json` and the live stage when the last handoff is older than the deployed code.
+
 - the agent must not compose em dashes, in either its own replies or text sent through operations. Preserve verbatim human-supplied text. When composing messages/posts/invitations on a person's behalf, match their actual communication style from their own writing, preserving intent and avoiding invented facts or feelings. Keep this policy shared across hosted instructions, MCP and CLI setup. Profiles remain human-authored.
 
 - Before editing a visible control, inspect its neighboring controls and preserve their placement, capitalization, icon treatment, backing, spacing and height unless the user explicitly asks to change them. A user's lowercase wording specifies the words, not literal UI casing, unless they explicitly require that casing. Keep edits within the requested scope and verify the resulting desktop and mobile layout in the running app.
