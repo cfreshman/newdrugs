@@ -54,10 +54,12 @@ import {postVideoPoster} from './postVideoLinks';
 import { replyToReview } from './reviewReply';
 import {websiteRequest} from './websiteServing';
 import {reservedWebsiteUsername} from '../shared/website';
+import {MAX_SQUARE_BYTES} from '../src/squareModel';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
 const availableHandle=credentials.shape.handle.refine(handle=>!reservedWebsiteUsername(handle),'Usernames cannot begin with u_.');
 const registrationCredentials=credentials.extend({handle:availableHandle});
+const makeRequestBytes=MAX_SQUARE_BYTES+1024*1024;
 
 
 export function createApp() {
@@ -73,7 +75,7 @@ export function createApp() {
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '128kb' }), async (req, res) => {
     await stripeWebhook(req.body, req.get('stripe-signature') || ''); res.json({ received: true });
   });
-  app.post('/mcp', limiter('/mcp', 300), authenticate, express.json({ limit: '2200kb' }), async (req, res) => {
+  app.post('/mcp', limiter('/mcp', 300), authenticate, express.json({ limit: makeRequestBytes }), async (req, res) => {
     const actor = requireActor(req);
     if (actor.source === 'browser') throw new AppError(403, 'token_required', 'Connect MCP using an access token.');
     const server = createMcpServer(actor);
@@ -122,12 +124,12 @@ export function createApp() {
     const event=await receiver.receive((req.body as Buffer).toString('utf8'),req.get('Authorization'));
     await callWebhook(event);await spaceWebhook(event);res.json({ok:true});
   });
-  const ordinaryJson=express.json({limit:'32kb'}),websiteJson=express.json({limit:'2200kb'}),websiteSourceLimit=limiter('/api/website/source',30);
+  const ordinaryJson=express.json({limit:'32kb'}),websiteJson=express.json({limit:'2200kb'}),makeJson=express.json({limit:makeRequestBytes}),websiteSourceLimit=limiter('/api/website/source',30);
   const requestLimits=apiRequestLimits();
   app.use('/api', devApiGate, cookieParser(), csrf, (req,res,next)=>authenticate(req,res,authError=>{
     if(authError)delete req.actor;
     requestLimits(req,res,limitError=>next(limitError||authError));
-  }), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):ordinaryJson(req,res,next));
+  }), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):/^\/operations\/make\.(?:create|edit)$/.test(req.path)?makeJson(req,res,next):ordinaryJson(req,res,next));
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
     if (!req.actor) {
@@ -299,6 +301,7 @@ export function createApp() {
   if (config.APP_ENV === 'staging') app.use((_req, res) => { res.status(404).set('Cache-Control', 'no-store').end(); });
   const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     if (res.headersSent) { res.end(); return; }
+    if (error?.type === 'entity.too.large') { res.status(413).json({ error: { code: 'request_too_large', message: 'This request is too large.' } }); return; }
     if (error instanceof ZodError) { res.status(422).json({ error: { code: 'validation', message: error.issues.map(i => i.message).join(' ') } }); return; }
     if (error instanceof AppError) { res.status(error.status).json({ error: { code: error.code, message: error.message } }); return; }
     if (error?.code === 11000) { res.status(409).json({ error: { code: 'conflict', message: 'That name or request is already in use. Please try again.' } }); return; }
