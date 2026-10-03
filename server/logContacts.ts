@@ -4,6 +4,7 @@ import {rows,transaction} from './db';
 import {users,type Actor} from './auth';
 import {AppError} from './errors';
 import type {LogContact} from '../shared/logJoining';
+import {logMemberPairs,backfillLogPeople} from './logUsername';
 interface ContactSource {_id:string;members:string[];viewers:{userId:string;people:string[]}[]}
 interface ContactCount {_id:string;userId:string;personId:string;count:number}
 interface ContactState {_id:string;dirty?:boolean;generation?:number;revision?:number;cursor?:string|null;lease?:string;leaseUntil?:number;sourceRevision?:number}
@@ -15,7 +16,7 @@ export async function syncLogContacts(entryId:string,session?:ClientSession):Pro
  if(!session)return transaction(session=>syncLogContacts(entryId,session));
  const entry=await rows('logEntries').findOne({_id:entryId},{session,projection:{members:1,deletedAt:1}}),prior=await sources().findOne({_id:entryId},{session});
  // Fence source edits against a concurrent backfill or repair.
- if(entry)await rows<{_id:string;contactIndexRevision:number}>('logEntries').updateOne({_id:entryId},{$inc:{contactIndexRevision:1}},{session});
+ if(entry)await rows<{_id:string;contactIndexRevision:number}>('logEntries').updateOne({_id:entryId},{$inc:{contactIndexRevision:1},$set:{memberPairKeys:entry.deletedAt?[]:logMemberPairs(entry.members as string[])}},{session});
  const members=entry&&!entry.deletedAt?entry.members as string[]:[];
  const suspended=members.length?await users().findOne({_id:{$in:members},suspendedAt:{$type:'string'}},{session,projection:{_id:1}}):null;
  const blocks=members.length?await rows('blocks').find({members:{$in:members}},{session,projection:{members:1}}).toArray():[];
@@ -83,4 +84,10 @@ export async function repairLogContacts(limit=20){
  const batch=await rows('logEntries').find({members:state._id,...(state.cursor?{_id:{$gt:state.cursor}}:{})},{projection:{_id:1}}).sort({_id:1}).limit(limit).toArray();
  try{for(const entry of batch)await syncLogContacts(entry._id);await states().updateOne({_id:state._id,lease,revision:state.revision},{$set:{cursor:batch.at(-1)?._id||state.cursor,dirty:batch.length===limit,leaseUntil:0}});return batch.length;}catch(error){await states().updateOne({_id:state._id,lease,revision:state.revision},{$set:{leaseUntil:0}});throw error;}
 }
-export function startLogContactWorker(){let stopped=false,running:Promise<unknown>|undefined;const tick=()=>{if(stopped||running)return;running=backfillLogContacts().then(()=>repairLogContacts()).catch(error=>console.error('Log contact indexing:',error.name)).finally(()=>{running=undefined;});};tick();const timer=setInterval(tick,1000);return async()=>{stopped=true;clearInterval(timer);await running;};}
+export async function backfillLogMemberPairs(limit=50){
+ const meta=rows('logContactMeta'),key='member-pairs-v1',state=await meta.findOne({_id:key});if(state?.done)return 0;
+ const batch=await rows('logEntries').find(state?.cursor?{_id:{$gt:String(state.cursor)}}:{},{projection:{_id:1,revision:1,members:1,deletedAt:1}}).sort({_id:1}).limit(limit).toArray();
+ for(const entry of batch)await rows('logEntries').updateOne({_id:entry._id,revision:entry.revision},{$set:{memberPairKeys:entry.deletedAt?[]:logMemberPairs(entry.members as string[]||[])}});
+ await meta.updateOne({_id:key},{$set:{cursor:batch.at(-1)?._id||state?.cursor||'',done:batch.length<limit}},{upsert:true});return batch.length;
+}
+export function startLogContactWorker(){let stopped=false,running:Promise<unknown>|undefined;const tick=()=>{if(stopped||running)return;running=backfillLogContacts().then(()=>repairLogContacts()).then(()=>backfillLogMemberPairs()).then(()=>backfillLogPeople()).catch(error=>console.error('Log contact indexing:',error.name)).finally(()=>{running=undefined;});};tick();const timer=setInterval(tick,1000);return async()=>{stopped=true;clearInterval(timer);await running;};}

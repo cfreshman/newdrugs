@@ -7,6 +7,7 @@ import {syncSourceAttachments} from './attachmentReferences';
 import {listStorage,storageAttachments} from './storage';
 import type {StorageType,StorageLocation} from '../shared/storage';
 import {defaultPreferences} from '../shared/preferences';
+import {logPersonGrams} from '../shared/logPeople';
 import {logOperation,logEntryFor,hasSharedHangouts} from './log';
 import {makeOperation,normalizeMakeProject,stageMakePublish} from './make';
 import {endCallForConnection} from './calling';
@@ -229,7 +230,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       let area: CoarseArea|null|undefined;
       if (locationCell===null) area=null;
       else if (typeof locationCell==='string') { const record=requireValue(await rows('locationAreas').findOne({_id:locationCell},options)); area={cell:locationCell,label:String(record.label),point:coarsePoint(locationCell)}; }
-      const values = { ...fields, ...(area!==undefined ? {area,city:area?.label||''} : {}),
+      const values = { ...fields, ...(d.name!==undefined?{logNameGrams:logPersonGrams(String(d.name))}:{}),...(area!==undefined ? {area,city:area?.label||''} : {}),
         ...(d.interests ? { interests: [...new Set((d.interests as string[]).map(s => s.toLowerCase()))] } : {}) };
       const saved = requireValue(await users().findOneAndUpdate({ _id: userId }, { $set: values }, { ...options, returnDocument: 'after' }));
       await enqueueSearch('profiles', userId, session!);

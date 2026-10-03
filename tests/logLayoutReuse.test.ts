@@ -8,6 +8,25 @@ const api=vi.hoisted(()=>({operation:vi.fn()}));
 vi.mock('../src/api',async original=>({...await original<typeof import('../src/api')>(),operation:api.operation}));
 let dom:ReturnType<typeof setupDOM>;
 beforeEach(()=>{dom=setupDOM();api.operation.mockReset();});afterEach(()=>dom.cleanup());
+it('keeps Log blank until the saved Grid or List arrangement is known',async()=>{
+ let resolvePreferences!:(value:any)=>void;
+ api.operation.mockImplementation((name,input)=>name==='log.preferences'?new Promise(resolve=>{resolvePreferences=resolve;}):name==='log.list'?Promise.resolve({items:[],nextCursor:null}):name==='log.birthdays'?Promise.resolve({items:[]}):name==='log.birthday_get'?Promise.resolve({birthday:null}):Promise.resolve({days:[],indexing:false}));
+ await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogPanel,{user:{id:'me',name:'Me'} as any,navigate:vi.fn()}))));
+ expect(dom.container.querySelector('.log-retained-calendar,.log-gallery,.log-list')).toBeNull();
+ expect(api.operation.mock.calls.some(([name])=>name==='log.calendar')).toBe(false);
+ await act(async()=>resolvePreferences({arrangement:'list',todayPresentation:'full',views:[]}));
+ expect(dom.container.querySelector('.log-list')).not.toBeNull();
+ expect(dom.container.querySelector('.log-retained-calendar:not([hidden])')).toBeNull();
+});
+it('uses the ordinary three-row Log card for search results',async()=>{
+ const entry={id:'shared',ownerId:'me',date:'2026-09-20',title:'A day',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,createdAt:'2026-09-20T12:00:00Z',updatedAt:'2026-09-20T12:00:00Z',cover:null,membership:'member',contributors:[{userId:'me',name:'Me',note:'',files:[]},{userId:'friend',name:'Cyrus Freshman',handle:'cyrus',note:'',files:[]}],invitations:[]};
+ api.operation.mockImplementation(async(name)=>name==='log.preferences'?{arrangement:'list',todayPresentation:'full',views:[]}:name==='log.search'?{items:[{entryId:entry.id,title:entry.title,date:entry.date,place:'',snippet:'With Cyrus Freshman',score:1,match:'text',entry}],nextCursor:null,indexing:false,mode:'keyword',notices:[]}:name==='log.list'?{items:[],nextCursor:null}:name==='log.birthdays'?{items:[]}:name==='log.birthday_get'?{birthday:null}:{days:[],indexing:false});
+ await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogPanel,{user:{id:'me',name:'Me'} as any,navigate:vi.fn(),initialQuery:'cyrus'}))));
+ const row=dom.container.querySelector('.log-search-results .log-list>a')!;
+ expect([...row.querySelectorAll('span:last-child > *')].map(node=>node.className||node.tagName.toLowerCase())).toContain('log-list-people');
+ expect(row.querySelector('.log-list-people')?.textContent).toBe('Me, Cyrus Freshman');
+ expect(row.querySelector('.log-list-preview')).toBeNull();
+});
 it('reshapes loaded calendar tiles immediately, retaining the calendar and avoiding a second list fetch',async()=>{
  let savedPreferences={arrangement:'calendar',todayPresentation:'full',views:[]};
  const date=Temporal.Now.plainDateISO().toString(),tile={id:'entry',date,title:'A day together',createdAt:'2026-09-27T00:00:00Z',cover:null};let finish!:(page:any)=>void;

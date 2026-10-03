@@ -1,5 +1,6 @@
 import {publicUploadName} from './uploadNames';
 import {listLogContacts} from './logContacts';
+import {matchingLogPeople,logMemberPair} from './logUsername';
 import {Temporal} from '@js-temporal/polyfill';
 import {workGate} from './workGate';
 import {relatedLog,searchLog} from './search/log';
@@ -115,7 +116,16 @@ async function patchContribution(row:LogRow,userId:string,patch:LogContributionP
  return {first,removed:previous.filter(id=>!fileIds.includes(id))};
 }
 async function notifyFirstContribution(row:LogRow,actorId:string,session?:ClientSession){for(const member of row.members)if(member!==actorId)await notification(row,actorId,member,'log_update',session);}
-function queryFilter(query:string){return logQueryGroups(query).map(group=>({$and:group.map(term=>{const regex=new RegExp(term.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'),match={$or:[{title:regex},{place:regex},{'contributions.note':regex}]};return term.exclude?{$nor:[match]}:match;})}));}
+async function queryFilter(query:string,userId:string,session?:ClientSession){
+ const parsed=logQueryGroups(query),people=new Map<string,Awaited<ReturnType<typeof matchingLogPeople>>>();
+ for(const text of new Set(parsed.flatMap(group=>group.map(term=>term.text))))people.set(text,await matchingLogPeople(text,session));
+ return parsed.map(group=>({$and:group.map(term=>{
+  const regex=new RegExp(term.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+  const matched=people.get(term.text)||[],others=matched.filter(person=>person.id!==userId).map(person=>logMemberPair(userId,person.id));
+  const match={$or:[{title:regex},{place:regex},{'contributions.note':regex},...(others.length?[{memberPairKeys:{$in:others}}]:[]),...(matched.some(person=>person.id===userId)?[{members:userId}]:[])]};
+  return term.exclude?{$nor:[match]}:match;
+ })}));
+}
 async function list(userId:string,d:LogList,session?:ClientSession,full=false){
  if(d.calendarDay&&(d.from||d.through||d.recurring))throw new AppError(422,'log_dates','Use calendarDay without from, through or recurring.');
  if(d.from&&d.through&&d.from>d.through)throw new AppError(422,'log_dates','The end date must follow the start date.');
@@ -124,7 +134,7 @@ async function list(userId:string,d:LogList,session?:ClientSession,full=false){
  if(d.calendarDay)filter.push(calendarDateFilter(d.calendarDay,d.includeAnniversaries));
  if(d.personId)filter.push({members:d.personId});if(d.recurring)filter.push({recurrence:{$ne:'none'}});
  if(d.from||d.through)filter.push({date:{...(d.from?{$gte:d.from}:{}),...(d.through?{$lte:d.through}:{})}});
- const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
+ const groups=await queryFilter(d.query||'',userId,session);if(groups.length)filter.push({$or:groups});
  const ascending=d.order==='oldest',comparison=ascending?'$gt':'$lt',order=ascending?1:-1;
  // Preserve compatible newest-first cursors from earlier releases.
  const signature=createHash('sha256').update(JSON.stringify(['date-created-v2',userId,d.from,d.through,d.query,d.personId,d.scope,d.recurring,...(d.calendarDay?[d.calendarDay,d.includeAnniversaries]:[]),...(ascending?['oldest']:[])])).digest('hex');
@@ -146,7 +156,7 @@ async function readCalendar(userId:string,d:{from:string;through:string;today:st
  const filter:Filter<LogRow>[]=[await access(userId,session),{members:userId}];
  if(d.scope==='private')filter.push({members:{$size:1},invited:{$size:0}});
  if(d.scope==='shared')filter.push({$or:[{'members.1':{$exists:true}},{'invited.0':{$exists:true}}]});
- if(d.personId)filter.push({members:d.personId});const groups=queryFilter(d.query||'');if(groups.length)filter.push({$or:groups});
+ if(d.personId)filter.push({members:d.personId});const groups=await queryFilter(d.query||'',userId,session);if(groups.length)filter.push({$or:groups});
  // One admitted aggregate per range. Every union branch seeks an indexed day
  // and stops at ten authorized rows, including on a densely populated day.
  const dates=Array.from({length:count},(_,offset)=>first.add({days:offset}).toString());

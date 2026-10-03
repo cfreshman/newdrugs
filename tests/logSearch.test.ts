@@ -7,6 +7,7 @@ import {queueLogSearch,indexLogEntry,relatedLog,searchLog,type LogSearchChunk} f
 import {executeOperation} from '../server/operations';
 import * as backend from '../server/search/backend';
 import {buildResourceLinks} from '../server/resourceLinks';
+import {logPersonGrams} from '../shared/logPeople';
 const oldUrl=config.QDRANT_URL,vector=Array(512).fill(0).map((_,i)=>i===0?1:0),actor:Actor={userId:'me',source:'external',scope:'read'};
 async function clean(){if(db().databaseName!=='newdrugs_test')throw Error('Isolated database required');for(const collection of await db().collections())await collection.deleteMany({});}
 beforeAll(async()=>{await connectDatabase();});beforeEach(async()=>{await clean();config.QDRANT_URL='https://retrieval.invalid';const base:User={_id:'me',handle:'me',name:'Me',bio:'',city:'',cityKey:'',interests:[],discoverable:false,balanceNanos:0,reservedNanos:0,createdAt:'2026-09-27T00:00:00Z'};await users().insertMany([base,{...base,_id:'friend',handle:'friend'},{...base,_id:'other',handle:'other'}]);});afterAll(async()=>{config.QDRANT_URL=oldUrl;await clean();await mongo.close();});
@@ -44,6 +45,25 @@ it('returns indexed text matches before semantic neighbors',async()=>{
  const query=vi.spyOn(backend,'queryRetrieval').mockResolvedValue({lexical:[hit(direct,.2)],dense:[hit(neighbor,.9),hit(direct,.3)]});
  try{const result=await searchLog({query:'sunset',scope:'all',limit:20},actor,async()=>vector);expect(result.items.map(item=>[item.entryId,item.match])).toEqual([[text,'text'],[related,'semantic']]);}
  finally{query.mockRestore();}
+});
+it('matches attendee usernames and display names in Log search, list, and calendar',async()=>{
+ await users().updateOne({_id:'friend'},{$set:{handle:'cyrus',name:'Cyrus Freshman',logHandleGrams:logPersonGrams('cyrus'),logNameGrams:logPersonGrams('Cyrus Freshman')}});
+ await rows('connections').insertOne({_id:'friend:me',members:['friend','me'],status:'accepted'});
+ const writer={...actor,scope:'write' as const};
+ const created=await executeOperation('log.create',{entry:{date:'2026-09-20',title:'A day'},contribution:{note:''}},writer,randomUUID()) as {id:string;revision:number};
+ await executeOperation('log.add_person',{entryId:created.id,revision:created.revision,personId:'friend'},writer,randomUUID(),{confirmed:true});
+ const foreign=await entry(['other'],'Cyrus Freshman private memory');
+ const query=vi.spyOn(backend,'queryRetrieval').mockResolvedValue({lexical:[],dense:[]});
+ try{
+  for(const text of ['cyrus','yrus','@yrus','Freshman','resh']){
+   const result=await searchLog({query:text,scope:'all',limit:20},actor,async()=>vector);
+   expect(result.items.map(item=>item.entryId)).toEqual([created.id]);
+   expect(result.items[0].entry?.contributors.map(person=>person.name)).toContain('Cyrus Freshman');
+   expect((await executeOperation('log.list',{query:text},actor)).items.map((item:any)=>item.id)).toEqual([created.id]);
+   expect((await executeOperation('log.calendar',{from:'2026-09-20',through:'2026-09-20',today:'2026-09-20',scope:'all',query:text},actor)).days[0].items.map((item:any)=>item.id)).toEqual([created.id]);
+  }
+  expect(JSON.stringify(await searchLog({query:'Cyrus',scope:'all',limit:20},actor,async()=>vector))).not.toContain(foreign);
+ }finally{query.mockRestore();}
 });
 it('finds related Log entries from saved vectors and reauthorizes every result',async()=>{
  const source=await entry(['me'],'A walk beside the river'),related=await entry(['me'],'Another walk near the water'),foreign=await entry(['other'],'PRIVATE NOTE'),stale=await entry(['me'],'Old note');

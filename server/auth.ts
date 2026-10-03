@@ -9,6 +9,7 @@ import type { Profile } from '../shared/types';
 import { grantStarter, starterClaimKey } from './starterPool';
 import type { CoarseArea } from '../shared/geo';
 import {reservedWebsiteLabel,reservedWebsiteUsername,websiteHostLabel} from '../shared/website';
+import {logPersonGrams} from '../shared/logPeople';
 
 const derive = promisify(scrypt);
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -24,6 +25,7 @@ export interface User {
   area?: CoarseArea | null;
   photos?:string[];storageBytes?:number;
   websiteCode?:string;
+  logHandleGrams?:string[];logNameGrams?:string[];
 }
 export interface Actor { userId: string; source: 'browser' | 'external' | 'agent'; scope: 'read' | 'write'; credentialId?: string; runId?: string; background?: boolean; logAccess?: boolean; privateChat?: boolean; accountActivity?: boolean; webSearch?: boolean }
 declare global { namespace Express { interface Request { actor?: Actor } } }
@@ -58,7 +60,7 @@ export async function registerAccount(userId: string, handle: string, encodedPas
     const user = await currentUser(userId);
     if (user.handle) throw new AppError(409, 'registered', 'Your account is already saved.');
     requireValue(await users().findOneAndUpdate({ _id: userId, handle: { $exists: false } },
-      { $set: { handle, passwordHash: encodedPassword, starterClaimKey: starterClaimKey(address) } }, { session }));
+      { $set: { handle, logHandleGrams:logPersonGrams(handle),logNameGrams:logPersonGrams(user.name),passwordHash: encodedPassword, starterClaimKey: starterClaimKey(address) } }, { session }));
     await grantStarter(userId, session);
     return requireValue(await users().findOne({ _id: userId }, { session }));
   });
