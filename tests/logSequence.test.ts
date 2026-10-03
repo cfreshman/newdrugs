@@ -52,6 +52,16 @@ it('retains chronological neighbors for direct calendar and deep-link opens',asy
  await act(async()=>dom.root.render(createElement(Harness,{id:'a'})));
  expect(value.list).toBe(false);expect(value.neighbors.previous?.id).toBe('older');expect(value.neighbors.next?.id).toBe('newer');
 });
+it('keeps both directions pending while new neighbors load without exposing stale targets',async()=>{
+ let finish!:(result:{previous:ReturnType<typeof entry>;next:ReturnType<typeof entry>})=>void;
+ const original=api.operation.getMockImplementation()!;
+ api.operation.mockImplementation((name,input,...args)=>name==='log.neighbors'&&input.entryId==='b'?new Promise(resolve=>{finish=resolve;}):original(name,input,...args));
+ await act(async()=>dom.root.render(createElement(Harness,{id:'a'})));
+ await act(async()=>dom.root.render(createElement(Harness,{id:'b'})));
+ expect(value.pending).toBe(true);expect(value.neighbors).toEqual({previous:null,next:null});
+ await act(async()=>finish({previous:entry('a'),next:entry('c')}));
+ expect(value.pending).toBe(false);expect(value.neighbors.next?.id).toBe('c');
+});
 it('keeps filtered calendar navigation chronological within its filters',async()=>{
  const context:LogSequence={key:'calendar-filter',ids:['a'],filters:{scope:'shared',query:'garden',personId:'friend'}};
  await act(async()=>dom.root.render(createElement(Harness,{id:'a',context})));

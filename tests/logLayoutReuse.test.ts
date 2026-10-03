@@ -18,6 +18,13 @@ it('keeps Log blank until the saved Grid or List arrangement is known',async()=>
  expect(dom.container.querySelector('.log-list')).not.toBeNull();
  expect(dom.container.querySelector('.log-retained-calendar:not([hidden])')).toBeNull();
 });
+it('opens Today cards into full Log chronology instead of a Today-only sequence',async()=>{
+ const date=Temporal.Now.plainDateISO().toString(),entry={id:'today',ownerId:'me',date,title:'Today',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,createdAt:`${date}T12:00:00Z`,updatedAt:`${date}T12:00:00Z`,cover:null,membership:'member',contributors:[],invitations:[]};
+ api.operation.mockImplementation(async(name,input)=>name==='log.preferences'?{arrangement:'calendar',todayPresentation:'full',views:[]}:name==='log.list'?{items:input.from?[entry]:[],nextCursor:null}:name==='log.birthdays'?{items:[]}:name==='log.birthday_get'?{birthday:null}:{days:[],indexing:false});
+ const navigate=vi.fn();await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogPanel,{user:{id:'me',name:'Me'} as any,navigate}))));
+ await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.log-today-card')!.click());
+ expect(navigate.mock.lastCall?.[0]).toEqual({view:'log',resourceId:'today'});
+});
 it('uses the ordinary three-row Log card for search results',async()=>{
  const entry={id:'shared',ownerId:'me',date:'2026-09-20',title:'A day',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,createdAt:'2026-09-20T12:00:00Z',updatedAt:'2026-09-20T12:00:00Z',cover:null,membership:'member',contributors:[{userId:'me',name:'Me',note:'',files:[]},{userId:'friend',name:'Cyrus Freshman',handle:'cyrus',note:'',files:[]}],invitations:[]};
  api.operation.mockImplementation(async(name)=>name==='log.preferences'?{arrangement:'list',todayPresentation:'full',views:[]}:name==='log.search'?{items:[{entryId:entry.id,title:entry.title,date:entry.date,place:'',snippet:'With Cyrus Freshman',score:1,match:'text',entry}],nextCursor:null,indexing:false,mode:'keyword',notices:[]}:name==='log.list'?{items:[],nextCursor:null}:name==='log.birthdays'?{items:[]}:name==='log.birthday_get'?{birthday:null}:{days:[],indexing:false});
