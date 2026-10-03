@@ -27,6 +27,31 @@ it('reshapes loaded calendar tiles immediately, retaining the calendar and avoid
  const requests=api.operation.mock.calls.filter(call=>call[0]==='log.calendar').length;await click('Calendar');expect(dom.container.querySelector('.log-calendar-history')).toBe(calendar);expect(dom.container.querySelector('.log-day')).toBe(firstDay);expect(scroller.scrollTop).toBe(40000);expect(api.operation.mock.calls.filter(call=>call[0]==='log.calendar')).toHaveLength(requests);
  await act(async()=>finish({items:[],nextCursor:null}));
 });
+
+it('opens search in Log options, hides today cards and filters the mounted calendar and Grid',async()=>{
+ let preferences={arrangement:'calendar',todayPresentation:'full',views:[]};
+ const date=Temporal.Now.plainDateISO().toString(),entry={id:'today',date,title:'Plant day',createdAt:'2026-09-27T00:00:00Z',place:'',contributors:[],links:[],recurrence:'none',coverFileId:null,membership:'member'};
+ api.operation.mockImplementation(async(name,input)=>{
+  if(name==='log.preferences')return preferences;
+  if(name==='log.preferences_update'){preferences=input;return input;}
+  if(name==='log.list')return {items:input.from?[entry]:[],nextCursor:null};
+  if(name==='log.calendar')return {days:[],indexing:false};
+  return {items:[],nextCursor:null};
+ });
+ const onStateChange=vi.fn();await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogPanel,{user:{id:'me',name:'Me'} as any,navigate:vi.fn(),onStateChange}))));
+ const scroller=dom.container.querySelector<HTMLElement>('.composer-view')!,calendar=dom.container.querySelector('.log-calendar-history');scroller.scrollTop=240;
+ expect(dom.container.querySelector('.log-today-card')).not.toBeNull();
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-options-toggle')!.click());
+ expect(dom.container.querySelector('.log-today-card')).toBeNull();
+ const input=dom.container.querySelector<HTMLInputElement>('.log-options input[type=search]')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'plant');input.dispatchEvent(new Event('input',{bubbles:true}));});
+ await act(async()=>input.closest('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ expect(dom.container.querySelector('.log-calendar-history')).toBe(calendar);expect(scroller.scrollTop).toBe(240);
+ expect(api.operation.mock.calls.some(([name,value])=>name==='log.calendar'&&value.query==='plant')).toBe(true);
+ await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('[aria-label="Log view"] button')].find(button=>button.textContent==='Grid')!.click());
+ expect(api.operation.mock.calls.some(([name,value])=>name==='log.list'&&!value.from&&value.query==='plant')).toBe(true);
+ expect(onStateChange).toHaveBeenCalledWith({query:'plant'});
+});
 it('does not restore older saved layouts over newer optimistic choices',async()=>{
  let initial!:(value:any)=>void,first!:(value:any)=>void,second!:(value:any)=>void,reads=0,writes=0;
  const preferences={arrangement:'list',todayPresentation:'full',views:[]};

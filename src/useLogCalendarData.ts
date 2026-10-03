@@ -31,6 +31,9 @@ export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filter
   if(started)changed(value=>value+1);
  };
  const wantedKey=wanted.join(',');
+ const filterKey=JSON.stringify([filters.scope,filters.query||'',filters.personId||'']);
+ const activeFilter=useRef(filterKey);
+ useEffect(()=>{if(activeFilter.current===filterKey)return;activeFilter.current=filterKey;for(const request of requests.current.values())request.abort();requests.current.clear();cache.current.clear();dirty.current.clear();setError('');changed(value=>value+1);pump.current();},[filterKey]);
  useEffect(()=>{
   targets.current=visible?wanted.slice(0,CALENDAR_CACHE_CHUNKS):[];
   for(const [index,request] of requests.current)if(!targets.current.includes(index)){request.abort();requests.current.delete(index);if(cache.current.has(index))dirty.current.add(index);else dirty.current.delete(index);}
