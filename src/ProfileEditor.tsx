@@ -63,7 +63,7 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
       <LocationPicker value={person.area || null} onChange={area => setPerson(current => ({ ...current, area, city: area?.label || '' }))} />
       <label>About you<textarea value={person.bio} maxLength={500} rows={3} onChange={event => setPerson({ ...person, bio: event.target.value })} /></label>
       <label>Interests<input value={interests} placeholder="Separate with commas" onChange={event => setInterests(event.target.value)} /></label>
-      <label className="check-label"><input type="checkbox" checked={person.discoverable} onChange={event => setPerson({ ...person, discoverable: event.target.checked })} />Let people nearby find me</label>
+      <label className="check-label"><input type="checkbox" checked={person.discoverable} onChange={event => setPerson({ ...person, discoverable: event.target.checked })} />Make my profile discoverable</label>
       <p className="quiet small">Turn this on to appear nearby. Public posts show your name and first photo.</p>
       <button className="solid" disabled={busy || uploading}>{busy ? 'Saving…' : 'Save profile'}</button>
     </form>}
