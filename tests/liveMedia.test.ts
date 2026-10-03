@@ -142,6 +142,19 @@ it('projects connected Talk participants and fences an old leave after a rejoin'
  await spaceWebhook({event:'participant_left',room,participant:{identity:'other',sid:'guest-1'}});
  listed=(await call('spaces.list')).items[0];expect(listed.listeningCount).toBe(1);
 });
+it('offers profile navigation only for currently discoverable Talk participants',async()=>{
+ const space=await call('spaces.create',{title:'Open room'},'me',true),room={name:spaceRoomName(space.id)};
+ await spaceWebhook({event:'participant_joined',room,participant:{identity:'me',sid:'host-1'}});
+ await spaceWebhook({event:'participant_joined',room,participant:{identity:'other',sid:'listener-1'}});
+ expect((await call('spaces.get',{spaceId:space.id},'me')).profileIds).toEqual(['me','other']);
+ expect((await call('spaces.list',{},'me')).items[0].profileIds).toBeUndefined();
+ await users().updateOne({_id:'other'},{$set:{discoverable:false}});
+ const privateView=await call('spaces.get',{spaceId:space.id},'me');
+ expect(privateView.presentListeners.map((person:any)=>person.id)).toEqual(['other']);
+ expect(privateView.profileIds).toEqual(['me']);
+ await users().updateOne({_id:'other'},{$set:{discoverable:true}});
+ expect((await call('spaces.get',{spaceId:space.id},'me')).profileIds).toEqual(['me','other']);
+});
 it('recovers presence for a room that was already open before deployment',async()=>{
  const space=await call('spaces.create',{title:'Already open'},'me',true);
  const participants=vi.spyOn(RoomServiceClient.prototype,'listParticipants').mockResolvedValue([{identity:'me',sid:'host-1'}] as any);
