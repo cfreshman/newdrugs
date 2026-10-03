@@ -25,7 +25,7 @@ export function useTalkSession(userId?:string):TalkSession{
  const [space,setSpace]=useState<Space|null>(null),[room,setRoom]=useState<Room|null>(null),[members,setMembers]=useState<Participant[]>([]),[speaking,setSpeaking]=useState<Set<string>>(new Set()),[requests,setRequests]=useState<{personId:string;name:string}[]>([]);
  const [mic,setMic]=useState(false),[audioBlocked,setAudioBlocked]=useState(false),[expanded,setExpanded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false);
  const [reconnectAttempt,setReconnectAttempt]=useState(0);
- const audioHost=useRef<HTMLDivElement>(null),activeSession=useRef<{id:string;role:Space['myRole'];requests:Set<string>}|null>(null),generation=useRef(0),livekit=useRef<typeof import('livekit-client')|null>(null);
+ const audioHost=useRef<HTMLDivElement>(null),activeSession=useRef<{id:string;role:Space['myRole'];requests:Set<string>;hostOfferId?:string}|null>(null),generation=useRef(0),livekit=useRef<typeof import('livekit-client')|null>(null);
  const refresh=useCallback(async()=>{
   const session=activeSession.current;if(!session)return;const ticket=++generation.current;
   try{
@@ -33,6 +33,9 @@ export function useTalkSession(userId?:string):TalkSession{
    if(ticket!==generation.current||activeSession.current!==session)return;
    if(next.status==='ended'){forgetSession(userId);void room?.disconnect();activeSession.current=null;setSpace(null);setRoom(null);return;}
    if(session.role==='listener'&&next.myRole==='speaker')playTalkSound('approved');
+   const offerId=next.hostOffer&&next.hostOffer.toId===userId?next.hostOffer.id:undefined;
+   if(offerId&&offerId!==session.hostOfferId)playTalkSound('request');
+   session.hostOfferId=offerId;
    const becameHost=session.role!=='host'&&next.myRole==='host';
    session.role=next.myRole;setSpace(next);
    if(next.myRole==='host'){
@@ -64,7 +67,7 @@ export function useTalkSession(userId?:string):TalkSession{
    livekit.current=media;next=new media.Room({adaptiveStream:true,dynacast:true});await next.connect(access.url,access.token);
    let initialRequests:{personId:string;name:string}[]=[];
    if(access.space.myRole==='host')try{initialRequests=(await operation<{items:{personId:string;name:string}[]}>('spaces.requests',{spaceId:id})).items;}catch{}
-   activeSession.current={id,role:access.space.myRole,requests:new Set(initialRequests.map(item=>item.personId))};
+   activeSession.current={id,role:access.space.myRole,requests:new Set(initialRequests.map(item=>item.personId)),hostOfferId:access.space.hostOffer&&access.space.hostOffer.toId===userId?access.space.hostOffer.id:undefined};
    setRequests(initialRequests);setRoom(next);setSpace(access.space);setExpanded(false);setReconnectAttempt(0);
    try{await next.startAudio();setAudioBlocked(false);}catch{setAudioBlocked(true);}
    if(unmute&&access.space.myRole==='host')try{await next.localParticipant.setMicrophoneEnabled(true);setMic(next.localParticipant.isMicrophoneEnabled);}catch(cause){setError(`Microphone: ${errorText(cause)}`);}

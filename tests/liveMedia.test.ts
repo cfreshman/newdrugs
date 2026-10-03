@@ -146,7 +146,9 @@ it('offers profile navigation only for currently discoverable Talk participants'
  const space=await call('spaces.create',{title:'Open room'},'me',true),room={name:spaceRoomName(space.id)};
  await spaceWebhook({event:'participant_joined',room,participant:{identity:'me',sid:'host-1'}});
  await spaceWebhook({event:'participant_joined',room,participant:{identity:'other',sid:'listener-1'}});
- expect((await call('spaces.get',{spaceId:space.id},'me')).profileIds).toEqual(['me','other']);
+ const publicView=await call('spaces.get',{spaceId:space.id},'me');
+ expect(publicView.profileIds).toEqual(['me','other']);
+ expect(publicView.participantCards).toEqual([{id:'me',name:'Me',handle:'me'},{id:'other',name:'Other',handle:'other'}]);
  expect((await call('spaces.list',{},'me')).items[0].profileIds).toBeUndefined();
  await users().updateOne({_id:'other'},{$set:{discoverable:false}});
  const privateView=await call('spaces.get',{spaceId:space.id},'me');
