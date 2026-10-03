@@ -48,7 +48,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   } else if (['posts.incoming_replies','posts.thread_updates'].includes(name)) {
     for(const row of rows)if(typeof row.id==='string')add({view:'post',resourceId:row.id},'View reply','exact','post',row.id);
     if(rows.length&&rows.every(row=>typeof row.id==='string'))add({view:'post_list',postIds:rows.map(row=>row.id)},name==='posts.incoming_replies'?'Replies to you':'Thread updates','surface','post_list');
-  } else if (['posts.save', 'posts.get', 'posts.create', 'posts.list', 'posts.replies', 'posts.reply', 'posts.like'].includes(name)) {
+  } else if (['posts.save', 'posts.get', 'posts.ancestors', 'posts.create', 'posts.list', 'posts.replies', 'posts.reply', 'posts.like'].includes(name)) {
     for (const row of rows) if (typeof row.id === 'string') add({ view: 'post', resourceId: row.id }, 'View post', 'exact', 'post', row.id);
     if (name === 'posts.list' && input.scope === 'selected' && rows.length) add({view:'post_list',postIds:rows.map(row=>row.id)},'Posts for you','surface','post_list');
     else if (name === 'posts.list') add({ view: 'feed', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined, scope: input.scope==='public'? 'all':input.scope as Destination['scope'] }, 'Browse posts', 'surface', 'feed');

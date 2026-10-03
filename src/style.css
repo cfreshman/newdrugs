@@ -395,6 +395,7 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .post-card > :last-child { margin-bottom: 0; }
 .post-compose-actions .solid { min-height: 36px; padding: 6px 18px; border: 0; border-radius: 999px; }
 .thread-replies { margin-top: var(--space-4); }
+.posts-list.post-ancestor-chain { margin: 0 0 var(--space-2); }
 .message-view-actions .video-link, .conversation-options summary { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; padding: var(--space-2) var(--space-3); min-height: 36px; border-radius: 999px; background: var(--surface-soft); font-size: var(--text-sm); text-decoration: none; cursor: pointer; }
 .conversation-options summary { list-style: none; }
 .conversation-options summary::-webkit-details-marker { display: none; }

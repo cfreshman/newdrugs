@@ -99,6 +99,17 @@ it('rejects an expired one-time schedule instead of creating an unscheduled acti
  const me=await actor();await expect(executeOperation('automations.create',{...definition,schedule:{kind:'once',at:'2020-01-01T00:00:00.000Z'}},me,randomUUID(),{confirmed:true})).rejects.toMatchObject({code:'schedule'});
  expect(await automations().countDocuments({userId:me.userId})).toBe(0);
 });
+it('lets another automation run while one sleeps but keeps the sleeping definition single-run',async()=>{
+ const me=await actor(),first=await saved(me),second=await saved(me);
+ const firstRow=(await automations().findOne({_id:first.id}))!,secondRow=(await automations().findOne({_id:second.id}))!;
+ const sleepingId=await transaction(session=>admitAutomation(firstRow,'first occurrence',session));
+ await runs().updateOne({_id:sleepingId},{$set:{status:'sleeping',leaseUntil:0,sleep:{until:Date.now()+60000,reason:'Wait for an update',callId:'call',turnId:'turn'}}});
+ const unrelatedId=await transaction(session=>admitAutomation(secondRow,'other occurrence',session));
+ expect((await runs().findOne({_id:unrelatedId}))?.status).toBe('queued');
+ await expect(transaction(session=>admitAutomation(firstRow,'second occurrence',session))).rejects.toMatchObject({code:'automation_busy'});
+ await runs().updateOne({_id:unrelatedId},{$set:{status:'running',leaseUntil:Date.now()+60000}});
+ await expect(transaction(session=>admitAutomation(firstRow,'third occurrence',session))).rejects.toMatchObject({code:'automation_busy'});
+});
 it('requires review to enable and enforces revision checks, source permissions and independent runs',async()=>{
  const me=await actor(),created=await saved(me);
  const row=await executeOperation('automations.pause',{automationId:created.id,revision:created.revision},me,randomUUID()) as Automation;

@@ -37,3 +37,15 @@ it('exposes the read contract and exact reply links plus the ordered list destin
  expect(links.filter(link=>link.targetKind==='exact').map(link=>link.resourceId)).toEqual(result.items.map(post=>post.id));
  const selection=links.find(link=>link.resourceType==='post_list')!;expect(parseDestination(selection.url,config.uiOrigin)?.postIds).toEqual(result.items.map(post=>post.id));
 });
+it('returns the visible parent chain in order and stops at unavailable ancestors',async()=>{
+ const chain=await executeOperation('posts.ancestors',{postId:id(14)},actor) as {items:{id:string;text:string}[];earlierId:string|null;unavailable:boolean};
+ expect(chain.items.map(post=>post.id)).toEqual([id(1),id(10)]);expect(chain.earlierId).toBeNull();expect(chain.unavailable).toBe(false);
+ const deleted=await executeOperation('posts.ancestors',{postId:id(21)},actor) as typeof chain;
+ expect(deleted.items).toMatchObject([{id:id(4),text:'',deleted:true}]);
+ await rows('posts').insertOne({_id:id(22),userId:'alice',text:'Safe child',city:'',fileIds:[],links:[],parentId:id(16),rootId:id(1),createdAt:'2026-09-26T12:00:22.000Z'});
+ const hidden=await executeOperation('posts.ancestors',{postId:id(22)},actor) as typeof chain;
+ expect(hidden.items).toEqual([]);expect(hidden.unavailable).toBe(true);expect(JSON.stringify(hidden)).not.toContain('Post 16');
+ const missing=await executeOperation('posts.ancestors',{postId:id(18)},actor) as typeof chain;
+ expect(missing.items).toEqual([]);expect(missing.unavailable).toBe(true);
+ expect(describeOperation('posts.ancestors')?.kind).toBe('read');
+});

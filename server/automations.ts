@@ -33,7 +33,7 @@ export async function admitAutomation(row: AutomationRow, occurrence: string, se
   if (!await automationAuthorized({ userId: row.userId, automationId: row._id, automationGeneration: row.generation }, session)) throw new AppError(403, 'automation_paused', 'This automation is no longer authorized.');
   if (!config.aiEnabled) throw new AppError(503, 'agent_unavailable', 'The hosted agent is unavailable.');
   const owner = requireValue(await users().findOneAndUpdate({ _id: row.userId, handle: { $type: 'string' } }, { $inc: { automationRevision: 1 } }, { session }));
-  if (await runs().findOne({ userId: row.userId, purpose: 'automation', status: { $in: ['queued','running','sleeping'] } }, { session })) throw new AppError(409, 'automation_busy', 'Another automation is still running.');
+  if (await runs().findOne({ userId: row.userId, purpose: 'automation', $or: [{ status: { $in: ['queued','running'] } }, { status: 'sleeping', automationId: row._id }] }, { session })) throw new AppError(409, 'automation_busy', 'Another automation is still running.');
   const day = new Date().toISOString().slice(0, 10);
   const priorRuns = await runs().find({ userId: row.userId, purpose: 'automation', createdAt: { $gte: day } }, { session }).limit(101).toArray();
   const allocated = (run: typeof priorRuns[number]) => run.usagePending || !['completed','failed','cancelled'].includes(run.status) ? run.budgetNanos || 0 : Math.min(run.budgetNanos || 0, run.costNanos);

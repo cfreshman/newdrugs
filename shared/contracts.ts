@@ -87,7 +87,7 @@ export const outputs: Record<string, z.ZodType> = {
   'search.query':searchResult, 'posts.search':searchResult, 'search.similar':searchResult, 'search.refine':searchResult,
   'search.explain':z.object({match:searchMatch,retrieval:searchRetrieval}),
   'search.datasets':z.object({datasets:z.array(z.object({dataset:z.string(),count:z.number()})),pending:z.number(),failed:z.number(),model:z.string(),dimensions:z.number(),indexVersion:z.string(),capacity:z.number().nullable().describe("Fixed fallback capacity, or null for provisioned persistent retrieval."),notice:z.string()}),
-  'people.search': page(profileOutput).extend({retrieval:searchRetrieval.optional(),matches:z.array(searchMatch).optional(),indexing:z.boolean().optional()}), 'posts.list': page(post), 'posts.get': post, 'posts.create': post,
+  'people.search': page(profileOutput).extend({retrieval:searchRetrieval.optional(),matches:z.array(searchMatch).optional(),indexing:z.boolean().optional()}), 'posts.list': page(post), 'posts.get': post, 'posts.ancestors':z.object({items:z.array(post).max(50),earlierId:id.nullable(),unavailable:z.boolean()}), 'posts.create': post,
   'posts.incoming_replies':page(post),'posts.thread_updates':page(post),
   'posts.save':post, 'posts.replies': page(post), 'posts.reply': post, 'posts.like': post,
   'posts.delete': z.object({ deleted: z.literal(true), id }),

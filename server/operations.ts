@@ -21,6 +21,7 @@ import {resolveTime,convertTime,overlapTimes} from './timeUtilities';
 import type {TimeResolveInput,TimeConvertInput,TimeOverlapInput} from '../shared/utilitySchemas';
 import type {Profile} from '../shared/types';
 import {normalizedPostLinks} from '../shared/postLinks';
+import {postAncestors} from './postAncestors';
 import { setCollection, collectionPage, postAudience } from './socialCollections';
 import { profileVisibleTo } from './profileVisibility';
 import legacyOperationRevisions from '../shared/legacyOperationRevisions.json';
@@ -358,6 +359,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       ], options).toArray();
       const projected=await postCards(posts.slice(0,limit),userId,blocked,session);
       return {items:projected.map((post,index)=>({...post,...(cell?sharedAreaDistance(cell,(posts.find(record=>record._id===post.id)!.area as CoarseArea).cell,posts.find(record=>record._id===post.id)!.distanceMeters):{})})),nextCursor:posts.length>limit?(paging?paging.cursor(posts[limit-1]):posts[limit-1]._id):null};
+    }
+    case 'posts.ancestors': {
+      requireValue(await run('posts.get',{postId:d.postId},actor,session),'This post is unavailable.');
+      return postAncestors(String(d.postId),userId,await blockedIds(userId,session),session);
     }
     case 'posts.get': {
       const post = requireValue(await rows('posts').findOne({ _id: String(d.postId) }, options));
