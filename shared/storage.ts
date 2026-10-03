@@ -6,5 +6,6 @@ export type StorageLocation=typeof storageLocations[number];
 export type StorageType=typeof storageTypes[number];
 export const storageAttachmentSchema=z.object({label:z.string(),destination:z.object({view:z.enum(['person','post','chat','log']),resourceId:z.string()}).optional(),url:z.string()});
 export type StorageAttachment=z.infer<typeof storageAttachmentSchema>;
-export interface StoredFile extends UploadRef {createdAt:string;attached:boolean;inProfile:boolean;inWebsite?:boolean;attachments:StorageAttachment[];attachmentCursor?:string|null}
-export interface StoragePage {usedBytes:number;limitBytes:number;items:StoredFile[];nextCursor:string|null;indexing?:boolean}
+export interface StoredFile extends UploadRef {kind?:'upload';createdAt:string;attached:boolean;inProfile:boolean;inWebsite?:boolean;posterBytes?:number;attachments:StorageAttachment[];attachmentCursor?:string|null}
+export interface LinkedVideoItem {kind:'linked_video';id:string;sourceUrl:string;title:string;posterUrl?:string;bytes:number;createdAt:string;postId:string;attachments:StorageAttachment[];attachmentCursor?:string|null}
+export interface StoragePage {usedBytes:number;limitBytes:number;items:(StoredFile|LinkedVideoItem)[];nextCursor:string|null;indexing?:boolean}

@@ -4,10 +4,13 @@ import { rows } from './db';
 import { users } from './auth';
 import { requireValue, AppError } from './errors';
 import { enqueueSearch } from './search/queue';
+import {enqueuePostVideoLinks,removePostVideoLinks} from './postVideoLinks';
 export async function moderatePost(postId:string, hidden:boolean, reason:string, keyId:string, session:ClientSession) {
   const post=requireValue(await rows('posts').findOne({_id:postId},{session}));
   if(post.deletedAt&&!hidden)throw new AppError(409,'deleted','An author-deleted post cannot be restored.');
   await rows<{_id:string;interactionRevision:number}>('posts').updateOne({_id:postId},hidden?{$set:{moderatedAt:new Date().toISOString(),moderationReason:reason,moderatedBy:keyId},$inc:{interactionRevision:1}}:{$unset:{moderatedAt:'',moderationReason:'',moderatedBy:''},$inc:{interactionRevision:1}},{session});
+  if(hidden)await removePostVideoLinks(String(post.userId),postId,session);
+  else await enqueuePostVideoLinks({_id:postId,userId:String(post.userId),text:String(post.text||''),links:post.links as string[]||[],createdAt:String(post.createdAt)},session);
   if(hidden)await rows('notifications').deleteMany({postId},{session});
   await enqueueSearch('posts',postId,session);
   return {postId,hidden};

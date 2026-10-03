@@ -522,8 +522,8 @@ export function App() {
         {availableRelease&&<button className="settings-update" onClick={()=>void applyAppRelease(closePanel)}><Star size={23} weight="fill"/>Reload to apply app update</button>}
         <NavLink to={{view:'notifications'}}><Bell size={23} />Notifications</NavLink>
         {data?.user.handle&&<NavLink to={{view:'profile'}}><UserCircle size={23}/>Profile</NavLink>}
-        <NavLink to={{view:'account_menu'}}><LockKey size={23}/>Account</NavLink>
         <NavLink to={{view:'preferences'}}><Sun size={23}/>Preferences</NavLink>
+        <NavLink to={{view:'account_menu'}}><LockKey size={23}/>Account</NavLink>
         <NavLink to={{view:'credits'}}><CreditCard size={23}/>Billing</NavLink>
         <NavLink to={{view:'agents'}}><Plugs size={23}/>Connected agents</NavLink>
         <div className="settings-utilities settings-donate-row"><a href="https://fuckingdonate.co/@cyrus" target="_blank" rel="noopener noreferrer"><Heart size={21}/>Donate</a>{data?.user.handle&&<button onClick={()=>void post('/account/logout').then(()=>location.reload()).catch(e=>logError(errorText(e)))}><SignOut size={21}/>Log out</button>}</div>

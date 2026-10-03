@@ -5,11 +5,12 @@ import {uploads,ownedUploadRef,ownUpload} from './uploads';
 import {logAttachmentLocations} from './log';
 import {attachmentReferences,type AttachmentReference} from './attachmentReferences';
 import {destinationPath} from '../shared/navigation';
-import type {StorageType,StorageLocation,StorageAttachment,StoragePage} from '../shared/storage';
+import type {StorageType,StorageLocation,StorageAttachment,StoragePage,StoredFile,LinkedVideoItem} from '../shared/storage';
 import {MAX_ACCOUNT_UPLOAD_BYTES} from '../shared/uploads';
 import {workGate} from './workGate';
 import {websitePreviewUrl,websitePublicUrl,type WebsiteDoc} from './websites';
 import {AppError} from './errors';
+import {postVideoLinks} from './postVideoLinks';
 const referenceGate=workGate(8,256);
 const snippet=(value:unknown)=>typeof value==='string'&&value.trim()?`: ${value.trim().slice(0,64)}${value.trim().length>64?'…':''}`:'';
 type StorageCursor={createdAt:string;id:string};
@@ -52,13 +53,28 @@ export async function listStorage(user:User,{type='all',attachedTo='all',before,
  const media={images:/^image\//,audio:/^audio\//,video:/^video\//};
  const mime=type==='all'?{}:type==='documents'?{mime:{$not:/^(image|audio|video)\//}}:{mime:media[type]};
  const cursor=before?await storageCursor(user._id,before,session):null;
- const files=await uploads().find({userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false},...mime,...(attachedTo!=='all'?{attachmentKinds:attachedTo}:{}),...(cursor?{$or:[{createdAt:{$lt:cursor.createdAt}},{createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]}:{})},{session}).sort({createdAt:-1,_id:-1}).limit(limit+1).toArray();
- const page=files.slice(0,limit);
- const groups=await Promise.all(page.map(file=>referenceGate.run(()=>attachmentReferences().find({ownerId:user._id,fileId:file._id,...(attachedTo!=='all'?{kind:attachedTo}:{})},{session}).sort({_id:1}).limit(7).toArray())));
+ const position=cursor?{$or:[{createdAt:{$lt:cursor.createdAt}},{createdAt:cursor.createdAt,_id:{$lt:cursor.id}}]}:{};
+ const [files,links]=await Promise.all([
+  uploads().find({userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false},...mime,...(attachedTo!=='all'?{attachmentKinds:attachedTo}:{}),...position},{session}).sort({createdAt:-1,_id:-1}).limit(limit+1).toArray(),
+  (type==='all'||type==='video')&&(attachedTo==='all'||attachedTo==='posts')?postVideoLinks().find({userId:user._id,...position},{session,projection:{poster:0}}).sort({createdAt:-1,_id:-1}).limit(limit+1).toArray():Promise.resolve([]),
+ ]);
+ const ordered=[...files.map(file=>({kind:'file' as const,file,createdAt:file.createdAt,_id:file._id})),...links.map(link=>({kind:'link' as const,link,createdAt:link.createdAt,_id:link._id}))].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b._id.localeCompare(a._id));
+ const page=ordered.slice(0,limit),filePage=page.flatMap(item=>item.kind==='file'?[item.file]:[]);
+ const groups=await Promise.all(filePage.map(file=>referenceGate.run(()=>attachmentReferences().find({ownerId:user._id,fileId:file._id,...(attachedTo!=='all'?{kind:attachedTo}:{})},{session}).sort({_id:1}).limit(7).toArray())));
  const projected=await projectReferences(user,groups.flat(),session);
  const order={person:0,post:1,chat:2,log:3,website:4};
- const items=page.map((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);return {...ownedUploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)),inWebsite:refs.some(ref=>ref.kind==='websites'),attachments,attachmentCursor:refs.length>6?refs[5]._id:null};})
-  .filter((file,index)=>attachedTo==='all'||groups[index].length>6||groups[index].some(ref=>ref.kind===attachedTo&&projected.has(ref._id)));
+ const uploadItems=new Map<string,StoredFile>();
+ filePage.forEach((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);if(attachedTo==='all'||refs.length>6||refs.some(ref=>ref.kind===attachedTo&&projected.has(ref._id)))uploadItems.set(file._id,{...ownedUploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)),inWebsite:refs.some(ref=>ref.kind==='websites'),...(file.posterBytes?{posterBytes:file.posterBytes}:{}),attachments,attachmentCursor:refs.length>6?refs[5]._id:null});});
+ const postIds=[...new Set(page.flatMap(item=>item.kind==='link'?[item.link.postId]:[]))];
+ const activePosts=postIds.length?await rows('posts').find({_id:{$in:postIds},userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session,projection:{_id:1}}).toArray():[];
+ const visiblePosts=new Set(activePosts.map(post=>post._id));
+ const items:StoragePage['items']=page.flatMap<StoredFile|LinkedVideoItem>(item=>{
+  if(item.kind==='file')return uploadItems.get(item.file._id)?[uploadItems.get(item.file._id)!]:[];
+  const link=item.link;if(!visiblePosts.has(link.postId))return [];
+  const destination={view:'post' as const,resourceId:link.postId},attachment={label:'Post video',destination,url:destinationPath(destination)};
+  const video:LinkedVideoItem={kind:'linked_video',id:link._id,sourceUrl:link.sourceUrl,title:link.title,postId:link.postId,createdAt:link.createdAt,bytes:link.bytes,...(link.bytes?{posterUrl:`/api/post-video-links/${link._id}/poster`}:{}),attachments:[attachment]};
+  return [video];
+ });
  const indexing=await rows('attachmentReferenceMeta').countDocuments({done:true},{session})<5;
- return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items,indexing,nextCursor:files.length>limit?nextStorageCursor(page.at(-1)!):null};
+ return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items,indexing,nextCursor:ordered.length>limit?nextStorageCursor(page.at(-1)!):null};
 }

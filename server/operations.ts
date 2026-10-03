@@ -47,6 +47,7 @@ import {enqueueNotificationEvent} from './notificationEvents';
 import type {NotificationType} from '../shared/notificationSettings';
 import { postCards } from './postProjection';
 import { linkPreview,linkText } from './linkPreviews';
+import {enqueuePostVideoLinks,removePostVideoLinks} from './postVideoLinks';
 import { retainPostPhotos } from './uploads';
 
 import { enqueueSearch } from './search/queue';
@@ -396,6 +397,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const fileIds = await retainPostPhotos(userId, d.fileIds as string[], session);
       await rows<{_id:string;interactionRevision:number}>('posts').updateOne({_id:parent._id},{$inc:{interactionRevision:1}},options);
       const reply={_id:nextId(),userId,text:d.text,links:normalizedPostLinks(d.links),fileIds,parentId:parent._id,rootId:parent.rootId||parent._id,city:'',area:null,createdAt:now};await rows('posts').insertOne(reply,options);await enqueueSearch('posts',reply._id,session!);
+      await enqueuePostVideoLinks({...reply,text:String(d.text)},session);
       if(session)await enqueueNotificationEvent('post_reply',userId,reply._id,session,{parentId:parent._id,rootId:String(reply.rootId)});
       if(parent.userId!==userId&&await notificationEnabled(String(parent.userId),'post_reply',session)){const noticeId=hash(`post_reply:${reply._id}`);await rows('notifications').insertOne({_id:noticeId,userId:parent.userId,actorId:userId,kind:'post_reply',postId:reply._id,text:String(d.text).slice(0,180),readAt:null,createdAt:now},options);await enqueueStoredPush(String(parent.userId),userId,reply._id,'post_reply',noticeId,session);}
       return (await postCards([reply],userId,await blockedIds(userId,session),session))[0];
@@ -407,6 +409,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if(d.areaCell){const record=requireValue(await rows('locationAreas').findOne({_id:String(d.areaCell)},options));area={cell:String(d.areaCell),label:String(record.label),point:coarsePoint(String(d.areaCell))};}
       const post = { _id: nextId(), userId, text: d.text, links:normalizedPostLinks(d.links),fileIds, area, city:area?.label||'', createdAt: now };
       await rows('posts').insertOne(post, options);
+      await enqueuePostVideoLinks({...post,text:String(d.text)},session);
       await enqueueSearch('posts',post._id,session!);
       if(session)await enqueueNotificationEvent('post_create',userId,post._id,session);
       return (await postCards([post],userId,[],session))[0];
@@ -414,6 +417,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'posts.delete': {
       const result = await rows('posts').updateOne({ _id: String(d.postId), userId, deletedAt:{$exists:false} },{$set:{text:'',city:'',area:null,deletedAt:now}}, options);
       if (!result.modifiedCount) throw new AppError(404, 'not_found', 'That post is not yours or no longer exists.');
+      await removePostVideoLinks(userId,String(d.postId),session!);
       await rows('postLikes').deleteMany({postId:d.postId},options);await rows('notifications').deleteMany({postId:d.postId},options);
       await enqueueSearch('posts',String(d.postId),session!);
       return { deleted: true, id: d.postId };

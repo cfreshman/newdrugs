@@ -1,9 +1,13 @@
 import {backfillAttachmentReferences,syncSourceAttachments} from '../server/attachmentReferences';
 import {storageAttachments} from '../server/storage';
 import {randomUUID} from 'node:crypto';
+import {Binary} from 'mongodb';
 import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
-import {connectDatabase,db,mongo,rows} from '../server/db';
-import {users,type User,type Actor} from '../server/auth';
+import {connectDatabase,db,mongo,rows,transaction} from '../server/db';
+import {users,hash,type User,type Actor} from '../server/auth';
+import {refreshPostVideoLinks,removePostVideoLinks,postVideoPoster} from '../server/postVideoLinks';
+import {uploadVideoPoster} from '../server/videoPosters';
+import {deleteUpload} from '../server/uploads';
 import {executeOperation} from '../server/operations';
 import {buildResourceLinks} from '../server/resourceLinks';
 import type {StoragePage} from '../shared/storage';
@@ -45,6 +49,31 @@ it('orders uploads by creation time, breaks ties by ID, and keeps a stable page 
  const second=await list({limit:2,before:first.nextCursor!});expect(second.items.map(item=>item.id)).toEqual(['b','z']);expect(second.nextCursor).toBeNull();
  expect((await list({limit:2,before:'a'})).items.map(item=>item.id)).toEqual(['b','z']);
  await expect(list({before:'s2.invalid'})).rejects.toMatchObject({code:'storage_cursor'});
+});
+
+it('treats a post video link and its preview as one Video item with reversible storage bytes',async()=>{
+ const url='https://example.com/clip.mp4',image=Buffer.from([1,2,3,4]),previewId=hash(`rich-v6:${url}`);
+ await rows('linkPreviews').insertOne({_id:previewId,preview:{url,hostname:'example.com',title:'Clip',description:'',kind:'video',imageUrl:`/api/link-previews/${previewId}/image`},image:new Binary(image),expiresAt:new Date(Date.now()+60000)});
+ await rows('posts').insertOne({_id:'post-video',userId:'me',text:'',links:[url],createdAt:'2026-09-28T00:00:00.000Z'});
+ await file('uploaded-video','video/mp4','me','2026-09-27T00:00:00.000Z');
+ await refreshPostVideoLinks('post-video');await refreshPostVideoLinks('post-video');
+ const first=await list({type:'video',limit:1});expect(first.usedBytes).toBe(504);expect(first.items).toHaveLength(1);
+ const item=first.items[0];expect(item.kind).toBe('linked_video');if(item.kind!=='linked_video')throw Error('Expected linked video');
+ expect(item.bytes).toBe(4);expect(item.attachments[0].destination).toEqual({view:'post',resourceId:'post-video'});expect(await postVideoPoster(actor,item.id)).toEqual(image);
+ const next=await list({type:'video',limit:1,before:first.nextCursor!});expect(next.items.map(row=>row.id)).toEqual(['uploaded-video']);
+ expect((await list({type:'video',attachedTo:'posts'})).items.map(row=>row.id)).toEqual([item.id]);
+ await transaction(async session=>{await rows('posts').updateOne({_id:'post-video'},{$set:{deletedAt:'now'}},{session});await removePostVideoLinks('me','post-video',session);});
+ expect((await list({type:'video'})).items.map(row=>row.id)).toEqual(['uploaded-video']);expect((await list()).usedBytes).toBe(500);
+});
+
+it('charges an uploaded video poster to its video and frees both together',async()=>{
+ await file('legacy-video','video/mp4');const image=Buffer.from([1,2,3,4,5,6]);
+ await rows('uploadPosters').insertOne({_id:'legacy-video',sha256:'hash',image:new Binary(image)});
+ expect(await uploadVideoPoster(actor,'legacy-video')).toEqual(image);
+ expect(await uploadVideoPoster(actor,'legacy-video')).toEqual(image);
+ const item=(await list({type:'video'})).items.find(row=>row.id==='legacy-video');if(!item||item.kind==='linked_video')throw Error('Expected uploaded video');expect(item.posterBytes).toBe(6);expect((await list()).usedBytes).toBe(506);
+ await deleteUpload({...actor,scope:'write'},'legacy-video');
+ expect((await list()).usedBytes).toBe(400);expect(await rows('uploadPosters').findOne({_id:'legacy-video'})).toBeNull();
 });
 
 it('bounds initial attachment links and pages subsequent uses without scanning source history',async()=>{

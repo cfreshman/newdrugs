@@ -15,7 +15,7 @@ import { AppError, requireValue } from './errors';
 import { MAX_UPLOAD_BYTES, MAX_ACCOUNT_UPLOAD_BYTES, type UploadPurpose, type UploadRef } from '../shared/uploads';
 import type { InputContentParam } from 'openai/resources/beta/agents/agents';
 
-export interface Upload { _id:string; userId:string; name:string; originalName?:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string;storage?:ObjectLocation }
+export interface Upload { _id:string; userId:string; name:string; originalName?:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; posterBytes?:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string;storage?:ObjectLocation }
 export const uploads=()=>rows<Upload>('uploads');
 const digest=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const filePath=(id:string)=>{if(!/^[0-9a-f-]{36}$/.test(id))throw new Error('Invalid file identity.');return resolve(config.DATA_DIR,'files',id);};
@@ -138,8 +138,9 @@ export async function deleteUpload(actor:Actor,id:string,session?:ClientSession)
     const updated=await rows<import('./websites').WebsiteDoc>('websites').updateOne({_id:actor.userId,revision:site.revision},{$set:{assets:(site.assets||[]).filter(asset=>asset.fileId!==id),published,updatedAt:new Date().toISOString()},$inc:{revision:1}},{session});
     if(!updated.matchedCount)throw new AppError(409,'website_changed','This website changed. Retry the file deletion.');}
   await rows('attachmentReferences').deleteMany({ownerId:actor.userId,fileId:id},{session});
-  await uploads().updateOne({_id:id,userId:actor.userId},{$set:{deletedAt:new Date().toISOString(),ready:false,retained:false,bytes:0,expiresAt:new Date()}},{session});
-  await users().updateOne({_id:actor.userId},{$inc:{storageBytes:-file.bytes},$pull:{photos:id}},{session});
+  await uploads().updateOne({_id:id,userId:actor.userId},{$set:{deletedAt:new Date().toISOString(),ready:false,retained:false,bytes:0,posterBytes:0,expiresAt:new Date()}},{session});
+  await users().updateOne({_id:actor.userId},{$inc:{storageBytes:-file.bytes-(file.posterBytes||0)},$pull:{photos:id}},{session});
+  await rows('uploadPosters').deleteOne({_id:id},{session});
   const affectedLogs=await rows('logEntries').find({'contributions.fileIds':id},{session,projection:{date:1,members:1,invited:1}}).toArray();
   // Remove public references in the same transaction, also emitting post refreshes.
   await rows<{ _id: string; fileIds: string[] }>('posts').updateMany({ userId: actor.userId, fileIds: id }, { $pull: { fileIds: id } }, { session });
@@ -153,7 +154,8 @@ export async function expireUploads({remote=true}:{remote?:boolean}={}){
   for(const candidate of expired){
     const removed=await transaction(async session=>{
       const file=await uploads().findOneAndDelete({_id:candidate._id,retained:{$ne:true},expiresAt:{$lte:new Date()}},{session});
-      if(file)await users().updateOne({_id:file.userId},{$inc:{storageBytes:-file.bytes}},{session});
+      if(file)await users().updateOne({_id:file.userId},{$inc:{storageBytes:-file.bytes-(file.posterBytes||0)}},{session});
+      if(file)await rows('uploadPosters').deleteOne({_id:file._id},{session});
       if(file)await rows('mediaDeletes').updateOne({_id:file._id},{$setOnInsert:{...(file.storage?{storage:file.storage}:{}),availableAt:Date.now(),attempts:0}},{session,upsert:true});
       return Boolean(file);
     });

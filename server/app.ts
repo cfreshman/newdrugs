@@ -50,6 +50,7 @@ import { buildResourceLinks } from './resourceLinks';
 import { devApiGate,trustedDevKey } from './devGate';
 import { previewImage } from './linkPreviews';
 import {uploadVideoPoster} from './videoPosters';
+import {postVideoPoster} from './postVideoLinks';
 import { replyToReview } from './reviewReply';
 import {websiteRequest} from './websiteServing';
 import {reservedWebsiteUsername} from '../shared/website';
@@ -166,6 +167,10 @@ export function createApp() {
   app.get('/api/link-previews/:id/image', async (req, res) => {
     requireActor(req);
     res.set({ 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' }).send(await previewImage(String(req.params.id)));
+  });
+  app.get('/api/post-video-links/:id/poster',async(req,res)=>{
+    const image=await postVideoPoster(requireActor(req),String(req.params.id));
+    res.set({'Content-Type':'image/webp','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}).send(image);
   });
   app.put('/api/uploads/:id',limiter('/api/uploads/:id', 20),(req,_res,next)=>{requireActor(req);next();},uploadAdmission(),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
   app.get('/api/files/:id',async(req,res)=>{
