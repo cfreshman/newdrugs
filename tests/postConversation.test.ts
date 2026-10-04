@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import {act,createElement} from 'react';
+import {act,createElement,useState} from 'react';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
-import {PostPanel,type Post} from '../src/PostPanels';
+import {PostList,PostPanel,type Post} from '../src/PostPanels';
+import {PanelVisibilityContext} from '../src/PanelReadiness';
 import {setupDOM} from './dom';
 
 const api=vi.hoisted(()=>({operation:vi.fn()}));
@@ -30,8 +31,8 @@ it('shows the parent chain above a selected reply while leaving its other replie
 });
 
 it('opens each deeper reply at the top of the Agent scrollport and holds it there as ancestors grow',async()=>{
- const root=post('root'),second=post('second','root'),third=post('third','second');
- api.operation.mockImplementation(async(name,data:{postId:string})=>name==='posts.get'?({root,second,third} as Record<string,Post>)[data.postId]:name==='posts.ancestors'?{items:data.postId==='second'?[root]:[root,second],earlierId:null,unavailable:false}:name==='posts.replies'?{items:[],nextCursor:null}:null);
+ const root=post('base'),second=post('middle','base'),third=post('leaf','middle');
+ api.operation.mockImplementation(async(name,data:{postId:string})=>name==='posts.get'?({base:root,middle:second,leaf:third} as Record<string,Post>)[data.postId]:name==='posts.ancestors'?{items:data.postId==='middle'?[root]:[root,second],earlierId:null,unavailable:false}:name==='posts.replies'?{items:[],nextCursor:null}:null);
  let ancestorHeight=220;
  const rect=(top:number)=>({top,left:0,right:500,bottom:top+100,width:500,height:100,x:0,y:top,toJSON(){}});
  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){
@@ -43,14 +44,47 @@ it('opens each deeper reply at the top of the Agent scrollport and holds it ther
   if(!node||node.dataset.mockScroll)return;node.dataset.mockScroll='true';let offset=0;
   Object.defineProperties(node,{clientHeight:{value:500},scrollHeight:{get:()=>300+node.querySelectorAll('.post-ancestor-chain .post-card').length*ancestorHeight+(parseFloat(node.querySelector<HTMLElement>('.post-scroll-clearance')?.style.height||'0')||0)},scrollTop:{get:()=>offset,set:(value:number)=>{offset=Math.max(0,Math.min(value,node.scrollHeight-node.clientHeight));}}});
  }},createElement(PostPanel,{postId:id,user,navigate})));
- await act(async()=>dom.root.render(render('root')));
+ await act(async()=>dom.root.render(render('base')));
  const scroller=dom.container.querySelector<HTMLElement>('.composer-surface-content')!;
  expect(scroller.scrollTop).toBe(0);
- await act(async()=>dom.root.render(render('second')));
+ await act(async()=>dom.root.render(render('middle')));
  expect(scroller.scrollTop).toBe(220);
- await act(async()=>dom.root.render(render('third')));
+ await act(async()=>dom.root.render(render('leaf')));
  expect(scroller.scrollTop).toBe(440);
  ancestorHeight=400;
  dom.resize(dom.container.querySelector('.post-ancestor-chain')!);dom.frame();
  expect(scroller.scrollTop).toBe(800);
+});
+
+it('renders a known reply chain immediately while refreshing it in the background',async()=>{
+ const top=post('top-cache'),middle=post('middle-cache','top-cache'),bottom=post('bottom-cache','middle-cache'),navigate=vi.fn();
+ await act(async()=>dom.root.render(createElement(PostList,{posts:[top,middle,bottom],user,navigate,changed:vi.fn(),deleted:vi.fn()})));
+ api.operation.mockImplementation(()=>new Promise(()=>{}));
+ await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(PostPanel,{postId:'middle-cache',user,navigate}))));
+ expect([...dom.container.querySelectorAll('.post-card')].map(card=>card.getAttribute('data-post-id'))).toEqual(['top-cache','middle-cache','bottom-cache']);
+ expect(api.operation).toHaveBeenCalledWith('posts.get',{postId:'middle-cache'});
+});
+
+it('realigns a clicked preserved reply while Back keeps its previous scroll',async()=>{
+ const top=post('preserved-top'),child=post('preserved-child','preserved-top');
+ await act(async()=>dom.root.render(createElement(PostList,{posts:[top,child],user,navigate:vi.fn(),changed:vi.fn(),deleted:vi.fn()})));
+ api.operation.mockImplementation(()=>new Promise(()=>{}));
+ const rect=(top:number)=>({top,left:0,right:500,bottom:top+100,width:500,height:100,x:0,y:top,toJSON(){}});
+ vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){return rect(this.classList.contains('post-current')?420-(dom.container.querySelector<HTMLElement>('.composer-view')?.scrollTop||0):this.classList.contains('composer-view')?80:0);});
+ function Harness(){const [active,setActive]=useState(true);return createElement('div',null,
+  createElement('button',{onClick:()=>setActive(false)},'Show parent'),
+  createElement('div',{className:'composer-view',hidden:!active,ref:(node:HTMLElement|null)=>{if(!node||node.dataset.mockScroll)return;node.dataset.mockScroll='true';let offset=0;Object.defineProperties(node,{clientHeight:{value:500},scrollHeight:{get:()=>600+(parseFloat(node.querySelector<HTMLElement>('.post-scroll-clearance')?.style.height||'0')||0)},scrollTop:{get:()=>offset,set:(value:number)=>{offset=Math.max(0,Math.min(value,node.scrollHeight-node.clientHeight));}}});}},createElement(PanelVisibilityContext.Provider,{value:active},createElement(PostPanel,{postId:child.id,user,navigate:vi.fn()}))),
+  !active&&createElement('div',{className:'parent-list'},createElement('button',{onClick:()=>setActive(true)},'Back'),createElement(PostList,{posts:[child],user,navigate:()=>setActive(true),changed:vi.fn(),deleted:vi.fn()})));
+ }
+ await act(async()=>dom.root.render(createElement(Harness)));
+ dom.frame();
+ const scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;
+ expect(scroller.clientHeight).toBe(500);
+ expect([...scroller.querySelectorAll('.post-card')].map(card=>card.getAttribute('data-post-id'))).toEqual(['preserved-top','preserved-child']);
+ expect(scroller.querySelector<HTMLElement>('.post-scroll-clearance')?.style.height).toBe('240px');
+ expect(scroller.scrollTop).toBe(340);
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('button')!.click());scroller.scrollTop=25;
+ await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Back')!.click());expect(scroller.scrollTop).toBe(25);
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('button')!.click());scroller.scrollTop=0;
+ await act(async()=>dom.container.querySelector<HTMLElement>('.parent-list .post-card')!.click());expect(scroller.scrollTop).toBe(340);
 });
