@@ -99,6 +99,14 @@ export async function uploadMetadata(actor:Actor,id:string,allowPublicPhoto=fals
   const {originalName:_privateName,...publicFile}=file;
   return {...publicFile,name:publicUploadName(file),...(file.userId===actor.userId?{originalName:originalUploadName(file)}:{})};
 }
+/** The upload ID is the bearer capability for file reads; never return owner-private filename metadata. */
+export async function publicUploadMetadata(id:string){
+  if(!/^[0-9a-f-]{36}$/i.test(id))throw new AppError(404,'not_found','This file is unavailable.');
+  const file=requireValue(await uploads().findOne({_id:id,ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}}),'This file is unavailable.');
+  if(await users().findOne({_id:file.userId,suspendedAt:{$type:'string'}},{projection:{_id:1}}))throw new AppError(404,'not_found','This file is unavailable.');
+  const {originalName:_privateName,...publicFile}=file;
+  return {...publicFile,name:publicUploadName(file)};
+}
 export async function readUpload(actor:Actor,id:string,allowPublicPhoto=false){
   const file=await uploadMetadata(actor,id,allowPublicPhoto);
   const bytes=file.storage?await readObjectFile(file.storage,file.bytes,file.sha256):await readFile(filePath(id));

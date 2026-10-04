@@ -20,7 +20,7 @@ export function mediaRange(value:string|undefined,size:number):{start:number;end
  return start>end||start>=size?false:{start,end};
 }
 
-/** Authorized immutable files stream with backpressure, including single byte ranges. */
+/** Verified immutable files stream with backpressure, including single byte ranges. */
 export async function sendMedia(file:Upload,req:Request,res:Response){
  if(!/^[0-9a-f-]{36}$/.test(file._id))throw new AppError(404,'not_found','This file is unavailable.');
  const range=mediaRange(req.headers.range,file.bytes);

@@ -45,7 +45,7 @@ import { searchOperations, searchSchema } from './operationSearch';
 import release from '../release.json';
 import { checkout, stripeWebhook, topupQuote } from './payments';
 import { ensureIntroduction } from './onboarding';
-import {acceptUpload,uploadMetadata} from './uploads';
+import {acceptUpload,publicUploadMetadata} from './uploads';
 import { streamLiveState, readLiveState } from './liveState';
 import { buildResourceLinks } from './resourceLinks';
 import { devApiGate,trustedDevKey } from './devGate';
@@ -125,6 +125,20 @@ export function createApp() {
     const event=await receiver.receive((req.body as Buffer).toString('utf8'),req.get('Authorization'));
     await callWebhook(event);await spaceWebhook(event);res.json({ok:true});
   });
+  const publicFileHeaders:express.RequestHandler=(_req,res,next)=>{res.set({'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, HEAD, OPTIONS','Access-Control-Allow-Headers':'Range','Access-Control-Expose-Headers':'Content-Length, Content-Range, Accept-Ranges','Cross-Origin-Resource-Policy':'cross-origin','Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'});next();};
+  const publicFileLimit=limiter('/api/public-files',12000);
+  app.options('/api/files/:id',publicFileHeaders,(_req,res)=>{res.sendStatus(204);});
+  app.options('/api/files/:id/poster',publicFileHeaders,(_req,res)=>{res.sendStatus(204);});
+  app.get('/api/files/:id',publicFileHeaders,publicFileLimit,async(req,res)=>{
+    const file=await publicUploadMetadata(String(req.params.id));
+    res.set('Content-Disposition',`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`);
+    await sendMedia(file,req,res);
+  });
+  app.get('/api/files/:id/poster',publicFileHeaders,publicFileLimit,async(req,res)=>{
+    const file=await publicUploadMetadata(String(req.params.id));
+    const image=await uploadVideoPoster({userId:file.userId,source:'external',scope:'read'},file._id);
+    res.set({'Content-Type':'image/webp','X-Content-Type-Options':'nosniff'}).send(image);
+  });
   const ordinaryJson=express.json({limit:'32kb'}),websiteJson=express.json({limit:'2200kb'}),makeJson=express.json({limit:makeRequestBytes}),websiteSourceLimit=limiter('/api/website/source',30);
   const requestLimits=apiRequestLimits();
   app.use('/api', devApiGate, cookieParser(), csrf, (req,res,next)=>authenticate(req,res,authError=>{
@@ -176,15 +190,6 @@ export function createApp() {
     res.set({'Content-Type':'image/webp','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}).send(image);
   });
   app.put('/api/uploads/:id',limiter('/api/uploads/:id', 20),(req,_res,next)=>{requireActor(req);next();},uploadAdmission(),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
-  app.get('/api/files/:id',async(req,res)=>{
-    const file=await uploadMetadata(requireActor(req),String(req.params.id),true);
-    res.set('Content-Disposition',`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`);
-    await sendMedia(file,req,res);
-  });
-  app.get('/api/files/:id/poster',async(req,res)=>{
-    const image=await uploadVideoPoster(requireActor(req),String(req.params.id));
-    res.set({'Content-Type':'image/webp','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}).send(image);
-  });
   app.get('/api/admin/session', async (req, res) => { res.json(await adminStatus(req)); });
   app.post('/api/admin/login', limiter('/api/admin/login', 10, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const data = z.strictObject({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/), password: z.string().min(8).max(128) }).parse(req.body);

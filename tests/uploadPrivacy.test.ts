@@ -6,8 +6,9 @@ import sharp from 'sharp';
 import {config} from '../server/config';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {users,type Actor,type User} from '../server/auth';
-import {acceptUpload,prepareUpload,uploadMetadata,uploads,fileInput,retainUploads} from '../server/uploads';
+import {acceptUpload,prepareUpload,uploadMetadata,publicUploadMetadata,uploads,fileInput,retainUploads} from '../server/uploads';
 import {executeOperation} from '../server/operations';
+import {createApp} from '../server/app';
 import {postCards} from '../server/postProjection';
 import {projectLogEntries} from '../server/log';
 import {publicInvitePreview} from '../server/logInvites';
@@ -30,6 +31,27 @@ it('keeps the original filename for owner reads after conversion, while shared m
  const post={_id:'post',userId:owner.userId,text:'photo',fileIds:[file.id]};await rows('posts').insertOne(post);
  const shared=await uploadMetadata(viewer,file.id,true);expect(shared.name).toBe(`${file.id}.webp`);expect(shared).not.toHaveProperty('originalName');
  const cards=await postCards([post],viewer.userId,[]);expect(cards[0].photos[0].name).toBe(`${file.id}.webp`);expect(JSON.stringify(cards)).not.toContain(original);
+});
+it('serves an obfuscated upload URL without a session, including cross-origin and range reads',async()=>{
+ const original='my-private-plan.png',bytes=await sharp({create:{width:8,height:8,channels:3,background:'#123456'}}).png().toBuffer(),file=await upload(original,bytes);
+ expect(await publicUploadMetadata(file.id)).toMatchObject({name:`${file.id}.webp`});
+ expect(await publicUploadMetadata(file.id)).not.toHaveProperty('originalName');
+ const server=createApp().listen(0,'127.0.0.1');
+ await new Promise<void>(resolve=>server.once('listening',resolve));
+ const url=`http://127.0.0.1:${(server.address() as {port:number}).port}/api/files/${file.id}`;
+ try{
+  const response=await fetch(url,{headers:{Origin:'https://other.example'}});
+  expect(response.status).toBe(200);
+  expect(response.headers.get('access-control-allow-origin')).toBe('*');
+  expect(response.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+  expect(response.headers.get('content-disposition')).toContain(`${file.id}.webp`);
+  expect(response.headers.get('content-disposition')).not.toContain(original);
+  const all=Buffer.from(await response.arrayBuffer());
+  const ranged=await fetch(url,{headers:{Range:'bytes=0-3',Origin:'https://other.example'}});
+  expect(ranged.status).toBe(206);expect(Buffer.from(await ranged.arrayBuffer())).toEqual(all.subarray(0,4));
+  await uploads().updateOne({_id:file.id},{$set:{deletedAt:new Date().toISOString()}});
+  expect((await fetch(url)).status).toBe(404);
+ }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });
 it('protects legacy filenames in shared hangouts and invite previews without erasing owner metadata',async()=>{
  const file=await upload('private-memory.png',await sharp({create:{width:8,height:8,channels:3,background:'#123456'}}).png().toBuffer()),legacyName='private-memory.webp';
