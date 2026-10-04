@@ -73,6 +73,7 @@ import {TalkDock} from './TalkDock';
 import release from '../release.json';
 
 const settingsViews = new Set(['agent_instructions','agent_memory','preferences','appearance','account_menu','settings', 'account', 'account_settings', 'credits', 'agents', 'blocked', 'hidden_people', 'storage', 'notifications', 'notification_settings', 'location']);
+const mobileNotificationLink=()=>window.innerWidth<=760||window.matchMedia('(pointer: coarse)').matches;
 const inlineViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads']);
 const accountViews = new Set(['agent_instructions','agent_memory','log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'location', 'uploads', 'storage', 'blocked', 'hidden_people', 'notifications', 'notification_settings', 'agents']);
 const requiresSavedAccount = (view: string, context: Omit<Destination, 'view'>) => accountViews.has(view) && !(view === 'agents' && context.resourceId === 'device');
@@ -570,7 +571,7 @@ export function App() {
                       : panel === 'inbox' ? <InboxPanel itemId={panelContext.resourceId} navigate={navigate} discuss={discussUpdate} />
                       : panel === 'automations' ? <AutomationsPanel automationId={panelContext.resourceId} navigate={navigate} chatBusy={sendBusy} example={sendExample} />
                       : panel === 'chat_history' ? <ChatSearchPanel initialQuery={panelContext.query} initialRole={panelContext.role} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} openMessage={openChatMessage} />
-                      : panel === 'notifications' ? <NotificationsPanel userId={data.user.id} state={data.notifications} navigate={navigate} />
+                      : panel === 'notifications' ? <NotificationsPanel userId={data.user.id} state={data.notifications} navigate={destination=>{if(!mobileNotificationLink()){navigate(destination);return;}resumeSettings.current=false;void closePanel().then(()=>requestAnimationFrame(()=>{navigate(destination);resumeSettings.current=false;}));}} />
                       : panel === 'notification_settings' ? <NotificationSettingsPanel />
                         : panel === 'uploads' ? <UploadPanel requestId={surface?.view === 'uploads' ? surface.id : undefined} submit={async files => { if (surface?.view === 'uploads') await closePanel(true, files.map(file => file.id)); else { setAttachments(files); await closePanel(); } }} />
                         : panel === 'agents' ? panelContext.resourceId==='device'?<DeviceApproval initialCode={panelContext.query} handle={data.user.handle} registered={Boolean(data.user.handle)} onAccount={() => startAccount({view:'agents',resourceId:'device',query:panelContext.query})} />:<Connections registered={Boolean(data.user.handle)} onAccount={() => navigatePanel('account')} /> : null) : null;

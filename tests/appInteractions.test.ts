@@ -214,6 +214,22 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('dialog[open] .settings-title')?.textContent||dom.container.querySelector('dialog[open]')?.textContent).toContain('Notifications');
     expect(dom.container.querySelector('.social-log .log-modal[data-open=true] .log-detail h2')?.textContent).toBe('Test memory');expect(location.search).not.toContain('notification=1');
   });
+  it('closes mobile Notifications when a hangout notification is opened from its list',async()=>{
+    const notice={id:'log-notice',kind:'log_added' as const,title:'New hangout',text:'A shared day',createdAt:'2026-10-04T12:00:00.000Z',read:true,link:{rel:'open_in_newdrugs' as const,targetKind:'exact' as const,resourceType:'log_entry',resourceId:'resource',title:'Open hangout',url:'https://dev.druggie.org/log/resource'}};
+    history.replaceState(null,'','/log');await mount();await act(async()=>bootstrap.resolve({...initial,notifications:{unread:0,items:[notice]}}));
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
+    expect(dom.container.querySelector('.settings-sheet[open]')?.textContent).toContain('Settings');
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.settings-menu a[href="/notifications"]')!.click());
+    expect(dom.container.querySelector('.settings-sheet[open]')?.textContent).toContain('New hangout');
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.notification-list a')!.click());
+    expect(dom.container.querySelector('.settings-sheet[open]')).toBeNull();
+    expect(dom.container.querySelector('.social-log .log-modal[data-open=true]')).toBeNull();
+    await act(async()=>{await Promise.resolve();dom.frame();await Promise.resolve();});
+    expect(dom.container.querySelector('.social-log .log-modal[data-open=true] .log-detail h2')?.textContent).toBe('Test memory');
+    await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.log-detail button')].find(button=>button.textContent==='Close')!.click());
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
+    expect(dom.container.querySelector('.settings-sheet[open] h2')?.textContent).toBe('Settings');
+  });
   it('shows invite photos before login and restores the invite after the account identity changes',async()=>{
     const code='a'.repeat(32);history.replaceState(null,'',`/log/join/${code}`);await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,id:'guest',handle:undefined}}));
     expect(dom.container.querySelector('.log-join .log-photo-strip img')).not.toBeNull();expect(dom.container.querySelector('.log-join .log-note-content strong')?.textContent).toBe('shared');expect(dom.container.querySelector('.log-join audio')?.getAttribute('src')).toBe('/invite-voice');
