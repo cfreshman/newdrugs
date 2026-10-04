@@ -266,7 +266,7 @@ The operation catalog is the common contract for UI/CLI/MCP. A feature that chan
 
 `log.related` is a private CLI/MCP/agent read: `newdrugs --profile dev read log.related '{"entryId":"<hangout-id>"}'`. It uses existing indexed text vectors, returns exact authorized Log links, and makes no model call. It needs a joined entry with searchable text and may report that indexing is still underway. There is no Related memories control in the Log UI.
 
-`access.get` reports the current connection scope and filtered operation authority without exposing a token. `messages.search` uses a separate private DM index, and `messages.window` provides bounded, source-authorized context around one human DM. `search.global` groups matches from the currently authorized public, Log, Agent chat and DM indexes, with exact links and no cross-source score comparison. Background runs can search only their granted sources. `automations.validate` uses the same schema and scheduler as creation but makes no change, creates no run and grants no authority.
+`access.get` reports the current connection scope and filtered operation authority without exposing a token. `messages.search` uses a separate private DM index, and `messages.window` provides bounded, source-authorized context around one human DM. `search.global` merges bounded candidates from authorized public, Log, Agent chat and DM indexes and reranks them with the same query-vector cosine and word-coverage formula. It does not give any source priority or filter weak matches for the agent. Background runs can search only their granted sources. `automations.validate` uses the same schema and scheduler as creation but makes no change, creates no run and grants no authority.
 
 Keep these four things distinct:
 
@@ -321,7 +321,7 @@ Admin static routing is in `server/adminFrontend.ts`. Match the bare `/admin` re
 
 ## CLI and credentials
 
-Use the installed CLI or the built source CLI; MCP installation is optional. This machine has used named `default` (production) and `dev` connections. Verify available profiles instead of assuming tokens remain valid:
+Use the installed CLI or the built source CLI; MCP installation is optional. `npm run cli:build` compiles the TypeScript CLI into five platform-specific Bun executables and a portable Node fallback. `npm run cli -- ...` runs compiled Node instead of interpreting TypeScript with `tsx`. After login, `newdrugs native-install` downloads a size- and SHA-256-verified executable for macOS ARM64/x64, Linux ARM64/x64 or Windows x64, installs it immutably, and prints its managed launcher path. Use that launcher for native startup speed; Node remains the fallback. The native launcher checks for strictly newer releases daily and switches only after verification. This machine has used named `default` (production) and `dev` connections. Verify available profiles instead of assuming tokens remain valid:
 
 ```sh
 newdrugs profiles
@@ -334,6 +334,8 @@ newdrugs --profile dev read identity.get
 Discover and describe operations before use. Do not perform real writes merely to verify connection health. Explicit `--profile` is safer than changing the globally active connection during development. Ordinary users default to the public site without dev/prod jargon.
 
 CLI failures are one JSON object on stderr with a stable server error code when available, an HTTP status for API failures and a nonzero typed exit code. Preserve token redaction and the MCP `{ ok:false, error }` contract when changing transport behavior.
+
+Known-operation CLI calls reuse a private selected-definition cache keyed by connection and credential. Each business request still checks the exact operation version, kind and actor authority on the server before execution. A rejected stale read may refresh its definition and retry once; writes are never replayed after contract drift. Search remains live, and explicit describe fetches the current selected definition. The server already includes authorized resource links in the business response, so there is no separate navigation round trip to remove here.
 
 Credentials live in the private config store, normally `~/.config/newdrugs/config.json`; operator credentials are separate in `admin.json`. Never dump these files. Login tokens go through `--token-stdin`, not command arguments, shell history, docs, screenshots, or replies. Reuse the user's existing connection; do not ask for or expose keys unnecessarily.
 

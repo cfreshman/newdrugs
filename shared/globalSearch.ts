@@ -1,6 +1,5 @@
 export type GlobalSearchSource='public'|'log'|'chat'|'messages';
 export type GlobalSearchKind='person'|'post'|'talk'|'log'|'chat'|'message';
-export interface GlobalSearchInput {query:string;sources?:GlobalSearchSource[];limitPerSource?:number}
-export interface GlobalSearchItem {kind:GlobalSearchKind;id:string;title:string;snippet:string;url:string}
-export interface GlobalSearchGroup {source:GlobalSearchSource;items:GlobalSearchItem[];nextCursor:string|null;notices:string[]}
-export interface GlobalSearchResult {groups:GlobalSearchGroup[];errors:{source:GlobalSearchSource;message:string}[]}
+export interface GlobalSearchInput {query:string;sources?:GlobalSearchSource[];limit?:number}
+export interface GlobalSearchItem {source:GlobalSearchSource;kind:GlobalSearchKind;id:string;title:string;snippet:string;url:string;score:number}
+export interface GlobalSearchResult {items:GlobalSearchItem[];notices:{source:GlobalSearchSource;text:string}[];errors:{source:GlobalSearchSource;message:string}[]}

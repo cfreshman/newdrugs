@@ -81,8 +81,8 @@ export function Connections({ registered, onAccount }: { registered: boolean; on
   const [secret, setSecret] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [showPromptFallback,setShowPromptFallback]=useState(false);
   const [deviceCopied,setDeviceCopied]=useState(false);
   const [expiry, setExpiry] = useState('');
   const setup = agentSetup(window.location.origin, secret);
@@ -91,36 +91,44 @@ export function Connections({ registered, onAccount }: { registered: boolean; on
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError(''); setBusy(true);
     const form = new FormData(event.currentTarget);
+    let finishClipboard:((text:string)=>void)|undefined,rejectClipboard:(()=>void)|undefined,earlyCopy:Promise<boolean>|undefined;
+    if(navigator.clipboard?.write&&typeof ClipboardItem!=='undefined'){
+      const deferred=new Promise<Blob>((resolve,reject)=>{finishClipboard=text=>resolve(new Blob([text],{type:'text/plain'}));rejectClipboard=()=>reject(Error('Token creation failed.'));});
+      void deferred.catch(()=>{});
+      try{earlyCopy=navigator.clipboard.write([new ClipboardItem({'text/plain':deferred})]).then(()=>true,()=>false);}
+      catch{rejectClipboard?.();earlyCopy=undefined;}
+    }
     try {
       const days = expiry === 'custom' ? Number(form.get('customExpiry')) : expiry ? Number(expiry) : null;
       const result = await post<{ token: string }>('/tokens', { name: String(form.get('name') || '').trim() || 'My AI agent', scope: form.get('scope'), expiresInDays: days });
-      setSecret(result.token); setCopied(false); setPromptCopied(false); await load();
-    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+      setSecret(result.token);setPromptCopied(false);setShowPromptFallback(false);
+      const prompt=agentSetup(window.location.origin,result.token).prompt;finishClipboard?.(prompt);
+      let copied=earlyCopy?await earlyCopy:false;
+      if(!copied)try{await navigator.clipboard.writeText(prompt);copied=true;}catch{/* The prompt remains available below. */}
+      if(copied)setPromptCopied(true);
+      else{setShowPromptFallback(true);setError('Connection created, but copying was blocked. Copy the setup prompt below.');}
+      await load();
+    } catch (e) { rejectClipboard?.(); setError(errorText(e)); } finally { setBusy(false); }
   };
   return <>
     <p>Use New Drugs from Codex, Claude Code, or another agent. Direct app actions are <strong>free</strong>.</p>
-    <p>Create a token, then paste the setup prompt below into your agent. It will install the CLI and connect for you.</p>
+    <p>Create a connection, then paste the copied setup prompt into your agent. It will install the CLI and connect for you.</p>
     {!registered ? <NavLink className="solid wide" to={{view:'profile'}} navigate={onAccount}>Save your account first</NavLink> : <form className="fields" onSubmit={create}>
       <label>Connection name<input name="name" placeholder="My AI agent" maxLength={60} /></label>
       <label>Access<select name="scope" defaultValue="write"><option value="write">Read and take actions for me</option><option value="read">Read only</option></select></label>
       <label>Expires<select name="expiresInDays" value={expiry} onChange={event => setExpiry(event.target.value)}><option value="">No expiry</option><option value="7">After 7 days</option><option value="30">After 30 days</option><option value="90">After 90 days</option><option value="365">After one year</option><option value="custom">Choose a number of days</option></select></label>
       {expiry === 'custom' && <label>Days until expiry<input name="customExpiry" type="number" min={1} max={3650} required defaultValue={30} /></label>}
-      <button className="solid" disabled={busy}>{busy ? 'Connecting…' : 'Create an access token'}</button>
+      <button className="solid" disabled={busy}>{busy ? 'Connecting…' : 'Create token and copy prompt'}</button>
     </form>}
-    {secret && <div className="token-result"><label>Shown once. Keep it private.<input readOnly value={secret} aria-label="Access token" onFocus={e => e.target.select()} /></label>
-      <button className="text-link" onClick={async () => { try { await navigator.clipboard.writeText(secret); setCopied(true); } catch { setError('Select the token and copy it manually.'); } }}>{copied ? 'Copied' : 'Copy token'}</button></div>}
-    <section className="connection-setup" aria-label="Agent setup">
-      <button type="button" className="solid wide" disabled={!secret} onClick={async () => { try { await navigator.clipboard.writeText(setup.prompt); setPromptCopied(true); } catch { setError('Select the setup prompt and copy it manually.'); } }}>{promptCopied ? 'Setup prompt copied' : 'Copy setup prompt'}</button>
+    {secret && <section className="connection-setup" aria-label="Agent setup">
+      {promptCopied?<p>Setup prompt copied. Paste it into your agent. <button type="button" className="text-link" onClick={async()=>{try{await navigator.clipboard.writeText(setup.prompt);}catch{setShowPromptFallback(true);setError('Select the setup prompt and copy it manually.');}}}>Copy again</button></p>
+       :<button type="button" className="solid wide" onClick={async () => { try { await navigator.clipboard.writeText(setup.prompt); setPromptCopied(true);setShowPromptFallback(false);setError(''); } catch { setShowPromptFallback(true);setError('Select the setup prompt and copy it manually.'); } }}>Copy setup prompt</button>}
       <p className="quiet small">The prompt includes your token. Paste it only into an agent you trust.</p>
-      <pre className="setup-prompt" tabIndex={0} aria-label="Setup prompt">{setup.prompt}</pre>
-      <p className="small">For a manual connection, install the CLI and log in at its hidden token prompt:</p>
-      <pre>npm install --global {setup.site}/downloads/newdrugs-cli.tgz{`\n`}newdrugs{setup.profile} login --url {setup.site}</pre>
-      <p className="quiet small">MCP is optional. Its endpoint is <code>{setup.site}/mcp</code>, using your token as Bearer authentication.</p>
-      <p className="quiet small">Connected agents can read your private chat and, with write access, act for you. Revoke access below whenever you want.</p>
-    </section>
-    <details className="device-login-option"><summary>Browser approval for a cloud agent</summary><p>Use this optional setup when your agent runs on another computer. It gives you an approval link and code, then saves its credentials automatically.</p><pre className="setup-prompt">{agentDeviceSetup(window.location.origin)}</pre><button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(agentDeviceSetup(window.location.origin));setDeviceCopied(true);setTimeout(()=>setDeviceCopied(false),2000);}catch{setError('Select the setup prompt and copy it manually.');}}}>{deviceCopied?'Copied':'Copy device setup prompt'}</button></details>
+      {showPromptFallback&&<pre className="setup-prompt" tabIndex={0} aria-label="Setup prompt">{setup.prompt}</pre>}
+    </section>}
+    <details className="device-login-option"><summary>Browser approval for a cloud agent</summary><p>Use this optional setup when your agent runs on another computer. It gives you an approval link and code, then saves its credentials automatically.</p><pre className="setup-prompt">{agentDeviceSetup(window.location.origin)}</pre><button type="button" className="solid wide" onClick={async()=>{try{await navigator.clipboard.writeText(agentDeviceSetup(window.location.origin));setDeviceCopied(true);setTimeout(()=>setDeviceCopied(false),2000);}catch{setError('Select the setup prompt and copy it manually.');}}}>{deviceCopied?'Copied':'Copy device setup prompt'}</button></details>
     {tokens.length > 0 && <ul className="token-list">{tokens.map(token => <li key={token.id}><span>{token.name}<small>{token.scope === 'read' ? 'Read only' : 'Read & write'} · {token.expiresAt ? `until ${new Date(token.expiresAt).toLocaleDateString()}` : 'No expiry'}</small></span>
-      <button className="text-link" onClick={async () => { try { await api(`/tokens/${token.id}`, { method: 'DELETE' }); setSecret(''); await load(); } catch (e) { setError(errorText(e)); } }}>Revoke</button></li>)}</ul>}
+      <button className="text-link" onClick={async () => { try { await api(`/tokens/${token.id}`, { method: 'DELETE' }); setSecret('');setShowPromptFallback(false); await load(); } catch (e) { setError(errorText(e)); } }}>Revoke</button></li>)}</ul>}
     {error && <p className="error" role="alert">{error}</p>}
   </>;
 }

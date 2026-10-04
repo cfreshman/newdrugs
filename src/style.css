@@ -415,6 +415,7 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .token-result input { font-family: var(--font-mono); font-size: var(--text-sm); margin: var(--space-1) 0 var(--space-2); width: 100%; }
 .token-result button { font-size: var(--text-sm); }
 .connection-setup { margin-top: var(--space-6); }
+.device-login-option { display:block; margin-top:var(--space-6); }
 .setup-prompt { max-height: 280px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .upload-list { list-style: none; margin: 0; padding: 0; }
 .upload-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: var(--border-width) solid var(--divider); }

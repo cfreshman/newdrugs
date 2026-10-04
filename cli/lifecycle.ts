@@ -10,6 +10,15 @@ import {promisify} from 'node:util';
 import {ConfigStore, operatorStore} from './config';
 const exec=promisify(execFile),CHECK_INTERVAL=86400000;
 export interface Installation {prefix:string;npm:string;npmCli?:string}
+export async function inferNativeRoot(entrypoint=process.execPath):Promise<string|null>{
+ if(!entrypoint||!['newdrugs','newdrugs.exe'].includes(basename(entrypoint)))return null;
+ let path:string;try{path=await realpath(entrypoint);}catch{return null;}
+ if(!['newdrugs','newdrugs.exe'].includes(basename(path)))return null;
+ const release=basename(dirname(path));if(!/^\d+\.\d+\.\d+-(?:darwin|linux|win32)-(?:arm64|x64)-[a-f0-9]{12}$/.test(release)||basename(dirname(dirname(path)))!=='releases')return null;
+ const root=dirname(dirname(dirname(path))),{nativeRoot}=await import('./native');
+ if(root!==await realpath(nativeRoot()).catch(()=>nativeRoot()))return null;
+ return root;
+}
 export function isNewerVersion(candidate:string,current:string) {
   if(!/^\d+\.\d+\.\d+$/.test(candidate)||!/^\d+\.\d+\.\d+$/.test(current))return false;
   const next=candidate.split('.').map(Number),old=current.split('.').map(Number);
@@ -65,18 +74,44 @@ export async function updateInstallation(install:Installation,origin:string,curr
 }
 export async function maybeAutoUpdate(current:string,store:ConfigStore,profile?:string,force=false){
   if(!force&&process.env.NEWDRUGS_DISABLE_AUTO_UPDATE==='1')return 'disabled';
+  const native=await inferNativeRoot();
+  if(native){let origin='https://druggie.org';try{origin=(await store.resolve(profile)).url;}catch{/* Native fallback uses the public release. */}
+    try{return await updateNativeInstallation(native,origin,current,force);}catch(error){if(force)throw error;return 'unavailable';}}
   const install=await installation();if(!install){if(force)throw new Error('This copy is a source checkout, not an installed CLI.');return 'source';}
   let origin='https://druggie.org';try{origin=(await store.resolve(profile)).url;}catch{/* Fresh install uses the public release. */}
   try{return await updateInstallation(install,origin,current,force);}catch(error){if(force)throw error;return 'unavailable';}
 }
+export async function updateNativeInstallation(root:string,origin:string,current:string,force=false){
+ if(!['https://druggie.org','https://dev.druggie.org'].includes(new URL(origin).origin))throw Error('Native releases must come from New Drugs.');
+ const stamp=join(root,`.newdrugs-update-${createHash('sha256').update(origin).digest('hex').slice(0,12)}`),lockPath=join(root,'.newdrugs-update.lock');
+ if(!force){try{if(Date.now()-(await stat(stamp)).mtimeMs<CHECK_INTERVAL)return 'not_due';}catch{/* First check. */}}
+ let lock;try{lock=await open(lockPath,'wx',0o600);await lock.writeFile(String(process.pid));}
+ catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST'){
+   const pid=Number(await readFile(lockPath,'utf8').catch(()=>''));if(Number.isSafeInteger(pid)&&pid>0){try{process.kill(pid,0);}catch(cause){if((cause as NodeJS.ErrnoException).code==='ESRCH'){await unlink(lockPath);return updateNativeInstallation(root,origin,current,force);}}}
+   return 'busy';
+  }throw error;}
+ try{
+  await writeFile(stamp,String(Date.now()),{mode:0o600});
+  const response=await fetch(new URL('/downloads/cli.json',origin),{redirect:'error',signal:AbortSignal.timeout(4000)});
+  if(!response.ok)throw Error('The release manifest is unavailable.');
+  const manifest=await response.json() as {version?:string;nativeManifest?:string};
+  if(!manifest.version||manifest.nativeManifest!==`native-${manifest.version}.json`||!/^\d+\.\d+\.\d+$/.test(manifest.version))throw Error('Invalid native release manifest.');
+  if(!isNewerVersion(manifest.version,current))return 'current';
+  const {installNative}=await import('./native');await installNative(origin,root,manifest.version);
+  process.stderr.write(`New Drugs CLI updated from ${current} to ${manifest.version}. The next invocation uses it.\n`);return 'updated';
+ }finally{await lock.close();await unlink(lockPath).catch(()=>{});}
+}
 export async function uninstall(confirmed:boolean,store:ConfigStore,install:Installation|null|undefined=undefined,run=exec){
   if(!confirmed)throw new Error('Uninstall removes the CLI, its standard New Drugs MCP registrations, and all locally saved logins. Run newdrugs uninstall --yes to confirm.');
+  const native=install===undefined?await inferNativeRoot():null;
   install=install===undefined?await installation():install;
-  if(!install)throw new Error('This copy is not a recognized installed CLI, so it cannot be removed safely.');
+  if(!install&&!native)throw new Error('This copy is not a recognized installed CLI, so it cannot be removed safely.');
   // Match Wayfinder: remove only this app's standard registrations, never other servers.
   for(const [command,args] of [['codex',['mcp','remove','newdrugs']],['claude',['mcp','remove','--scope','user','newdrugs']]] as const){try{await run(command,[...args],{timeout:10000,maxBuffer:100000,windowsHide:true});}catch{/* Optional host not installed or entry absent. */}}
   await operatorStore(store).removeAll();
   await store.removeAll();
+  if(native){await rm(native,{recursive:true,force:true});process.stdout.write('New Drugs native CLI and locally saved logins removed. Any separate npm fallback remains installed. Your account remains on New Drugs.\n');return;}
+  if(!install)throw Error('Native installation disappeared.');
   const args=['uninstall','--global','--prefix',install.prefix,'newdrugs-cli','--ignore-scripts'];
   try{await run(install.npmCli?process.execPath:install.npm,install.npmCli?[install.npmCli,...args]:args,{timeout:120000,maxBuffer:200000,windowsHide:true});}
   catch{throw new Error('Saved logins and standard MCP registrations were removed, but npm could not remove the CLI package.');}

@@ -25,6 +25,12 @@ it('keeps dev UI and anonymous API private while retaining health and authentica
  const account=await register.json();expect(account.user.id).toBe(state.user.id);expect(account.user.handle).toBeTruthy();
  const token=`nd_${randomUUID()}`;await rows('tokens').insertOne({_id:randomUUID(),userId:state.user.id,hash:hash(token),scope:'read',revokedAt:null,expiresAt:null});
  const cli=await request('/api/operations/identity.get',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{}'});expect(cli.status).toBe(200);expect((await cli.json()).data.id).toBe(state.user.id);
+ const selected=await request('/api/catalog/identity.get',{headers:{Authorization:`Bearer ${token}`}});expect(selected.status).toBe(200);
+ const definition=(await selected.json()).operation;expect(definition).toMatchObject({name:'identity.get',kind:'read',version:expect.stringMatching(/^op1:/)});
+ const fenced=(version:string,kind:string)=>request('/api/operations/identity.get',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','X-NewDrugs-Operation-Version':version,'X-NewDrugs-Expected-Kind':kind},body:'{}'});
+ expect((await fenced('op1:'+'0'.repeat(64),'read')).status).toBe(409);
+ expect((await fenced(definition.version,'write')).status).toBe(409);
+ expect((await fenced(definition.version,'read')).status).toBe(200);
  const mcp=await request('/mcp',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'gate-test',version:'1'}}})});expect(mcp.status).toBe(200);
  expect(await users().countDocuments({_id:state.user.id})).toBe(1);
 });

@@ -29,10 +29,10 @@ it('indexes DMs separately, checks current membership and blocks, and links exac
  expect(retrieval.query).toHaveBeenCalledWith('dm',a.userId,expect.objectContaining({filter:expect.objectContaining({must:expect.arrayContaining([expect.objectContaining({key:'indexVersion'})])})}));
  const link=buildResourceLinks('messages.search',{},found,a)[0];expect(parseDestination(link.url,'https://dev.druggie.org')).toEqual({view:'messages',resourceId:ab,messageId:first});
  const global=outputs['search.global'].parse(await searchGlobal({query:'cycling',sources:['messages']},a)) as GlobalSearchResult;
- expect(global.groups[0].items).toMatchObject([{kind:'message',id:first,url:expect.stringContaining(`message=${first}`)}]);
+ expect(global.items).toMatchObject([{source:'messages',kind:'message',id:first,url:expect.stringContaining(`message=${first}`)}]);
  const all=outputs['search.global'].parse(await searchGlobal({query:'cycling'},a)) as GlobalSearchResult;
- expect(all.groups.map(group=>group.source)).toEqual(['public','log','chat','messages']);
- expect(all.groups.find(group=>group.source==='messages')?.items.map(item=>item.id)).toEqual([first]);
+ expect(all.items.filter(item=>item.source==='messages').map(item=>item.id)).toEqual([first]);
+ expect(all.items.every((item,index)=>!index||all.items[index-1].score>=item.score)).toBe(true);
  expect((await searchDM({query:'cycling'},c)).items.map(row=>row.id)).toEqual([second]);
  await rows('blocks').insertOne({_id:randomUUID(),members:[a.userId,b.userId],pairId:[a.userId,b.userId].sort().join(':')});
  expect((await searchDM({query:'cycling'},a)).items).toEqual([]);

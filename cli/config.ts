@@ -1,4 +1,4 @@
-import { mkdir, lstat, readFile, writeFile, rename, unlink, open, chmod } from 'node:fs/promises';
+import { mkdir, lstat, readFile, writeFile, rename, unlink, open, chmod, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -72,12 +72,13 @@ export class ConfigStore {
     }
     try {
       const config = await this.load(); change(config); await secure(this.file);
-      if (remove) { if (await secure(this.file)) await unlink(this.file); if (this.file !== this.legacy && await secure(this.legacy)) await unlink(this.legacy); return; }
+      if (remove) { if (await secure(this.file)) await unlink(this.file); if (this.file !== this.legacy && await secure(this.legacy)) await unlink(this.legacy); await rm(join(dir,'contracts'),{recursive:true,force:true}); return; }
       const temporary = `${this.file}.${randomUUID()}.tmp`;
       try { await writeFile(temporary, JSON.stringify(config, null, 2) + '\n', { mode: 0o600, flag: 'wx' }); await rename(temporary, this.file); }
       finally { await unlink(temporary).catch(() => {}); }
       // Do not leave an old token file that would revive a logged-out profile.
       if (this.file !== this.legacy && await secure(this.legacy)) await unlink(this.legacy);
+      await rm(join(dir,'contracts'),{recursive:true,force:true});
     } finally { await lock.close(); await unlink(lockPath); }
   }
   removeAll() { return this.mutate(() => {}, true); }

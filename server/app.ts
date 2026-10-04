@@ -237,10 +237,18 @@ export function createApp() {
     res.json({ operations: operations.filter(o => operationAvailable(actor,o)).map(o => describeOperation(o.name)) });
   });
   app.post('/api/catalog/search', async (req, res) => { res.json(await searchOperations(searchSchema.parse(req.body), requireActor(req))); });
+  app.get('/api/catalog/:name', (req, res) => {
+    const actor=requireActor(req),name=String(req.params.name),operation=operations.find(item=>item.name===name);
+    if(!operation||!operationAvailable(actor,operation))throw new AppError(404,'unknown_operation','Operation is unavailable to this connection.');
+    res.json({operation:describeOperation(name)});
+  });
   app.post('/api/operations/:name', async (req, res) => {
     const actor = requireActor(req);
-    const result = await executeOperation(String(req.params.name), req.body, actor, req.get('Idempotency-Key'), { confirmed: req.get('X-NewDrugs-Confirmed') === 'true' });
-    res.json({ ok: true, data: result, links: buildResourceLinks(String(req.params.name), req.body, result, actor) });
+    const name=String(req.params.name),version=req.get('X-NewDrugs-Operation-Version'),kind=req.get('X-NewDrugs-Expected-Kind');
+    if(version||kind){const operation=operations.find(item=>item.name===name);if(!operation||!operationAvailable(actor,operation))throw new AppError(404,'unknown_operation','Operation is unavailable to this connection.');
+      if(version!==operation.version||kind!==operation.kind)throw new AppError(409,'operation_contract_changed','The operation changed. Describe it again before retrying.');}
+    const result = await executeOperation(name, req.body, actor, req.get('Idempotency-Key'), { confirmed: req.get('X-NewDrugs-Confirmed') === 'true' });
+    res.json({ ok: true, data: result, links: buildResourceLinks(name, req.body, result, actor) });
   });
   app.post('/api/chat', limiter('/api/chat', 12), async (req, res) => {
     const actor = browserActor(req);

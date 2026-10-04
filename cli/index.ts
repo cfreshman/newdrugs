@@ -1,13 +1,9 @@
 #!/usr/bin/env node
 import {parseSearchArgs,searchCatalog,type SearchPage} from './search';
 import {deviceLogin} from './deviceLogin';
+import {CatalogCache,type CachedOperation} from './catalogCache';
 import { randomUUID } from 'node:crypto';
 import {readFile,writeFile} from 'node:fs/promises';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import release from '../release.json';
 import { ConfigStore, operatorStore, validUrl, profileName, type Login } from './config';
 import { maybeAutoUpdate, uninstall } from './lifecycle';
@@ -15,7 +11,7 @@ import { downloadFile } from './download';
 import { uploadLocalFile } from './upload';
 import { CliRequestError,cliFailure,requestError } from './errors';
 
-interface Operation { name: string; kind: 'read' | 'write'; description: string; inputSchema: Record<string, unknown> }
+interface Operation extends CachedOperation {}
 const rawArgs = process.argv.slice(2);
 const profileIndex = rawArgs.findIndex(arg=>arg==='--profile'||arg.startsWith('--profile='));
 const inlineProfile = profileIndex>=0 && rawArgs[profileIndex].startsWith('--profile=');
@@ -24,18 +20,18 @@ const args = rawArgs.filter((_, index) => profileIndex < 0 || index !== profileI
 const command = args[0] || 'help';
 const store = new ConfigStore();
 function option(name: string) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; }
-async function request<T>(login: Login, path: string, body?: unknown, idempotencyKey?: string, confirmed = false): Promise<T> {
+async function request<T>(login: Login, path: string, body?: unknown, idempotencyKey?: string, confirmed = false,expected?:Pick<Operation,'version'|'kind'>): Promise<T> {
   const response = await fetch(`${login.url}/api${path}`, { method: body === undefined ? 'GET' : 'POST', redirect: 'error',
-    signal: AbortSignal.timeout(60000), headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}), ...(confirmed ? { 'X-NewDrugs-Confirmed': 'true' } : {}) },
+    signal: AbortSignal.timeout(60000), headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}), ...(confirmed ? { 'X-NewDrugs-Confirmed': 'true' } : {}),...(expected?{'X-NewDrugs-Operation-Version':expected.version,'X-NewDrugs-Expected-Kind':expected.kind}:{}) },
     body: body === undefined ? undefined : JSON.stringify(body) });
   let result:unknown;
   try{result=await response.json();}catch{if(!response.ok)throw new CliRequestError('request_failed',`Request failed (${response.status}).`,response.status);throw new Error('The server returned an invalid response.');}
   if (!response.ok) throw requestError(response.status,result);
   return result as T;
 }
-async function catalog(login: Login) { return (await request<{ operations: Operation[] }>(login, '/catalog')).operations; }
-async function invoke(login: Login, name: string, input: unknown, key?: string, confirmed = false) {
-  return request(login, `/operations/${encodeURIComponent(name)}`, input, key, confirmed);
+async function selectedOperation(login:Login,name:string,cache:CatalogCache){const result=await request<{operation:Operation}>(login,`/catalog/${encodeURIComponent(name)}`);await cache.put(result.operation);return result.operation;}
+async function invoke(login: Login, name: string, input: unknown, key?: string, confirmed = false,expected?:Pick<Operation,'version'|'kind'>) {
+  return request(login, `/operations/${encodeURIComponent(name)}`, input, key, confirmed,expected);
 }
 async function readSecret() {
   if (args.includes('--token-stdin')) {
@@ -69,7 +65,7 @@ async function main() {
   if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogin --device [--url https://druggie.org] [--name name] [--scope read|write]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input or @file.json]\nexecute <operation> [JSON input or @file.json] [--key idempotency-key] [--yes]\nread make.render '{"draftId":"..."}' [--output preview.png]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogin --device [--url https://druggie.org] [--name name] [--scope read|write]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input or @file.json]\nexecute <operation> [JSON input or @file.json] [--key idempotency-key] [--yes]\nread make.render '{"draftId":"..."}' [--output preview.png]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nnative-install\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
     return;
   }
   if (command === 'admin') {
@@ -115,6 +111,7 @@ async function main() {
   if (command === 'profiles') { const config = await store.load(); print({ profiles: Object.entries(config.profiles).map(([name, login]) => ({ name, url: login.url, active: name === config.activeProfile })) }); return; }
   if (command === 'use') { await store.use(profileName(args[1] || '')); console.log(`Using ${args[1]}.`); return; }
   const login = await store.resolve(selectedProfile);
+  if(command==='native-install'){const {installNative}=await import('./native');print(await installNative(login.url));return;}
   if (command === 'file-download') { print(await downloadFile(login,args[1]||'',args[2]||'')); return; }
   if (command === 'file-upload') {
     const key = option('--key') || randomUUID();
@@ -123,6 +120,8 @@ async function main() {
     return;
   }
   if (command === 'mcp') {
+    const [{Server},{StdioServerTransport},{CallToolRequestSchema,ListToolsRequestSchema,ListResourcesRequestSchema,ReadResourceRequestSchema},{Client},{StreamableHTTPClientTransport}]=await Promise.all([
+      import('@modelcontextprotocol/sdk/server/index.js'),import('@modelcontextprotocol/sdk/server/stdio.js'),import('@modelcontextprotocol/sdk/types.js'),import('@modelcontextprotocol/sdk/client/index.js'),import('@modelcontextprotocol/sdk/client/streamableHttp.js')]);
     const upstream = new Client({ name: 'new-drugs-cli', version: release.version });
     await upstream.connect(new StreamableHTTPClientTransport(new URL('/mcp', login.url), { requestInit: { headers: { Authorization: `Bearer ${login.token}` } } }));
     const server = new Server({ name: 'new-drugs', version: release.version }, { capabilities: { tools: {}, resources: {} }, instructions: upstream.getInstructions() });
@@ -135,15 +134,24 @@ async function main() {
     return;
   }
   if (command === 'search') { print(await searchCatalog(parseSearchArgs(args.slice(1)),input=>request<SearchPage>(login,'/catalog/search',input)));return; }
-  const available = await catalog(login);
-  const op = available.find(o => o.name === args[1]);
-  if (!op) throw new Error('Unknown operation. Run search to see what is available.');
+  const cache=new CatalogCache(store,login,selectedProfile||'active');
+  const name=args[1]||'';
+  let op=command==='describe'?await selectedOperation(login,name,cache):await cache.get(name)||await selectedOperation(login,name,cache);
   if (command === 'describe') { print(op); return; }
   if ((command === 'read' && op.kind === 'read') || (command === 'execute' && op.kind === 'write')) {
     const key = op.kind === 'write' ? option('--key') || randomUUID() : undefined;
     if (key) process.stderr.write(`Request key: ${key}\n`);
     const input = await operationInput(args[2]);
-    const result=await invoke(login, op.name, input, key, args.includes('--yes')) as {ok?:boolean;data?:{pngBase64?:string}};
+    let result:{ok?:boolean;data?:{pngBase64?:string}};
+    try{result=await invoke(login,op.name,input,key,args.includes('--yes'),op) as typeof result;}
+    catch(error){
+      if(error instanceof CliRequestError&&[401,403,404,409].includes(error.status))await cache.forget(op.name);
+      if(command!=='read'||!(error instanceof CliRequestError)||error.code!=='operation_contract_changed')throw error;
+      // A live pre-execution contract rejection makes one read retry safe. Writes never replay.
+      op=await selectedOperation(login,op.name,cache);
+      if(op.kind!=='read')throw error;
+      result=await invoke(login,op.name,input,undefined,false,op) as typeof result;
+    }
     if(command==='read'&&op.name==='make.render'&&option('--output')){
       const png=result.data?.pngBase64;if(!result.ok||typeof png!=='string')throw Error('Make did not return a PNG preview.');
       await writeFile(option('--output')!,Buffer.from(png,'base64'),{flag:'wx',mode:0o600});

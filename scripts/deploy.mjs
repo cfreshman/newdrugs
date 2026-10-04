@@ -31,7 +31,7 @@ const port = instance === 'prod' ? 7331 : 7333;
 await run('ssh',[...sshOptions,target,`install -d -m 755 ${remote}`]);
 await mkdir('.data/releases',{recursive:true});
 const archive=resolve(`.data/releases/${instance}-${release}.tgz`);
-await run('tar',['-czf',archive,'dist','package.json','package-lock.json','bin','assets/square-fonts']);
+await run('tar',['-czf',archive,'--exclude=dist/cli-native','--exclude=dist/cli-package','dist','package.json','package-lock.json','bin','assets/square-fonts']);
 await run('scp',[...sshOptions,archive,`${target}:${remote}/release.tgz`]);
 const activate = `set -eu
 cd ${remote}

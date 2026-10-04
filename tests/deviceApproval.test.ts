@@ -17,4 +17,21 @@ it('shows the signed-in account and submits the same permission/expiry fields as
 });
 it('requires sign-in before looking up the code',async()=>{const account=vi.fn();await act(async()=>dom.root.render(createElement(DeviceApproval,{initialCode:'BCDF-GHJK',registered:false,onAccount:account})));expect(calls.api).not.toHaveBeenCalled();await act(async()=>dom.container.querySelector<HTMLAnchorElement>('a')!.click());expect(account).toHaveBeenCalledOnce();});
 it('denies without sending permissions or token fields',async()=>{await act(async()=>dom.root.render(createElement(DeviceApproval,{initialCode:'BCDF-GHJK',registered:true,onAccount:vi.fn()})));const deny=[...dom.container.querySelectorAll('button')].find(node=>node.textContent==='Deny')!;await act(async()=>deny.click());expect(calls.post).toHaveBeenCalledWith('/agent-login/deny',{userCode:'BCDF-GHJK'});});
-it('leaves PAT setup visible by default and keeps browser approval collapsed',async()=>{calls.api.mockResolvedValue({tokens:[]});await act(async()=>dom.root.render(createElement(Connections,{registered:true,onAccount:vi.fn()})));expect(dom.container.textContent).toContain('Create a token');expect(dom.container.querySelector('details')?.open).toBe(false);expect(dom.container.querySelector('form [name=scope]')).not.toBeNull();});
+it('waits to show the token setup prompt and styles the optional device copy action',async()=>{calls.api.mockResolvedValue({tokens:[]});await act(async()=>dom.root.render(createElement(Connections,{registered:true,onAccount:vi.fn()})));expect(dom.container.textContent).toContain('Create token and copy prompt');expect(dom.container.textContent).not.toContain('Copy setup prompt');expect(dom.container.querySelector('details')?.open).toBe(false);expect(dom.container.querySelector('form [name=scope]')).not.toBeNull();expect([...dom.container.querySelectorAll('details button')].find(button=>button.textContent==='Copy device setup prompt')?.classList.contains('solid')).toBe(true);});
+it('starts clipboard copy during the create gesture and copies the complete prompt after creation',async()=>{
+ calls.api.mockResolvedValue({tokens:[]});let resolvePost!:(value:{token:string})=>void;
+ calls.post.mockReturnValue(new Promise(resolve=>{resolvePost=resolve;}));
+ const priorClipboard=Object.getOwnPropertyDescriptor(navigator,'clipboard'),priorItem=Object.getOwnPropertyDescriptor(globalThis,'ClipboardItem');
+ class PendingClipboardItem{constructor(readonly data:Record<string,Promise<Blob>>){} }
+ const write=vi.fn(async(items:PendingClipboardItem[])=>{await items[0].data['text/plain'];});
+ Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write,writeText:vi.fn()}});
+ Object.defineProperty(globalThis,'ClipboardItem',{configurable:true,value:PendingClipboardItem});
+ try{
+  await act(async()=>dom.root.render(createElement(Connections,{registered:true,onAccount:vi.fn()})));
+  await act(async()=>{dom.container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await Promise.resolve();});
+  expect(calls.post).toHaveBeenCalledWith('/tokens',expect.any(Object));expect(write).toHaveBeenCalledOnce();
+  await act(async()=>{resolvePost({token:'nd_test_secret'});await Promise.resolve();});
+  expect(dom.container.textContent).toContain('Setup prompt copied.');
+  expect(dom.container.textContent).not.toContain('Copy token');expect(dom.container.querySelector('[aria-label="Access token"]')).toBeNull();
+ }finally{if(priorClipboard)Object.defineProperty(navigator,'clipboard',priorClipboard);else delete (navigator as {clipboard?:Clipboard}).clipboard;if(priorItem)Object.defineProperty(globalThis,'ClipboardItem',priorItem);else delete (globalThis as {ClipboardItem?:typeof ClipboardItem}).ClipboardItem;}
+});
