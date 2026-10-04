@@ -32,20 +32,27 @@ async function archiveBytes(response:Response,size:number){
  if(count!==size)throw Error('Native archive size did not match the manifest.');
  return Buffer.concat(chunks);
 }
-async function switchLauncher(root:string,target:string,version:string,platform:string,digest:string){
+export async function switchLauncher(root:string,target:string,version:string,platform:string,digest:string){
  const bin=join(root,'bin');await safeDir(bin);
- const name=process.platform==='win32'?'newdrugs.cmd':'newdrugs',launcher=join(bin,name),temporary=join(bin,`.newdrugs-${randomUUID()}`);
+ const windows=platform.startsWith('win32'),name=windows?'newdrugs.cmd':'newdrugs',launcher=join(bin,name),temporary=join(bin,`.newdrugs-${randomUUID()}`);
+ let existingText:string|undefined;
  try{
   const existing=await lstat(launcher);
-  if(process.platform==='win32'){
-   if(!existing.isFile()||existing.isSymbolicLink()||!(await readFile(launcher,'utf8')).startsWith('@rem New Drugs managed launcher\r\n'))throw Error('Refusing to replace an unmanaged launcher.');
+  if(windows){
+   existingText=await readFile(launcher,'utf8');
+   if(!existing.isFile()||existing.isSymbolicLink()||!existingText.startsWith('@rem New Drugs managed launcher\r\n'))throw Error('Refusing to replace an unmanaged launcher.');
   }else{
    if(!existing.isSymbolicLink()||!/^\.\.\/releases\/\d+\.\d+\.\d+-(?:darwin|linux)-(?:arm64|x64)-[a-f0-9]{12}\/newdrugs$/.test(await readlink(launcher)))throw Error('Refusing to replace an unmanaged launcher.');
   }
  }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
- if(process.platform==='win32'){
+ if(windows){
   const folder=`${version}-${platform}-${digest.slice(0,12)}`;
-  await writeFile(temporary,`@rem New Drugs managed launcher\r\n@echo off\r\n"%~dp0..\\releases\\${folder}\\newdrugs.exe" %*\r\n`,{flag:'wx',mode:0o700});
+  const pointer=join(root,'current.txt'),pointerTemporary=join(root,`.current-${randomUUID()}`);
+  try{const state=await lstat(pointer);if(!state.isFile()||state.isSymbolicLink()||!/^\d+\.\d+\.\d+-win32-(?:arm64|x64)-[a-f0-9]{12}\r?\n?$/.test(await readFile(pointer,'utf8')))throw Error('Refusing to replace an unmanaged native pointer.');}
+  catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
+  try{await writeFile(pointerTemporary,`${folder}\r\n`,{flag:'wx',mode:0o600});await rename(pointerTemporary,pointer);}finally{await rm(pointerTemporary,{force:true}).catch(()=>{});}
+  if(existingText?.includes('current.txt'))return launcher;
+  await writeFile(temporary,'@rem New Drugs managed launcher\r\n@echo off\r\nsetlocal DisableDelayedExpansion\r\nset /p ND_RELEASE=<"%~dp0..\\current.txt"\r\nif not defined ND_RELEASE exit /b 1\r\n"%~dp0..\\releases\\%ND_RELEASE%\\newdrugs.exe" %*\r\nexit /b %errorlevel%\r\n',{flag:'wx',mode:0o700});
  }else await symlink(relative(bin,target),temporary);
  try{await rename(temporary,launcher);}finally{await rm(temporary,{force:true}).catch(()=>{});}
  return launcher;
@@ -74,5 +81,5 @@ export async function installNative(rawOrigin:string,root=nativeRoot(),requested
   finally{await rm(temporary,{force:true}).catch(()=>{});}
  }
  const launcher=await switchLauncher(root,target,version,platform,entry.binarySha256);
- return {launcher,version,platform,native:true};
+ return {launcher,executable:target,version,platform,native:true};
 }

@@ -15,7 +15,7 @@
     "deploy:dev": "node scripts/deploy.mjs dev",
     "deploy:prod": "node scripts/deploy.mjs prod",
     "build": "node scripts/version.mjs && tsc --noEmit && vite build && vite build --config admin/vite.config.ts && tsup server/index.ts server/mediaMigration.ts server/workerStatus.ts --target node22 --format esm --out-dir dist/server --external vite && npm run cli:build",
-    "cli:build": "tsup cli/index.ts --format esm --out-dir dist/cli --clean && node scripts/build-cli-native.mjs && node scripts/package-cli.mjs",
+    "cli:build": "tsup cli/index.ts cli/postinstall.ts --format esm --out-dir dist/cli --clean && node scripts/build-cli-native.mjs && node scripts/package-cli.mjs",
     "start": "NODE_ENV=production node dist/server/index.js",
     "check": "tsc --noEmit",
     "test": "vitest run",

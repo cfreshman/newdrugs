@@ -37,6 +37,8 @@ addendum
 
 agent-written rules (you are allowed to edit below this line)
 
+- When the user corrects an earlier plan or statement, explicitly say what was wrong and what changes. Do not answer with “agreed” or another affirmation that implies the corrected approach was already yours. Verify that the implementation actually follows the correction before claiming it does.
+
 - Do not maintain rolling handoff, operating-guide, or release-history documents. Use Git commits, `release.json`, the live stage, and current source for release state.
 
 - the agent must not compose em dashes, in either its own replies or text sent through operations. Preserve verbatim human-supplied text. When composing messages/posts/invitations on a person's behalf, match their actual communication style from their own writing, preserving intent and avoiding invented facts or feelings. Keep this policy shared across hosted instructions, MCP and CLI setup. Profiles remain human-authored.
@@ -127,7 +129,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 - The dev domain serves no public frontend. Local Vite injects the private development key; CLI and hosted MCP use their own bearer credentials. Never put that key in browser code.
 
 - Agent-selected posts use the reusable PostList and a reopenable selection link. Keep navigation ancestors mounted so opening a post/reply and going Back preserves scroll, filters, pagination and drafts. Do not show a redundant Public reply label in the composer.
-- Installed CLI releases follow Wayfinder's daily version check, strictly newer updates, preserved profiles, and explicit `uninstall --yes` cleanup. Never self-overwrite/uninstall a source checkout.
+- Installed CLI releases follow Wayfinder's daily version check, strictly newer updates, preserved profiles, and explicit `uninstall --yes` cleanup. A normal CLI package install and self-update must make the existing `newdrugs` command run the verified native executable on supported systems automatically. Node is the fallback only when native installation cannot work. Do not expose a separate native-install command or setup step. Never self-overwrite/uninstall a source checkout.
 
 - On phones and touch tablets, anchor chat to `visualViewport.offsetTop + visualViewport.height`, not `innerHeight`; iOS standalone can resize and pan simultaneously when its keyboard opens. All mobile inputs, textareas and selects must be at least 16px to prevent focus zoom. Preserve pinch zoom. While the keyboard occupies the bottom of the screen, remove the bottom safe-area inset and retain only the normal gutter; restore the inset after dismissal. In that same keyboard-open state, shrink the mic and its control row to the launcher size, updating the positioning radius too so the recovered space belongs to chat. Detect keyboard shrink against the unobscured viewport, not only current innerHeight.
 - Notification links to DMs/posts/people open the attached launcher panel, never a small Settings dialog. Preserve the prior launcher view and draft as a Back destination. Accepted DMs display the original invitation from the connection record as the first chronological bubble, without inserting a synthetic message or counting it as unread.

@@ -24,7 +24,7 @@ try {
 await run('ssh',[...sshOptions,target,`python3 - --stage both --apply`],{input:await readFile('scripts/release-retention.py','utf8')});
 await prepareVersion(instance === 'prod');
 // Rebuild after preparing the version so every deployed artifact has the same version.
-await run('npm',['run','build']);
+await run('npm',['run','build'],{env:{...process.env,NEWDRUGS_RELEASE_ORIGIN:instance==='dev'?'https://dev.druggie.org':'https://druggie.org'}});
 const release = new Date().toISOString().replace(/[^0-9]/g,'');
 const remote = `/srv/newdrugs/${instance}/releases/${release}`;
 const port = instance === 'prod' ? 7331 : 7333;

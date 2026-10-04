@@ -3,6 +3,7 @@ import {parseSearchArgs,searchCatalog,type SearchPage} from './search';
 import {deviceLogin} from './deviceLogin';
 import {CatalogCache,type CachedOperation} from './catalogCache';
 import { randomUUID } from 'node:crypto';
+import {spawn} from 'node:child_process';
 import {readFile,writeFile} from 'node:fs/promises';
 import release from '../release.json';
 import { ConfigStore, operatorStore, validUrl, profileName, type Login } from './config';
@@ -59,13 +60,23 @@ async function readSecret() {
 }
 function print(result: unknown) { process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); }
 async function operationInput(value?:string){return value&&!value.startsWith('--')?JSON.parse(value.startsWith('@')?await readFile(value.slice(1),'utf8'):value):{};}
+async function continueInNative(executable:string){
+  const child=spawn(executable,rawArgs,{stdio:'inherit',windowsHide:true});
+  await new Promise<void>((resolve,reject)=>{child.once('error',reject);child.once('exit',(code,signal)=>{process.exitCode=code??(signal==='SIGINT'?130:signal==='SIGTERM'?143:1);resolve();});});
+}
 async function main() {
   if (command === 'uninstall') { await uninstall(args.includes('--yes'),store); return; }
-  if (command === 'update') { const state=await maybeAutoUpdate(release.version,store,selectedProfile,true); if(state!=='updated')process.stdout.write(state==='current'?'New Drugs CLI is current.\n':'An update is already running.\n'); return; }
-  if (!['logout','profiles','use','--version','version'].includes(command)) await maybeAutoUpdate(release.version,store,selectedProfile);
+  const preferredOrigin=command==='login'&&option('--url')?validUrl(option('--url')!):undefined;
+  const state=await maybeAutoUpdate(release.version,store,selectedProfile,command==='update',preferredOrigin);
+  if(command==='update'){
+    if(typeof state==='object')process.stdout.write(`New Drugs native CLI ${state.version} is installed.\n`);
+    else if(state!=='updated')process.stdout.write(state==='current'?'New Drugs CLI is current.\n':state==='busy'?'An update is already running.\n':'New Drugs CLI update is unavailable.\n');
+    return;
+  }
+  if(typeof state==='object'){await continueInNative(state.nativeExecutable);return;}
   if (command === '--version' || command === 'version') { console.log(release.version); return; }
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogin --device [--url https://druggie.org] [--name name] [--scope read|write]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input or @file.json]\nexecute <operation> [JSON input or @file.json] [--key idempotency-key] [--yes]\nread make.render '{"draftId":"..."}' [--output preview.png]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nnative-install\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
+    console.log(`New Drugs\n\nlogin [--url https://druggie.org] [--token-stdin]\nlogin --device [--url https://druggie.org] [--name name] [--scope read|write]\nlogout\nsearch [words] [--keyword] [--limit 1-50] [--cursor cursor] [--all]\ndescribe <operation>\nread <operation> [JSON input or @file.json]\nexecute <operation> [JSON input or @file.json] [--key idempotency-key] [--yes]\nread make.render '{"draftId":"..."}' [--output preview.png]\nfile-upload <path> [--log] [--key idempotency-key] [--request upload-request-id]\nfile-download <file-id> <destination>\nadmin (separate operator commands)\nprofiles\nuse <profile>\nupdate\nuninstall --yes\nmcp (optional)\n\nUse --profile <name> with any command for an independent saved connection.\nDirect operations do not call a model or spend credits. Failures are JSON on stderr with a stable error code. Profiles are human-authored in the app.`);
     return;
   }
   if (command === 'admin') {
@@ -111,7 +122,6 @@ async function main() {
   if (command === 'profiles') { const config = await store.load(); print({ profiles: Object.entries(config.profiles).map(([name, login]) => ({ name, url: login.url, active: name === config.activeProfile })) }); return; }
   if (command === 'use') { await store.use(profileName(args[1] || '')); console.log(`Using ${args[1]}.`); return; }
   const login = await store.resolve(selectedProfile);
-  if(command==='native-install'){const {installNative}=await import('./native');print(await installNative(login.url));return;}
   if (command === 'file-download') { print(await downloadFile(login,args[1]||'',args[2]||'')); return; }
   if (command === 'file-upload') {
     const key = option('--key') || randomUUID();

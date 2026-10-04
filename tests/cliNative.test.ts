@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
-import {installNative,nativePlatform} from '../cli/native';
+import {installNative,nativePlatform,switchLauncher} from '../cli/native';
 import {inferNativeRoot} from '../cli/lifecycle';
 
 let root:string;
@@ -47,4 +47,13 @@ it('recognizes the real managed executable path for native update checks',async(
   expect(await inferNativeRoot(executable)).toBe(await realpath(managed));
   if(process.platform!=='win32')expect(await inferNativeRoot(launcher)).toBe(await realpath(managed));
  }finally{if(previous===undefined)delete process.env.XDG_DATA_HOME;else process.env.XDG_DATA_HOME=previous;}
+});
+it('updates a Windows release pointer without replacing the active command wrapper',async()=>{
+ const managed=join(root,'managed'),bin=join(managed,'bin');await mkdir(managed,{mode:0o700});
+ const first=await switchLauncher(managed,join(managed,'releases','first','newdrugs.exe'),'0.52.2','win32-x64','a'.repeat(64));
+ const wrapper=await readFile(first,'utf8');expect(wrapper).toContain('current.txt');
+ expect(await readFile(join(managed,'current.txt'),'utf8')).toBe(`0.52.2-win32-x64-${'a'.repeat(12)}\r\n`);
+ await switchLauncher(managed,join(managed,'releases','second','newdrugs.exe'),'0.53.1','win32-x64','b'.repeat(64));
+ expect(await readFile(first,'utf8')).toBe(wrapper);
+ expect(await readFile(join(managed,'current.txt'),'utf8')).toBe(`0.53.1-win32-x64-${'b'.repeat(12)}\r\n`);
 });
