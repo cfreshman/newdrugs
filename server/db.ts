@@ -65,6 +65,7 @@ export async function connectDatabase(name?: string,options:{indexes?:boolean}={
     rows('logEntries').createIndex({members:1,recurrence:1,calendarMonthDay:1,_id:1}),
     rows('logEntries').createIndex({joinKey:1},{unique:true,partialFilterExpression:{joinKey:{$type:'string'}}}),
     rows('logEntries').createIndex({members:1,date:-1,createdAt:-1,_id:-1}),
+    rows('logEntries').createIndex({members:1,updatedAt:-1,_id:-1}),
     rows('logEntries').createIndex({memberPairKeys:1,date:-1,createdAt:-1,_id:-1}),
     rows('logEntries').createIndex({invited:1,date:-1,createdAt:-1,_id:-1}),
     rows('logEntries').createIndex({'contributions.fileIds':1}),

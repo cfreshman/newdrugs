@@ -2,11 +2,11 @@ import type { Actor } from './auth';
 import { rows } from './db';
 import { automationAuthorized } from './automations';
 import { AppError } from './errors';
-const accountReads = new Set(['people.context','people.mutuals','activity.since','connections.list','connections.get','connections.status','messages.list','messages.get','messages.window','messages.search','notifications.list','agent.actions.list']);
-const publicReads = new Set(['spaces.list','spaces.get','access.get','time.resolve','time.convert','time.overlap','locations.meeting_area','posts.thread_updates','identity.get','locations.search','locations.resolve','people.get','people.search','posts.list','posts.get','posts.ancestors','posts.incoming_replies','posts.replies','posts.search','search.query','search.global','search.similar','search.refine','search.explain','search.datasets','links.preview','links.text','app.open']);
-export function backgroundCanRead(actor: Actor, name: string) { return !actor.background || Boolean(actor.logAccess&&['log.calendar','log.search','log.related','log.birthday_get','log.birthdays','log.contacts','log.list','log.get','log.people','log.neighbors','log.preferences','log.export'].includes(name)) || (publicReads.has(name) && (!['links.preview','links.text'].includes(name) || actor.webSearch === true)) || Boolean(actor.accountActivity && accountReads.has(name)) || Boolean(actor.privateChat && ['conversation.search','conversation.window','conversation.list','agent.memory.context','agent.memory.list','agent.memory.get'].includes(name)); }
+const publicReads = new Set(['spaces.list','spaces.get','access.get','time.resolve','time.convert','time.overlap','locations.search','locations.resolve','people.get','people.search','posts.list','posts.get','posts.ancestors','posts.replies','posts.search','search.query','search.global','search.datasets','links.preview','links.text','app.open']);
+const publicWrites = new Set(['posts.create','posts.reply','posts.like','posts.delete','spaces.create','spaces.end','spaces.offer_host','spaces.cancel_host_offer','spaces.accept_host','spaces.decline_host','spaces.request_speak','spaces.cancel_request','spaces.respond_speaker','spaces.revoke_speaker','spaces.remove_person']);
+export function backgroundCanRead(actor: Actor, name: string) { return !actor.background || actor.privateAccess!==false || publicReads.has(name); }
 export function operationAvailable(actor:Actor,operation:{name:string;kind:'read'|'write';agent:boolean}) {
-  return backgroundCanRead(actor,operation.name) && (actor.source==='browser'||operation.name!=='profile.update') && (actor.source!=='agent'||operation.agent) && (actor.scope==='write'||operation.kind==='read');
+  return (operation.kind==='read'?backgroundCanRead(actor,operation.name):!actor.background||actor.privateAccess!==false||publicWrites.has(operation.name)) && (actor.source==='browser'||operation.name!=='profile.update') && (actor.source!=='agent'||operation.agent) && (actor.scope==='write'||operation.kind==='read');
 }
 export async function assertBackgroundAuthority(actor: Actor) {
   if (!actor.background) return;

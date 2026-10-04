@@ -1,4 +1,4 @@
-import {agentMemoryContext,automationMemoryContext,personalInstructions,pressure} from './agentMemory';
+import {agentMemoryContext,automationMemoryContext,pressure} from './agentMemory';
 import {resolvePageContext,pageContextText} from './pageContext';
 import { resolveRecordContexts } from './recordContext';
 import { inboxContext } from './inbox';
@@ -11,7 +11,7 @@ import type {ChatInputContext} from '../shared/chatInputContext';
 
 async function memoryForRun(run:RunRecord){
  if(run.memorySnapshot)return run.memorySnapshot;
- const snapshot=run.purpose==='automation'?(run.privateChat?await automationMemoryContext(run.userId,{logAccess:Boolean(run.logAccess),accountActivity:Boolean(run.accountActivity)}):{instructions:await personalInstructions(run.userId),slots:[],omittedSlots:0,pressure:pressure({_id:run.userId,coreUsed:0,noncoreUsed:0,slots:0,coreSlots:0,revision:0})}):await agentMemoryContext(run.userId);
+ const snapshot=run.purpose==='automation'?(run.privateAccess!==false?await automationMemoryContext(run.userId):{instructions:{text:'',revision:0},slots:[],omittedSlots:0,pressure:pressure({_id:run.userId,coreUsed:0,noncoreUsed:0,slots:0,coreSlots:0,revision:0})}):await agentMemoryContext(run.userId);
  const saved=await rows<RunRecord>('runs').findOneAndUpdate({_id:run._id,userId:run.userId,memorySnapshot:{$exists:false}},{$set:{memorySnapshot:snapshot}},{returnDocument:'after'});
  run.memorySnapshot=saved?.memorySnapshot||(await rows<RunRecord>('runs').findOne({_id:run._id,userId:run.userId}))?.memorySnapshot||snapshot;return run.memorySnapshot;
 }
@@ -36,7 +36,7 @@ export async function messageInput(run: RunRecord) {
 
 /** Rebuild useful continuity without promoting historical text into instructions. */
 export async function sessionInput(run: RunRecord) {
-  if (run.purpose === 'automation') return [{ role: 'user' as const, content: [{ type: 'input_text' as const, text: `Saved automation instruction:\n${run.text}\nCurrent time: ${new Date().toISOString()}\nTimezone: ${run.timezone}\nPermitted social account activity lookup: ${Boolean(run.accountActivity)}\nPermitted private Log lookup: ${Boolean(run.logAccess)}\nPermitted private agent-chat and Agent Memory lookup: ${Boolean(run.privateChat)}\nWeb search permitted: ${Boolean(run.webSearch)}\nOwner profile: ${JSON.stringify(profile(await currentUser(run.userId)))}\nRecent deliveries (avoid repetition): ${JSON.stringify(run.recentDeliveries || [])}` },{type:'input_text' as const,text:memoryText(await memoryForRun(run))}] }];
+  if (run.purpose === 'automation') return [{ role: 'user' as const, content: [{ type: 'input_text' as const, text: `Saved automation instruction:\n${run.text}\nCurrent time: ${new Date().toISOString()}\nTimezone: ${run.timezone}\nPrivate account data permitted: ${run.privateAccess!==false}\nApp changes permitted: ${run.writeAccess!==false}\nOwner profile: ${run.privateAccess===false?'Unavailable to this public-only task':JSON.stringify(profile(await currentUser(run.userId)))}\nRecent deliveries (avoid repetition): ${JSON.stringify(run.privateAccess===false?[]:run.recentDeliveries||[])}` },{type:'input_text' as const,text:memoryText(await memoryForRun(run))}] }];
   const recent = (await conversation(run.userId, 100)).filter(message => message.id !== `${run._id}:user`);
   const messages = [];
   let characters = 0;

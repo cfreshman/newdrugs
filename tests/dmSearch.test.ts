@@ -52,5 +52,5 @@ it('drops moderated text and rechecks a changed message before returning a cache
 it('backfills old messages and forbids background search of an ungranted private source',async()=>{
  const a=await person(),b=await person(),ab=await connection(a,b),id=randomUUID();await rows('directMessages').insertOne({_id:id,connectionId:ab,fromId:a.userId,text:'old cycling link',createdAt:new Date().toISOString()});
  await backfillDMSearch();expect(await rows('dmSearchJobs').findOne({messageId:id})).not.toBeNull();
- await expect(searchGlobal({query:'cycling',sources:['messages']},{...a,background:true,accountActivity:false})).rejects.toMatchObject({code:'data_access'});
+ await expect(searchGlobal({query:'cycling',sources:['messages']},{...a,background:true,privateAccess:false})).rejects.toMatchObject({code:'data_access'});
 });

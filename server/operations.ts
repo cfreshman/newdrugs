@@ -27,7 +27,7 @@ import { profileVisibleTo } from './profileVisibility';
 import legacyOperationRevisions from '../shared/legacyOperationRevisions.json';
 import { automationOperation, ownAutomation,validateAutomationConfiguration } from './automations';
 import { wakeRun } from './sleep';
-import { backgroundCanRead, assertBackgroundAuthority,operationAvailable } from './backgroundAuthority';
+import { assertBackgroundAuthority,operationAvailable } from './backgroundAuthority';
 import { inboxOperation, validateInboxLinks, ownInbox } from './inbox';
 import { enqueueChatSearch, searchChat } from './search/chat';
 import {enqueueDMSearch,searchDM} from './search/dm';
@@ -67,7 +67,7 @@ async function blockedIds(userId: string, session?: ClientSession) {
   return blocks.flatMap(b => (b.members as string[]).filter(id => id !== userId));
 }
 async function withMutualCounts(userId:string,people:Profile[],session?:ClientSession,actor?:Actor){
- if(actor?.background&&!actor.accountActivity)return people;
+ if(actor?.background&&actor.privateAccess===false)return people;
  const summaries=await circleSummaries(userId,people.map(person=>person.id),session),ids=[...new Set([...summaries.values()].flatMap(row=>row.previewIds))];
  const [friends,blocked,connections]=await Promise.all([
   users().find({_id:{$in:ids},suspendedAt:null},{session,projection:{name:1,handle:1,photos:1}}).limit(ids.length).toArray(),
@@ -129,9 +129,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   if (name.startsWith('make.')) { registered(user); return makeOperation(name,d,actor,session); }
   if (name.startsWith('spaces.')) { registered(user); return spaceOperation(name,d,actor,session); }
   if(name==='automations.validate'){
-    registered(user);const validated=validateAutomationConfiguration(d),authority:Actor={userId,source:'agent',scope:'read',background:true,...validated.dataAccess};
+    registered(user);const validated=validateAutomationConfiguration(d),authority:Actor={userId,source:'agent',scope:validated.dataAccess.writeAccess?'write':'read',background:true,privateAccess:validated.dataAccess.privateAccess};
     const readableOperations=operations.filter(operation=>operation.kind==='read'&&operationAvailable(authority,operation)).map(operation=>operation.name).sort();
-    return {...validated,readableOperations,socialWrites:false,delivery:['agent_inbox','silent'],notice:'Validation does not create or authorize a run. Creation and execution recheck the schedule, budget, credential and current source permissions.'};
+    const writableOperations=operations.filter(operation=>operation.kind==='write'&&operationAvailable(authority,operation)).map(operation=>operation.name).sort();
+    return {...validated,readableOperations,writableOperations,delivery:['agent_inbox','silent'],notice:'Validation does not create or authorize a run. Creation and execution recheck the schedule, budget, credential and current access.'};
   }
   if (name.startsWith('automations.')) { registered(user); return automationOperation(name, d, actor, session); }
   if (name === 'runs.wake') return wakeRun(actor.userId, String(d.runId), true, session);
@@ -146,7 +147,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const available=operations.filter(operation=>operationAvailable(actor,operation)),writes=available.filter(operation=>operation.kind==='write');
       const credential=actor.source==='external'&&actor.credentialId?requireValue(await rows('tokens').findOne({_id:actor.credentialId,userId,revokedAt:null,$or:[{expiresAt:null},{expiresAt:{$gt:new Date()}}]},options),'This connected agent is unavailable.'):null;
       const date=(value:unknown)=>value instanceof Date?value.toISOString():typeof value==='string'?value:undefined;
-      return {source:actor.source,scope:actor.scope,background:Boolean(actor.background),...(credential?{credential:{name:String(credential.name||'My AI agent'),...(date(credential.createdAt)?{createdAt:date(credential.createdAt)}:{}),expiresAt:date(credential.expiresAt)||null}}:{}),...(actor.source==='agent'?{grants:{logAccess:Boolean(actor.logAccess),privateChat:Boolean(actor.privateChat),accountActivity:Boolean(actor.accountActivity),webSearch:Boolean(actor.webSearch)}}:{}),operations:{read:available.filter(operation=>operation.kind==='read').map(operation=>operation.name).sort(),write:writes.map(operation=>operation.name).sort(),confirmationRequired:writes.filter(operation=>operation.confirmationRequired).map(operation=>operation.name).sort()}};
+      return {source:actor.source,scope:actor.scope,background:Boolean(actor.background),...(credential?{credential:{name:String(credential.name||'My AI agent'),...(date(credential.createdAt)?{createdAt:date(credential.createdAt)}:{}),expiresAt:date(credential.expiresAt)||null}}:{}),...(actor.source==='agent'?{grants:{privateAccess:actor.privateAccess!==false,writeAccess:actor.scope==='write'}}:{}),operations:{read:available.filter(operation=>operation.kind==='read').map(operation=>operation.name).sort(),write:writes.map(operation=>operation.name).sort(),confirmationRequired:writes.filter(operation=>operation.confirmationRequired).map(operation=>operation.name).sort()}};
     }
     case 'time.resolve': return resolveTime(d as unknown as TimeResolveInput);
     case 'time.convert': return convertTime(d as unknown as TimeConvertInput);
@@ -207,7 +208,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if(d.view==='log_join')await logOperation('log.join_preview',{code:String(d.resourceId||'')},actor,session);
       if(d.view==='people'&&d.scope&&!['all','nearby'].includes(String(d.scope)))throw new AppError(422,'people_scope','People supports Nearby or All people.');
       if (d.view === 'connections') d.view = 'messages';
-      if (actor.background && !['people','person','feed','post','post_list','location', ...(actor.logAccess?['log']:[]), ...(actor.privateChat ? ['chat_history'] : []), ...(actor.accountActivity ? ['messages','notifications'] : [])].includes(String(d.view))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');
+      if (actor.background && actor.privateAccess===false && (!['people','person','feed','post','post_list','location'].includes(String(d.view)) || ['saved','hidden','friends','circle'].includes(String(d.scope)))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');
       if (d.view === 'automations' && d.resourceId) await ownAutomation(userId, String(d.resourceId), session, true);
       if (d.view === 'inbox' && d.resourceId) await ownInbox(userId, String(d.resourceId), session);
       if (d.view === 'chat_history' && d.resourceId) requireValue(await rows('messages').findOne({ _id: String(d.resourceId), userId }, options));
@@ -243,9 +244,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'people.get': {
       await notBlocked(userId, String(d.personId), session);
       const person = requireValue(await users().findOne({ _id: String(d.personId) }, options));
+      if(actor.background&&actor.privateAccess===false&&!person.discoverable)throw new AppError(404,'unavailable','This profile is not public.');
       if (!await profileVisibleTo(userId, person, session)) throw new AppError(404, 'unavailable', 'This profile is not available.');
-      const [[view],hidden]=await Promise.all([withMutualCounts(userId,[profile(person)],session,actor),isPersonHidden(userId,person._id,session)]);
-      return {...view,...(hidden?{hidden:true}:{}),...(!actor.background||actor.logAccess?{hasSharedHangouts:await hasSharedHangouts(userId,person._id,session)}:{})};
+      const [[view],hidden]=await Promise.all([withMutualCounts(userId,[profile(person)],session,actor),actor.background&&actor.privateAccess===false?Promise.resolve(false):isPersonHidden(userId,person._id,session)]);
+      return {...view,...(hidden?{hidden:true}:{}),...(!actor.background||actor.privateAccess!==false?{hasSharedHangouts:await hasSharedHangouts(userId,person._id,session)}:{})};
     }
     case 'people.mutuals':{
       const personId=String(d.personId);await notBlocked(userId,personId,session);
@@ -277,7 +279,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       registered(user);const post=requireValue(await rows('posts').findOne({_id:String(d.postId)},options));await notBlocked(userId,String(post.userId),session);if(d.saved&&(post.deletedAt||post.moderatedAt))throw new AppError(404,'unavailable','This post is unavailable.');await setCollection('postSaves',userId,post._id,Boolean(d.saved),session);return (await postCards([post],userId,await blockedIds(userId,session),session))[0];
     }
     case 'people.search': {
-      if(d.scope==='circle'&&actor.background&&!actor.accountActivity)throw new AppError(403,'account_activity_required','This task cannot read your Circle.');
+      if(d.scope==='circle'&&actor.background&&actor.privateAccess===false)throw new AppError(403,'private_access_required','This task cannot read your Circle.');
+      if(d.scope==='nearby'&&actor.background&&actor.privateAccess===false&&!d.near)throw new AppError(422,'location_required','Provide a public area for nearby search.');
       if (d.query && d.scope === 'nearby' && !d.near && !user.area?.cell) throw new AppError(422,'location_required','Choose an approximate area to find nearby people.');
       if(d.scope==='hidden'){
         let cursor=d.before as string|undefined,scanned=0;const found:Profile[]=[];
@@ -616,9 +619,12 @@ export const canonicalJSON = (value: unknown): string => JSON.stringify(value, f
 export async function executeOperation(name: string, input: unknown, actor: Actor, idempotencyKey?: string, proof: ExecutionProof = {}) {
   await assertBackgroundAuthority(actor);
   const op = operations.find(o => o.name === name);
-  if (actor.background && (!op || op.kind !== 'read' || !backgroundCanRead(actor, name))) throw new AppError(403, 'automation_scope', 'This background agent does not have access to that operation.');
+  if (actor.background && (!op || !operationAvailable(actor,op))) throw new AppError(403, 'automation_scope', 'This background agent does not have access to that operation.');
   if (!op) throw new AppError(404, 'unknown_operation', 'Unknown operation.');
   const parsed = op.schema.parse(input) as Record<string, unknown>;
+  if(actor.background&&actor.privateAccess===false){
+    if(['people.search','search.query','posts.search','search.similar'].includes(name)&&parsed.includeHidden===true||['people.search','posts.search','posts.list'].includes(name)&&['saved','friends','circle','hidden'].includes(String(parsed.scope))||['posts.create','posts.reply'].includes(name)&&Array.isArray(parsed.fileIds)&&parsed.fileIds.length>0)throw new AppError(403,'private_access_required','This task is limited to public data.');
+  }
   if(['posts.create','posts.reply'].includes(name)&&!parsed.text&&!(parsed.fileIds as string[]).length&&!(parsed.links as string[]|undefined)?.length)throw new AppError(422,'post_empty','Add text, a photo, or a URL before posting.');
   if (actor.source !== 'browser' && name === 'profile.update') throw new AppError(403, 'human_authored', 'Profiles are written by the person in the app.');
   if (actor.source === 'agent' && !op.agent) throw new AppError(403, 'unavailable', 'This operation is not available to the hosted agent.');
@@ -626,7 +632,7 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if (op.kind === 'read') {
     const result=op.outputSchema.parse(await run(name, parsed, actor));
     // Private bookmark metadata is account activity, even on public record reads.
-    return actor.background&&!actor.accountActivity?JSON.parse(JSON.stringify(result,(key,value)=>key==='saved'?undefined:value)):result;
+    return actor.background&&actor.privateAccess===false?JSON.parse(JSON.stringify(result,(key,value)=>['saved','liked','hidden','friendAction','connectionId'].includes(key)?undefined:value)):result;
   }
   if (actor.scope !== 'write') throw new AppError(403, 'scope', 'This token only has read access.');
   if (!idempotencyKey || !/^[\w:.-]{8,150}$/.test(idempotencyKey)) throw new AppError(422, 'idempotency_required', 'Writes need an idempotency key of 8–150 characters. Reuse it only when retrying the same action.');

@@ -4,6 +4,7 @@ import {users,type Actor,type User} from '../server/auth';
 import {config} from '../server/config';
 import {executeOperation} from '../server/operations';
 import {buildResourceLinks} from '../server/resourceLinks';
+import {activitySince} from '../server/activityUtilities';
 import {backgroundCanRead} from '../server/backgroundAuthority';
 import {nearestCoarseCell,coarsePoint} from '../shared/geo';
 import {operations,describeOperation} from '../shared/catalog';
@@ -65,6 +66,27 @@ it('honors the catch-up time boundary and labels snippets instead of claiming fu
  const value=await read('activity.since',{since:at(19),until:at(21)});expect(value.items).toHaveLength(1);expect(value.items[0].text).toHaveLength(300);expect(value.items[0].textTruncated).toBe(true);
  const none=await read('activity.since',{since:at(21),until:at(24)});expect(none.items).toEqual([]);
 });
+it('includes current Log entry changes only with the separate Log grant',async()=>{
+ const log=(n:number,members:string[],extra:Record<string,unknown>={})=>({_id:id(n),ownerId:'me',members,invited:[],title:`Hangout ${n}`,createdAt:at(1),updatedAt:at(n),...extra});
+ await rows('logEntries').insertMany([
+  log(21,['me'],{lastActorId:'me'}),
+  log(22,['me','alice'],{lastActorId:'alice'}),
+  log(23,['me']),
+  log(24,['alice']),
+  log(25,['me','blocked']),
+  log(26,['me'],{deletedAt:at(27)}),
+ ]);
+ const query={since:at(0),until:at(30),kinds:['log'],limit:1};
+ const first=await read('activity.since',query),second=await read('activity.since',{...query,before:first.nextCursor}),third=await read('activity.since',{...query,before:second.nextCursor});
+ expect([first.items[0].entryId,second.items[0].entryId,third.items[0].entryId]).toEqual([id(23),id(22),id(21)]);
+ expect(first.items[0]).toMatchObject({kind:'log_entry',actor:null,text:'Hangout 23',createdAt:at(23)});
+ expect(second.items[0]).toMatchObject({kind:'log_entry',actor:{id:'alice'},link:{resourceType:'log_entry',resourceId:id(22)}});
+ expect(third.nextCursor).toBeNull();
+ const background={...actor,background:true,privateAccess:false};
+ await expect(activitySince(query,background,[])).rejects.toMatchObject({code:'private_access_required'});
+ expect((await activitySince(query,{...background,privateAccess:true},['blocked'])).items[0]).toMatchObject({entryId:id(23)});
+ expect(backgroundCanRead({...actor,background:true,privateAccess:true},'activity.since')).toBe(true);
+});
 it('computes meeting candidates solely from canonical coarse areas and does no external lookup',async()=>{
  const fetch=vi.spyOn(globalThis,'fetch').mockRejectedValue(Error('Network must not be used'));
  const original=(await users().findOne({_id:'me'}))!.area!;await users().updateOne({_id:'me'},{$set:{'area.point.coordinates':[-71.412345678,41.812345678]}});
@@ -79,6 +101,6 @@ it('handles locations across the dateline and same-cell privacy labels',async()=
  const same=area(41.8,-71.4);await users().updateMany({_id:{$in:['me','alice']}},{$set:{area:same}});const together=await read('locations.meeting_area',{personIds:['alice'],limit:1});expect(together.candidates[0].area.cell).toBe(same.cell);expect(together.candidates[0].distances.every((item:any)=>item.sameArea&&!('approximateMiles'in item))).toBe(true);
 });
 it('keeps account-context helpers scoped and publishes complete read contracts',()=>{
- const background={...actor,background:true};for(const name of ['people.context','activity.since','connections.list','messages.window']){expect(backgroundCanRead(background,name)).toBe(false);expect(backgroundCanRead({...background,accountActivity:true},name)).toBe(true);}expect(backgroundCanRead(background,'access.get')).toBe(true);
+ const background={...actor,background:true,privateAccess:false};for(const name of ['people.context','activity.since','connections.list','messages.window']){expect(backgroundCanRead(background,name)).toBe(false);expect(backgroundCanRead({...background,privateAccess:true},name)).toBe(true);}expect(backgroundCanRead(background,'access.get')).toBe(true);
  for(const name of ['access.get','automations.validate','messages.window','people.context','activity.since','posts.thread_updates','locations.meeting_area','time.resolve','time.convert','time.overlap']){const op=operations.find(op=>op.name===name)!;expect(op.kind).toBe('read');expect(op.outputSchema).toBeDefined();expect(describeOperation(name)?.confirmationRequired).toBe(false);}
 });

@@ -28,7 +28,7 @@ it('invalidates aggregate generations on suspension and never exposes a hidden s
 it('backfills existing entries and pages candidates without hydrating or aggregating hangout history',async()=>{
  await rows('logEntries').insertMany([{_id:'one',members:['me','a']},{_id:'two',members:['me','b']}]);expect(await backfillLogContacts(1)).toBe(1);expect(await backfillLogContacts(1)).toBe(1);expect(await backfillLogContacts(1)).toBe(0);expect(await backfillLogContacts(1)).toBe(0);
  const first=await listLogContacts(actor,{limit:1}),second=await listLogContacts(actor,{limit:1,before:first.nextCursor!}),third=await listLogContacts(actor,{limit:1,before:second.nextCursor!});expect(new Set([...first.items,...second.items,...third.items].map(person=>person.id)).size).toBe(3);expect(first.indexing).toBe(false);expect(third.nextCursor).toBeNull();
- expect((await listLogContacts({...actor,background:true,accountActivity:false},{query:'friend'})).items).toEqual([]);
+ expect((await listLogContacts({...actor,background:true,privateAccess:true},{query:'friend'})).items.map(person=>person.id)).toContain('friend');
 });
 
 it('bounds sparse name filtering and resumes from the last examined contact',async()=>{

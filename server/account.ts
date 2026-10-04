@@ -32,7 +32,7 @@ export async function clearAgentChat(userId: string) {
     const owner=requireValue(await users().findOneAndUpdate({ _id: userId }, { $set: { chatClearedAt: now }, $inc: { chatGeneration: 1 }, $unset: { activeRun: '' } }, { session,returnDocument:'after' }));
     const {queueRetrieval}=await import('./search/replication');await queueRetrieval('chat_purge',userId,session,{userId,generation:Number(owner.chatGeneration||0)});
     await rows('retrievalJobs').updateMany({kind:'chat',userId},{$set:{revision:randomUUID(),availableAt:Date.now()},$unset:{lease:''}},{session});
-    const target = { userId, $or: [{ purpose: { $ne: 'automation' } }, { privateChat: true }] };
+    const target = { userId, $or: [{ purpose: { $ne: 'automation' } }, { privateAccess: { $ne: false } }] };
     const affected = await rows('runs').find(target, { session, projection: { providerSessionId: 1, reservedNanos: 1, status: 1 } }).toArray();
     const held = affected.filter(run => !['completed','failed','cancelled'].includes(String(run.status))).reduce((total, run) => total + Number(run.reservedNanos || 0), 0);
     if (held) await users().updateOne({ _id: userId }, { $inc: { reservedNanos: -held } }, { session });

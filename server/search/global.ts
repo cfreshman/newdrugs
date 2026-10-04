@@ -39,7 +39,7 @@ async function semanticScores(kind:RetrievalKind,userId:string,vector:number[]|u
 
 /** Each source authorizes and hydrates candidates; one shared formula orders the union. */
 export async function searchGlobal(input:GlobalSearchInput,actor:Actor):Promise<GlobalSearchResult>{
- const allowed=(source:GlobalSearchSource)=>!actor.background||source==='public'||source==='log'&&Boolean(actor.logAccess)||source==='chat'&&Boolean(actor.privateChat)||source==='messages'&&Boolean(actor.accountActivity);
+ const allowed=(source:GlobalSearchSource)=>!actor.background||actor.privateAccess!==false||source==='public';
  const selected=input.sources?.length?[...new Set(input.sources)]:sources.filter(allowed);
  if(selected.some(source=>!allowed(source)))throw new AppError(403,'data_access','This search source is outside this agent’s data access.');
  let vector:number[]|undefined;try{vector=await embed(input.query,'query',`global:${actor.userId}`);}catch{/* Lexical search remains available. */}

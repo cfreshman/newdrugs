@@ -39,7 +39,7 @@ async function readyContacts(userId:string,session?:ClientSession){
 /** Seek two indexed streams: positive co-attendance counts, then friend-only
  * contacts. Hydration and text filtering have a hard per-page candidate budget. */
 export async function listLogContacts(actor:Actor,input:{query?:string;limit?:number;before?:string},session?:ClientSession){
- const userId=actor.userId,ready=await readyContacts(userId,session),limit=input.limit||20,canReadFriends=Boolean(!actor.background||actor.accountActivity);
+ const userId=actor.userId,ready=await readyContacts(userId,session),limit=input.limit||20,canReadFriends=true;
  const blocked=new Set((await rows('blocks').find({members:userId},{session,projection:{members:1}}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)));
  const signature=createHash('sha256').update(JSON.stringify(['seek-v2',userId,input.query||'',canReadFriends,ready])).digest('hex');
  type Cursor={phase:'contacts'|'friends';count:number;id:string};let cursor:Cursor={phase:ready?'contacts':'friends',count:0,id:''};

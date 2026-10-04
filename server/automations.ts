@@ -12,7 +12,16 @@ import { automationConfigSchema, type Automation, type AutomationConfig } from '
 export interface AutomationRow extends AutomationConfig { _id: string; userId: string; revision: number; generation: number; status: Automation['status']; nextRunAt: number | null; createdAt: string; blockedReason?: string; blockedCode?: string; retryAt?: number; credentialId?: string; lastSeenAt?: string }
 export const automations = () => rows<AutomationRow>('automations');
 // Omit persisted ownership fields when validating a saved configuration.
-const definition = (row: AutomationRow): AutomationConfig => ({ name: row.name, instruction: row.instruction, schedule: row.schedule, maxRunNanos: row.maxRunNanos, dailyBudgetNanos: row.dailyBudgetNanos, logAccess: Boolean(row.logAccess), privateChat: row.privateChat, accountActivity: Boolean(row.accountActivity), webSearch: row.webSearch });
+const definition = (row: AutomationRow): AutomationConfig => ({ name: row.name, instruction: row.instruction, schedule: row.schedule, maxRunNanos: row.maxRunNanos, dailyBudgetNanos: row.dailyBudgetNanos, privateAccess: row.privateAccess!==false, writeAccess: row.writeAccess!==false });
+/** Convert saved definitions and unfinished runs once. The founder chose full access for existing tasks. */
+export async function migrateAutomationAuthority(){
+ const marker='automation-authority-v2';
+ if(await rows('migrationMarkers').findOne({_id:marker}))return;
+ const legacy={$unset:{logAccess:'',privateChat:'',accountActivity:'',webSearch:''}} as const;
+ await automations().updateMany({privateAccess:{$exists:false}},{$set:{privateAccess:true,writeAccess:true},...legacy});
+ await runs().updateMany({purpose:'automation',privateAccess:{$exists:false}},{$set:{privateAccess:true,writeAccess:true},...legacy});
+ await rows('migrationMarkers').updateOne({_id:marker},{$set:{completedAt:new Date().toISOString()}},{upsert:true});
+}
 export function viewAutomation(row: AutomationRow): Automation { return { ...definition(row), id: row._id, revision: row.revision, status: row.status, nextRunAt: row.nextRunAt ? new Date(row.nextRunAt).toISOString() : null, createdAt: row.createdAt, ...(row.blockedReason ? { blockedReason: row.blockedReason, blockedCode: row.blockedCode } : {}), ...(row.retryAt ? {retryAt:new Date(row.retryAt).toISOString()} : {}) }; }
 export async function ownAutomation(userId: string, id: string, session?: ClientSession, includeDeleted = false) { return requireValue(await automations().findOne({ _id: id, userId, ...(includeDeleted ? {} : { status: { $ne: 'deleted' as const } }) }, { session }), 'This automation is unavailable.'); }
 export async function automationAuthorized(run: { userId: string; automationId?: string; automationGeneration?: number }, session?: ClientSession) {
@@ -25,7 +34,7 @@ export function validateAutomationConfiguration(data:unknown) {
   const configuration=automationConfigSchema.parse(data),nextRunAt=nextAutomationTime(configuration.schedule);
   if(!nextRunAt)throw new AppError(422,'schedule','Choose a future time before creating this automation.');
   if(configuration.dailyBudgetNanos<configuration.maxRunNanos)throw new AppError(422,'budget','Daily allowance must cover one run.');
-  return {configuration,nextRunAt:new Date(nextRunAt).toISOString(),dataAccess:{logAccess:configuration.logAccess,privateChat:configuration.privateChat,accountActivity:configuration.accountActivity,webSearch:configuration.webSearch}};
+  return {configuration,nextRunAt:new Date(nextRunAt).toISOString(),dataAccess:{privateAccess:configuration.privateAccess,writeAccess:configuration.writeAccess}};
 }
 export async function admitAutomation(row: AutomationRow, occurrence: string, session: ClientSession) {
   const runId = `automation:${row._id}:${hash(occurrence).slice(0, 24)}`;
@@ -40,9 +49,9 @@ export async function admitAutomation(row: AutomationRow, occurrence: string, se
   if (priorRuns.length >= 100 || priorRuns.reduce((sum, run) => sum + allocated(run), 0) + row.maxRunNanos > 1e9 || priorRuns.filter(run => run.automationId === row._id).reduce((sum, run) => sum + allocated(run), 0) + row.maxRunNanos > row.dailyBudgetNanos) throw new AppError(409, 'automation_budget', 'The daily automation spending allowance is used.');
   if (owner.balanceNanos - owner.reservedNanos < row.maxRunNanos) throw new AppError(402, 'credit_required', 'Not enough available credit for this automation.');
   await users().updateOne({ _id: owner._id }, { $inc: { reservedNanos: row.maxRunNanos } }, { session });
-  const recentDeliveries = await rows('agentInbox').find({ userId: row.userId, automationId: row._id, automationGeneration: row.generation }, { session, projection: { title: 1, links: 1, body: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(10).toArray();
+  const recentDeliveries = row.privateAccess===false?[]:await rows('agentInbox').find({ userId: row.userId, automationId: row._id, automationGeneration: row.generation }, { session, projection: { title: 1, links: 1, body: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(10).toArray();
   const now = new Date().toISOString();
-  await runs().insertOne({ _id: runId, userId: row.userId, purpose: 'automation', priority: 1, automationId: row._id, automationGeneration: row.generation, automationName: row.name, logAccess: Boolean(row.logAccess), privateChat: row.privateChat, accountActivity: Boolean(row.accountActivity), webSearch: row.webSearch, budgetNanos: row.maxRunNanos, text: row.instruction, recentDeliveries: recentDeliveries.map(item => ({ title: String(item.title), links: [...(Array.isArray(item.links) ? item.links : []), ...textLinks(String(item.body || '')).map(link => ({ title: 'Previously linked source', url: link.url }))].slice(0, 24), createdAt: String(item.createdAt) })), clientId: '', timezone: row.schedule.kind === 'weekly' ? row.schedule.timeZone : 'UTC', fileIds: [], fingerprint: hash(runId), status: 'queued', reservedNanos: row.maxRunNanos, costNanos: 0, chargedNanos: 0, billingRate: RATE, usagePending: true, responseIds: [], createdAt: now, updatedAt: now, draft: '', progress: [], approvals: [], revision: 0, attempts: 0, failures: 0 }, { session });
+  await runs().insertOne({ _id: runId, userId: row.userId, purpose: 'automation', priority: 1, automationId: row._id, automationGeneration: row.generation, automationName: row.name, privateAccess: row.privateAccess!==false, writeAccess: row.writeAccess!==false, budgetNanos: row.maxRunNanos, text: row.instruction, recentDeliveries: recentDeliveries.map(item => ({ title: String(item.title), links: [...(Array.isArray(item.links) ? item.links : []), ...textLinks(String(item.body || '')).map(link => ({ title: 'Previously linked source', url: link.url }))].slice(0, 24), createdAt: String(item.createdAt) })), clientId: '', timezone: row.schedule.kind === 'weekly' ? row.schedule.timeZone : 'UTC', fileIds: [], fingerprint: hash(runId), status: 'queued', reservedNanos: row.maxRunNanos, costNanos: 0, chargedNanos: 0, billingRate: RATE, usagePending: true, responseIds: [], createdAt: now, updatedAt: now, draft: '', progress: [], approvals: [], revision: 0, attempts: 0, failures: 0 }, { session });
   return runId;
 }
 export async function automationOperation(name: string, data: Record<string, unknown>, actor: Actor, session?: ClientSession) {

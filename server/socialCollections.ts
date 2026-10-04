@@ -24,7 +24,7 @@ export async function collectionPage(kind:CollectionKind,userId:string,before:un
 /** Resolve current membership on every read, including search cursor hydration. */
 export async function postAudience(scope:unknown,actor:Actor,session?:ClientSession){
  if(scope!=='friends'&&scope!=='saved')return null;
- if(actor.background&&!actor.accountActivity)throw new AppError(403,'account_activity_required','This view requires access to social account activity.');
+ if(actor.background&&actor.privateAccess===false)throw new AppError(403,'private_access_required','This view requires private account access.');
  if(scope==='saved')return {postIds:new Set((await rows('postSaves').find({userId:actor.userId},{session}).toArray()).map(row=>String(row.targetId)))};
  const connections=await rows('connections').find({members:actor.userId,status:'accepted'},{session}).toArray();
  return {authorIds:new Set(connections.flatMap(row=>(row.members as string[]).filter(id=>id!==actor.userId)))};

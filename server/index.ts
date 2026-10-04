@@ -23,8 +23,10 @@ import {startNotificationWorker} from './notificationEvents';
 import {startNotificationRuleIndex} from './notificationRuleIndex';
 import {startNotificationSchedule} from './notificationSchedule';
 import {startPostVideoLinkWorker} from './postVideoLinks';
+import {migrateAutomationAuthority} from './automations';
 
 await connectDatabase();
+if(config.PROCESS_ROLE!=='web')await migrateAutomationAuthority();
 await ensureStarterPool();
 const background = config.PROCESS_ROLE !== 'web';
 const stopWorkerHealth = background ? startWorkerHealth() : async () => {};

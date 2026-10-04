@@ -95,7 +95,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'people.hide':[{route:'/settings/hidden',targetKind:'surface',resourceType:'hidden_people'}],
   'people.search': [{ route: '/people/[id]', targetKind: 'exact', resourceType: 'person' }, { route: '/nearby', targetKind: 'surface', resourceType: 'people' }],
   'people.context':[{route:'/people/[id]',targetKind:'exact',resourceType:'person'},{route:'/messages/[id]',targetKind:'exact',resourceType:'conversation'}],
- 'activity.since':[{route:'/notifications',targetKind:'surface',resourceType:'notifications'}],
+ 'activity.since':[{route:'/notifications',targetKind:'surface',resourceType:'notifications'},{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'}],
  ...Object.fromEntries(['notifications.preferences','notifications.preference_set','notifications.rules','notifications.rule_create','notifications.rule_set','notifications.rule_delete'].map(name=>[name,[{route:'/account/notifications',targetKind:'surface' as const,resourceType:'notification_settings'}]])),
   'posts.thread_updates':[{route:'/posts/[id]',targetKind:'exact',resourceType:'post'},{route:'/selected-posts?ids=[ids]',targetKind:'surface',resourceType:'post_list'}],
   'posts.incoming_replies': [{route:'/posts/[id]',targetKind:'exact',resourceType:'post'},{route:'/selected-posts?ids=[ids]',targetKind:'surface',resourceType:'post_list'}],

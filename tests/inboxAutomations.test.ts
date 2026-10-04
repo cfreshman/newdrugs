@@ -18,7 +18,7 @@ const originalAI=config.aiEnabled;
 async function clean(){if(db().databaseName!=='newdrugs_test')throw Error('Isolated cloud tests only.');for(const c of await db().collections())await c.deleteMany({});}
 beforeAll(async()=>{await connectDatabase();});beforeEach(async()=>{await clean();await ensureStarterPool();config.aiEnabled=true;});afterAll(async()=>{config.aiEnabled=originalAI;await clean();await mongo.close();});
 async function actor(){const guest=await createGuest();const u=await registerAccount(guest._id,`auto_${++sequence}`,await passwordHash('password8'),`192.0.2.${sequence}`);const credentialId=randomUUID();await rows('tokens').insertOne({_id:credentialId,userId:u._id,name:'My connected agent',scope:'write',hash:hash(randomUUID()),revokedAt:null,expiresAt:null});return {userId:u._id,source:'external',scope:'write',credentialId} as Actor;}
-const definition={name:'Weekly search',instruction:'Find useful public posts and link them.',schedule:{kind:'weekly',timeZone:'America/New_York',hour:7,minute:0,weekdays:[1]},maxRunNanos:50000000,dailyBudgetNanos:200000000,privateChat:false,webSearch:false};
+const definition={name:'Weekly search',instruction:'Find useful public posts and link them.',schedule:{kind:'weekly',timeZone:'America/New_York',hour:7,minute:0,weekdays:[1]},maxRunNanos:50000000,dailyBudgetNanos:200000000};
 async function saved(a:Actor){return await executeOperation('automations.create',definition,a,randomUUID(),{confirmed:true}) as Automation;}
 async function enabled(a:Actor){return saved(a);}
 async function background(a:Actor){const row=await enabled(a);const result=await executeOperation('automations.run_now',{automationId:row.id,revision:row.revision},a,randomUUID()) as {runId:string};return (await runs().findOne({_id:result.runId}))!;}
@@ -54,17 +54,21 @@ it('creates one active scheduled automation after review, with no separate enabl
  await rows('tokens').updateOne({_id:me.credentialId},{$set:{revokedAt:'now'}});
  expect(await automationAuthorized({userId:me.userId,automationId:created.id,automationGeneration:1})).toBe(false);
 });
-it('validates automation schedules and data authority without saving or running anything',async()=>{
+it('validates full access defaults and public read-only choices without creating a task',async()=>{
  const me=await actor(),basic=await executeOperation('automations.validate',definition,me) as any;
- expect(basic).toMatchObject({configuration:{...definition,logAccess:false,accountActivity:false},dataAccess:{logAccess:false,privateChat:false,accountActivity:false,webSearch:false},socialWrites:false,delivery:['agent_inbox','silent']});
- expect(Date.parse(basic.nextRunAt)).toBeGreaterThan(Date.now());expect(basic.readableOperations).toContain('posts.list');expect(basic.readableOperations).not.toContain('messages.window');expect(basic.readableOperations).not.toContain('log.get');expect(basic.readableOperations).not.toContain('conversation.window');expect(basic.readableOperations).not.toContain('links.preview');
- const expanded=await executeOperation('automations.validate',{...definition,logAccess:true,privateChat:true,accountActivity:true,webSearch:true},me) as any;
- for(const operation of ['messages.window','log.get','conversation.window','links.preview'])expect(expanded.readableOperations).toContain(operation);
+ expect(basic).toMatchObject({configuration:{...definition,privateAccess:true,writeAccess:true},dataAccess:{privateAccess:true,writeAccess:true},delivery:['agent_inbox','silent']});
+ expect(Date.parse(basic.nextRunAt)).toBeGreaterThan(Date.now());
+ for(const name of ['posts.list','messages.window','log.get','conversation.window','links.preview'])expect(basic.readableOperations).toContain(name);
+ for(const name of ['posts.create','messages.send','log.create'])expect(basic.writableOperations).toContain(name);
+ const limited=await executeOperation('automations.validate',{...definition,privateAccess:false,writeAccess:false},me) as any;
+ expect(limited.readableOperations).toContain('posts.list');
+ for(const name of ['messages.window','log.get','conversation.window'])expect(limited.readableOperations).not.toContain(name);
+ expect(limited.writableOperations).toEqual([]);
  expect(await automations().countDocuments({userId:me.userId})).toBe(0);expect(await runs().countDocuments({userId:me.userId})).toBe(0);
  await expect(executeOperation('automations.validate',{...definition,schedule:{kind:'once',at:'2020-01-01T00:00:00.000Z'}},me)).rejects.toMatchObject({code:'schedule'});
  await expect(executeOperation('automations.validate',{...definition,maxRunNanos:200000000,dailyBudgetNanos:100000000},me)).rejects.toMatchObject({code:'budget'});
 });
-it('gives a private-chat automation current memory, not a deleted TODO or ungranted Log memory',async()=>{
+it('gives a private automation current memory and permits run-bound writes',async()=>{
  const me=await actor();
  const save=(key:string,content:string,core:boolean)=>executeOperation('agent.memory.save',{key,title:key,content,core,revision:0},me,randomUUID());
  await save('current_preference','Do not suggest tennis without being asked.',true);
@@ -72,20 +76,20 @@ it('gives a private-chat automation current memory, not a deleted TODO or ungran
  await executeOperation('agent.memory.delete',{key:'radius_todo',revision:1},me,randomUUID());
  await save('open_task','A current task remains open.',false);
  await rows('agentMemorySlots').insertOne({_id:randomUUID(),userId:me.userId,key:'private_log_note',title:'Private Log note',content:'Diary detail requiring Log access',core:true,sources:[{kind:'log',id:randomUUID()}],sourceProofs:[],revision:1,estimatedTokens:30,updatedAt:new Date().toISOString()});
- const created=await executeOperation('automations.create',{...definition,privateChat:true,accountActivity:true},me,randomUUID(),{confirmed:true}) as Automation;
+ const created=await saved(me);
  const {runId}=await executeOperation('automations.run_now',{automationId:created.id,revision:created.revision},me,randomUUID()) as {runId:string};
- const run=await running(runId),credential:Actor={userId:me.userId,source:'agent',scope:'read',runId,background:true,privateChat:true,accountActivity:true,logAccess:false};
+ const run=await running(runId),credential:Actor={userId:me.userId,source:'agent',scope:'write',runId,background:true,privateAccess:true};
  const packet=JSON.stringify(await sessionInput(run));
  expect(packet).toContain('Do not suggest tennis without being asked.');
  expect(run.memorySnapshot?.availableNotes).toEqual([{key:'open_task',title:'open_task'}]);
  expect(packet).not.toContain('The old radius change is pending.');
  expect(packet).not.toContain('Diary detail requiring Log access');
  const memory=await executeOperation('agent.memory.list',{limit:30},credential) as {items:{key:string}[]};
- expect(memory.items.map(item=>item.key)).toEqual(['current_preference','open_task']);
+ expect(memory.items.map(item=>item.key)).toEqual(['current_preference','open_task','private_log_note']);
  expect((await executeOperation('agent.memory.get',{key:'open_task'},credential) as any).slot.content).toBe('A current task remains open.');
- await expect(executeOperation('agent.memory.get',{key:'private_log_note'},credential)).rejects.toMatchObject({status:404});
- await expect(executeOperation('agent.memory.list',{limit:30},{...credential,privateChat:false})).rejects.toMatchObject({code:'automation_scope'});
- await expect(executeOperation('agent.memory.save',{key:'intrusion',title:'Intrusion',content:'No',revision:0},credential,randomUUID())).rejects.toMatchObject({code:'automation_scope'});
+ expect((await executeOperation('agent.memory.get',{key:'private_log_note'},credential) as any).slot.sourceStatus).toBe('unavailable');
+ await expect(executeOperation('agent.memory.list',{limit:30},{...credential,privateAccess:false})).rejects.toMatchObject({code:'automation_scope'});
+ expect(await executeOperation('agent.memory.save',{key:'new_note',title:'New note',content:'Saved by the task',revision:0},credential,randomUUID(),{runId,lease:'lease',confirmed:true})).toMatchObject({saved:true});
 });
 it('reports the current credential authority without exposing its secret',async()=>{
  const me=await actor(),access=await executeOperation('access.get',{},me) as any;
@@ -110,15 +114,15 @@ it('lets another automation run while one sleeps but keeps the sleeping definiti
  await runs().updateOne({_id:unrelatedId},{$set:{status:'running',leaseUntil:Date.now()+60000}});
  await expect(transaction(session=>admitAutomation(firstRow,'third occurrence',session))).rejects.toMatchObject({code:'automation_busy'});
 });
-it('requires review to enable and enforces revision checks, source permissions and independent runs',async()=>{
- const me=await actor(),created=await saved(me);
+it('requires review to enable and enforces public read-only access and independent runs',async()=>{
+ const me=await actor(),created=await executeOperation('automations.create',{...definition,privateAccess:false,writeAccess:false},me,randomUUID(),{confirmed:true}) as Automation;
  const row=await executeOperation('automations.pause',{automationId:created.id,revision:created.revision},me,randomUUID()) as Automation;
  await expect(executeOperation('automations.enable',{automationId:row.id,revision:row.revision},me,randomUUID())).rejects.toMatchObject({code:'confirmation_required'});
  const active=await executeOperation('automations.enable',{automationId:row.id,revision:row.revision},me,randomUUID(),{confirmed:true}) as Automation;
  const foreground=await reserveRun(me.userId,`${me.userId}:${randomUUID()}`,'Primary message');
  const id=await transaction(async session=>admitAutomation((await automations().findOne({_id:row.id}))!,'occurrence',session));
  expect((await currentUser(me.userId)).activeRun).toBe(foreground._id);expect(await rows('messages').countDocuments()).toBe(1);
- const task=await running(id);const credential:Actor={userId:me.userId,source:'agent',scope:'read',runId:id,background:true,privateChat:false};
+ const task=await running(id);const credential:Actor={userId:me.userId,source:'agent',scope:'read',runId:id,background:true,privateAccess:false};
  await expect(executeOperation('conversation.list',{},credential)).rejects.toMatchObject({code:'automation_scope'});
  await expect(executeOperation('messages.send',{connectionId:'anything',text:'hello'},credential,randomUUID())).rejects.toMatchObject({code:'automation_scope'});
  const packet=JSON.stringify(await sessionInput(task));expect(packet).not.toContain('Primary message');
@@ -153,29 +157,25 @@ it('changes account credentials without changing identity and clears old chat co
  expect(await runs().findOne({_id:run._id})).toMatchObject({text:'',superseded:true,cancelRequested:true});
 });
 
-it('grants account activity separately from chat and keeps conversation ownership and write restrictions',async()=>{
+it('uses one private-data boundary and preserves conversation ownership while allowing writes',async()=>{
  const me=await actor(),other=await actor(),third=await actor();
- const base=await saved(me);expect(base.accountActivity).toBe(false);
- const edited=await executeOperation('automations.update',{automationId:base.id,revision:base.revision,configuration:{...definition,accountActivity:true}},me,randomUUID()) as Automation;
- const enabled=await executeOperation('automations.enable',{automationId:edited.id,revision:edited.revision},me,randomUUID(),{confirmed:true}) as Automation;
- const {runId}=await executeOperation('automations.run_now',{automationId:enabled.id,revision:enabled.revision},me,randomUUID()) as {runId:string};
- const run=await running(runId);expect(run.accountActivity).toBe(true);expect(run.privateChat).toBe(false);
- const credential:Actor={userId:me.userId,source:'agent',scope:'read',runId,background:true,accountActivity:true,privateChat:false};
+ const base=await saved(me);expect(base).toMatchObject({privateAccess:true,writeAccess:true});
+ const {runId}=await executeOperation('automations.run_now',{automationId:base.id,revision:base.revision},me,randomUUID()) as {runId:string};
+ const run=await running(runId);expect(run).toMatchObject({privateAccess:true,writeAccess:true});
+ const credential:Actor={userId:me.userId,source:'agent',scope:'write',runId,background:true,privateAccess:true};
+ const publicOnly:Actor={...credential,privateAccess:false},readOnly:Actor={...credential,scope:'read'};
  const connectionId=randomUUID(),foreignId=randomUUID(),now=new Date().toISOString();
  await rows('connections').insertMany([{_id:connectionId,members:[me.userId,other.userId],fromId:me.userId,toId:other.userId,note:'Hello',status:'accepted',createdAt:now},{_id:foreignId,members:[other.userId,third.userId],fromId:other.userId,toId:third.userId,note:'Hello',status:'accepted',createdAt:now}]);
  await rows('directMessages').insertMany([{_id:randomUUID(),connectionId,fromId:other.userId,text:'Meet for a walk?',createdAt:now},{_id:randomUUID(),connectionId:foreignId,fromId:third.userId,text:'Private to someone else',createdAt:now}]);
- await rows('receipts').insertMany([{_id:randomUUID(),userId:me.userId,operation:'conversation.append',source:'external',result:{text:'Agent chat must stay private'},createdAt:now},{_id:randomUUID(),userId:me.userId,operation:'posts.like',source:'external',result:{liked:true,postId:'liked-post'},createdAt:now}]);
  for(const name of ['connections.list','notifications.list','agent.actions.list']){
-  await expect(executeOperation(name,{}, {...credential,accountActivity:false})).rejects.toMatchObject({code:'automation_scope'});
+  await expect(executeOperation(name,{},publicOnly)).rejects.toMatchObject({code:'automation_scope'});
   await expect(executeOperation(name,{},credential)).resolves.toBeDefined();
  }
- await expect(executeOperation('messages.list',{connectionId},{...credential,accountActivity:false})).rejects.toMatchObject({code:'automation_scope'});
- await rows('notifications').insertOne({_id:randomUUID(),userId:me.userId,kind:'agent_update',title:'Private automation context',text:'Private chat excerpt',inboxId:randomUUID(),readAt:null,createdAt:now});
- expect(JSON.stringify(await executeOperation('notifications.list',{},credential))).not.toContain('Private chat excerpt');
- const activity=JSON.stringify(await executeOperation('agent.actions.list',{},credential));expect(activity).toContain('liked-post');expect(activity).not.toContain('Agent chat must stay private');
+ await expect(executeOperation('messages.list',{connectionId},publicOnly)).rejects.toMatchObject({code:'automation_scope'});
  const own=await executeOperation('messages.list',{connectionId},credential);expect(JSON.stringify(own)).toContain('Meet for a walk?');expect(JSON.stringify(own)).not.toContain('Private to someone else');
  await expect(executeOperation('messages.list',{connectionId:foreignId},credential)).rejects.toThrow();
- await expect(executeOperation('conversation.list',{},credential)).rejects.toMatchObject({code:'automation_scope'});
- await expect(executeOperation('messages.send',{connectionId,text:'Yes'},credential,randomUUID())).rejects.toMatchObject({code:'automation_scope'});
- expect(JSON.stringify(await sessionInput(run))).toContain('Permitted social account activity lookup: true');
+ await expect(executeOperation('messages.send',{connectionId,text:'Yes'},readOnly,randomUUID(),{runId,lease:'lease',confirmed:true})).rejects.toMatchObject({code:'automation_scope'});
+ await expect(executeOperation('messages.send',{connectionId,text:'Yes'},publicOnly,randomUUID(),{runId,lease:'lease',confirmed:true})).rejects.toMatchObject({code:'automation_scope'});
+ expect(await executeOperation('messages.send',{connectionId,text:'Yes'},credential,randomUUID(),{runId,lease:'lease',confirmed:true})).toMatchObject({text:'Yes'});
+ expect(JSON.stringify(await sessionInput(run))).toContain('Private account data permitted: true');
 });

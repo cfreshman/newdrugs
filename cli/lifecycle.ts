@@ -62,6 +62,7 @@ export async function updateInstallation(install:Installation,origin:string,curr
   try{
     const response=await deps.fetch(new URL('/downloads/cli.json',site),{redirect:'error',signal:AbortSignal.timeout(4000),headers:{Accept:'application/json'}});
     if(!response.ok)throw new Error('The release manifest is unavailable.');
+    if(!response.headers.get('content-type')?.toLowerCase().includes('application/json'))throw new Error('The release manifest is not JSON.');
     const manifest=await response.json() as {version?:string;archive?:string;sha256?:string};
     if(typeof manifest.version!=='string'||manifest.archive!=='newdrugs-cli.tgz'||!manifest.sha256||!/^([a-f0-9]{64})$/.test(manifest.sha256))throw new Error('Invalid release manifest.');
     if(!isNewerVersion(manifest.version,current)){await writeFile(stamp,String(deps.now()),{mode:0o600});await unlink(failureStamp).catch(()=>{});return 'current';}
@@ -128,7 +129,7 @@ export async function maybeAutoUpdate(current:string,store:ConfigStore,profile?:
   if(['darwin-arm64','darwin-x64','linux-arm64','linux-x64','win32-x64'].includes(`${process.platform}-${process.arch}`)){
     try{
       const {installNative,nativeRoot}=await import('./native');
-      const native=await installNative(origin,nativeRoot(),current);
+      const native=await installNative(origin,nativeRoot());
       await promoteNpmCommandToNative(prefix,process.argv[1],native.launcher,native.executable);
       process.stderr.write(`New Drugs CLI switched to native ${native.version}.\n`);
       return {nativeExecutable:native.executable,version:native.version};
@@ -152,6 +153,7 @@ export async function updateNativeInstallation(root:string,origin:string,current
  try{
   const response=await fetch(new URL('/downloads/cli.json',origin),{redirect:'error',signal:AbortSignal.timeout(4000)});
   if(!response.ok)throw Error('The release manifest is unavailable.');
+  if(!response.headers.get('content-type')?.toLowerCase().includes('application/json'))throw Error('The release manifest is not JSON.');
   const manifest=await response.json() as {version?:string;nativeManifest?:string};
   if(!manifest.version||manifest.nativeManifest!==`native-${manifest.version}.json`||!/^\d+\.\d+\.\d+$/.test(manifest.version))throw Error('Invalid native release manifest.');
   if(isNewerVersion(current,manifest.version)||origin==='https://druggie.org'&&!isNewerVersion(manifest.version,current)){await writeFile(stamp,String(Date.now()),{mode:0o600});await unlink(failureStamp).catch(()=>{});return 'current';}

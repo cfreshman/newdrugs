@@ -7,14 +7,6 @@ import {workGate} from './workGate';
 interface Note extends Omit<MemoryNote,'sources'> {_id:string;userId:string;sources:MemorySourceRef[];sourceProofs:string[]}
 interface State {_id:string;coreUsed:number;noncoreUsed:number;slots:number;coreSlots:number;revision:number}
 const notes=()=>rows<Note>('agentMemorySlots'),states=()=>rows<State>('agentMemoryState'),sourceGate=workGate(8,256);
-type MemoryReadScope={logAccess:boolean;accountActivity:boolean};
-function memoryScopeFilter(scope?:MemoryReadScope){
- const denied:MemorySourceRef['kind'][]=[];
- if(scope&&!scope.logAccess)denied.push('log');
- if(scope&&!scope.accountActivity)denied.push('message');
- return denied.length?{sources:{$not:{$elemMatch:{kind:{$in:denied}}}}}:{};
-}
-function memorySourcesAllowed(note:Note,scope?:MemoryReadScope){return !scope||note.sources.every(source=>source.kind!=='log'||scope.logAccess)&&note.sources.every(source=>source.kind!=='message'||scope.accountActivity);}
 const empty=(userId:string):State=>({_id:userId,coreUsed:0,noncoreUsed:0,slots:0,coreSlots:0,revision:0});
 export const memoryEstimate=(title:string,content:string,sources:MemorySourceRef[])=>Math.ceil(Buffer.byteLength(title+'\n'+content+JSON.stringify(sources),'utf8')/3)+24;
 export function pressure(state:State):MemoryPressure{
@@ -50,32 +42,31 @@ async function sourceStatus(note:Note,cache=new Map<string,Promise<SourceSnapsho
  catch(error){if(error instanceof AppError&&[403,404].includes(error.status))return {status:'unavailable' as const,dates:[]};throw error;}
 }
 export async function personalInstructions(userId:string,session?:ClientSession){const row=await rows('agentInstructions').findOne({_id:userId},{session});return {text:String(row?.text||''),revision:Number(row?.revision||0)};}
-export async function agentMemoryContext(userId:string,scope?:MemoryReadScope):Promise<MemoryContext>{
- const [instructions,slots,state]=await Promise.all([personalInstructions(userId),notes().find({userId,core:true,...memoryScopeFilter(scope)}).sort({key:1}).limit(32).toArray(),states().findOne({_id:userId})]);
+export async function agentMemoryContext(userId:string):Promise<MemoryContext>{
+ const [instructions,slots,state]=await Promise.all([personalInstructions(userId),notes().find({userId,core:true}).sort({key:1}).limit(32).toArray(),states().findOne({_id:userId})]);
  const cache=new Map<string,Promise<SourceSnapshot>>(),checks=await Promise.all(slots.map(note=>sourceStatus(note,cache)));
  return {instructions,slots:slots.flatMap((note,index)=>checks[index].status==='current'?[view(note,checks[index].dates)]:[]),omittedSlots:checks.filter(result=>result.status!=='current').length,pressure:pressure(state||empty(userId))};
 }
-export async function automationMemoryContext(userId:string,scope:MemoryReadScope){
- const [context,noncore]=await Promise.all([agentMemoryContext(userId,scope),notes().find({userId,core:false,...memoryScopeFilter(scope)},{projection:{key:1,title:1}}).sort({key:1}).limit(128).toArray()]);
+export async function automationMemoryContext(userId:string){
+ const [context,noncore]=await Promise.all([agentMemoryContext(userId),notes().find({userId,core:false},{projection:{key:1,title:1}}).sort({key:1}).limit(128).toArray()]);
  return {...context,availableNotes:noncore.map(note=>({key:note.key,title:note.title}))};
 }
 export async function memoryOperation(name:string,data:Record<string,unknown>,actor:Actor,session?:ClientSession){
  const userId=actor.userId;
- if(actor.background&&(!actor.privateChat||!['agent.memory.context','agent.memory.list','agent.memory.get'].includes(name)))throw new AppError(403,'memory_scope','This automation cannot access or change Agent Memory.');
- const memoryScope=actor.background?{logAccess:Boolean(actor.logAccess),accountActivity:Boolean(actor.accountActivity)}:undefined;
+ if(actor.background&&actor.privateAccess===false)throw new AppError(403,'memory_scope','This automation cannot access private Agent Memory.');
  if(name==='agent.instructions.get')return personalInstructions(userId,session);
  if(name==='agent.instructions.update'){
   const old=await personalInstructions(userId,session);if(old.revision!==data.revision)throw new AppError(409,'instructions_changed','Your instructions changed. Read them again before saving.');
   const result={text:String(data.text),revision:old.revision+1};await rows('agentInstructions').updateOne({_id:userId},{$set:{...result,updatedAt:new Date().toISOString()}},{session,upsert:true});return result;
  }
- if(name==='agent.memory.context')return agentMemoryContext(userId,memoryScope);
+ if(name==='agent.memory.context')return agentMemoryContext(userId);
  const state=await states().findOne({_id:userId},{session})||empty(userId),used=pressure(state);
  if(name==='agent.memory.list'){
-  const limit=Number(data.limit||20),found=await notes().find({userId,...memoryScopeFilter(memoryScope),...(data.core===undefined?{}:{core:Boolean(data.core)}),...(data.before?{key:{$gt:String(data.before)}}:{})},{session,projection:{content:0,sourceProofs:0}}).sort({key:1}).limit(limit+1).toArray();
+  const limit=Number(data.limit||20),found=await notes().find({userId,...(data.core===undefined?{}:{core:Boolean(data.core)}),...(data.before?{key:{$gt:String(data.before)}}:{})},{session,projection:{content:0,sourceProofs:0}}).sort({key:1}).limit(limit+1).toArray();
   return {items:found.slice(0,limit).map(note=>{const {content,...metadata}=view(note);return metadata;}),nextCursor:found.length>limit?found[limit-1].key:null,pressure:used};
  }
  const id=hash(JSON.stringify([userId,data.key])),previous=await notes().findOne({_id:id,userId},{session});
- if(name==='agent.memory.get'){const note=requireValue(previous,'This note is unavailable.');if(!memorySourcesAllowed(note,memoryScope))throw new AppError(404,'memory_unavailable','This note is unavailable.');const source=await sourceStatus(note);return {slot:{...view(note,source.dates),sourceStatus:source.status},pressure:used};}
+ if(name==='agent.memory.get'){const note=requireValue(previous,'This note is unavailable.');const source=await sourceStatus(note);return {slot:{...view(note,source.dates),sourceStatus:source.status},pressure:used};}
  if(Number(data.revision)!==(previous?.revision||0))throw new AppError(409,'memory_changed','This note changed. Read it again before saving.');
  if(name==='agent.memory.delete'){
   requireValue(previous,'This note is unavailable.');await notes().deleteOne({_id:id,userId},{session});

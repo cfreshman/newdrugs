@@ -37,6 +37,10 @@ it('refuses corrupt or untrusted releases before creating a launcher',async()=>{
  await expect(stat(join(root,'bin',process.platform==='win32'?'newdrugs.cmd':'newdrugs'))).rejects.toMatchObject({code:'ENOENT'});
  await expect(installNative('https://example.com',root,undefined,send)).rejects.toThrow('New Drugs');
 });
+it('reports an HTML response as a missing native manifest instead of a JSON parse error',async()=>{
+ const version='0.55.2',send=vi.fn(async(input:string|URL)=>String(input).endsWith('/cli.json')?Response.json({version,nativeManifest:`native-${version}.json`}):new Response('<!doctype html>',{status:200,headers:{'Content-Type':'text/html'}})) as unknown as typeof fetch;
+ await expect(installNative('https://druggie.org',root,undefined,send)).rejects.toThrow('Native release manifest is not JSON.');
+});
 it('keeps a newer native release when an older dev package is installed afterward',async()=>{
  const platform=nativePlatform(),version='0.53.1',binary=Buffer.from('native newer'),archive=gzipSync(binary),file=`newdrugs-cli-${version}-${platform}${process.platform==='win32'?'.exe':''}.gz`;
  const entry={file,sha256:hash(archive),binarySha256:hash(binary),bytes:archive.length,binaryBytes:binary.length};

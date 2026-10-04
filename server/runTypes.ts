@@ -2,7 +2,7 @@ import type { RunView, Approval } from '../shared/types';
 export interface RunRecord extends Omit<RunView, 'id'> {
   memorySnapshot?:import('../shared/agentMemory').MemoryContext&{availableNotes?:{key:string;title:string}[]};
   pageContext?:import('../shared/pageContext').AgentPageContext; inputContext?:import('../shared/chatInputContext').ChatInputContext; creationRecoveries?: number; awakeMs?: number; backgroundReadCount?: number; credentialId?: string; completedSleeps?: Record<string, string>;
-  purpose?: 'automation'; priority?: number; automationId?: string; automationGeneration?: number; automationName?: string; logAccess?: boolean; privateChat?: boolean; accountActivity?: boolean; webSearch?: boolean; budgetNanos?: number;
+  purpose?: 'automation'; priority?: number; automationId?: string; automationGeneration?: number; automationName?: string; privateAccess?: boolean; writeAccess?: boolean; budgetNanos?: number;
   delivery?: import('../shared/automations').AutomationOutcome; inboxId?: string; inboxIds?: string[];
   recentDeliveries?: { title: string; links: unknown; createdAt: string }[];
   sleep?: { until: number; reason: string; callId: string; turnId: string; wokeAt?: number }; superseded?: boolean;

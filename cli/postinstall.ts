@@ -11,8 +11,8 @@ const entrypoint=join(directory,'index.js');
 const prefix=await inferNpmGlobalPrefix(entrypoint);
 if(prefix){
   try{
-    const metadata=JSON.parse(await readFile(join(directory,'package.json'),'utf8')) as {newDrugsReleaseOrigin?:string;version?:string};
-    const native=await installNative(metadata.newDrugsReleaseOrigin||'https://druggie.org',nativeRoot(),metadata.version);
+    const metadata=JSON.parse(await readFile(join(directory,'package.json'),'utf8')) as {newDrugsReleaseOrigin?:string};
+    const native=await installNative(metadata.newDrugsReleaseOrigin||'https://druggie.org',nativeRoot());
     await promoteNpmCommandToNative(prefix,entrypoint,native.launcher,native.executable);
     process.stdout.write(`New Drugs native CLI ${native.version} installed.\n`);
   }catch(error){

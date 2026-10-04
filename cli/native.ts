@@ -21,6 +21,7 @@ const manifestEntry=(value:unknown,version:string,platform:string)=>{
 async function releaseVersion(origin:string,send:typeof fetch){
  const response=await send(`${origin}/downloads/cli.json`,{redirect:'error',signal:AbortSignal.timeout(10000)});
  if(!response.ok)throw Error('CLI release manifest is unavailable.');
+ if(!response.headers.get('content-type')?.toLowerCase().includes('application/json'))throw Error('CLI release manifest is not JSON.');
  const manifest=await response.json() as {version?:string;nativeManifest?:string};
  if(!manifest.version||!/^\d+\.\d+\.\d+$/.test(manifest.version)||manifest.nativeManifest!==`native-${manifest.version}.json`)throw Error('Invalid CLI release manifest.');
  return manifest.version;
@@ -94,6 +95,7 @@ export async function installNative(rawOrigin:string,root=nativeRoot(),requested
  if(current&&newer(current.version,version))return current;
  const response=await send(`${origin}/downloads/native-${version}.json`,{redirect:'error',signal:AbortSignal.timeout(10000)});
  if(!response.ok)throw Error('Native release manifest is unavailable.');
+ if(!response.headers.get('content-type')?.toLowerCase().includes('application/json'))throw Error('Native release manifest is not JSON.');
  const manifest=await response.json() as {version?:string;entries?:Record<string,unknown>};
  if(manifest.version!==version)throw Error('Native release version does not match.');
  const entry=manifestEntry(manifest.entries?.[platform],version,platform),folder=`${version}-${platform}-${entry.binarySha256.slice(0,12)}`;

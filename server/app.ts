@@ -305,6 +305,7 @@ export function createApp() {
   app.use('/api', (_req, _res, next) => next(new AppError(404, 'not_found', 'Unknown endpoint.')));
   if (config.production) {
     app.use('/downloads', express.static(resolve('dist/downloads'), { index: false, setHeaders: res => { res.setHeader('Cache-Control', 'no-cache'); } }));
+    app.use('/downloads', (_req,res) => { res.status(404).set('Cache-Control','no-store').end(); });
   }
   if (config.production && config.APP_ENV === 'production') {
     mountAdminFrontend(app);

@@ -55,7 +55,7 @@ export function createMcpServer(actor: Actor, authority: ExecutionProof = {}) {
     annotations: { readOnlyHint: !name.includes('execute'), destructiveHint: name.includes('execute'), idempotentHint: true, openWorldHint: false } })) }));
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: 'newdrugs://instructions', name: 'New Drugs instructions', mimeType: 'text/plain' }] }));
   server.setRequestHandler(ReadResourceRequestSchema, async req => {
-    if (actor.background && req.params.uri !== 'newdrugs://instructions') throw new Error('Background file access is unavailable.');
+    if (actor.background && actor.privateAccess===false && req.params.uri !== 'newdrugs://instructions') throw new Error('Private file access is unavailable.');
     const file=/^newdrugs:\/\/files\/([a-zA-Z0-9-]{1,100})$/.exec(req.params.uri);
     if (file) {
       const { file: metadata, bytes } = await readUpload(actor, file[1],true);

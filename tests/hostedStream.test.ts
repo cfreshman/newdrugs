@@ -198,7 +198,7 @@ it('refreshes an outdated contract review without executing it or returning a sp
 it.each([false,true])('reviews the full active-creation configuration before execution, existing approval=%s',async(existing)=>{
  const {operations}=await import('../shared/catalog');const {hash}=await import('../server/auth');const {canonicalJSON}=await import('../server/operations');
  const user=await fundedAccount(),id=`${user._id}:${randomUUID()}`,op=operations.find(o=>o.name==='automations.create')!;
- const input=op.schema.parse({name:'Morning context',instruction:'Review my current account activity.',schedule:{kind:'weekly',timeZone:'America/New_York',weekdays:[1],hour:7,minute:0},accountActivity:true});
+ const input=op.schema.parse({name:'Morning context',instruction:'Review my current account activity.',schedule:{kind:'weekly',timeZone:'America/New_York',weekdays:[1],hour:7,minute:0}});
  await reserveRun(user._id,id,'Set up the task');
  await runs().updateOne({_id:id},{$set:{status:'running',lease:'lease',leaseUntil:Date.now()+60000,providerSessionId:'session',providerTurnId:'turn',inputSubmitted:true,approvals:existing?[{id:'create-call',operation:op.name,input,version:'old-contract',digest:hash(canonicalJSON({name:op.name,version:'old-contract',input})),title:'Create',detail:'Create',human:false,kind:'write',status:'approved',expiresAt:Date.now()+60000}]:[]}});
  const controller=new AbortController(),stream={controller,async *[Symbol.asyncIterator](){if(!controller.signal.aborted)await new Promise<void>(resolve=>controller.signal.addEventListener('abort',()=>resolve(),{once:true}));}};

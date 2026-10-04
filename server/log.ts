@@ -21,7 +21,7 @@ import {AppError,requireValue} from './errors';
 import {uploads,ownUpload,retainUploads,deleteUpload,type Upload} from './uploads';
 import {orderedLogContributions,selectLogCoverUpload} from './logCover';
 import {logPreferencesSchema,logQueryGroups,logPlainText,type LogEntry,type LogFields,type LogContribution,type LogFieldPatch,type LogContributionPatch,type LogList,type LogCalendarPage} from '../shared/log';
-interface LogRow extends LogFields {calendarMonthDay?:string;_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
+interface LogRow extends LogFields {calendarMonthDay?:string;_id:string;liveEventVersion?:number;historicalPeople?:string[];joinKey?:string;ownerId:string;lastActorId?:string;members:string[];invited:string[];contributions:(LogContribution&{userId:string;hasContributed?:boolean})[];revision:number;createdAt:string;updatedAt:string;deletedAt?:string}
 const entries=()=>rows<LogRow>('logEntries');
 async function excluded(userId:string,session?:ClientSession){return (await rows('blocks').find({members:userId},{session}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId));}
 async function access(userId:string,session?:ClientSession):Promise<Filter<LogRow>>{const blocked=await excluded(userId,session);return {deletedAt:{$exists:false},members:{$nin:blocked},$or:[{members:userId},{invited:userId}]};}
@@ -79,7 +79,7 @@ async function notification(row:LogRow,actorId:string,userId:string,kind:'log_up
 async function save(row:LogRow,revision:number,actor:Actor,session?:ClientSession){
  if(row.revision!==revision)throw new AppError(409,'log_changed','This entry changed. Reload it before saving.');
  const previous=await entries().findOne({_id:row._id,revision},{session,projection:{members:1,invited:1,date:1}});
- row.updatedAt=new Date().toISOString();row.revision++;row.liveEventVersion=1;row.calendarMonthDay=row.recurrence==='none'?'':row.date.slice(5);
+ row.updatedAt=new Date().toISOString();row.lastActorId=actor.userId;row.revision++;row.liveEventVersion=1;row.calendarMonthDay=row.recurrence==='none'?'':row.date.slice(5);
  const result=await entries().replaceOne({_id:row._id,revision},{...row},{session});if(!result.matchedCount)throw new AppError(409,'log_changed','This entry changed. Reload it before saving.');
  await publishLogChange(previous,row,session);
  return project(row,actor.userId,session);
@@ -205,7 +205,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
   await rows('logBirthdays').updateOne({_id:userId},{$set:{...birthday,updatedAt:now},...(year===null?{$unset:{year:''}}:{})},{session,upsert:true});return {birthday};
  }
  if(name==='log.birthdays'){
-  const blocked=await excluded(userId,session),connections=!actor.background||actor.accountActivity?await rows('connections').find({members:userId,status:'accepted'},{session}).toArray():[];
+ const blocked=await excluded(userId,session),connections=await rows('connections').find({members:userId,status:'accepted'},{session}).toArray();
   const ids=[...new Set([userId,...connections.flatMap(row=>(row.members as string[]).filter(id=>!blocked.includes(id)))])];
   const people=(await users().find({_id:{$in:ids},suspendedAt:null},{session,projection:{name:1,handle:1}}).toArray()).map(person=>({id:person._id,name:person.name,handle:person.handle})),saved=await rows('logBirthdays').find({_id:{$in:people.map(person=>person.id)}},{session}).toArray();
   return {items:saved.map(row=>{const person=people.find(person=>person.id===row._id)!;return {personId:row._id,name:person.name,handle:person.handle,month:row.month,day:row.day};})};
@@ -226,10 +226,10 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  if(name==='log.create'){
   const fields=d.entry as LogFields,contribution=d.contribution as LogContribution,entryId=randomUUID();await media(userId,contribution.fileIds,entryId,session);
   if(fields.coverFileId&&(!contribution.fileIds.includes(fields.coverFileId)||!await uploads().findOne({_id:fields.coverFileId,ready:true,mime:{$regex:'^image/'}},{session})))throw new AppError(422,'log_cover','Choose a cover from this entry’s attachments.');
-  const row:LogRow={...fields,calendarMonthDay:fields.recurrence==='none'?'':fields.date.slice(5),liveEventVersion:1,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});await publishLogChange(null,row,session);return project(row,userId,session);
+  const row:LogRow={...fields,calendarMonthDay:fields.recurrence==='none'?'':fields.date.slice(5),liveEventVersion:1,_id:entryId,joinKey:randomBytes(16).toString('hex'),ownerId:userId,lastActorId:userId,members:[userId],invited:[],contributions:[{...contribution,userId,hasContributed:true}],revision:1,createdAt:now,updatedAt:now};await entries().insertOne(row,{session});await publishLogChange(null,row,session);return project(row,userId,session);
  }
  if(name==='log.people'){
-  const result=await listLogContacts({...actor,background:true,accountActivity:false},d as {limit?:number;before?:string},session);
+  const result=await listLogContacts(actor,d as {limit?:number;before?:string},session);
   const own=!d.before&&(await visibleEntries({$and:[await access(userId,session),{members:userId}]},session,undefined,1,{_id:1})).length?await users().findOne({_id:userId},{session,projection:{name:1,handle:1}}):null;
   return {...result,items:[...(own?[{userId:own._id,name:own.name||own.handle||'Member',...(own.handle?{handle:own.handle}:{})}]:[]),...result.items.map(person=>({userId:person.id,name:person.name,...(person.handle?{handle:person.handle}:{})}))]};
  }
@@ -276,7 +276,7 @@ export async function logOperation(name:string,d:Record<string,unknown>,actor:Ac
  if(name==='log.add_person'){
   const personId=String(d.personId);if(row.members.includes(personId))return project(row,userId,session);
   if(row.members.length>=20)throw new AppError(422,'log_members','A hangout can include up to 20 people.');
-  if(!((!actor.background||actor.accountActivity)&&await rows('connections').findOne({members:{$all:[userId,personId]},status:'accepted'},{session,projection:{_id:1}}))&&!await hasSharedHangouts(userId,personId,session))throw new AppError(403,'log_contact','Choose someone from a previous hangout or your New Drugs friends. New people can scan the hangout code.');
+  if(!await rows('connections').findOne({members:{$all:[userId,personId]},status:'accepted'},{session,projection:{_id:1}})&&!await hasSharedHangouts(userId,personId,session))throw new AppError(403,'log_contact','Choose someone from a previous hangout or your New Drugs friends. New people can scan the hangout code.');
   await fencePairs(personId,row.members,session);await compatible(personId,row.members,session);
   row.members.push(personId);row.invited=row.invited.filter(id=>id!==personId);row.contributions.push({userId:personId,note:'',fileIds:[],hasContributed:false});
   const result=await save(row,Number(d.revision),actor,session);
