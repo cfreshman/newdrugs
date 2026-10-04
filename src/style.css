@@ -631,6 +631,7 @@ blockquote { font-family: var(--font-ui); }
 
 .post-card + .post-composer {margin-top:var(--space-3);}
 .post-current + .post-composer {margin-top:var(--space-3);}
+.post-scroll-clearance {height:0;pointer-events:none;}
 .custom-document {padding:var(--card-inset);border-radius:var(--radius-control);background:var(--surface);min-width:0;overflow:hidden;}
 .custom-document p {margin:var(--space-2) 0;overflow-wrap:anywhere;}
 .custom-document audio,.custom-document video {display:block;width:100%;max-width:100%;}
