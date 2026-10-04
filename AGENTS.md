@@ -1,15 +1,5 @@
 we are building "New Drugs" made in new england at druggie.org
 
-Current handoff. Read this first when entering the project:
-
-@docs/HANDOFF.md
-
-Detailed operating guide and code map. Read the sections relevant to the task:
-
-@docs/OPERATING_GUIDE.md
-
-Past rollout notes live in docs/OPERATING_HISTORY.md. They are historical evidence, not current instructions or pending work.
-
 we are on a computer with a project called 'Wayfinder OS' already built
 
 the goal is to adapt what we've learned building Wayfinder into a social media app which actively makes your life better by connecting you to people around you and generally letting you work with an agent who does whatever you want socially in this app
@@ -47,7 +37,7 @@ addendum
 
 agent-written rules (you are allowed to edit below this line)
 
-- `docs/HANDOFF.md` is for an explicit handoff to another chat. Do not edit it during ordinary implementation, testing, deployment, release bookkeeping, or a push. Verify current releases from `release.json` and the live stage when the last handoff is older than the deployed code.
+- Do not maintain rolling handoff, operating-guide, or release-history documents. Use Git commits, `release.json`, the live stage, and current source for release state.
 
 - the agent must not compose em dashes, in either its own replies or text sent through operations. Preserve verbatim human-supplied text. When composing messages/posts/invitations on a person's behalf, match their actual communication style from their own writing, preserving intent and avoiding invented facts or feelings. Keep this policy shared across hosted instructions, MCP and CLI setup. Profiles remain human-authored.
 
@@ -81,7 +71,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 
 - chat is the usual home. users can trigger task-specific UIs and return to the same chat with their context preserved.
 
-- avoid browser automation unless strictly necessary.
+- Never use browser or computer UI automation to inspect or verify something that can be determined from the repository code. Read and trace the relevant source first. Use browser interaction only when the required behavior cannot be established from code.
 
 - the product name is styled "New Drugs".
 
@@ -186,6 +176,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 - Mobile browser content uses matching 6px exterior gutters, retaining safe-area insets. Installed mobile Friends/Posts reach the side and bottom edges beneath the top controls. The mobile agent subpanel covers the content-panel bounds.
 
 - Queue ordinary changes into the current work batch. Deploy cloud dev when that batch contains server changes or the user explicitly asks for a dev deployment; do not run `deploy:dev` for CSS, React or other frontend-only edits. The user's local hosts serve those edits. Do not deploy an isolated change ahead of the rest unless the user explicitly calls it a hotfix. Production still requires an explicit request.
+- If the user changes an in-progress release, stop the obsolete build or deployment promptly, make the correction, then release the combined result once. Do not spend time checking whether the interrupted production deployment activated when the corrected release is going out immediately, unless a specific recovery condition requires that check.
 - Avoid timed asynchronous clarification prompts; the founder is not watching for them. Resolve routine choices from the current instructions and code, and keep implementing. Ask only when an answer is genuinely required to proceed.
 
 - Posts and replies support three separate URL attachments in addition to photos and a 280-character caption. Keep UI/CLI/MCP parity and exact-link review. Recognized providers and MUSE/POPS/CIF render natively; custom JSON and linked text are fetched through bounded public-URL validation, and inactive media stops playing.

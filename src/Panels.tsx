@@ -29,7 +29,7 @@ export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAcc
   return <>
     <p className="balance">{balanceLabel(data.wallet.balanceNanos + starter)}</p>
     <p className="quiet balance-caption">{starter ? 'Starter credit available after signup' : 'Credit balance'}</p>
-    <p><strong>New Drugs takes no cut.</strong> Your credit pays for AI at cost. No markup or subscription.</p>
+    <p><strong>New Drugs takes no cut.</strong></p>
     <div className="amounts" role="group" aria-label="Top-up amount">{[500, 1000, 2000].map(cents => <button key={cents} aria-pressed={amount === cents} onClick={() => setAmount(cents)}>${cents / 100}</button>)}</div>
     {quote && <dl className="checkout-quote"><div><dt>AI credit</dt><dd>{cents(quote.creditCents)}</dd></div><div><dt>Expected processing fee</dt><dd>{cents(quote.processingCents)}</dd></div><div className="quote-total"><dt>Total</dt><dd>{cents(quote.totalCents)}</dd></div></dl>}
     <button className="solid wide" onClick={buy} disabled={busy || !data.config.paymentsEnabled || !quote}>{busy ? 'Opening checkout…' : quote ? `Pay ${cents(quote.totalCents)}, add ${cents(quote.creditCents)}` : 'Add credit'}</button>

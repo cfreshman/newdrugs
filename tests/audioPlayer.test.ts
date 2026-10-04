@@ -42,7 +42,9 @@ it('keeps Log voice playback compact and interruption restarts from the beginnin
  await act(async()=>dom.root.render(createElement(AudioPlayer,{src:'/voice.m4a',voiceNote:true,editor:true})));
  const audio=dom.container.querySelector('audio')!;
  expect(dom.container.textContent).toBe('Play voice note');expect(dom.container.querySelector('input')).toBeNull();
+ Object.defineProperty(audio,'duration',{configurable:true,value:15});act(()=>audio.dispatchEvent(new Event('loadedmetadata')));
  await act(async()=>dom.container.querySelector('button')!.click());
- act(()=>{audio.currentTime=4;audio.dispatchEvent(new Event('timeupdate'));});expect(dom.container.textContent).toBe('Interrupt 4s');
+ act(()=>{audio.currentTime=4;audio.dispatchEvent(new Event('timeupdate'));});expect(dom.container.textContent).toBe('Interrupt 11s');
+ act(()=>{audio.currentTime=14.2;audio.dispatchEvent(new Event('timeupdate'));});expect(dom.container.textContent).toBe('Interrupt 1s');
  await act(async()=>dom.container.querySelector('button')!.click());expect(audio.paused).toBe(true);expect(audio.currentTime).toBe(0);expect(dom.container.textContent).toBe('Play voice note');
 });

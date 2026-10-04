@@ -1,6 +1,6 @@
 # Scaling implementation
 
-Current production is **v0.30.5**, release `20260928012914741`, on replacement host `167.172.21.42` (NYC3). The scaling batch shipped in v0.30.1. The ten [review findings](REVIEW-2026-09-27.md) are fixed. Validation: 25 local regressions and 106 isolated cloud checks. Production media migration verified 537 files; all 507 initial Log sources were indexed. **Old-host deletion and proxy-trust cleanup are complete.** See [current handoff](../HANDOFF.md). Later milestone sections below are historical, not remaining rollout tasks.
+Production was **v0.30.5**, release `20260928012914741`, when this record was written. The scaling batch shipped in v0.30.1. The ten [review findings](REVIEW-2026-09-27.md) are fixed. Validation: 25 local regressions and 106 isolated cloud checks. Production media migration verified 537 files; all 507 initial Log sources were indexed. **Old-host deletion and proxy-trust cleanup are complete.** Later milestone sections below are historical, not remaining rollout tasks.
 
 Authorized September 27, 2026. This tracks implementation of SCALING_AUDIT.md. That authorized production rollout is complete. New work defaults to dev and requires a fresh explicit production request. Local Vite/admin servers remain user-owned. Large capacity tests must not run on the shared production host.
 
