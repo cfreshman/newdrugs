@@ -72,7 +72,7 @@ export function useTalkSession(userId?:string):TalkSession{
    try{await next.startAudio();setAudioBlocked(false);}catch{setAudioBlocked(true);}
    if(unmute&&access.space.myRole==='host')try{await next.localParticipant.setMicrophoneEnabled(true);setMic(next.localParticipant.isMicrophoneEnabled);}catch(cause){setError(`Microphone: ${errorText(cause)}`);}
    if(userId)rememberSession(userId,id,next.localParticipant.isMicrophoneEnabled);
-  }catch(cause){void next?.disconnect();if(cause instanceof ApiError&&[403,404,409].includes(cause.status))forgetSession(userId);setError(errorText(cause));throw cause;}
+  }catch(cause){await next?.disconnect().catch(()=>{});try{const failed=await operation<Space>('spaces.get',{spaceId:id});if(failed.status==='starting'&&failed.hostId===userId){await operation('spaces.end',{spaceId:id,revision:failed.revision},{confirmed:true});changed();}}catch(cleanupError){console.error('Talk startup cleanup:',cleanupError instanceof Error?cleanupError.name:'Error');}if(cause instanceof ApiError&&[403,404,409].includes(cause.status))forgetSession(userId);setError(errorText(cause));throw cause;}
   finally{setBusy(false);}
  };
  const create=async(title:string,description:string)=>{if(room)throw Error('Leave the current Talk space before opening another.');unlockTalkSounds();setBusy(true);setError('');try{const saved=await operation<Space>('spaces.create',{title,description},{confirmed:true});changed();setBusy(false);await join(saved.id,true);}catch(cause){setError(errorText(cause));throw cause;}finally{setBusy(false);}};

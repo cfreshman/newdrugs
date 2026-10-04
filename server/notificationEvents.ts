@@ -46,6 +46,7 @@ async function deliver(event:EventRow,userId:string,ruleId:string|undefined,acto
  else{resourceType='person';title=`${actorName} is in your Circle`;text=`${event.mutualCount||1} mutual friend${event.mutualCount===1?'':'s'}`;}
  if(resourceType==='space'){
   const source=await rows('spaces').findOne({_id:event.resourceId,status:'live'},{projection:{title:1,hostId:1}});if(!source||source.hostId!==event.actorId)return;text=String(source.title);
+  if(!await rows('spacePresence').findOne({_id:`${event.resourceId}:${source.hostId}`},{projection:{_id:1}}))return;
  }else if(resourceType==='post'){
   const source=await rows('posts').findOne({_id:event.resourceId,userId:event.actorId,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{projection:{text:1}});if(!source)return;text=String(source.text||'').slice(0,180);
  }else{

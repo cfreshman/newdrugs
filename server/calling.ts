@@ -15,7 +15,7 @@ interface CallRow extends Omit<CallRecord,'id'> {_id:string;members:string[];act
 const calls=()=>rows<CallRow>('calls');
 const roomName=(id:string)=>`${config.APP_ENV}:call:${id}`;
 export const liveMediaReady=()=>Boolean(config.LIVEKIT_URL&&config.LIVEKIT_PUBLIC_URL&&config.LIVEKIT_API_KEY&&config.LIVEKIT_API_SECRET);
-export const liveRoomService=()=>{if(!liveMediaReady())throw new AppError(503,'calling_unavailable','Live calling is not available yet.');return new RoomServiceClient(config.LIVEKIT_URL,config.LIVEKIT_API_KEY,config.LIVEKIT_API_SECRET,{requestTimeout:5000});};
+export const liveRoomService=()=>{if(!liveMediaReady())throw new AppError(503,'calling_unavailable','Live calling is not available yet.');return new RoomServiceClient(config.LIVEKIT_URL,config.LIVEKIT_API_KEY,config.LIVEKIT_API_SECRET,{requestTimeout:5});};
 const view=(row:CallRow):CallRecord=>({id:row._id,connectionId:row.connectionId,callerId:row.callerId,calleeId:row.calleeId,status:row.status,createdAt:row.createdAt,...(row.joinedAt?{joinedAt:row.joinedAt}:{}),...(row.endedAt?{endedAt:row.endedAt}:{}),...(row.endedBy?{endedBy:row.endedBy}:{})});
 async function connection(userId:string,connectionId:string,session?:ClientSession,active=true){
  const row=requireValue(await rows('connections').findOne({_id:connectionId,members:userId,...(active?{status:'accepted'}:{})},{session}),'This conversation is unavailable.');

@@ -10,9 +10,11 @@ import {processScheduledNotificationRule} from '../server/notificationSchedule';
 import {deliverPush} from '../server/push';
 import {insertAgentToken} from '../server/agentTokens';
 import {Temporal} from '@js-temporal/polyfill';
+import {spaceRoomName,spaceWebhook} from '../server/spaces';
 
 const actor=(userId='me'):Actor=>({userId,source:'external',scope:'write'});
 const call=(name:string,input:unknown={},userId='me')=>executeOperation(name,input,actor(userId),randomUUID(),{confirmed:true}) as Promise<any>;
+const connectHost=(space:{id:string},hostId='me')=>spaceWebhook({event:'participant_joined',room:{name:spaceRoomName(space.id)},participant:{identity:hostId,sid:`${hostId}-host`}});
 async function clean(){if(db().databaseName!=='newdrugs_test')throw Error('Isolated test database required');for(const collection of await db().collections())await collection.deleteMany({});}
 const original={LIVEKIT_URL:config.LIVEKIT_URL,LIVEKIT_PUBLIC_URL:config.LIVEKIT_PUBLIC_URL,LIVEKIT_API_KEY:config.LIVEKIT_API_KEY,LIVEKIT_API_SECRET:config.LIVEKIT_API_SECRET,QDRANT_URL:config.QDRANT_URL};
 beforeAll(async()=>{if(new URL(config.MONGODB_URI).pathname!=='/newdrugs_test')throw Error('Isolated test database required');await connectDatabase();Object.assign(config,{LIVEKIT_URL:'http://127.0.0.1:7880',LIVEKIT_PUBLIC_URL:'wss://dev.druggie.org',LIVEKIT_API_KEY:'test-key-test-key',LIVEKIT_API_SECRET:'test-secret-test-secret-test-secret',QDRANT_URL:''});});
@@ -39,23 +41,28 @@ it('alerts for first live Talk and selected hosts without notifying every later 
  await call('notifications.preference_set',{type:'talk_first_live',enabled:true},'other');
  await call('notifications.rule_create',{rule:{kind:'talk_person',personId:'me'}},'other');
  const first=await call('spaces.create',{title:'Night walks'});
+ expect(await rows('notificationEvents').countDocuments({resourceId:first.id})).toBe(0);
+ await connectHost(first);
  for(let n=0;n<4;n++)await processNotificationEvent();
  const notices=(await notificationState('other')).items.filter(item=>item.kind==='alert');
  expect(notices).toHaveLength(1);expect(notices[0].link.url).toContain(`/spaces/${first.id}`);
  expect(notices[0].title).toMatch(/Talk/);
- await call('spaces.create',{title:'Another room'},'friend');
+ const later=await call('spaces.create',{title:'Another room'},'friend');await connectHost(later,'friend');
  for(let n=0;n<4;n++)await processNotificationEvent();
  expect((await notificationState('other')).items.filter(item=>item.kind==='alert')).toHaveLength(1);
 });
 it('records one first-live transition when two hosts open Talks concurrently',async()=>{
- await Promise.all([call('spaces.create',{title:'First'},'me'),call('spaces.create',{title:'Second'},'friend')]);
+ const [first,second]=await Promise.all([call('spaces.create',{title:'First'},'me'),call('spaces.create',{title:'Second'},'friend')]);
+ await Promise.all([connectHost(first),connectHost(second,'friend')]);
  expect(await rows('notificationEvents').countDocuments({kind:'talk_first_live'})).toBe(1);
 });
 it('does not repeat the first-live alert when Talk briefly returns to zero',async()=>{
  let room=await call('spaces.create',{title:'First'});
+ await connectHost(room);
  await call('spaces.end',{spaceId:room.id,revision:room.revision});
  room=await call('spaces.create',{title:'Opened again'});
- expect(room.status).toBe('live');
+ await connectHost(room);
+ expect((await call('spaces.get',{spaceId:room.id})).status).toBe('live');
  expect(await rows('notificationEvents').countDocuments({kind:'talk_first_live'})).toBe(1);
 });
 it('watches a selected author and Circle person with exact links and mutual context',async()=>{

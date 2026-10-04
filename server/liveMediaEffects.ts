@@ -10,7 +10,7 @@ interface Effect {_id:string;kind:EffectKind;room:string;spaceId?:string;personI
 export async function queueLiveMediaEffect(kind:EffectKind,room:string,session:ClientSession,spaceId?:string,personId?:string){
  await rows<Effect>('liveMediaEffects').insertOne({_id:randomUUID(),kind,room,...(spaceId?{spaceId}:{}),...(personId?{personId}:{}),availableAt:Date.now(),attempts:0},{session});
 }
-const service=()=>new RoomServiceClient(config.LIVEKIT_URL,config.LIVEKIT_API_KEY,config.LIVEKIT_API_SECRET,{requestTimeout:5000});
+const service=()=>new RoomServiceClient(config.LIVEKIT_URL,config.LIVEKIT_API_KEY,config.LIVEKIT_API_SECRET,{requestTimeout:5});
 const unavailable=(error:unknown)=>{const value=error as {code?:string|number;message?:string};return value.code==='not_found'||value.code===5||/not found|does not exist/i.test(value.message||'');};
 async function apply(effect:Effect){
  if(!config.LIVEKIT_URL||!config.LIVEKIT_API_KEY||!config.LIVEKIT_API_SECRET)throw Error('Live media is not configured.');

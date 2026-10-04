@@ -83,6 +83,7 @@ export async function connectDatabase(name?: string,options:{indexes?:boolean}={
     rows('spaces').createIndex({status:1,createdAt:-1,_id:-1}),
     rows('spaces').createIndex({status:1,_id:1}),
     rows('spaces').createIndex({hostId:1,status:1},{unique:true,partialFilterExpression:{status:'live'}}),
+    rows('spaces').createIndex({hostId:1},{name:'one_hosted_talk_start_or_live',unique:true,partialFilterExpression:{status:{$in:['starting','live']}}}),
     rows('spacePresence').createIndex({spaceId:1}),
     rows('spaceSpeakerRequests').createIndex({spaceId:1,status:1,createdAt:1}),
     rows('spaceRemovals').createIndex({spaceId:1,userId:1}),

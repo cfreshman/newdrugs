@@ -9,7 +9,7 @@ export function loadedPhotoPreview(image:HTMLImageElement|null){
  try{const scale=Math.min(1,1024/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));const context=canvas.getContext('2d');if(!context)return undefined;context.drawImage(image,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/webp',.85);}catch{return undefined;}
 }
 export interface PostPhoto { id: string; name: string; url: string }
-export function PostPhotos({ photos:original, log=false,horizontal=false,onOpen }: { photos: PostPhoto[]; log?:boolean;horizontal?:boolean;onOpen?(items:MediaItem[],index:number):void }) {
+export function PostPhotos({ photos:original, log=false,horizontal=false,eager=false,onOpen }: { photos: PostPhoto[]; log?:boolean;horizontal?:boolean;eager?:boolean;onOpen?(items:MediaItem[],index:number):void }) {
   const photos=log?original.map(photo=>({...photo,url:logImageUrl(photo.url)})):original;
   const gallery=useRef<HTMLDivElement>(null),experience=useExperience();
   useHorizontalMediaScroll(gallery,horizontal,photos.length);
@@ -20,5 +20,5 @@ export function PostPhotos({ photos:original, log=false,horizontal=false,onOpen 
     const elements=[...gallery.current!.querySelectorAll('a')];
     const items=photos.map((photo,i)=>{const img=elements[i].querySelector('img');return {...photo,...(i===index?{previewUrl:loadedPhotoPreview(img)}:{}),width:img?.naturalWidth,height:img?.naturalHeight,element:elements[i]};});
     if(onOpen)onOpen(items,index);else experience!.media(items,index);
-  }}><img draggable={horizontal?false:undefined} src={photo.url} alt={photo.name} loading="lazy" onError={event => { event.currentTarget.hidden = true; event.currentTarget.parentElement!.classList.add('photo-unavailable'); }} /><span className="photo-missing">Photo unavailable</span></a>)}</div>;
+  }}><img draggable={horizontal?false:undefined} src={photo.url} alt={photo.name} loading={eager?'eager':'lazy'} onError={event => { event.currentTarget.hidden = true; event.currentTarget.parentElement!.classList.add('photo-unavailable'); }} /><span className="photo-missing">Photo unavailable</span></a>)}</div>;
 }

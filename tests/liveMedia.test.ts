@@ -5,7 +5,7 @@ import {connectDatabase,db,mongo,rows} from '../server/db';
 import {users,type User,type Actor} from '../server/auth';
 import {config} from '../server/config';
 import {startCall,joinCall,endCall,callHistory,incomingCall} from '../server/calling';
-import {reconcileSpacePresence,spaceRoomName,spaceWebhook} from '../server/spaces';
+import {reconcileSpacePresence,reconcileStartingSpaces,spaceRoomName,spaceWebhook} from '../server/spaces';
 import {executeOperation} from '../server/operations';
 import {sourceDocument} from '../server/search/sources';
 import {notificationState} from '../server/notifications';
@@ -16,6 +16,7 @@ import {resetIndex} from '../server/search/index';
 const original={LIVEKIT_URL:config.LIVEKIT_URL,LIVEKIT_PUBLIC_URL:config.LIVEKIT_PUBLIC_URL,LIVEKIT_API_KEY:config.LIVEKIT_API_KEY,LIVEKIT_API_SECRET:config.LIVEKIT_API_SECRET,QDRANT_URL:config.QDRANT_URL};
 const actor=(userId='me'):Actor=>({userId,source:'external',scope:'write'});
 const call=(name:string,input:unknown={},userId='me',confirmed=false)=>executeOperation(name,input,actor(userId),randomUUID(),{confirmed}) as Promise<any>;
+const connectHost=async(space:{id:string},hostId='me')=>{await spaceWebhook({event:'participant_joined',room:{name:spaceRoomName(space.id)},participant:{identity:hostId,sid:`${hostId}-host`}});return call('spaces.get',{spaceId:space.id},hostId);};
 async function clean(){if(db().databaseName!=='newdrugs_test')throw Error('Isolated test database required');for(const collection of await db().collections())await collection.deleteMany({});}
 beforeAll(async()=>{if(new URL(config.MONGODB_URI).pathname!=='/newdrugs_test')throw Error('Isolated test database required');await connectDatabase();Object.assign(config,{LIVEKIT_URL:'http://127.0.0.1:7880',LIVEKIT_PUBLIC_URL:'wss://dev.druggie.org',LIVEKIT_API_KEY:'test-key-test-key',LIVEKIT_API_SECRET:'test-secret-test-secret-test-secret',QDRANT_URL:''});});
 beforeEach(async()=>{resetIndex();await clean();const base:User={_id:'me',handle:'me',name:'Me',bio:'',city:'',cityKey:'',interests:[],discoverable:true,balanceNanos:0,reservedNanos:0,createdAt:new Date().toISOString()};await users().insertMany([base,{...base,_id:'other',handle:'other',name:'Other'}]);await rows('connections').insertOne({_id:'me:other',members:['me','other'],status:'accepted',fromId:'me',toId:'other',note:'Hi',createdAt:new Date().toISOString()});});
@@ -57,6 +58,9 @@ it('marks an opened invitation read without accepting it and denies someone outs
 
 it('indexes a live talk title and optional description and gates speaking and removal',async()=>{
  let space=await call('spaces.create',{title:'Night walks',description:'Talking about late walks by the ocean.'},'me',true);
+ expect(space.status).toBe('starting');expect(await sourceDocument('spaces',space.id)).toBeNull();expect((await call('spaces.list',{},'other')).items).toEqual([]);
+ await expect(call('spaces.get',{spaceId:space.id},'other')).rejects.toMatchObject({code:'space_unavailable'});
+ space=await connectHost(space);
  expect((await sourceDocument('spaces',space.id))?.text).toBe('title: Night walks\ndescription: Talking about late walks by the ocean.');
  const vector=Array(512).fill(0);vector[0]=1;await indexOne(async()=>vector);
  const matched=await searchPublic({query:'ocean walks',datasets:['spaces'],mode:'semantic',limit:20},actor('other'),vector);
@@ -75,6 +79,7 @@ it('indexes a live talk title and optional description and gates speaking and re
  expect((await call('spaces.list')).items).toEqual([]);
  expect(await rows('searchOutbox').findOne({_id:`spaces:${space.id}`})).toMatchObject({kind:'spaces'});
  const titleOnly=await call('spaces.create',{title:'Stargazing'},'me',true);
+ await connectHost(titleOnly);
  expect((await sourceDocument('spaces',titleOnly.id))?.text).toBe('title: Stargazing');
 });
 it('hands a live Talk space to a connected speaker only after acceptance',async()=>{
@@ -124,6 +129,7 @@ it('revokes a pending Talk host offer when its speaker leaves, declines or loses
 });
 it('keeps a Talk space live through a host browser refresh until the room actually closes',async()=>{
  const space=await call('spaces.create',{title:'Reconnect'},'me',true),room={name:spaceRoomName(space.id)};
+ await connectHost(space);
  await spaceWebhook({event:'participant_left',room,participant:{identity:'me'}});
  expect((await call('spaces.get',{spaceId:space.id})).status).toBe('live');
  await spaceWebhook({event:'room_finished',room});
@@ -161,8 +167,8 @@ it('recovers presence for a room that was already open before deployment',async(
  const space=await call('spaces.create',{title:'Already open'},'me',true);
  const participants=vi.spyOn(RoomServiceClient.prototype,'listParticipants').mockResolvedValue([{identity:'me',sid:'host-1'}] as any);
  try{
-  expect((await call('spaces.list',{},'other')).items[0].speakingCount).toBe(0);
-  await reconcileSpacePresence();
+  expect((await call('spaces.list',{},'other')).items).toEqual([]);
+  await reconcileStartingSpaces();
   expect(participants).toHaveBeenCalledWith(spaceRoomName(space.id));
   expect((await call('spaces.list',{},'other')).items[0].speakingCount).toBe(1);
   participants.mockResolvedValue([]);
@@ -170,10 +176,21 @@ it('recovers presence for a room that was already open before deployment',async(
   expect((await call('spaces.list',{},'other')).items[0].speakingCount).toBe(0);
  }finally{participants.mockRestore();}
 });
+it('expires a start that never connected and releases the host to try again',async()=>{
+ const started=await call('spaces.create',{title:'No media room'},'me',true);
+ expect(await rows('notificationEvents').countDocuments({resourceId:started.id})).toBe(0);
+ await rows('spaces').updateOne({_id:started.id},{$set:{createdAt:new Date(Date.now()-180000).toISOString()}});
+ const participants=vi.spyOn(RoomServiceClient.prototype,'listParticipants').mockRejectedValue({status:404});
+ try{await reconcileStartingSpaces();}finally{participants.mockRestore();}
+ expect((await rows('spaces').findOne({_id:started.id}))?.status).toBe('ended');
+ expect((await call('spaces.list',{},'other')).items).toEqual([]);
+ expect((await call('spaces.create',{title:'Retry'},'me',true)).status).toBe('starting');
+});
 
 it('ends a private call and removes a listener from a public Space when either person blocks',async()=>{
  const video=await startCall('me','me:other');
  const space=await call('spaces.create',{title:'Outside',description:'We are talking about parks.'},'me',true);
+ await connectHost(space);
  await call('people.block',{personId:'me',blocked:true},'other');
  expect((await rows('calls').findOne({_id:video.id}))?.status).toBe('ended');
  expect((await call('spaces.get',{spaceId:space.id},'me')).id).toBe(space.id);
