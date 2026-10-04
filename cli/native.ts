@@ -25,6 +25,33 @@ async function releaseVersion(origin:string,send:typeof fetch){
  if(!manifest.version||!/^\d+\.\d+\.\d+$/.test(manifest.version)||manifest.nativeManifest!==`native-${manifest.version}.json`)throw Error('Invalid CLI release manifest.');
  return manifest.version;
 }
+const newer=(left:string,right:string)=>{
+ const a=left.split('.').map(Number),b=right.split('.').map(Number);
+ return a.some((part,index)=>part>b[index]&&a.slice(0,index).every((earlier,at)=>earlier===b[at]));
+};
+async function installedRelease(root:string,platform:string){
+ const windows=platform.startsWith('win32'),launcher=join(root,'bin',windows?'newdrugs.cmd':'newdrugs');
+ let folder:string;
+ try{
+  if(windows){
+   let value:string;
+   try{value=(await readFile(join(root,'current.txt'),'utf8')).trim();}
+   catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;
+    const legacy=await readFile(launcher,'utf8'),match=/\\releases\\(\d+\.\d+\.\d+-win32-(?:arm64|x64)-[a-f0-9]{12})\\newdrugs\.exe/.exec(legacy);
+    if(!match)return null;value=match[1];
+   }
+   if(!/^\d+\.\d+\.\d+-win32-(?:arm64|x64)-[a-f0-9]{12}$/.test(value))return null;
+   folder=value;
+  }else{
+   const match=/^\.\.\/releases\/(\d+\.\d+\.\d+-(?:darwin|linux)-(?:arm64|x64)-[a-f0-9]{12})\/newdrugs$/.exec(await readlink(launcher));
+   if(!match)return null;folder=match[1];
+  }
+  if(!folder.includes(`-${platform}-`))return null;
+  const executable=join(root,'releases',folder,windows?'newdrugs.exe':'newdrugs'),state=await lstat(executable);
+  if(!state.isFile()||state.isSymbolicLink()||state.nlink!==1||hash(await readFile(executable)).slice(0,12)!==folder.slice(-12))return null;
+  return {launcher,executable,version:folder.split('-')[0],platform,native:true};
+ }catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return null;throw error;}
+}
 async function archiveBytes(response:Response,size:number){
  if(!response.ok||!response.body)throw Error('Native release is unavailable.');
  const chunks:Uint8Array[]=[];let count=0;
@@ -63,6 +90,8 @@ export async function installNative(rawOrigin:string,root=nativeRoot(),requested
  const origin=originFor(rawOrigin),platform=nativePlatform();if(!isAbsolute(root))throw Error('Native install root must be absolute.');
  const version=requestedVersion||await releaseVersion(origin,send);
  if(!/^\d+\.\d+\.\d+$/.test(version))throw Error('Invalid native release version.');
+ const current=await installedRelease(root,platform);
+ if(current&&newer(current.version,version))return current;
  const response=await send(`${origin}/downloads/native-${version}.json`,{redirect:'error',signal:AbortSignal.timeout(10000)});
  if(!response.ok)throw Error('Native release manifest is unavailable.');
  const manifest=await response.json() as {version?:string;entries?:Record<string,unknown>};

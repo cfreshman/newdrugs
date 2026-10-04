@@ -37,6 +37,19 @@ it('refuses corrupt or untrusted releases before creating a launcher',async()=>{
  await expect(stat(join(root,'bin',process.platform==='win32'?'newdrugs.cmd':'newdrugs'))).rejects.toMatchObject({code:'ENOENT'});
  await expect(installNative('https://example.com',root,undefined,send)).rejects.toThrow('New Drugs');
 });
+it('keeps a newer native release when an older dev package is installed afterward',async()=>{
+ const platform=nativePlatform(),version='0.53.1',binary=Buffer.from('native newer'),archive=gzipSync(binary),file=`newdrugs-cli-${version}-${platform}${process.platform==='win32'?'.exe':''}.gz`;
+ const entry={file,sha256:hash(archive),binarySha256:hash(binary),bytes:archive.length,binaryBytes:binary.length};
+ const sendMock=vi.fn(async(input:string|URL)=>{const path=new URL(input).pathname;
+  if(path.endsWith(`/native-${version}.json`))return Response.json({version,entries:{[platform]:entry}});
+  if(path.endsWith(`/${file}`))return new Response(archive);
+  throw Error('An older release must not be fetched');
+ }),send=sendMock as unknown as typeof fetch;
+ const first=await installNative('https://druggie.org',root,version,send);
+ const second=await installNative('https://dev.druggie.org',root,'0.52.2',send);
+ expect(second).toEqual(first);
+ expect(sendMock).toHaveBeenCalledTimes(2);
+});
 
 it('recognizes the real managed executable path for native update checks',async()=>{
  const previous=process.env.XDG_DATA_HOME;process.env.XDG_DATA_HOME=root;

@@ -1,11 +1,11 @@
 import {beforeEach,afterEach,expect,it,vi} from 'vitest';
-import {mkdtemp,mkdir,writeFile,readFile,rm,symlink,realpath,readlink} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm,symlink,realpath,readlink,readdir,utimes} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
-import {inferNpmGlobalPrefix,isNewerVersion,updateInstallation,promoteNpmCommandToNative,uninstall,type Installation} from '../cli/lifecycle';
+import {inferNpmGlobalPrefix,isNewerVersion,updateInstallation,updateNativeInstallation,promoteNpmCommandToNative,linkedNpmInstallations,uninstall,type Installation} from '../cli/lifecycle';
 import {ConfigStore} from '../cli/config';
-let directory:string;beforeEach(async()=>{directory=await mkdtemp(join(tmpdir(),'nd-lifecycle-'));});afterEach(async()=>{vi.restoreAllMocks();await rm(directory,{recursive:true,force:true});});
+let directory:string;beforeEach(async()=>{directory=await mkdtemp(join(tmpdir(),'nd-lifecycle-'));});afterEach(async()=>{vi.restoreAllMocks();vi.unstubAllGlobals();await rm(directory,{recursive:true,force:true});});
 it('uses strictly newer versions and recognizes only real global package installations',async()=>{
  expect(isNewerVersion('0.4.1','0.3.9')).toBe(true);expect(isNewerVersion('0.4.1','0.4.1')).toBe(false);expect(isNewerVersion('0.3.9','0.4.1')).toBe(false);expect(isNewerVersion('latest','0.4.1')).toBe(false);
  const root=join(directory,'prefix'),pkg=join(root,'lib','node_modules','newdrugs-cli');await mkdir(pkg,{recursive:true});await writeFile(join(pkg,'package.json'),JSON.stringify({name:'newdrugs-cli'}));await writeFile(join(pkg,'index.js'),'');await symlink(join(pkg,'index.js'),join(directory,'newdrugs'));
@@ -25,20 +25,48 @@ it('does not install corrupt downloads, downgrade, or fetch an untrusted release
  expect(await updateInstallation({prefix:directory,npm:'/test/npm'},'https://druggie.org','0.5.0',true,deps)).toBe('current');
  await expect(updateInstallation({prefix:directory,npm:'/test/npm'},'https://untrusted.example','0.3.1',true,deps)).rejects.toThrow('New Drugs');
 });
+it('retries failed automatic checks rather than marking them done for a day',async()=>{
+ const unavailable=vi.fn(async()=>new Response('offline',{status:503}));
+ const deps={fetch:unavailable as unknown as typeof fetch,install:vi.fn(),now:Date.now};
+ const install={prefix:directory,npm:'/test/npm'};
+ await expect(updateInstallation(install,'https://druggie.org','0.3.1',false,deps)).rejects.toThrow('manifest');
+ expect(await updateInstallation(install,'https://druggie.org','0.3.1',false,deps)).toBe('unavailable');
+ expect(unavailable).toHaveBeenCalledTimes(1);
+ const failed=(await readdir(directory)).find(name=>name.startsWith('.newdrugs-update-failed-'))!;
+ const old=new Date(Date.now()-6*60000);await utimes(join(directory,failed),old,old);
+ await expect(updateInstallation(install,'https://druggie.org','0.3.1',false,deps)).rejects.toThrow('manifest');
+ expect(unavailable).toHaveBeenCalledTimes(2);
+ vi.stubGlobal('fetch',unavailable);
+ const nativeRoot=join(directory,'native');await mkdir(nativeRoot);
+ await expect(updateNativeInstallation(nativeRoot,'https://druggie.org','0.3.1')).rejects.toThrow('manifest');
+ expect(await updateNativeInstallation(nativeRoot,'https://druggie.org','0.3.1')).toBe('unavailable');
+ const nativeFailed=(await readdir(nativeRoot)).find(name=>name.startsWith('.newdrugs-update-failed-'))!;await utimes(join(nativeRoot,nativeFailed),old,old);
+ await expect(updateNativeInstallation(nativeRoot,'https://druggie.org','0.3.1')).rejects.toThrow('manifest');
+ expect(unavailable).toHaveBeenCalledTimes(4);
+ vi.unstubAllGlobals();
+});
 it('switches only the npm-owned command to native and preserves its install record',async()=>{
  const prefix=join(directory,'prefix'),packageDir=join(prefix,'lib','node_modules','newdrugs-cli'),bin=join(prefix,'bin');
  const root=join(directory,'managed'),release=join(root,'releases','0.6.0-darwin-arm64-aaaaaaaaaaaa'),nativeBin=join(root,'bin');
  await mkdir(packageDir,{recursive:true});await mkdir(bin,{recursive:true});await mkdir(release,{recursive:true});await mkdir(nativeBin,{recursive:true});
  const entry=join(packageDir,'index.js'),executable=join(release,'newdrugs'),launcher=join(nativeBin,'newdrugs'),command=join(bin,'newdrugs');
- await writeFile(entry,'node');await writeFile(executable,'native');await symlink(executable,launcher);await symlink(entry,command);
+ await writeFile(join(packageDir,'package.json'),JSON.stringify({name:'newdrugs-cli'}));await writeFile(entry,'node');await writeFile(executable,'native');await symlink(executable,launcher);await symlink(entry,command);
  expect(await promoteNpmCommandToNative(prefix,entry,launcher,executable,'darwin')).toBe(command);
  expect(await readlink(command)).toBe(launcher);expect(await realpath(command)).toBe(await realpath(executable));
- expect(JSON.parse(await readFile(join(root,'npm-install.json'),'utf8'))).toEqual({prefix,command,launcher});
+ const records=(await readdir(root)).filter(name=>name.startsWith('npm-install-'));
+ expect(records).toHaveLength(1);
+ expect(JSON.parse(await readFile(join(root,records[0]),'utf8'))).toEqual({prefix,command,launcher});
+ const secondPrefix=join(directory,'second-prefix'),secondPackage=join(secondPrefix,'lib','node_modules','newdrugs-cli'),secondBin=join(secondPrefix,'bin');
+ await mkdir(secondPackage,{recursive:true});await mkdir(secondBin,{recursive:true});
+ const secondEntry=join(secondPackage,'index.js');await writeFile(join(secondPackage,'package.json'),JSON.stringify({name:'newdrugs-cli'}));await writeFile(secondEntry,'node');await symlink(secondEntry,join(secondBin,'newdrugs'));
+ await promoteNpmCommandToNative(secondPrefix,secondEntry,launcher,executable,'darwin');
+ expect((await readdir(root)).filter(name=>name.startsWith('npm-install-'))).toHaveLength(2);
+ expect((await linkedNpmInstallations(await realpath(root))).map(item=>item.install?.prefix).sort()).toEqual([await realpath(prefix),await realpath(secondPrefix)].sort());
  const other=join(directory,'other');await writeFile(other,'other');await rm(command);await symlink(other,command);
  await expect(promoteNpmCommandToNative(prefix,entry,launcher,executable,'darwin')).rejects.toThrow('different New Drugs command');
  expect(await readlink(command)).toBe(other);
 });
-it('switches both npm Windows shims to the native executable only when they belong to this package',async()=>{
+it('switches npm Windows shims to the managed native launcher only when they belong to this package',async()=>{
  const prefix=join(directory,'windows-prefix'),root=join(directory,'windows-managed'),bin=join(root,'bin');await mkdir(prefix,{recursive:true});await mkdir(bin,{recursive:true});
  const entry=join(prefix,'node_modules','newdrugs-cli','index.js'),launcher=join(bin,'newdrugs.cmd'),executable=join(root,'releases','0.6.0-win32-x64-aaaaaaaaaaaa','newdrugs.exe');
  const cmd=join(prefix,'newdrugs.cmd'),ps=join(prefix,'newdrugs.ps1');
@@ -49,6 +77,14 @@ it('switches both npm Windows shims to the native executable only when they belo
  await writeFile(ps,'unrelated');
  await expect(promoteNpmCommandToNative(prefix,entry,launcher,executable,'win32')).rejects.toThrow('different New Drugs command');
  expect(await readFile(ps,'utf8')).toBe('unrelated');
+});
+it('supports a Windows npm install without a PowerShell shim',async()=>{
+ const prefix=join(directory,'cmd-only'),root=join(directory,'managed-cmd-only'),bin=join(root,'bin');await mkdir(prefix,{recursive:true});await mkdir(bin,{recursive:true});
+ const entry=join(prefix,'node_modules','newdrugs-cli','index.js'),launcher=join(bin,'newdrugs.cmd'),executable=join(root,'releases','0.6.0-win32-x64-aaaaaaaaaaaa','newdrugs.exe');
+ await writeFile(join(prefix,'newdrugs.cmd'),'@echo off\r\nnode "%~dp0\\node_modules\\newdrugs-cli\\index.js" %*\r\n');
+ await promoteNpmCommandToNative(prefix,entry,launcher,executable,'win32');
+ expect(await readFile(join(prefix,'newdrugs.cmd'),'utf8')).toContain(launcher);
+ expect(await readFile(join(prefix,'newdrugs.ps1'),'utf8')).toContain(launcher);
 });
 it('requires the uninstall flag, refuses source copies, and removes only owned CLI credentials and standard registrations',async()=>{
  const store=new ConfigStore(join(directory,'config','config.json'));await store.set('dev',{url:'https://dev.druggie.org',token:'private-dev'});await store.set('default',{url:'https://druggie.org',token:'private-public'});await writeFile(join(directory,'config','unrelated.txt'),'keep');

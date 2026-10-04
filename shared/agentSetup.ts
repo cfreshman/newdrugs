@@ -12,8 +12,8 @@ Access token: ${token || '[Create a token above, then copy this prompt]'}
 
 1. Check that Node.js 22 or newer and npm are available. Install the CLI from ${site}/downloads/newdrugs-cli.tgz using npm. Use a user-owned installation prefix if needed; do not use sudo without asking me.
 2. Run newdrugs${profile} login --url ${site} --token-stdin, passing the access token through stdin. Keep it out of command arguments, logs and your replies. The CLI stores it privately.
-3. Verify the connection with newdrugs${profile} read identity.get and read wallet.get. These are read-only and cost no New Drugs credit.
-4. Use the CLI's search and describe commands to discover the actual operations. Read each operation's schema before calling it. Ask for confirmation before actions that require it, then execute each individual action with its own idempotency key. Profile text and photos are human-authored in the app.
+3. Verify the connection with newdrugs${profile} read identity.get and newdrugs${profile} read wallet.get. These are read-only and cost no New Drugs credit.
+4. Use newdrugs${profile} search and describe to discover the actual operations. Read each operation's schema before calling it. Ask for confirmation before actions that require it, then execute each individual action with its own idempotency key. Profile text and photos are human-authored in the app.
 
 The installed CLI switches to the native executable automatically when one is available, checks for newer published versions daily, and updates itself; run newdrugs update to check immediately. If I ask to remove it, run newdrugs uninstall --yes to remove the CLI, standard New Drugs MCP registrations, and all locally saved logins.
 

@@ -32,7 +32,8 @@
   --panel-header-surface:#1d1b1ac0;
   --launcher-surface:#302927d9;
   --inverse-ink:#1d1a18;
-  --on-user:var(--inverse-ink);
+  --user-bubble:#38383880;
+  --on-user:#fff;
   --border:#846a5e;
   --border-strong:#a58a7a;
   --divider:#413630;
@@ -56,6 +57,7 @@
   --audio-track:#735648;
   --audio-track-fill:#dfc4b6;
 }
+:root[data-theme=dark] :is(.message.user .bubble,.direct-messages p.from-me,.call-message.user .call-message-card){backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
 .appearance-options{margin:0;}.appearance-options button{display:flex;flex:1;align-items:center;justify-content:center;gap:7px;min-height:44px;}
 
 .preferences-panel{display:flex;flex-direction:column;gap:20px;}.preferences-panel h3{font-size:14px;margin:0 0 8px;}.landing-options button{gap:5px;padding-inline:7px;font-size:12px;}.settings-utilities{display:flex;gap:8px;}.settings-utilities>a,.settings-utilities>button{display:flex;flex:1;align-items:center;justify-content:center;gap:8px;min-width:0;padding:10px;border-radius:var(--radius-control);background:var(--surface-soft);text-decoration:none;font-size:14px;}.agent-preference-actions button{min-height:48px;}
