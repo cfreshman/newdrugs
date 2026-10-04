@@ -11,6 +11,7 @@ import {defaultPreferences,initialDestination as landingDestination} from '../sh
 import {LogPeople,LogDates} from './LogDirectory';
 import {LogSettings} from './LogSettings';
 import {capturePageContext} from '../shared/pageContext';
+import type {ChatInputContext} from '../shared/chatInputContext';
 import {LogCodePanel,LogScanPanel,LogJoinPanel} from './LogJoining';
 import {LogPanel,LogDetail,LogEditor} from './LogPanel';
 import {scrollFromPanelHeader} from './panelHeaderScroll';
@@ -130,8 +131,8 @@ export function App() {
   const [panelContext, setPanelContext] = useState<Omit<Destination, 'view'>>({});
   const authDestination=useRef<Destination|null>(readAuthReturn());
   const [authReturn,setAuthReturn]=useState<Destination|null>(null);
-  const [afterAccount, setAfterAccount] = useState<{ destination?:Destination; panel?: Exclude<Panel, null>; context?: Omit<Destination, 'view'>; space?: 'modal' | 'composer'; chat?: string } | null>(null);
-  const [resumeChat, setResumeChat] = useState<string | null>(null);
+  const [afterAccount, setAfterAccount] = useState<{ destination?:Destination; panel?: Exclude<Panel, null>; context?: Omit<Destination, 'view'>; space?: 'modal' | 'composer'; chat?: string; inputContext?:ChatInputContext } | null>(null);
+  const [resumeChat, setResumeChat] = useState<{text:string;inputContext:ChatInputContext} | null>(null);
   const [accountMode, setAccountMode] = useState<'register' | 'login'>('register');
   const [panelHistory, setPanelHistory] = useState<{ panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]>([]);
   const rememberedSettings=useRef<{userId:string;panel:Exclude<Panel,null>;context:Omit<Destination,'view'>;history:typeof panelHistory;title:string;content:ReactNode}|null>(null),resumeSettings=useRef(false);
@@ -464,13 +465,14 @@ export function App() {
     const messageId = pendingChatJump; setPendingChatJump(null);
     void openChatMessage(messageId).catch(e => logError(errorText(e)));
   }, [pendingChatJump, data?.user.id, data?.user.handle]);
-  const send = async (event?: FormEvent, textOverride?: string, retry?: Message, fromExample = false) => {
+  const send = async (event?: FormEvent, textOverride?: string, retry?: Message, fromExample = false, contextOverride?:Partial<ChatInputContext>) => {
     event?.preventDefault();
     if (inputOccupied && !fromExample || (dictation.active && textOverride === undefined) || busyRef.current || !data || data.user.id !== identity.current) return;
     const text = (textOverride ?? draft).trim(); const files = fromExample ? [] : retry?.files || attachments; const attachedUpdates = fromExample ? [] : retry?.inbox || inboxAttachments; const records=fromExample?[]:retry?.records||recordAttachments; if (!text && !files.length && !attachedUpdates.length && !records.length) return;
+    const inputContext=retry?.inputContext||{mobile:contextOverride?.mobile??mobileNotificationLink(),dictated:contextOverride?.dictated??false};
     const commands: Record<string, Panel> = { '/profile': 'account', '/account': 'account', '/credits': 'credits', '/connect': 'agents', '/nearby': 'people', '/feed': 'feed', '/location': 'location', '/messages': 'messages', '/upload': 'uploads' };
     if (commands[text.toLowerCase()]) { const destination = commands[text.toLowerCase()]!; open(destination, {}, inlineViews.has(destination) ? 'composer' : 'modal'); setDraft(''); return; }
-    if (!data.user.handle) { setAfterAccount({ chat: text }); setAccountMode('register'); setDraft(text); open('account'); return; }
+    if (!data.user.handle) { setAfterAccount({ chat: text,inputContext }); setAccountMode('register'); setDraft(text); open('account'); return; }
     const pageContext=retry?.pageContext||capturePageContext(location.href,location.origin);
     const review = retry?.review || (reviewing && run ? { runId: run.id, revision: run.revision } : undefined);
     const requestId = retry ? retry.id.split(':')[1] : crypto.randomUUID();
@@ -481,11 +483,11 @@ export function App() {
     if (!retry && !fromExample) { if (!files.length && !attachedUpdates.length && !records.length) placeMessage(id, text); dictation.stop(); setDraft(''); setAttachments([]); setInboxAttachments([]);setRecordAttachments([]); }
     setRun(null);
     busyRef.current = true; setSubmitting(true); scroll.follow();
-    const message: Message = { id, role: 'user', text, files, createdAt: new Date().toISOString(), source: 'app', status: 'pending', review, ...(pageContext?{pageContext}:{}), ...(attachedUpdates.length ? { inbox: attachedUpdates } : {}),...(records.length?{records}:{}) };
+    const message: Message = { id, role: 'user', text, files, createdAt: new Date().toISOString(), source: 'app', status: 'pending', review, inputContext, ...(pageContext?{pageContext}:{}), ...(attachedUpdates.length ? { inbox: attachedUpdates } : {}),...(records.length?{records}:{}) };
     setMessages(previous => [...previous.filter(m => m.id !== id), message]);
     let accepted = false;
     try {
-      const result = await post<{ run: RunView }>('/chat', { text, fileIds: files.map(file => file.id), ...(attachedUpdates.length ? { inboxIds: attachedUpdates.map(item => item.id) } : {}), ...(records.length?{recordRefs:records.map(({kind,id})=>({kind,id}))}:{}), requestId, clientId, ...(pageContext?{pageContext}:{}), ...(review ? { review } : {}), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      const result = await post<{ run: RunView }>('/chat', { text, fileIds: files.map(file => file.id), ...(attachedUpdates.length ? { inboxIds: attachedUpdates.map(item => item.id) } : {}), ...(records.length?{recordRefs:records.map(({kind,id})=>({kind,id}))}:{}), requestId, clientId, inputContext, ...(pageContext?{pageContext}:{}), ...(review ? { review } : {}), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
       if (data.user.id !== identity.current) return;
       accepted = true;
       if (submission.current === runId) { submission.current = null; setSubmitting(false); }
@@ -501,14 +503,14 @@ export function App() {
   };
   useEffect(() => {
     if (!resumeChat || !data?.user.handle || inputOccupied || panel && panelSpace === 'modal') return;
-    const text = resumeChat; setResumeChat(null); void send(undefined, text);
+    const pending = resumeChat; setResumeChat(null); void send(undefined, pending.text,undefined,false,pending.inputContext);
   }, [resumeChat, data?.user.handle, inputOccupied, panel, panelSpace]);
   const accountSaved = async () => {
     const intent = afterAccount, destination=authDestination.current||intent?.destination;setAfterAccount(null);
     if(destination){authDestination.current=null;clearAuthReturn();setAuthReturn(destination);return;}
     if (surface) { await closePanel(true); return; }
     if (intent?.panel) { open(intent.panel, intent.context, intent.space); return; }
-    if (intent?.chat) { await closePanel(); setResumeChat(intent.chat); return; }
+    if (intent?.chat) { await closePanel(); setResumeChat({text:intent.chat,inputContext:intent.inputContext||{mobile:mobileNotificationLink(),dictated:false}}); return; }
     if (panelHistory.length) backPanel(); else await closePanel(true);
   };
   useEffect(()=>{if(!authReturn||!data?.user.handle||data.user.id!==identity.current)return;const destination=authReturn;setAuthReturn(null);void closePanel().then(()=>navigate(destination));},[authReturn,data?.user.id,data?.user.handle]);
@@ -584,7 +586,7 @@ export function App() {
   const workspaceViewKey=(tab:AppMode,screen:ComposerScreen|null|undefined)=>`${tab}:${screen?.reset||0}:${screen?screenKey(screen):'launcher'}`;
   const workspaceAncestors=[...(composerScreen?.history.map(screen=>`${mode}:${composerScreen.reset}:${screenKey(screen)}`)||[]),...Object.entries(tabWorkspaces.current).filter(([tab])=>tab!==mode).flatMap(([tab,saved])=>[workspaceViewKey(tab as AppMode,saved.lastComposer),...(saved.lastComposer?.history.map(screen=>`${tab}:${saved.lastComposer!.reset}:${screenKey(screen)}`)||[])])];
   const dictationControl=<div className="dictation-slot"><Orb hideIcon={inputOccupied || Boolean(draft.trim())} active={dictation.active && !inputOccupied} listening={dictation.listening} finishing={dictation.finishing} canSend={Boolean(draft.trim()) && Boolean(data)} busy={sendBusy}
-          onTap={() => { if (!inputOccupied) dictation.start(); }} onCancel={dictation.cancel} onSend={() => { void dictation.finish().then(text => { void send(undefined, text); }); }} {...effectiveDrag} /></div>;
+          onTap={() => { if (!inputOccupied) dictation.start(); }} onCancel={dictation.cancel} onSend={() => { void dictation.finish().then(text => { void send(undefined, text,undefined,false,{dictated:true}); }); }} {...effectiveDrag} /></div>;
   return <CallProvider userId={data?.user.id} beforeEnter={async()=>{if(talk.room)await talk.leave();}}><TalkContext.Provider value={talk}><ExperienceContext.Provider value={{mode,changeMode,ask:askAbout,media:(items,index)=>setMedia({items,index}),navigate}}><NavigationContext.Provider value={navigate}><div className="app" inert={Boolean(media)} data-mode={mode} data-standalone={standalone||undefined} data-agent-dock={agentDockVisible||undefined} data-panel-below-controls={mode!=='agent'&&belowControls||undefined} data-talk-active={Boolean(talk.space&&talk.room)||undefined} style={style} data-keyboard-open={keyboardOpen || undefined} ref={page} onKeyDown={event => { if (event.key === 'Escape' && launcherOpen && !event.defaultPrevented) { event.preventDefault(); void closePanel(); } }}>
     <Atmosphere/><div className="grain" aria-hidden="true" />
     {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockVisible} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockVisible} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={startAccount}/>)}{mode!=='agent'&&dockAvailable&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockVisible} inert={mode!=='agent'&&!agentDockVisible}>

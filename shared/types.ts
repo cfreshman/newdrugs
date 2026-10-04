@@ -9,7 +9,7 @@ export interface Profile {
   photos?:string[];
   websiteUrl?:string;
 }
-export interface Message { pageContext?:import('./pageContext').PageContextCandidate; records?:import('./recordContext').RecordAttachment[];
+export interface Message { pageContext?:import('./pageContext').PageContextCandidate; inputContext?:import('./chatInputContext').ChatInputContext; records?:import('./recordContext').RecordAttachment[];
   id: string; role: 'user' | 'assistant'; text: string; createdAt: string;
   source: 'app' | 'external'; status?: 'complete' | 'interrupted' | 'pending' | 'failed';
   files?: import('./uploads').UploadRef[];

@@ -6,6 +6,7 @@ import { connectDatabase, db, rows, mongo } from '../server/db';
 import { createGuest, registerAccount } from '../server/auth';
 import { reserveRun, runs, wallet } from '../server/wallet';
 import { processRun } from '../server/agent';
+import {messageInput} from '../server/sessionContext';
 import { ensureStarterPool } from '../server/starterPool';
 
 let accountSequence = 0;
@@ -14,6 +15,19 @@ async function clean() { if (db().databaseName !== 'newdrugs_test') throw new Er
 beforeAll(async () => { await connectDatabase(); await clean(); });
 beforeEach(async () => { await clean(); await ensureStarterPool(); });
 afterAll(async () => { await clean(); await mongo.close(); });
+
+it('keeps mobile and dictated hints with one message and its model input',async()=>{
+  const user=await fundedAccount(),id=`${user._id}:${randomUUID()}`;
+  const options={clientId:'fixture',timezone:'UTC',fileIds:[],inputContext:{mobile:true,dictated:true}};
+  const run=await reserveRun(user._id,id,'I seen flu whose there',options);
+  expect(run.inputContext).toEqual(options.inputContext);
+  const input=JSON.stringify(await messageInput(run));
+  expect(input).toContain('I seen flu whose there');
+  expect(input).toContain('do not call newdrugs_open');
+  expect(input).toContain('possibly inaccurate transcript');
+  expect((await reserveRun(user._id,id,'I seen flu whose there',options))._id).toBe(id);
+  await expect(reserveRun(user._id,id,'I seen flu whose there',{...options,inputContext:{mobile:false,dictated:true}})).rejects.toMatchObject({code:'submission_conflict'});
+});
 
 it.each([false, true])('streams both existing and fresh conversation-only sessions (fresh: %s)', async freshSession => {
   const user = await fundedAccount(), id = `${user._id}:${randomUUID()}`;
@@ -104,7 +118,7 @@ it('resumes a declined tool with the exact typed correction and never executes i
   const op = operations.find(op => op.name === 'posts.create')!, input = op.schema.parse({ text: 'Old caption' }) as Record<string, unknown>;
   await runs().updateOne({ _id: id }, { $set: { status: 'waiting_for_approval', revision: 4, providerSessionId: 'session', providerTurnId: 'turn', inputSubmitted: true,
     approvals: [{ id: 'call', operation: op.name, input, version: op.version, digest: hash(canonicalJSON({ name: op.name, version: op.version, input })), title: 'Publish', detail: 'Publish', human: true, kind: 'write', status: 'pending', expiresAt: Date.now() + 60000 }] } });
-  await replyToReview(user._id, { runId: id, revision: 4 }, { requestId: randomUUID(), text: 'nah cancel that. what else could i do', fileIds: [] });
+  await replyToReview(user._id, { runId: id, revision: 4 }, { requestId: randomUUID(), text: 'nah cancel that. what else could i do', fileIds: [],inputContext:{mobile:true,dictated:true} });
   await runs().updateOne({ _id: id }, { $set: { status: 'running', lease: 'lease', leaseUntil: Date.now() + 60000 } });
   let ended = false, wake: (() => void) | undefined;
   const queue: AgentSessionEvent[] = [], controller = new AbortController();
@@ -113,7 +127,7 @@ it('resumes a declined tool with the exact typed correction and never executes i
   const turn = { id: 'turn', status: 'in_progress', subagent_id: null, usage: null };
   const create = vi.fn(async (_id: string, request: any) => {
     const reply = request.events[0]; expect(reply.type).toBe('agent.session.input.tool_result');
-    expect(JSON.parse(reply.output)).toMatchObject({ status: 'not_executed', userReply: { text: 'nah cancel that. what else could i do' } });
+    expect(JSON.parse(reply.output)).toMatchObject({ status: 'not_executed', userReply: { text: 'nah cancel that. what else could i do',interactionContext:expect.stringContaining('do not call newdrugs_open') } });
     queue.push({ type: 'agent.session.turn.completed', event_id: randomUUID(), session_id: 'session', turn_id: 'turn', turn: { ...turn, status: 'completed' }, usage: null } as AgentSessionEvent); wake?.();
   });
   const client = { beta: { agents: { sessions: { events: { stream: async () => stream, create }, turns: { list: async () => ({ data: [turn] }), retrieve: async () => turn }, items: { async *list() {} }, retrieve: async () => ({ required_actions: [{ type: 'function_call', call_id: 'call', turn_id: 'turn', name: 'newdrugs_execute', arguments: JSON.stringify({ operation: op.name, input }) }] }) } } } } as unknown as OpenAI;

@@ -79,14 +79,14 @@ export async function wallet(userId: string, session?: ClientSession, owner?: Us
 
 // Holds are extended before each paid model call and released when the run settles.
 export const RUN_RESERVE = 60_000_000; // $0.06, unused amount is always released.
-export async function reserveRun(userId: string, runId: string, text: string, options: { pageContext?:import('../shared/pageContext').PageContextCandidate; clientId: string; timezone: string; fileIds: string[]; inboxIds?: string[]; recordRefs?:import('../shared/recordContext').RecordReference[] } = { clientId: '', timezone: 'America/New_York', fileIds: [] }) {
+export async function reserveRun(userId: string, runId: string, text: string, options: { pageContext?:import('../shared/pageContext').PageContextCandidate; inputContext?:import('../shared/chatInputContext').ChatInputContext; clientId: string; timezone: string; fileIds: string[]; inboxIds?: string[]; recordRefs?:import('../shared/recordContext').RecordReference[] } = { clientId: '', timezone: 'America/New_York', fileIds: [] }) {
   const pageContext=await resolvePageContext(userId,options.pageContext);
   const inbox = await inboxContext(userId, options.inboxIds || []);
   const records=await resolveRecordContexts(userId,options.recordRefs);
   return transaction(async session => {
     const user = await users().findOne({ _id: userId }, { session });
     requireValue(user);
-    const fingerprint = hash(JSON.stringify({ text, fileIds: options.fileIds, ...(options.inboxIds?.length ? { inboxIds: options.inboxIds } : {}),...(options.recordRefs?.length?{recordRefs:options.recordRefs}:{}),...(options.pageContext?{pageContext:options.pageContext}:{}) }));
+    const fingerprint = hash(JSON.stringify({ text, fileIds: options.fileIds, ...(options.inboxIds?.length ? { inboxIds: options.inboxIds } : {}),...(options.recordRefs?.length?{recordRefs:options.recordRefs}:{}),...(options.pageContext?{pageContext:options.pageContext}:{}),...(options.inputContext?{inputContext:options.inputContext}:{}) }));
     const prior = await runs().findOne({ _id: runId, userId }, { session });
     if (prior) {
       if (prior.fingerprint !== fingerprint) throw new AppError(409, 'submission_conflict', 'This submission id belongs to a different message.');
