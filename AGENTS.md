@@ -129,9 +129,9 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 - text should appear smoothly while a run is active, without restarting or disappearing between snapshots; completed messages show immediately. Prefer correct provider-to-browser event delivery over animation hiding stale state.
 - scrolling the base page scrolls chat; native chat scrolling, modals, focused controls, pinch zoom and orb dragging retain their own interactions.
 
-- development uses the cloud dev API, MongoDB and public MCP, with local Vite only on 7330. maintain and deploy the cloud dev backend as part of development. production is separate. use the OpenAI-hosted Agents API with its public HTTPS MCP connection, not a locally owned Agents SDK loop.
+- development uses the cloud dev API, MongoDB and public MCP, with local Vite only on 7330. Deploy cloud dev when backend, API, MCP or shared server contracts change. Frontend-only changes are served and tested by the user's local Vite hosts and do not need a cloud dev deployment. production is separate. use the OpenAI-hosted Agents API with its public HTTPS MCP connection, not a locally owned Agents SDK loop.
 
-- the user starts and owns local dev servers. do not launch or restart local Vite/admin servers. provide the command and leave local ports free. continue maintaining cloud services and deploying cloud dev changes as needed. there is no local MongoDB or API server.
+- the user starts and owns local dev servers. do not launch or restart local Vite/admin servers. provide the command and leave local ports free. continue maintaining cloud services and deploying backend changes to cloud dev as needed. there is no local MongoDB or API server.
 
 - Public semantic search combines persisted 512-dimensional vectors, lexical relevance and current source authorization. Nearby and All people are both available, in that order. Nearby is a strict coarse-area filter, not the only search scope. Do not index DMs, private chats, files or inferred profile traits into public discovery. External search is platform-funded, never deducted from user credit.
 - The dev domain serves no public frontend. Local Vite injects the private development key; CLI and hosted MCP use their own bearer credentials. Never put that key in browser code.
@@ -185,7 +185,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 
 - Mobile browser content uses matching 6px exterior gutters, retaining safe-area insets. Installed mobile Friends/Posts reach the side and bottom edges beneath the top controls. The mobile agent subpanel covers the content-panel bounds.
 
-- Queue ordinary changes into the current work batch and deploy cloud dev when that batch is complete or the user asks for deployment. Do not deploy an isolated change ahead of the rest unless the user explicitly calls it a hotfix. Production still requires an explicit request.
+- Queue ordinary changes into the current work batch. Deploy cloud dev when that batch contains server changes or the user explicitly asks for a dev deployment; do not run `deploy:dev` for CSS, React or other frontend-only edits. The user's local hosts serve those edits. Do not deploy an isolated change ahead of the rest unless the user explicitly calls it a hotfix. Production still requires an explicit request.
 - Avoid timed asynchronous clarification prompts; the founder is not watching for them. Resolve routine choices from the current instructions and code, and keep implementing. Ask only when an answer is genuinely required to proceed.
 
 - Posts and replies support three separate URL attachments in addition to photos and a 280-character caption. Keep UI/CLI/MCP parity and exact-link review. Recognized providers and MUSE/POPS/CIF render natively; custom JSON and linked text are fetched through bounded public-URL validation, and inactive media stops playing.
