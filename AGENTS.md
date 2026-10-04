@@ -77,7 +77,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 
 - the product name is styled "New Drugs".
 
-- the page/install icon is the original dimensional blue orb. The interactive mic button is flat black; only its icon disappears while typing or while an inline panel occupies the input. Never fade or pulse the circle’s opacity. dictation splits into close, flat red cancel and green send circles; no rings, shadows or connecting bridge. User chat bubbles are blue in light mode and visibly translucent gray with white text and blur in dark mode.
+- the page/install icon is the original dimensional blue orb. The interactive mic button is flat black; only its icon disappears while typing or while an inline panel occupies the input. Never fade or pulse the circle’s opacity. dictation splits into close, flat red cancel and green send circles; no rings, shadows or connecting bridge. User chat bubbles are blue in light mode and use `#0005` with white text and no blur in dark mode.
 
 - mobile is the primary interaction surface. design for mobile first. keep chat within horizontal viewport limits. user message text is 12px with 6px by 10px padding; agent message text is 14px. use 1px control borders, not 2px. no literal connecting bridge behind dictation buttons.
 - mobile chat is fixed at its lowest allowed position; no dragging or saved desktop position. The app version belongs in the Settings credit row. Desktop stays pinned to the visible bottom too, allowing horizontal dragging only. Ignore old saved vertical positions.
@@ -86,7 +86,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 
 - no top page gap around the conversation. use all seven rainbow colors in an overlapping radial gradient composition with varied centers and sizes; do not arrange them in spectrum order or rainbow bands. keep a warm field behind the blue orb and user bubbles for contrast.
 
-- agent bubbles are black with white text; user bubbles are blue in light mode and translucent gray with white text in dark mode.
+- agent bubbles are black with white text; user bubbles are blue in light mode and use `#0005` with white text and no blur in dark mode.
 
 - do not put errors or status text between the input and mic or let them move the controls. log technical failures. show user-actionable failures in the conversation.
 
