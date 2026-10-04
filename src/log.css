@@ -15,9 +15,7 @@
 .log-day{min-height:105px;background:color-mix(in srgb,var(--surface-soft) 45%,transparent);border-radius:var(--radius-sm);padding:3px;min-width:0;}
 .log-day[data-outside]{background:transparent;}
 .log-day[data-outside] .log-day-number{color:var(--muted);}
-.log-day[data-today]{box-shadow:inset 0 0 0 1px var(--primary);}
 .log-day-number{display:flex;justify-content:space-between;align-items:center;width:100%;font-family:var(--font-ui);font-size:11px;padding:2px 3px 5px;border-radius:4px;background:transparent;}
-.log-day[data-today] .log-day-number{color:var(--primary);font-weight:700;}
 .log-day-number svg{opacity:0;}.log-day:hover .log-day-number svg,.log-day-number:focus svg{opacity:1;}
 .log-day-entries{display:flex;flex-direction:column;gap:3px;}
 .log-tile{position:relative;display:block;aspect-ratio:1;width:100%;padding:0;overflow:hidden;color:inherit;text-decoration:none;text-align:left;border-radius:var(--radius-sm);background:var(--surface-soft);}
@@ -78,10 +76,7 @@
 .log-weekday-row .log-weekday{font-family:var(--font-ui);font-size:12px;color:var(--ink);}
 .log-calendar-history .log-calendar{gap:1px;grid-template-rows:minmax(0,1fr);}
 .log-calendar-history .log-day{min-height:0;height:100%;padding:0;border:0;border-radius:0;display:grid;place-items:center;background:transparent;color:inherit;text-decoration:none;position:relative;overflow:hidden;}
-.log-calendar-history .log-day[data-today]{box-shadow:none;}
-.log-calendar-history .log-day[data-today] .log-empty-date{color:var(--primary);font-weight:700;}
 .log-empty-date{font:12px var(--font-ui);}
-.log-calendar-history .log-day[data-future]{opacity:.33;}
 .log-day-mosaic{display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;width:100%;height:100%;--columns:1;}
 .log-day-mosaic[data-columns="2"]{--columns:2;}.log-day-mosaic[data-columns="3"]{--columns:3;}
 .log-day-mosaic>span{display:block;flex:0 0 calc(100% / var(--columns));width:calc(100% / var(--columns));height:calc(100% / var(--columns));aspect-ratio:1;background:var(--primary);overflow:hidden;}

@@ -53,6 +53,16 @@ it('keeps a day arrow clickable during neighbor lookup, then hides it at the end
 
 it('shows a birthday marker and opens that person without creating a synthetic hangout',async()=>{const date=Temporal.Now.plainDateISO().add({days:1}),openPerson=vi.fn();api.operation.mockImplementation(async(name)=>name==='log.birthdays'?{items:[{personId:'friend',name:'Friend',month:date.month,day:date.day}]}:{items:[],nextCursor:null});await act(async()=>dom.root.render(createElement('div',{className:'composer-view'},createElement(LogCalendar,{...props,openPerson}))));const button=[...dom.container.querySelectorAll<HTMLButtonElement>('.log-day')].find(button=>button.getAttribute('aria-label')?.includes("Friend's birthday"))!;expect(button).toBeTruthy();await act(async()=>button.click());expect(openPerson).toHaveBeenCalledWith('friend');expect(api.operation.mock.calls.some(call=>call[0]==='log.create')).toBe(false);});
 
+it('shows today normally and leaves future dates blank except special dates',async()=>{
+ const today=Temporal.Now.plainDateISO(),empty=today.add({days:1}),birthday=today.add({days:2});
+ api.operation.mockImplementation(async(name,input)=>name==='log.calendar'?calendarPage(input):name==='log.birthdays'?{items:[{personId:'friend',name:'Friend',month:birthday.month,day:birthday.day}]}:{items:[],nextCursor:null});
+ await mount();
+ expect(dom.container.querySelector('.log-day[data-today] .log-empty-date')?.textContent).toBe(String(today.day));
+ const future=dom.container.querySelector<HTMLElement>(`.log-day[data-date="${empty}"]`);
+ expect(future?.tagName).toBe('SPAN');expect(future?.textContent).toBe('');expect(future?.getAttribute('aria-hidden')).toBe('true');
+ expect([...dom.container.querySelectorAll('.log-day')].some(day=>day.getAttribute('aria-label')?.includes("Friend's birthday")&&Boolean(day.querySelector('.log-day-special')))).toBe(true);
+});
+
 it('prefetches older weeks a viewport ahead and updates the threshold on resize',async()=>{
  await mount();const scroller=dom.container.querySelector<HTMLElement>('.composer-view')!;Object.defineProperty(scroller,'clientHeight',{value:800,configurable:true});dom.resize(scroller);expect(edge().rootMargin).toBe('0px 0px 800px 0px');Object.defineProperty(scroller,'clientHeight',{value:500,configurable:true});dom.resize(scroller);expect(edge().rootMargin).toBe('0px 0px 500px 0px');
 });
