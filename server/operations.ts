@@ -30,6 +30,8 @@ import { wakeRun } from './sleep';
 import { backgroundCanRead, assertBackgroundAuthority,operationAvailable } from './backgroundAuthority';
 import { inboxOperation, validateInboxLinks, ownInbox } from './inbox';
 import { enqueueChatSearch, searchChat } from './search/chat';
+import {enqueueDMSearch,searchDM} from './search/dm';
+import {searchGlobal} from './search/global';
 import { enqueuePush,enqueueStoredPush, pushDevices, revokePush } from './push';
 import { ObjectId, type ClientSession, type Document } from 'mongodb';
 import { operations } from '../shared/catalog';
@@ -217,7 +219,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         const connection = requireValue(await rows('connections').findOne({ _id: String(d.resourceId), members: userId }, options));
         await notBlocked(userId, (connection.members as string[]).find(id => id !== userId)!, session);
       }
-      return { open:d.view,date:d.date,logMonth:d.logMonth,logScope:d.logScope,personId:d.personId, resourceId:d.resourceId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
+      if(d.messageId){if(d.view!=='messages'||!d.resourceId)throw new AppError(422,'message_destination','Choose a conversation for this message.');requireValue(await rows('directMessages').findOne({_id:String(d.messageId),connectionId:String(d.resourceId)},options),'This message is unavailable.');}
+      return { open:d.view,date:d.date,logMonth:d.logMonth,logScope:d.logScope,personId:d.personId, resourceId:d.resourceId, messageId:d.messageId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
     }
     case 'profile.update': {
       if (actor.source !== 'browser') throw new AppError(403, 'human_authored', 'Profiles are written by the person, not by their agent. Open the profile editor instead.');
@@ -265,6 +268,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     }
     case 'search.datasets': return searchStatus();
     case 'search.query': return searchPublic(d as unknown as SearchInput, actor);
+    case 'search.global': return searchGlobal(d as unknown as import('../shared/globalSearch').GlobalSearchInput,actor);
     case 'posts.search': return searchPublic({ ...d, datasets: d.datasets || ['posts','replies'] } as unknown as SearchInput, actor);
     case 'search.similar': return similarPublic(String(d.sourceId), d as unknown as SearchInput, actor);
     case 'search.refine': return refinePublic(String(d.retrievalId), d.positive as string[], d.negative as string[], actor);
@@ -499,6 +503,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const result = requireValue(await rows('connections').findOneAndUpdate({ _id: String(d.connectionId), fromId: userId, status: 'pending' }, { $set: { status: 'withdrawn', updatedAt: now } }, { ...options, returnDocument: 'after' }), 'That invitation is no longer pending.');
       return publicRow(result);
     }
+    case 'messages.search': return searchDM(d as unknown as import('../shared/dmSearch').DMSearchInput,actor);
     case 'messages.get': {
       const message=requireValue(await rows('directMessages').findOne({_id:String(d.messageId)},options));await connectionFor(userId,String(message.connectionId),session,true);return directMessage(message);
     }
@@ -520,6 +525,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const connection = await connectionFor(userId, String(d.connectionId), session);
       const message = { _id: nextId(), connectionId: d.connectionId, fromId: userId, text: d.text, createdAt: now, ...(d.clientId?{clientId:d.clientId}:{}) };
       await rows('directMessages').insertOne(message, options);
+      await enqueueDMSearch(message._id,session);
       await rows('connections').updateOne({ _id: connection._id }, { $set: { updatedAt: now, lastMessage: { text: message.text, fromId: userId, createdAt: now } } }, options);
       await notifyConnection((connection.members as string[]).find(id => id !== userId)!, userId, connection._id, 'message', String(d.text), message._id, session);
       return publicRow(message);

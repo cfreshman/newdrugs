@@ -25,7 +25,7 @@ export async function embed(text: string, kind: 'document' | 'query', namespace 
     if (!vector || vector.length !== DIMENSIONS || !vector.every(Number.isFinite)) throw new Error('embedding_invalid');
     const costNanos = response.usage.total_tokens * 20;
     await budget.updateOne({ _id: day }, { $inc: { spentNanos: costNanos - reserved } });
-    await rows('platformUsage').insertOne({ _id: randomUUID(), feature: namespace === 'public' ? 'social_search' : namespace.startsWith('log:') ? 'log_search' : 'chat_search', kind, model: EMBEDDING_MODEL, tokens: response.usage.total_tokens, costNanos, createdAt: new Date().toISOString() });
+    await rows('platformUsage').insertOne({ _id: randomUUID(), feature: namespace === 'public' ? 'social_search' : namespace.startsWith('log:') ? 'log_search' : namespace.startsWith('dm:')?'dm_search':namespace.startsWith('global:')?'global_search':'chat_search', kind, model: EMBEDDING_MODEL, tokens: response.usage.total_tokens, costNanos, createdAt: new Date().toISOString() });
     const normalized = normalize(vector);
     if (kind === 'query') await rows('searchQueryVectors').updateOne({ _id: key }, { $set: { vector: normalized, expiresAt: new Date(Date.now() + 86400000) } }, { upsert: true });
     return normalized;

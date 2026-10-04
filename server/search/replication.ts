@@ -4,7 +4,7 @@ import {rows,transaction} from '../db';
 import {hash} from '../auth';
 import {purgeRetrievalChat,replaceRetrievalSource,retrievalEnabled,retrievalRevisions,retrievalPage,type RetrievalDocument} from './backend';
 import type {SearchDocument} from './model';
-interface Job {_id:string;kind:'public'|'chat'|'log'|'chat_purge';sourceKey:string;userId?:string;viewerIds?:string[];generation?:number;revision:string;availableAt:number;attempts:number;lease?:string}
+interface Job {_id:string;kind:'public'|'chat'|'log'|'dm'|'chat_purge';sourceKey:string;userId?:string;viewerIds?:string[];generation?:number;revision:string;availableAt:number;attempts:number;lease?:string}
 const jobs=()=>rows<Job>('retrievalJobs');
 export async function queueRetrieval(kind:Job['kind'],sourceKey:string,session?:ClientSession,details:{userId?:string;viewerIds?:string[];generation?:number}={}){
  if(!retrievalEnabled())return;
@@ -25,6 +25,9 @@ export async function replicateRetrievalOne(replace=replaceRetrievalSource,purge
   }else if(job.kind==='log'){
    const parts=await rows<import('./log').LogSearchChunk>('logSearchChunks').find({entryId:job.sourceKey}).limit(161).toArray();if(parts.length>160)throw Error('retrieval_source_too_large');
    await replace('log',job.sourceKey,parts.map(part=>({id:part._id,sourceKey:part.entryId,kind:'log',ownerId:part.ownerId,viewerIds:part.viewerIds,memberCount:part.memberCount,invitedCount:part.invitedCount,sourceHash:part.sourceHash,sourceRevision:part.sourceRevision,indexVersion:part.indexVersion,text:part.text,vector:part.vector,createdAt:`${part.date}T00:00:00Z`})));
+  }else if(job.kind==='dm'){
+   const parts=await rows<import('./dm').DMSearchChunk>('dmSearchChunks').find({messageId:job.sourceKey}).limit(3).toArray();if(parts.length>2)throw Error('retrieval_source_too_large');
+   await replace('dm',job.sourceKey,parts.map(part=>({id:part._id,sourceKey:part.messageId,kind:'dm',ownerId:part.connectionId,viewerIds:part.viewerIds,sourceHash:part.sourceHash,sourceRevision:part.sourceHash,indexVersion:part.indexVersion,text:part.text,vector:part.vector,messageId:part.messageId,connectionId:part.connectionId,offset:part.offset,createdAt:part.createdAt})));
   }else if(job.kind==='chat_purge')await purge(job.userId!,job.generation!);
   else{
    // Old chunks predate generation metadata. Read their current owner generation
@@ -48,15 +51,15 @@ export async function replicateRetrievalOne(replace=replaceRetrievalSource,purge
 /** Bounded resumable backfill also becomes a periodic reconciliation sweep. */
 export async function backfillRetrieval(){
  if(!retrievalEnabled())return;
- for(const kind of ['public','chat','log'] as const){
+ for(const kind of ['public','chat','log','dm'] as const){
   const state=await rows('retrievalMeta').findOne({_id:`backfill:${kind}`});
   if(state?.done&&Number(state.againAt)>Date.now())continue;
   const cursor=!state?.done&&state?.cursor?String(state.cursor):undefined;
-  const collection=rows(kind==='public'?'searchDocuments':kind==='log'?'logSearchChunks':'chatSearchChunks');
+  const collection=rows(kind==='public'?'searchDocuments':kind==='log'?'logSearchChunks':kind==='dm'?'dmSearchChunks':'chatSearchChunks');
   const page=await collection.find(cursor?{_id:{$gt:cursor}}:{}).sort({_id:1}).limit(50).project({_id:1,userId:1,messageId:1,entryId:1,sourceHash:1,sourceRevision:1,indexVersion:1,viewerIds:1}).toArray();
   const remote=await retrievalRevisions(kind,page.map(row=>row._id));
   await transaction(async session=>{
-   for(const row of page){const found=remote.get(row._id);if(found?.sourceRevision===(row.sourceRevision||row.sourceHash)&&found?.indexVersion===row.indexVersion)continue;const sourceKey=kind==='public'?row._id:kind==='log'?String(row.entryId):String(row.messageId),id=hash(`${kind}:${sourceKey}`);await jobs().updateOne({_id:id},{$setOnInsert:{kind,sourceKey,...(kind==='chat'?{userId:String(row.userId)}:kind==='log'?{viewerIds:row.viewerIds as string[]||[]}:{}),revision:randomUUID(),availableAt:Date.now(),attempts:0}},{session,upsert:true});}
+   for(const row of page){const found=remote.get(row._id);if(found?.sourceRevision===(row.sourceRevision||row.sourceHash)&&found?.indexVersion===row.indexVersion)continue;const sourceKey=kind==='public'?row._id:kind==='log'?String(row.entryId):String(row.messageId),id=hash(`${kind}:${sourceKey}`);await jobs().updateOne({_id:id},{$setOnInsert:{kind,sourceKey,...(kind==='chat'?{userId:String(row.userId)}:kind==='log'||kind==='dm'?{viewerIds:row.viewerIds as string[]||[]}:{}),revision:randomUUID(),availableAt:Date.now(),attempts:0}},{session,upsert:true});}
    await rows('retrievalMeta').updateOne({_id:`backfill:${kind}`},{$set:{cursor:page.at(-1)?._id||'',done:page.length<50,againAt:Date.now()+3600000}},{session,upsert:true});
   });
  }
@@ -66,9 +69,9 @@ export async function reconcileRetrieval(){
  for(const lane of ['public','chat'] as const){
   const _id=`reconcile:${lane}`,state=await rows('retrievalMeta').findOne({_id});if(state?.done&&Number(state.againAt)>Date.now())continue;
   const page=await retrievalPage(lane,!state?.done&&state?.cursor?String(state.cursor):undefined);
-  for(const kind of ['public','chat','log'] as const){
+  for(const kind of ['public','chat','log','dm'] as const){
    const points=page.points.filter(point=>point.payload?.kind===kind);if(!points.length)continue;
-   const source=rows(kind==='public'?'searchDocuments':kind==='chat'?'chatSearchChunks':'logSearchChunks');
+   const source=rows(kind==='public'?'searchDocuments':kind==='chat'?'chatSearchChunks':kind==='dm'?'dmSearchChunks':'logSearchChunks');
    const canonical=await source.find({_id:{$in:points.map(point=>point.payload.id)}}).project({_id:1,sourceRevision:1,sourceHash:1,indexVersion:1}).toArray(),current=new Map(canonical.map(row=>[row._id,row]));
    await transaction(async session=>{for(const {payload} of points){const row=current.get(payload.id);if(!row||String(row.sourceRevision||row.sourceHash)!==payload.sourceRevision||row.indexVersion!==payload.indexVersion)await queueRetrieval(kind,payload.sourceKey,session,kind==='chat'?{userId:payload.ownerId}:{});}});
   }

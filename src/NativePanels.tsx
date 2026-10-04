@@ -21,6 +21,7 @@ import { useRecordRefresh } from './useRecordRefresh';
 import { captureHistoryAnchor, restoreHistoryAnchor, OlderMessages, useTopPagination } from './ChatHistory';
 import {directMessageLayout,directMessageTimeLabel,inboxTimeLabel} from './directMessageGrouping';
 import type {CallPage,CallRecord} from '../shared/calling';
+import type {DMSearchResult} from '../shared/dmSearch';
 import {useCall} from './CallProvider';
 import './calling.css';
 import {NavLink} from './NavLink';
@@ -90,7 +91,7 @@ export function PeoplePanel({ user, areaCell, radiusMiles = 25, initialQuery = '
   </>;
 }
 
-export function MessagesPanel({ userId, connectionId, navigate }: { userId: string; connectionId?: string; navigate: Navigate }) {
+export function MessagesPanel({ userId, connectionId, messageId, initialQuery = '', onStateChange, navigate }: { userId: string; connectionId?: string; messageId?:string; initialQuery?:string; onStateChange?(context:Partial<Destination>):void; navigate: Navigate }) {
   const visible = usePanelVisible();
   const callControl=useCall();
   const [inbox, setInbox] = useState<(Page<Connection> & { people: Profile[] }) | null>(null), [messages, setMessages] = useState<Page<DirectMessage> | null>(null);
@@ -101,11 +102,13 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
   const [reconnectNote,setReconnectNote]=useState('');
   const [reporting,setReporting]=useState<string|null>(null),[choosingReport,setChoosingReport]=useState(false);
   const [filter, setFilter] = useState<'all' | 'invites'>('all');
+  const [query,setQuery]=useState(initialQuery),[searchRevision,setSearchRevision]=useState(0),[searchResult,setSearchResult]=useState<DMSearchResult|null>(null),[searchBusy,setSearchBusy]=useState(false),[searchError,setSearchError]=useState('');
+  const [newerCursor,setNewerCursor]=useState<string|null>(null),[loadingNewer,setLoadingNewer]=useState(false);
   const [text, setText] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [awayFromBottom,setAwayFromBottom]=useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false), [olderError, setOlderError] = useState('');
   const olderRequest = useRef<string | null>(null), prependAnchor = useRef<ReturnType<typeof captureHistoryAnchor> | null>(null), isVisible = useRef(visible); isVisible.current = visible;
-  const generation = useRef(0), scroller = useRef<HTMLDivElement>(null), following = useRef(true), readThrough = useRef('');
+  const generation = useRef(0), searchGeneration=useRef(0), scroller = useRef<HTMLDivElement>(null), following = useRef(true), readThrough = useRef(''),jumpedTo=useRef(''),lastConnection=useRef(connectionId),windowCursorInitialized=useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const composer = useRef<HTMLFormElement>(null), content = useRef<HTMLDivElement>(null);
   const placeMessage = useMessagePlacement(composer, scroller, `${userId}:${connectionId}`, !visible);
@@ -117,33 +120,40 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     if (visible && following.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
   }, [text, Boolean(messages), connectionId, visible]);
   const merge = (previous: DirectMessage[], incoming: DirectMessage[]) => [...new Map([...previous.filter(message => !message.key || !incoming.some(saved => saved.clientId === message.key && saved.fromId === message.fromId)), ...incoming].map(message => [message.id, message])).values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  useEffect(()=>{setQuery(initialQuery||'');},[initialQuery]);
+  useEffect(()=>{const request=++searchGeneration.current;if(!query.trim()){setSearchResult(null);setSearchBusy(false);setSearchError('');return;}setSearchResult(null);setSearchBusy(true);setSearchError('');void operation<DMSearchResult>('messages.search',{query,limit:20}).then(result=>{if(request===searchGeneration.current)setSearchResult(result);}).catch(error=>{if(request===searchGeneration.current)setSearchError(errorText(error));}).finally(()=>{if(request===searchGeneration.current)setSearchBusy(false);});return()=>{searchGeneration.current++;};},[query,searchRevision]);
+  const moreSearch=async()=>{if(!searchResult?.nextCursor||searchBusy)return;const request=++searchGeneration.current;setSearchBusy(true);try{const page=await operation<DMSearchResult>('messages.search',{query,limit:20,cursor:searchResult.nextCursor});if(request===searchGeneration.current)setSearchResult(previous=>previous?{...page,items:[...previous.items,...page.items]}:page);}catch(error){if(request===searchGeneration.current)setSearchError(errorText(error));}finally{if(request===searchGeneration.current)setSearchBusy(false);}};
   const load = useCallback(async () => {
     const request = ++generation.current;
     try {
       if (connectionId) {
-        const relationship = await operation<{ connection: Connection; people: Profile[] }>('connections.get', { connectionId });
-        const [page,history]=await Promise.all([(relationship.connection.status === 'accepted' || relationship.connection.initialInvitation) ? operation<Page<DirectMessage>>('messages.list', { connectionId }) : Promise.resolve(null),api<CallPage>(`/calls/${encodeURIComponent(connectionId)}`)]);
+        const window=messageId?await operation<{connection:Connection;people:Profile[];items:DirectMessage[];targetId:string;olderCursor:string|null;newerCursor:string|null}>('messages.window',{messageId}):null;
+        if(window&&window.connection.id!==connectionId)throw Error('This message belongs to another conversation.');
+        const relationship = window||await operation<{ connection: Connection; people: Profile[] }>('connections.get', { connectionId });
+        const [page,history]=await Promise.all([window?Promise.resolve({items:[...window.items].reverse(),nextCursor:window.olderCursor}):(relationship.connection.status === 'accepted' || relationship.connection.initialInvitation) ? operation<Page<DirectMessage>>('messages.list', { connectionId }) : Promise.resolve(null),api<CallPage>(`/calls/${encodeURIComponent(connectionId)}`)]);
         if (request !== generation.current) return;
         setCurrent(relationship);setCalls(history);
+        if(!windowCursorInitialized.current){setNewerCursor(window?.newerCursor||null);windowCursorInitialized.current=true;}
         setMessages(previous => page ? { ...page, nextCursor: previous && previous.items.length > page.items.length ? previous.nextCursor : page.nextCursor, items: merge(previous?.items || [], page.items) } : null);
       } else { const inbox = await operation<Page<Connection> & { people: Profile[] }>('connections.list'); if (request === generation.current) setInbox(inbox); }
       if (request === generation.current) setError('');
     } catch (error) { if (request === generation.current) { setError(errorText(error)); setCurrent(null); setMessages(null);setCalls(null); } }
-  }, [connectionId]);
-  useEffect(() => { setMessages(null);setCalls(null); setReporting(null); setChoosingReport(false); setInbox(null); setCurrent(null); setText(''); setLoadingOlder(false); setOlderError(''); setAwayFromBottom(false); prependAnchor.current = null; following.current = true; readThrough.current = ''; pendingSend.current = null; void load(); return () => { generation.current++; }; }, [load]);
+  }, [connectionId,messageId]);
+  useEffect(() => { const changed=lastConnection.current!==connectionId;lastConnection.current=connectionId;setMessages(null);setCalls(null); setReporting(null); setChoosingReport(false); setInbox(null); setCurrent(null);if(changed)setText(''); setLoadingOlder(false); setOlderError(''); setNewerCursor(null);windowCursorInitialized.current=false;setAwayFromBottom(false); prependAnchor.current = null; following.current = !messageId; jumpedTo.current='';readThrough.current = ''; pendingSend.current = null; void load(); return () => { generation.current++; }; }, [load]);
   useRecordRefresh(['connections', 'messages','calls'], load);
   useLayoutEffect(()=>{if(visible)readThrough.current='';},[visible,connectionId]);
   const callReadKey=calls?.items.map(call=>call.id).join(',')||'';
   const markRead = useCallback(() => {
     if (!visible || !connectionId || !current || document.hidden) return;
-    const latest = following.current ? messages?.items.find(message => !message.pending && !message.failed)?.id : undefined;
+    const latest = messageId ? messages?.items.some(message=>message.id===messageId)?messageId:undefined : following.current ? messages?.items.find(message => !message.pending && !message.failed)?.id : undefined;
     const key=JSON.stringify([latest,current.connection.status,current.connection.updatedAt||current.connection.createdAt,callReadKey]);
     if (readThrough.current === key) return;
     readThrough.current = key;
     void operation('messages.mark_read', { connectionId, ...(latest ? { throughMessageId: latest } : {}) }).catch(error => { if(readThrough.current===key)readThrough.current = ''; console.error('Conversation read:', error); });
-  }, [connectionId, current?.connection.status, current?.connection.updatedAt, current?.connection.createdAt, messages?.items[0]?.id, callReadKey, visible]);
+  }, [connectionId, messageId,current?.connection.status, current?.connection.updatedAt, current?.connection.createdAt, messages?.items[0]?.id, callReadKey, visible]);
   const rememberPosition=()=>{const node=scroller.current;if(visible&&node)setAwayFromBottom(node.scrollHeight-node.clientHeight-node.scrollTop>24);};
-  const followLatest=()=>{const node=scroller.current;if(!node)return;prependAnchor.current=null;following.current=true;node.scrollTop=node.scrollHeight;setAwayFromBottom(false);markRead();};
+  const followLatest=()=>{if(messageId&&connectionId){navigate({view:'messages',resourceId:connectionId,messageId:undefined});return;}const node=scroller.current;if(!node)return;prependAnchor.current=null;following.current=true;node.scrollTop=node.scrollHeight;setAwayFromBottom(false);markRead();};
+  useLayoutEffect(()=>{if(!visible||!messageId||jumpedTo.current===messageId||!messages?.items.some(message=>message.id===messageId)||!scroller.current)return;const node=scroller.current,target=[...node.querySelectorAll<HTMLElement>('[data-message-id]')].find(element=>element.dataset.messageId===messageId);if(!target)return;node.scrollTop+=target.getBoundingClientRect().top-node.getBoundingClientRect().top-12;jumpedTo.current=messageId;following.current=false;rememberPosition();},[visible,messageId,messages?.items.length]);
   useLayoutEffect(() => { if (!visible) return; if (following.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight; rememberPosition();markRead(); }, [messages?.items.length, markRead, visible]);
   useEffect(() => { const restored=()=>{if(!document.hidden)readThrough.current='';markRead();};document.addEventListener('visibilitychange', restored); return () => document.removeEventListener('visibilitychange', restored); }, [markRead]);
   useLayoutEffect(() => {
@@ -165,6 +175,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     } catch (error) { if (request === generation.current) setOlderError(errorText(error)); }
     finally { if (olderRequest.current === key) olderRequest.current = null; if (request === generation.current) setLoadingOlder(false); }
   };
+  const newer=async()=>{if(!newerCursor||loadingNewer)return;const request=generation.current,cursor=newerCursor;setLoadingNewer(true);try{const page=await operation<{items:DirectMessage[];newerCursor:string|null;connection:Connection}>('messages.window',{messageId:cursor});if(request!==generation.current||page.connection.id!==connectionId)return;setNewerCursor(page.newerCursor);setMessages(previous=>previous&&({...previous,items:merge(previous.items,page.items)}));}catch(error){if(request===generation.current)setOlderError(errorText(error));}finally{if(request===generation.current)setLoadingNewer(false);}};
   useTopPagination(scroller, { enabled: visible && !olderError, hasMore: Boolean(messages?.nextCursor), count: messages?.items.length || 0, scope: connectionId, load: older });
   useLayoutEffect(() => { if (visible && prependAnchor.current && scroller.current) { restoreHistoryAnchor(scroller.current, prependAnchor.current); prependAnchor.current = null;rememberPosition(); } });
   const respond = async (connection: Connection, accept: boolean) => { setBusy(true); try { await operation('connections.respond', { connectionId: connection.id, accept }, { confirmed: true }); await load(); } catch (error) { setError(errorText(error)); } finally { setBusy(false); } };
@@ -199,7 +210,10 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
   };
   const closeCall=async(call:CallRecord)=>{if(callBusy||!callControl)return;setError('');try{await callControl.end(call);await load();}catch(error){setError(errorText(error));}};
   const inboxItems=inbox?.items.filter(connection => filter === 'all' || ['pending','declined','withdrawn'].includes(connection.status));
-  if (!connectionId) return <><nav className="view-tabs" aria-label="Inbox filter"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button><button aria-pressed={filter === 'invites'} onClick={() => setFilter('invites')}>Invitations</button></nav>
+  if (!connectionId) return <><SearchField label="Search messages" value={query} onSearch={value=>{if(value===query)setSearchRevision(previous=>previous+1);else setQuery(value);onStateChange?.({query:value});}}/>{query?<>
+    {searchResult?.notices.map(notice=><p className="quiet small" key={notice}>{notice}</p>)}
+    <div className="inbox-list dm-inbox-list">{searchResult?.items.map(item=><article className="dm-inbox-card" key={item.id}><NavLink className="dm-inbox-open" to={{view:'messages',resourceId:item.connectionId,messageId:item.id}} navigate={navigate}><span className="message-avatar" aria-hidden="true">{item.person.photoId?<img src={`/api/files/${encodeURIComponent(item.person.photoId)}`} alt=""/>:(item.person.name||item.person.handle||'?').slice(0,1).toUpperCase()}</span><span className="dm-inbox-content"><span className="dm-inbox-heading"><span className="message-person-name"><strong>{item.person.name}</strong>{item.person.handle&&<span className="quiet">@{item.person.handle}</span>}</span><time dateTime={item.createdAt}>{inboxTimeLabel(item.createdAt)}</time></span><span className="dm-inbox-preview">{item.fromId===userId?'You: ':''}{item.text}</span></span></NavLink></article>)}</div>
+    {searchBusy&&<p className="quiet">Searching…</p>}{searchResult&&!searchBusy&&!searchResult.items.length&&<p className="quiet">No matching messages.</p>}{searchResult?.nextCursor&&!searchBusy&&<button className="text-link" onClick={()=>void moreSearch()}>More messages</button>}{searchError&&<p className="error" role="alert">{searchError}</p>}</>:<><nav className="view-tabs" aria-label="Inbox filter"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button><button aria-pressed={filter === 'invites'} onClick={() => setFilter('invites')}>Invitations</button></nav>
     <div className="inbox-list dm-inbox-list">{inboxItems?.map(connection => {
       const person = inbox?.people.find(person => person.id === connection.members.find(id => id !== userId));
       const invitation=connection.status==='pending',sent=(connection.lastMessage?.fromId||connection.fromId)===userId;
@@ -214,7 +228,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
             : <span className="quiet small">{connection.status === 'disconnected' ? 'Connection ended' : connection.status === 'withdrawn' ? 'Invitation withdrawn' : 'Invitation declined'}</span>}</div>}
       </article>;
     })}</div>{inbox && !inboxItems?.length && !inbox.nextCursor && <><p className="quiet">{filter==='invites'?'No invitations yet.':'No invitations or conversations yet.'}</p><NavLink className="text-link" to={{view:'people'}} navigate={navigate}>Find people nearby</NavLink></>}
-    {inbox?.nextCursor && <button className="text-link" onClick={() => void moreConnections()}>More conversations</button>}{error && <p className="error" role="alert">{error}</p>}</>;
+    {inbox?.nextCursor && <button className="text-link" onClick={() => void moreConnections()}>More conversations</button>}{error && <p className="error" role="alert">{error}</p>}</>}</>;
   const other = current?.people.find(person => person.id !== userId);
   const chronologicalMessages=messages?[...messages.items].reverse():[],messageLayout=directMessageLayout(chronologicalMessages),layoutById=new Map(chronologicalMessages.map((message,index)=>[message.id,messageLayout[index]]));
   const visibleCalls=activeCall&&!calls?.items.some(call=>call.id===activeCall.id)?[activeCall,...(calls?.items||[])]:calls?.items||[];
@@ -225,7 +239,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
     {current && ['pending','declined','withdrawn'].includes(current.connection.status) && <p>{current.connection.note}</p>}
     {current?.connection.status === 'pending' && <>{current.connection.toId === userId ? <div className="review-buttons"><button disabled={busy} onClick={() => void respond(current.connection, false)}>Decline</button><button disabled={busy} onClick={() => void respond(current.connection, true)}>Accept invitation</button></div> : <><p className="quiet">Invitation sent. Messages open when they accept.</p><button className="text-link" disabled={busy} onClick={() => void withdraw(current.connection)}>Withdraw invitation</button></>}</>}
     {current?.connection.status === 'declined' && <><p className="quiet">This invitation was declined.</p>{current.connection.toId===userId&&<NavLink to={{view:'person',resourceId:current.connection.fromId}} navigate={navigate}>Send a new invitation</NavLink>}</>}{current?.connection.status==='disconnected'&&<><p className="quiet">This connection has ended. Message history is read-only.</p>{current.connection.disconnectedBy===userId&&<form className="fields" onSubmit={event=>{event.preventDefault();if(!reconnectNote.trim()||busy)return;setBusy(true);void operation('connections.request',{personId:current.connection.members.find(id=>id!==userId),note:reconnectNote.trim()},{confirmed:true}).then(()=>{setReconnectNote('');return load();}).catch(e=>setError(errorText(e))).finally(()=>setBusy(false));}}><label>New invitation<textarea value={reconnectNote} maxLength={500} onChange={event=>setReconnectNote(event.target.value)}/></label><button className="solid" disabled={busy||!reconnectNote.trim()}>Send invitation</button></form>}</>}{current?.connection.status === 'withdrawn' && <p className="quiet">This invitation was withdrawn.</p>}
-    {messages && <>{choosingReport&&<div className="message-report-choice"><span>Choose a message to report.</span><button onClick={()=>{setChoosingReport(false);setReporting(null);}}>Cancel</button></div>}<div className="direct-message-scroll"><div className="direct-messages" ref={scroller} onScroll={() => { if (!visible) return; const node = scroller.current!; following.current = node.scrollHeight - node.clientHeight - node.scrollTop <= 24; setAwayFromBottom(!following.current); markRead(); }}>
+    {messages && <>{choosingReport&&<div className="message-report-choice"><span>Choose a message to report.</span><button onClick={()=>{setChoosingReport(false);setReporting(null);}}>Cancel</button></div>}<div className="direct-message-scroll"><div className="direct-messages" ref={scroller} onScroll={() => { if (!visible) return; const node = scroller.current!; following.current = !messageId&&!newerCursor&&node.scrollHeight - node.clientHeight - node.scrollTop <= 24; setAwayFromBottom(!following.current); markRead(); }}>
       <div className="direct-message-content" ref={content}><OlderMessages hasMore={Boolean(messages.nextCursor)} loading={loadingOlder} error={olderError} retry={() => void older()} />
       {!messages.nextCursor && (current?.connection.initialInvitation?.note || current?.connection.note) && <article className={`message invitation-message ${(current.connection.initialInvitation?.fromId || current.connection.fromId) === userId ? 'user' : 'peer'}`} data-invitation-id={current.connection.id}>
         <small className="invitation-meta">Invitation · <time dateTime={current.connection.initialInvitation?.createdAt || current.connection.createdAt}>{new Date(current.connection.initialInvitation?.createdAt || current.connection.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</time></small>
@@ -243,7 +257,7 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
         const selectable=choosingReport&&message.fromId!==userId;
         const select=()=>{setReporting(message.id);setChoosingReport(false);};
         const layout=layoutById.get(message.id)!;
-        return <Fragment key={message.clientId||message.id}>{layout.showTime&&<time className="message-time-separator" dateTime={message.createdAt}>{directMessageTimeLabel(message.createdAt)}</time>}<article className={`message ${message.fromId===userId?'user':'peer'} ${layout.groupWithPrevious?'dm-group-with-previous':''} ${layout.groupWithNext?'dm-group-with-next':''}`} data-message-id={message.clientId?`pending:${message.clientId}`:message.id} title={new Date(message.createdAt).toLocaleString()}>
+        return <Fragment key={message.clientId||message.id}>{layout.showTime&&<time className="message-time-separator" dateTime={message.createdAt}>{directMessageTimeLabel(message.createdAt)}</time>}<article className={`message ${message.fromId===userId?'user':'peer'} ${layout.groupWithPrevious?'dm-group-with-previous':''} ${layout.groupWithNext?'dm-group-with-next':''}`} data-message-id={message.pending||message.failed?`pending:${message.clientId||message.key}`:message.id} data-search-target={messageId===message.id||undefined} title={new Date(message.createdAt).toLocaleString()}>
           <div className={`bubble ${selectable?'report-target':''}`} role={selectable?'button':undefined} tabIndex={selectable?0:undefined} aria-label={selectable?`Report message: ${message.text}`:undefined}
             onClickCapture={selectable?event=>{event.preventDefault();event.stopPropagation();select();}:undefined}
             onKeyDownCapture={selectable?event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();select();}}:undefined}>
@@ -253,6 +267,6 @@ export function MessagesPanel({ userId, connectionId, navigate }: { userId: stri
           {reporting===message.id&&<ContentReport personId={message.fromId} messageId={message.id} close={()=>setReporting(null)}/>}
           {message.failed&&<button className="retry-message" disabled={busy} onClick={()=>void send(undefined,message)}>Not sent · retry</button>}
         </article></Fragment>;
-      })}</div>
-    </div>{awayFromBottom&&<button className="latest-chat latest-dm" type="button" aria-label="Latest messages" title="Latest messages" onClick={followLatest}><ArrowDown size={22} weight="bold"/></button>}</div>{current?.connection.status==='accepted'&&<form className="message-compose" ref={composer} onSubmit={send}><label className="sr-only" htmlFor="direct-message">Message</label><textarea id="direct-message" ref={input} value={text} maxLength={2000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(event); } }} /><button className="solid" aria-label="Send direct message" disabled={busy || !text.trim()}><ArrowUp size={20} weight="bold" /></button></form>}</>}{error && <p className="error" role="alert">{error}</p>}</div>;
+      })}{newerCursor&&<button className="text-link dm-newer" disabled={loadingNewer} onClick={()=>void newer()}>{loadingNewer?'Loading…':'Newer messages'}</button>}</div>
+    </div>{(awayFromBottom||messageId)&&<button className="latest-chat latest-dm" type="button" aria-label="Latest messages" title="Latest messages" onClick={followLatest}><ArrowDown size={22} weight="bold"/></button>}</div>{current?.connection.status==='accepted'&&<form className="message-compose" ref={composer} onSubmit={send}><label className="sr-only" htmlFor="direct-message">Message</label><textarea id="direct-message" ref={input} value={text} maxLength={2000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(event); } }} /><button className="solid" aria-label="Send direct message" disabled={busy || !text.trim()}><ArrowUp size={20} weight="bold" /></button></form>}</>}{error && <p className="error" role="alert">{error}</p>}</div>;
 }

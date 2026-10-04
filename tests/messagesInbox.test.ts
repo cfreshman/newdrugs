@@ -63,3 +63,21 @@ it('reads a new video-call notification while the same DM stays open with no new
  transport.operation.mockClear();await act(async()=>document.dispatchEvent(new Event('visibilitychange')));
  expect(transport.operation).toHaveBeenCalledWith('messages.mark_read',{connectionId:'conversation',throughMessageId:'message'});
 });
+it('searches DMs and opens the matched message in its conversation',async()=>{
+ transport.operation.mockImplementation(async(name:string)=>name==='connections.list'?{items:[connection],people:[person],nextCursor:null}:name==='messages.search'?{items:[{id:'message-42',connectionId:'conversation',fromId:'friend',text:'Here is the link',createdAt:connection.createdAt,score:1,person:{id:'friend',name:'Friend Name',handle:'friend',photoId:'photo'}}],nextCursor:null,mode:'keyword',indexing:false,notices:[]}:{read:true});
+ const navigate=vi.fn();await act(async()=>dom.root.render(createElement(MessagesPanel,{userId:'me',initialQuery:'link',navigate})));
+ expect(transport.operation).toHaveBeenCalledWith('messages.search',{query:'link',limit:20});
+ const match=dom.container.querySelector<HTMLAnchorElement>('.dm-inbox-open')!;
+ expect(match.getAttribute('href')).toBe('/messages/conversation?message=message-42');
+ await act(async()=>match.click());expect(navigate).toHaveBeenCalledWith({view:'messages',resourceId:'conversation',messageId:'message-42'});
+});
+it('loads an exact DM window and marks only the target as viewed',async()=>{
+ const messages=Array.from({length:8},(_,index)=>({id:`message-${index}`,fromId:index%2?'me':'friend',text:`Row ${index}`,createdAt:new Date(Date.parse(connection.createdAt)+index*1000).toISOString(),...(index===3?{clientId:'temporary-animation-id'}:{})}));
+ transport.operation.mockImplementation(async(name:string)=>name==='messages.window'?{items:messages,targetId:'message-3',connection,people:[person],olderCursor:null,newerCursor:'message-7'}:{read:true});
+ const navigate=vi.fn();await act(async()=>dom.root.render(createElement(MessagesPanel,{userId:'me',connectionId:'conversation',messageId:'message-3',navigate})));
+ expect(transport.operation).toHaveBeenCalledWith('messages.window',{messageId:'message-3'});
+ expect(dom.container.querySelector('[data-search-target="true"]')?.getAttribute('data-message-id')).toBe('message-3');
+ expect(transport.operation).toHaveBeenCalledWith('messages.mark_read',{connectionId:'conversation',throughMessageId:'message-3'});
+ const latest=dom.container.querySelector<HTMLButtonElement>('.latest-dm')!;await act(async()=>latest.click());
+ expect(navigate).toHaveBeenCalledWith({view:'messages',resourceId:'conversation',messageId:undefined});
+});

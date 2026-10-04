@@ -6,7 +6,7 @@ export const surfaceViews = ['agent_instructions','agent_memory','preferences','
 export type SurfaceView = typeof surfaceViews[number];
 export interface LogSequence { key:string; ids:string[]; query?:Partial<Omit<LogList,'before'|'limit'>>; search?:Omit<LogSearchInput,'cursor'|'limit'>; filters?:{scope:'all'|'private'|'shared';query?:string;personId?:string}; nextCursor?:string|null }
 /** logSequence is browser/history context only, never encoded in the URL. */
-export interface Destination { logSequence?:LogSequence; view: SurfaceView | 'settings' | 'chat' | 'compose'; mode?: AppMode; date?:string; logMonth?:string; logScope?:'all'|'private'|'shared'|'invitations'; personId?:string; role?: 'all' | 'user' | 'assistant'; resourceId?: string; areaCell?: string; radiusMiles?: number; query?: string; scope?: 'all' | 'nearby' | 'circle' | 'own' | 'friends' | 'saved'; postIds?:string[] }
+export interface Destination { logSequence?:LogSequence; view: SurfaceView | 'settings' | 'chat' | 'compose'; mode?: AppMode; date?:string; logMonth?:string; logScope?:'all'|'private'|'shared'|'invitations'; personId?:string; messageId?:string; role?: 'all' | 'user' | 'assistant'; resourceId?: string; areaCell?: string; radiusMiles?: number; query?: string; scope?: 'all' | 'nearby' | 'circle' | 'own' | 'friends' | 'saved'; postIds?:string[] }
 export interface ResourceLink { rel: 'open_in_newdrugs' | 'download'; targetKind: 'exact' | 'surface'; title: string; url: string; resourceType: string; resourceId?: string }
 export const surfaceRoutes: Record<Destination['view'], string> = { agent_instructions:'/settings/instructions',agent_memory:'/settings/agent',preferences:'/settings/preferences',account_menu:'/account/menu',appearance:'/appearance',log_people:'/log/contacts',log_birthdays:'/log/birthdays',log_anniversaries:'/log/anniversaries',log_settings:'/log/preferences',log_join:'/log/join',log_code:'/log/code',log_scan:'/log/scan',log:'/log',log_compose:'/log/new', compose: '/compose', account_settings: '/account', inbox: '/inbox', automations: '/automations', chat_history: '/chat-history', chat: '/', settings: '/settings', profile: '/profile', credits: '/billing', agents: '/agents', connections: '/connections', people: '/nearby', feed: '/feed', post_list: '/selected-posts', person: '/people', post: '/posts', messages: '/messages', spaces:'/spaces', location: '/location', notifications: '/notifications', notification_settings:'/account/notifications', uploads: '/uploads', blocked: '/blocked', hidden_people:'/settings/hidden', storage: '/storage' };
 export const surfaceTitles: Record<Destination['view'], string> = { agent_instructions:'Guidance',agent_memory:'Agent memory',preferences:'Preferences',account_menu:'Account',appearance:'Preferences',log_people:'Log people',log_birthdays:'Birthdays',log_anniversaries:'Anniversaries',log_settings:'Log settings',log_join:'Join hangout',log_code:'Hangout code',log_scan:'Scan',log:'Log',log_compose:'New entry', compose: 'New post', account_settings: 'Sign-in & security', inbox: 'Agent inbox', automations: 'Automations', chat_history: 'Chat search', chat: 'Chat', settings: 'Settings', profile: 'Profile', credits: 'Add credit', agents: 'Connected agents', connections: 'Messages & invites', people: 'People', feed: 'Posts', post_list: 'Posts for you', person: 'Profile', post: 'Post', messages: 'Messages', spaces:'Talk', location: 'Choose your area', notifications: 'Notifications', notification_settings:'Notification settings', uploads: 'Upload files', blocked: 'Blocked people', hidden_people:'Hidden people', storage: 'Storage' };
@@ -19,6 +19,7 @@ export function destinationPath(destination: Destination) {
   if(destination.logMonth)query.set('month',destination.logMonth);
   if(destination.logScope&&destination.logScope!=='all')query.set('scope',destination.logScope);
   if(destination.personId)query.set('person',destination.personId);
+  if(destination.view==='messages'&&destination.resourceId&&destination.messageId)query.set('message',destination.messageId);
   if(destination.date)query.set('date',destination.date);
   if (destination.areaCell) query.set('area', destination.areaCell);
   if (destination.radiusMiles) query.set('radius', String(destination.radiusMiles));
@@ -49,6 +50,7 @@ export function parseDestination(value: string, origin: string): Destination | n
     if(device){const value=url.searchParams.get('code');if(value&&!normalizeUserCode(value))return null;destination={view:'agents',resourceId:'device',...(value?{query:normalizeUserCode(value)!}:{})};}
     if (!destination || ['person', 'post','log_join','log_code'].includes(destination.view) && !destination.resourceId) return null;
     if (destination.resourceId && !/^[A-Za-z0-9:_.-]{1,150}$/.test(destination.resourceId)) return null;
+    const messageId=url.searchParams.get('message');if(destination.view==='messages'&&destination.resourceId&&messageId){if(!/^[A-Za-z0-9:_.-]{1,100}$/.test(messageId))return null;destination.messageId=messageId;}
     if (mode) destination.mode = mode;
     const date=url.searchParams.get('date');if(date&&(destination.view==='log_compose'||destination.view==='log'&&!destination.resourceId)){if(!logDate.safeParse(date).success)return null;destination.date=date;}
     const role = url.searchParams.get('role');
@@ -59,7 +61,7 @@ export function parseDestination(value: string, origin: string): Destination | n
     if(destination.view==='post_list'){const ids=(url.searchParams.get('ids')||'').split(',');if(!ids.length||ids.length>30||ids.some(id=>!/^[A-Za-z0-9:_.-]{1,100}$/.test(id)))return null;destination.postIds=[...new Set(ids)];}
     if(destination.view==='log'){const month=url.searchParams.get('month'),scope=url.searchParams.get('scope'),person=url.searchParams.get('person');if(month){if(!/^\d{4}-\d{2}$/.test(month)||!logDate.safeParse(`${month}-01`).success)return null;destination.logMonth=month;}if(scope){if(!['all','private','shared','invitations'].includes(scope))return null;destination.logScope=scope as Destination['logScope'];}if(person&&/^[A-Za-z0-9:_.-]{1,100}$/.test(person))destination.personId=person;}
     const query = url.searchParams.get('q'), scope = url.searchParams.get('scope');
-    if (query && query.length<=500 && ['people','feed','chat_history','log'].includes(destination.view)) destination.query=query;
+    if (query && query.length<=500 && ['people','feed','chat_history','log','messages'].includes(destination.view)) destination.query=query;
     if(destination.view==='people'&&scope&&!['all','nearby','circle'].includes(scope))return null;
     if(destination.view==='feed'&&scope==='circle')return null;
     if (scope && ['all','nearby','circle','own','friends','saved'].includes(scope) && ['people','feed','chat_history'].includes(destination.view)) destination.scope=scope as Destination['scope'];
@@ -85,6 +87,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'account.preferences':[{route:'/settings/preferences',targetKind:'surface',resourceType:'preferences'}],
   'account.preferences_update':[{route:'/settings/preferences',targetKind:'surface',resourceType:'preferences'}],
   'conversation.search': [{ route: '/chat/[id]', targetKind: 'exact', resourceType: 'chat_message' }],
+  'search.global':[{route:'/people/[id]',targetKind:'exact',resourceType:'person'},{route:'/posts/[id]',targetKind:'exact',resourceType:'post'},{route:'/spaces/[id]',targetKind:'exact',resourceType:'space'},{route:'/log/[id]',targetKind:'exact',resourceType:'log_entry'},{route:'/chat/[id]',targetKind:'exact',resourceType:'chat_message'},{route:'/messages/[connectionId]?message=[messageId]',targetKind:'exact',resourceType:'message'}],
   'conversation.window': [{ route: '/chat/[id]', targetKind: 'exact', resourceType: 'chat_message' }],
   'identity.get': [{ route: '/people/[id]', targetKind: 'exact', resourceType: 'person' }],
   'profile.update': [{ route: '/people/[id]', targetKind: 'exact', resourceType: 'person' }],
@@ -111,7 +114,9 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'people.blocked': [{ route: '/blocked', targetKind: 'surface', resourceType: 'blocked' }],
   'connections.respond': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
   'messages.list': [{ route: '/messages/[connectionId]', targetKind: 'exact', resourceType: 'conversation' }],
-  'messages.window': [{ route: '/messages/[id]', targetKind: 'exact', resourceType: 'conversation' }],
+  'messages.search': [{route:'/messages/[connectionId]?message=[messageId]',targetKind:'exact',resourceType:'message'}],
+  'messages.get': [{route:'/messages/[connectionId]?message=[messageId]',targetKind:'exact',resourceType:'message'}],
+  'messages.window': [{ route: '/messages/[connectionId]?message=[messageId]', targetKind: 'exact', resourceType: 'message' }],
   'messages.send': [{ route: '/messages/[connectionId]', targetKind: 'surface', resourceType: 'message' }],
   'wallet.activity': [{ route: '/billing', targetKind: 'surface', resourceType: 'wallet' }],
   'wallet.get': [{ route: '/billing', targetKind: 'surface', resourceType: 'wallet' }],

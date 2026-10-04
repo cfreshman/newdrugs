@@ -564,7 +564,7 @@ export function App() {
                   : panel === 'compose' ? <PostComposer user={data.user} navigate={navigate} submitted={post=>navigate({view:'post',resourceId:post.id})}/>
                   : panel === 'post_list' ? <SelectedPostsPanel user={data.user} postIds={panelContext.postIds||[]} navigate={navigate}/>
                   : panel === 'post' ? <PostPanel user={data.user} postId={panelContext.resourceId || ''} navigate={navigate} />
-                    : (panel === 'messages' || panel === 'connections') ? <MessagesPanel userId={data.user.id} connectionId={panelContext.resourceId} navigate={navigate} />
+                    : (panel === 'messages' || panel === 'connections') ? <MessagesPanel userId={data.user.id} connectionId={panelContext.resourceId} messageId={panelContext.messageId} initialQuery={panelContext.query} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} navigate={navigate} />
                       : panel === 'blocked' ? <BlockedPanel />
                       : panel === 'hidden_people' ? <HiddenPeoplePanel navigate={destination=>{resumeSettings.current=true;void closePanel().then(()=>navigate(destination));}} />
                       : panel === 'storage' ? <StoragePanel navigate={destination=>{resumeSettings.current=true;void closePanel().then(()=>navigate(destination));}} />

@@ -18,12 +18,18 @@ it('returns exact authorized profile links and labels collection destinations as
   expect(links[1]).toMatchObject({ targetKind: 'surface', resourceType: 'people' });
   expect(JSON.stringify(links)).not.toContain('private');
 });
-it('does not fabricate inspectable links for deleted posts, unready files or unfocused messages', () => {
+it('does not fabricate inspectable links for deleted posts or unready files, and links exact messages', () => {
   expect(buildResourceLinks('posts.delete', { postId: 'gone' }, { id: 'gone', deleted: true }, actor)).toEqual([]);
   expect(buildResourceLinks('files.get', {}, { id: 'file', ready: false }, actor)).toEqual([]);
-  expect(buildResourceLinks('messages.get', { messageId: 'message' }, { id: 'message', connectionId: 'connection' }, actor)[0]).toMatchObject({ targetKind: 'surface', resourceType: 'conversation', resourceId: 'connection' });
-  expect(buildResourceLinks('messages.window', { messageId: 'message' }, { targetId:'message',connection:{id:'connection'} }, actor)[0]).toMatchObject({ targetKind: 'exact', resourceType: 'conversation', resourceId: 'connection' });
+  for(const [name,output] of [['messages.get',{id:'message',connectionId:'connection'}],['messages.window',{targetId:'message',connection:{id:'connection'}}]] as const){const link=buildResourceLinks(name,{messageId:'message'},output,actor)[0];expect(link).toMatchObject({targetKind:'exact',resourceType:'message',resourceId:'message'});expect(parseDestination(link.url,'https://dev.druggie.org')).toEqual({view:'messages',resourceId:'connection',messageId:'message'});}
   expect(buildResourceLinks('messages.send', { connectionId: 'connection' }, { id: 'message' }, actor)[0]).toMatchObject({ targetKind: 'surface', resourceId: 'connection' });
+});
+it('round-trips DM search and exact message routes',()=>{
+ expect(parseDestination('/messages?q=river','https://dev.druggie.org')).toEqual({view:'messages',query:'river'});
+ expect(parseDestination('/messages/conversation?message=message','https://dev.druggie.org')).toEqual({view:'messages',resourceId:'conversation',messageId:'message'});
+ expect(parseDestination('/messages/conversation?message=%2Fsecret','https://dev.druggie.org')).toBeNull();
+ const links=buildResourceLinks('messages.search',{}, {items:[{id:'message',connectionId:'conversation'}]},actor);
+ expect(parseDestination(links[0].url,'https://dev.druggie.org')).toEqual({view:'messages',resourceId:'conversation',messageId:'message'});
 });
 
 it('links authority and automation validation to their existing settings surfaces',()=>{

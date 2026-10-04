@@ -3,14 +3,14 @@ import {config} from '../config';
 import {workGate} from '../workGate';
 import {DIMENSIONS} from './model';
 
-export type RetrievalKind='public'|'chat'|'log'|'memory';
+export type RetrievalKind='public'|'chat'|'log'|'dm'|'memory';
 export interface RetrievalDocument {
  id:string;sourceKey:string;kind:RetrievalKind;ownerId:string;viewerIds?:string[];
  sourceHash:string;sourceRevision:string;indexVersion:string;text:string;vector:number[];
- dataset?:string;entityId?:string;messageId?:string;offset?:number;role?:string;
+ dataset?:string;entityId?:string;messageId?:string;connectionId?:string;offset?:number;role?:string;
  createdAt:string;generation?:number;memberCount?:number;invitedCount?:number;area?:{lon:number;lat:number};interests?:string[];
 }
-export interface RetrievalHit {id:string;score:number;sourceHash:string;sourceRevision:string;sourceKey:string;ownerId:string;messageId?:string;offset?:number}
+export interface RetrievalHit {id:string;score:number;sourceHash:string;sourceRevision:string;sourceKey:string;ownerId:string;messageId?:string;connectionId?:string;offset?:number}
 export type RetrievalCondition=Record<string,unknown>;
 export interface RetrievalFilter {must?:RetrievalCondition[];must_not?:RetrievalCondition[];should?:RetrievalCondition[]}
 export const retrievalEnabled=()=>Boolean(config.QDRANT_URL);
@@ -49,7 +49,7 @@ export async function ensureRetrievalCollection(kind:RetrievalKind){
  pending=(async()=>{
   const exists=await request<{exists:boolean}>(`/collections/${name}/exists`);
   if(!exists.exists)await request(`/collections/${name}`,'PUT',{vectors:{dense:{size:DIMENSIONS,distance:'Cosine',on_disk:true}},sparse_vectors:{lexical:{modifier:'idf',index:{on_disk:true}}},on_disk_payload:true,hnsw_config:{on_disk:true,max_indexing_threads:1},optimizers_config:{max_optimization_threads:1}});
-  for(const field of ['id','sourceKey','kind','ownerId','viewerIds','sourceHash','sourceRevision','indexVersion','dataset','entityId','messageId','role','interests'])await request(`/collections/${name}/index?wait=true`,'PUT',{field_name:field,field_schema:field==='viewerIds'?{type:'keyword',is_tenant:true}:'keyword'});
+  for(const field of ['id','sourceKey','kind','ownerId','viewerIds','sourceHash','sourceRevision','indexVersion','dataset','entityId','messageId','connectionId','role','interests'])await request(`/collections/${name}/index?wait=true`,'PUT',{field_name:field,field_schema:field==='viewerIds'?{type:'keyword',is_tenant:true}:'keyword'});
   await request(`/collections/${name}/index?wait=true`,'PUT',{field_name:'createdAt',field_schema:'datetime'});
   await request(`/collections/${name}/index?wait=true`,'PUT',{field_name:'area',field_schema:'geo'});
   for(const field of ['generation','memberCount','invitedCount'])await request(`/collections/${name}/index?wait=true`,'PUT',{field_name:field,field_schema:'integer'});
@@ -82,8 +82,8 @@ export async function queryRetrieval(kind:RetrievalKind,userId:string|undefined,
  const filter=retrievalScope(kind,userId,input.filter),limit=Math.min(150,Math.max(1,input.limit||150));
  if(input.vector&&(input.vector.length!==DIMENSIONS||!input.vector.every(Number.isFinite)))throw Error('retrieval_vector_invalid');
  const lane=async(using:'dense'|'lexical',query:unknown)=>{
-  const result=await request<{points:{score:number;payload:Record<string,unknown>}[]}>(`/collections/${collection(kind)}/points/query`,'POST',{query,using,filter,limit,with_vector:false,with_payload:['id','sourceHash','sourceRevision','sourceKey','ownerId','messageId','offset'],timeout:8});
-  return (result.points||[]).flatMap(point=>{const p=point.payload;if(typeof p?.id!=='string'||typeof p.sourceHash!=='string'||typeof p.sourceRevision!=='string'||typeof p.sourceKey!=='string'||typeof p.ownerId!=='string'||!Number.isFinite(point.score))return [];return [{id:p.id,sourceHash:p.sourceHash,sourceRevision:p.sourceRevision,sourceKey:p.sourceKey,ownerId:p.ownerId,score:point.score,...(typeof p.messageId==='string'?{messageId:p.messageId}:{}),...(typeof p.offset==='number'?{offset:p.offset}:{})}];}) as RetrievalHit[];
+  const result=await request<{points:{score:number;payload:Record<string,unknown>}[]}>(`/collections/${collection(kind)}/points/query`,'POST',{query,using,filter,limit,with_vector:false,with_payload:['id','sourceHash','sourceRevision','sourceKey','ownerId','messageId','connectionId','offset'],timeout:8});
+  return (result.points||[]).flatMap(point=>{const p=point.payload;if(typeof p?.id!=='string'||typeof p.sourceHash!=='string'||typeof p.sourceRevision!=='string'||typeof p.sourceKey!=='string'||typeof p.ownerId!=='string'||!Number.isFinite(point.score))return [];return [{id:p.id,sourceHash:p.sourceHash,sourceRevision:p.sourceRevision,sourceKey:p.sourceKey,ownerId:p.ownerId,score:point.score,...(typeof p.messageId==='string'?{messageId:p.messageId}:{}),...(typeof p.connectionId==='string'?{connectionId:p.connectionId}:{}),...(typeof p.offset==='number'?{offset:p.offset}:{})}];}) as RetrievalHit[];
  };
  const [lexical,dense]=await Promise.all([input.query.trim()?lane('lexical',{text:input.query,model:'qdrant/bm25'}):Promise.resolve([]),input.vector?lane('dense',input.vector):Promise.resolve([])]);
  return {lexical,dense};

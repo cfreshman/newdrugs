@@ -266,7 +266,7 @@ The operation catalog is the common contract for UI/CLI/MCP. A feature that chan
 
 `log.related` is a private CLI/MCP/agent read: `newdrugs --profile dev read log.related '{"entryId":"<hangout-id>"}'`. It uses existing indexed text vectors, returns exact authorized Log links, and makes no model call. It needs a joined entry with searchable text and may report that indexing is still underway. There is no Related memories control in the Log UI.
 
-`access.get` reports the current connection scope and filtered operation authority without exposing a token. `messages.window` provides bounded, source-authorized context around one human DM. `automations.validate` uses the same schema and scheduler as creation but makes no change, creates no run and grants no authority. Keep these focused reads separate from generic operation-preview or broad cross-dataset aggregation machinery.
+`access.get` reports the current connection scope and filtered operation authority without exposing a token. `messages.search` uses a separate private DM index, and `messages.window` provides bounded, source-authorized context around one human DM. `search.global` groups matches from the currently authorized public, Log, Agent chat and DM indexes, with exact links and no cross-source score comparison. Background runs can search only their granted sources. `automations.validate` uses the same schema and scheduler as creation but makes no change, creates no run and grants no authority.
 
 Keep these four things distinct:
 
@@ -283,7 +283,7 @@ Read the exact operation schema before calling it. Use one idempotency key per i
 
 Public search indexes discoverable human profiles, public posts, and replies using persisted 512-dimensional vectors plus lexical relevance, filtered retrieval, and source hydration. MongoDB is the source of truth. Both deployed stages use private Qdrant for incremental dense/lexical retrieval with indexed filters. Any in-process exact/legacy fallback must remain bounded; do not restore whole-history scoring or a full-index rebuild on ordinary queries. Pending/failed indexing and keyword fallback must be explicit. Do not add hardcoded phrase routes to fake semantic quality.
 
-Public results must re-check current blocks, visibility, deletion, and source content. DMs, private chats, private files, and inferred sensitive traits do not belong in public search. Private agent-chat search is a separate owner-only index using `conversation.search` and `conversation.window`. Clicking a result loads its surrounding context and scrolls to it without overwriting the live draft.
+Public results must re-check current blocks, visibility, deletion, and source content. DMs, private chats, private files, and inferred sensitive traits do not belong in public search. Private Agent chat uses its owner-only index through `conversation.search` and `conversation.window`. Human DMs use a separate member-scoped index through `messages.search` and `messages.window`, with current membership, blocks, suspension, moderation and source checks before text is returned. Clicking an Agent chat or DM search result loads its surrounding context and scrolls to the exact message without overwriting its draft.
 
 Search embeddings are platform-funded, not debited from user chat credit. Consult configured indexing/budget limits before increasing corpus capacity. Linked article contents and rich media are not automatically semantically indexed just because their attachment previews render. Multimodal/attachment-content retrieval remains future work.
 

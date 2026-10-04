@@ -5,6 +5,7 @@ import { users } from './auth';
 import { requireValue, AppError } from './errors';
 import { enqueueSearch } from './search/queue';
 import {enqueuePostVideoLinks,removePostVideoLinks} from './postVideoLinks';
+import {enqueueDMSearch} from './search/dm';
 export async function moderatePost(postId:string, hidden:boolean, reason:string, keyId:string, session:ClientSession) {
   const post=requireValue(await rows('posts').findOne({_id:postId},{session}));
   if(post.deletedAt&&!hidden)throw new AppError(409,'deleted','An author-deleted post cannot be restored.');
@@ -38,6 +39,7 @@ export async function moderateReportedMessage(reportId:string,hidden:boolean,rea
   if(evidence?.kind!=='message'||!evidence.id)throw new AppError(422,'message_report','Choose a report with submitted message evidence.');
   const message=requireValue(await rows('directMessages').findOne({_id:evidence.id},{session}));
   await rows('directMessages').updateOne({_id:message._id},hidden?{$set:{moderatedAt:new Date().toISOString(),moderationReason:reason,moderatedBy:keyId}}:{$unset:{moderatedAt:'',moderationReason:'',moderatedBy:''}},{session});
+  await enqueueDMSearch(message._id,session);
   if(hidden){
     await rows('notifications').deleteMany({messageId:message._id},{session});
     await rows('connections').updateOne({_id:String(message.connectionId),'lastMessage.createdAt':message.createdAt,'lastMessage.fromId':message.fromId},{$set:{'lastMessage.text':'Message removed by moderation.'}},{session});

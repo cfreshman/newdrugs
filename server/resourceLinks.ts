@@ -21,6 +21,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   if(name==='log.join_preview'){add({view:'log_join',resourceId:String(input.code)},'Join hangout','exact','log_join',data.entryId);return links;}
   if(name==='log.calendar'){for(const day of data.days||[])for(const row of day.items||[])if(!links.some(link=>link.resourceId===row.id))add({view:'log',resourceId:row.id},row.title||'Open Log entry','exact','log_entry',row.id);return links;}
   if(name==='log.search'||name==='log.related'){for(const row of rows)if(row.entryId)add({view:'log',resourceId:row.entryId},row.title||'Open Log entry','exact','log_entry',row.entryId);return links;}
+  if(name==='search.global'){for(const group of data.groups||[])for(const item of group.items||[])if(typeof item.url==='string'&&typeof item.id==='string')links.push({rel:'open_in_newdrugs',targetKind:'exact',title:String(item.title||'Open result').slice(0,160),url:item.url,resourceType:String(item.kind||'result'),resourceId:item.id});return links.slice(0,40);}
   if(name.startsWith('website.')){const site=object(data.site||data);if(typeof site.previewUrl==='string')links.push({rel:'open_in_newdrugs',targetKind:'exact',title:'Preview website draft',url:site.previewUrl,resourceType:'website_preview'});if(typeof site.publicUrl==='string')links.push({rel:'open_in_newdrugs',targetKind:'exact',title:'Open published website',url:site.publicUrl,resourceType:'website'});if(typeof site.stableUrl==='string'&&site.publicUrl)links.push({rel:'open_in_newdrugs',targetKind:'exact',title:'Permanent website address',url:site.stableUrl,resourceType:'website'});return links;}
   if(name==='make.publish'&&data.entry?.id){add({view:'log',resourceId:data.entry.id},data.entry.title||'Open Log entry','exact','log_entry',data.entry.id);return links;}
   if(name.startsWith('spaces.')){for(const row of name==='spaces.list'?rows:[object(data.space||data)])if(row.id)add({view:'spaces',resourceId:row.id},row.title||'Open talk space','exact','space',row.id);if(!links.length)add({view:'spaces'},'Browse Talk','surface','spaces');return links;}
@@ -56,6 +57,15 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     for (const row of name === 'connections.status' || name === 'connections.get' ? [object(data.connection)] : rows) if (typeof row.id === 'string') add({ view: 'messages', resourceId: row.id }, row.status === 'accepted' ? 'Open conversation' : 'View invitation', 'exact', row.status === 'accepted' ? 'conversation' : 'invitation', row.id);
     if (!links.length || name === 'connections.list') add({ view: 'messages' }, 'View invitations and conversations', 'surface', 'connections');
   } else if (name === 'notifications.list') return rows.map(row => row.link as ResourceLink).filter(Boolean);
+  else if(name==='messages.search'){
+    for(const row of rows)if(row.id&&row.connectionId)add({view:'messages',resourceId:row.connectionId,messageId:row.id},'Open message','exact','message',row.id);
+    return links;
+  }
+  else if(name==='messages.get'||name==='messages.window'){
+    const messageId=String(data.targetId||data.id||input.messageId||''),connectionId=String(data.connection?.id||data.connectionId||'');
+    if(messageId&&connectionId)add({view:'messages',resourceId:connectionId,messageId},'Open message','exact','message',messageId);
+    return links;
+  }
   else if (name.startsWith('messages.') && typeof (input.connectionId || data.connectionId || data.connection?.id) === 'string') {
     const connectionId=String(input.connectionId || data.connectionId || data.connection.id);
     add({ view: 'messages', resourceId: connectionId }, 'Open conversation', ['messages.list','messages.window'].includes(name) ? 'exact' : 'surface', 'conversation', connectionId);
@@ -70,7 +80,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   }
   else if (name === 'app.open' && data.open === 'chat_history' && data.resourceId) add({ view: 'chat', resourceId: data.resourceId }, 'Open chat message', 'exact', 'chat_message', data.resourceId);
   else if (name.startsWith('conversation.')) add({ view: 'chat' }, 'Open your agent chat', 'surface', 'chat');
-  else if (name === 'app.open') add({ view: data.open,date:data.date,logMonth:data.logMonth,logScope:data.logScope,personId:data.personId, resourceId: data.resourceId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.resourceId);
+  else if (name === 'app.open') add({ view: data.open,date:data.date,logMonth:data.logMonth,logScope:data.logScope,personId:data.personId, resourceId: data.resourceId, messageId:data.messageId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.messageId||data.resourceId);
   else if (name === 'files.get' || name === 'files.list') for (const row of rows) if (row.ready && typeof row.id === 'string') links.push({ rel: 'download', targetKind: 'exact', title: String(row.name), url: new URL(`/api/files/${encodeURIComponent(row.id)}`, config.uiOrigin).href, resourceType: 'file', resourceId: row.id });
   // Deleted/blocked/reported records have no promised inspectable destination.
   return links.filter((link, index) => links.findIndex(other => other.url === link.url) === index).slice(0, 40);
