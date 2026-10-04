@@ -5,9 +5,9 @@ import { ArrowLeft, X } from '@phosphor-icons/react';
 
 export function Dialog({ title, close, back, children, placement = 'settings', visible = true }: {visible?:boolean; title: string; close(): void; back?: () => void; children: ReactNode; placement?: 'settings' | 'task' }) {
   const {readiness,loading}=useReadinessBoundary();
-  const ref = useRef<HTMLDialogElement>(null),scroll=useRef(0),shown=useRef(visible),titleId=useId();shown.current=visible;
+  const ref = useRef<HTMLDialogElement>(null),scroll=useRef({outer:0,body:0}),shown=useRef(visible),titleId=useId();shown.current=visible;
   const closeRef = useRef(close); closeRef.current = close;
-  useLayoutEffect(() => { const dialog = ref.current!;if(visible){if(!dialog.open)dialog.showModal();dialog.scrollTop=scroll.current;}else{scroll.current=dialog.scrollTop;if(dialog.open)dialog.close();} }, [visible]);
+  useLayoutEffect(() => { const dialog = ref.current!,body=dialog.querySelector<HTMLElement>(':scope > .sheet-body');if(visible){if(!dialog.open)dialog.showModal();dialog.scrollTop=scroll.current.outer;if(body)body.scrollTop=scroll.current.body;}else{scroll.current={outer:dialog.scrollTop,body:body?.scrollTop||0};if(dialog.open)dialog.close();} }, [visible]);
   useLayoutEffect(()=>()=>{ref.current?.close();},[]);
   return <dialog ref={ref} className={`sheet ${placement}-sheet`} aria-labelledby={titleId} inert={!visible} onClose={() => {if(shown.current&&!ref.current?.open)closeRef.current();}}
     onPointerDown={e => { if (e.button === 0 && e.target === e.currentTarget) { const rect = e.currentTarget.getBoundingClientRect(); if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) close(); } }}>

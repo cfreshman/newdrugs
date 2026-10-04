@@ -221,14 +221,29 @@ describe('chat interaction integration', () => {
     expect(dom.container.querySelector('.settings-sheet[open]')?.textContent).toContain('Settings');
     await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.settings-menu a[href="/notifications"]')!.click());
     expect(dom.container.querySelector('.settings-sheet[open]')?.textContent).toContain('New hangout');
+    const sheet=dom.container.querySelector<HTMLDialogElement>('.settings-sheet')!,body=sheet.querySelector<HTMLElement>('.sheet-body')!;body.scrollTop=120;
     await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.notification-list a')!.click());
-    expect(dom.container.querySelector('.settings-sheet[open]')).toBeNull();
+    expect(dom.container.querySelector('.settings-sheet')).toBe(sheet);expect(sheet.open).toBe(false);
     expect(dom.container.querySelector('.social-log .log-modal[data-open=true]')).toBeNull();
     await act(async()=>{await Promise.resolve();dom.frame();await Promise.resolve();});
+    expect(dom.container.querySelector('.settings-sheet')).toBe(sheet);expect(sheet.open).toBe(false);
     expect(dom.container.querySelector('.social-log .log-modal[data-open=true] .log-detail h2')?.textContent).toBe('Test memory');
     await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.log-detail button')].find(button=>button.textContent==='Close')!.click());
     await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
-    expect(dom.container.querySelector('.settings-sheet[open] h2')?.textContent).toBe('Settings');
+    expect(dom.container.querySelector('.settings-sheet[open] h2')?.textContent).toBe('Notifications');
+    expect(dom.container.querySelector('.settings-sheet')).toBe(sheet);expect(body.scrollTop).toBe(120);
+  });
+  it('keeps mobile Notifications mounted but closed while its hangout link changes tabs',async()=>{
+    const notice={id:'cross-tab-log',kind:'log_added' as const,title:'New hangout',text:'A shared day',createdAt:'2026-10-04T12:00:00.000Z',read:true,link:{rel:'open_in_newdrugs' as const,targetKind:'exact' as const,resourceType:'log_entry',resourceId:'resource',title:'Open hangout',url:'https://dev.druggie.org/log/resource'}};
+    await mount();await act(async()=>bootstrap.resolve({...initial,notifications:{unread:0,items:[notice]}}));
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.settings-button')!.click());
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.settings-menu a[href="/notifications"]')!.click());
+    const sheet=dom.container.querySelector<HTMLDialogElement>('.settings-sheet')!;
+    await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.notification-list a')!.click());
+    expect(dom.container.querySelector('.settings-sheet')).toBe(sheet);expect(sheet.open).toBe(false);
+    await act(async()=>{await Promise.resolve();dom.frame();await Promise.resolve();});
+    expect(dom.container.querySelector('.social-log .log-modal[data-open=true] .log-detail h2')?.textContent).toBe('Test memory');
+    expect(dom.container.querySelector('.settings-sheet')).toBe(sheet);expect(sheet.open).toBe(false);
   });
   it('shows invite photos before login and restores the invite after the account identity changes',async()=>{
     const code='a'.repeat(32);history.replaceState(null,'',`/log/join/${code}`);await mount();await act(async()=>bootstrap.resolve({...initial,user:{...initial.user,id:'guest',handle:undefined}}));

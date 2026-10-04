@@ -729,6 +729,7 @@ button, [role="button"], summary, input[type="button"], input[type="submit"], in
 @media(max-width:760px),(pointer:coarse){
  .sheet{position:fixed;top:calc(var(--viewport-top,0px) + max(6px,env(safe-area-inset-top,0px)));bottom:calc(6px + var(--safe-area-bottom));height:fit-content;margin-block:auto;max-height:calc(var(--viewport-height,100dvh) - max(6px,env(safe-area-inset-top,0px)) - 6px - var(--safe-area-bottom));}
  .settings-sheet{height:max-content;display:flex;flex-direction:column;}
+ .settings-sheet:not([open]){visibility:hidden;pointer-events:none;}
  .settings-sheet>.sheet-body{flex:0 1 auto;min-height:0;overflow-y:auto;}
 }
 
