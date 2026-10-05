@@ -2,7 +2,8 @@ import {uploadAdmission} from './uploadAdmission';
 import {agentAccessSchema,deviceStartSchema} from '../shared/agentAccess';
 import {insertAgentToken} from './agentTokens';
 import {startDeviceLogin,pollDeviceLogin,readDeviceLogin,decideDeviceLogin} from './deviceLogin';
-import {sendMedia} from './mediaDelivery';
+import {sendMedia,sendMediaBuffer} from './mediaDelivery';
+import {playableVoiceAudio} from './audioPlayback';
 import {updateLiveInterests} from './liveSubscriptions';
 import {publicInvitePreview,inviteMediaMetadata} from './logInvites';
 import {pagePreview,readPagePreviewImage} from './pagePreviews';
@@ -133,11 +134,23 @@ export function createApp() {
   const publicFileHeaders:express.RequestHandler=(_req,res,next)=>{res.set({'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, HEAD, OPTIONS','Access-Control-Allow-Headers':'Range','Access-Control-Expose-Headers':'Content-Length, Content-Range, Accept-Ranges','Cross-Origin-Resource-Policy':'cross-origin','Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'});next();};
   const publicFileLimit=limiter('/api/public-files',12000);
   app.options('/api/files/:id',publicFileHeaders,(_req,res)=>{res.sendStatus(204);});
+  app.options('/api/files/:id/playback',publicFileHeaders,(_req,res)=>{res.sendStatus(204);});
   app.options('/api/files/:id/poster',publicFileHeaders,(_req,res)=>{res.sendStatus(204);});
   app.get('/api/files/:id',publicFileHeaders,publicFileLimit,async(req,res)=>{
     const file=await publicUploadMetadata(String(req.params.id));
     res.set('Content-Disposition',`${/^(image|audio|video)\//.test(file.mime)?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`);
     await sendMedia(file,req,res);
+  });
+  app.get('/api/files/:id/playback',publicFileHeaders,publicFileLimit,async(req,res)=>{
+    const file=await publicUploadMetadata(String(req.params.id));
+    if(!file.mime.startsWith('audio/'))throw new AppError(404,'not_found','This voice note is unavailable.');
+    if(file.mime==='audio/mp4'||file.mime==='audio/mpeg'){
+      res.set('Content-Disposition',`inline; filename*=UTF-8''${encodeURIComponent(file.name)}`);
+      await sendMedia(file,req,res);return;
+    }
+    const bytes=await playableVoiceAudio(file);
+    res.set('Content-Disposition',`inline; filename*=UTF-8''${encodeURIComponent(`${file._id}.m4a`)}`);
+    sendMediaBuffer(bytes,'audio/mp4',req,res);
   });
   app.get('/api/files/:id/poster',publicFileHeaders,publicFileLimit,async(req,res)=>{
     const file=await publicUploadMetadata(String(req.params.id));

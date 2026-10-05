@@ -1,5 +1,6 @@
 import {publicUploadName,originalUploadName} from './uploadNames';
 import {workGate} from './workGate';
+import {transcodeVoiceAudio} from './audioTranscode';
 import {publishLogChange} from './recordEvents';
 import {stageObjectWrite,readObjectFile,deleteObjectFile,cleanObjectWriteIntents,type ObjectLocation} from './objectStorage';
 import { profileVisibleTo } from './profileVisibility';
@@ -62,6 +63,7 @@ async function acceptUploadBytes(actor:Actor,id:string,body:Buffer){
     else if(body.toString('ascii',4,8)==='ftyp'&&['mp4','m4a','mov'].includes(extension||''))mime=extension==='m4a'?'audio/mp4':'video/mp4';
     else throw new AppError(422,'log_media','Choose a photo or voice note file.');
     if(mime.startsWith('video/'))throw new AppError(422,'log_video_upload','Upload a photo or voice note. Add videos as links instead.');
+    if(file.purpose==='profile_voice'){bytes=await transcodeVoiceAudio(body,mime);mime='audio/mp4';}
   }
   else if(body.toString('ascii',0,5)==='%PDF-')mime='application/pdf';
   else {

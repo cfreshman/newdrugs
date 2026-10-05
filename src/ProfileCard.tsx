@@ -22,8 +22,7 @@ export function ProfileCard({ person }: { person: Profile }) {
     {person.area?.label && <p className="quiet small"><LocationLabel label={person.area.label}/></p>}
     {person.bio && <p className="profile-bio">{person.bio}</p>}
     {person.interests.length > 0 && <ul className="profile-interests">{person.interests.map(interest => <li key={interest}>{interest}</li>)}</ul>}
-    {person.voiceFileId&&<div className="profile-voice log-voice-row"><AudioPlayer src={`/api/files/${encodeURIComponent(person.voiceFileId)}`} active={visible} voiceNote/></div>}
+    {(person.voiceFileId||person.websiteUrl)&&<div className="profile-utility-row log-voice-row">{person.voiceFileId&&<AudioPlayer src={`/api/files/${encodeURIComponent(person.voiceFileId)}`} active={visible} voiceNote/>}{person.websiteUrl&&<a className="profile-website" href={person.websiteUrl} target="_blank" rel="noopener noreferrer">Website</a>}</div>}
     {person.mediaUrl&&<div className="profile-media"><LinkPreviews text="" links={[person.mediaUrl]}/></div>}
-    {person.websiteUrl&&<a className="solid profile-website" href={person.websiteUrl} target="_blank" rel="noopener noreferrer">Website</a>}
   </article>;
 }

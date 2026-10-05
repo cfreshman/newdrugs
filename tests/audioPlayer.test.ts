@@ -48,3 +48,13 @@ it('keeps Log voice playback compact and interruption restarts from the beginnin
  act(()=>{audio.currentTime=14.2;audio.dispatchEvent(new Event('timeupdate'));});expect(dom.container.textContent).toBe('Interrupt 1s');
  await act(async()=>dom.container.querySelector('button')!.click());expect(audio.paused).toBe(true);expect(audio.currentTime).toBe(0);expect(dom.container.textContent).toBe('Play voice note');
 });
+it('uses compatible voice audio without seeking before iOS loads metadata',async()=>{
+ const id='a9e1a8b9-fa7c-4dc4-93a7-73a72abd738b';
+ await act(async()=>dom.root.render(createElement(AudioPlayer,{src:`/api/files/${id}`,voiceNote:true})));
+ const audio=dom.container.querySelector('audio')!;
+ expect(audio.getAttribute('src')).toBe(`/api/files/${id}/playback`);
+ Object.defineProperty(audio,'currentTime',{configurable:true,get:()=>0,set:()=>{throw Error('Seek before metadata.');}});
+ await act(async()=>dom.container.querySelector('button')!.click());
+ expect(HTMLMediaElement.prototype.play).toHaveBeenCalledOnce();
+ expect(dom.container.textContent).toContain('Interrupt');
+});

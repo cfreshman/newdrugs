@@ -5,6 +5,7 @@ const time=(seconds:number)=>{const value=Math.max(0,Math.floor(Number.isFinite(
 
 /** Shared audio controls. The media element has no native menu or download UI. */
 export function AudioPlayer({src,active=true,voiceNote=false,editor=false}:{src:string;active?:boolean;voiceNote?:boolean;editor?:boolean}){
+ const playbackSrc=voiceNote&&/^\/api\/files\/[0-9a-f-]{36}$/i.test(src)?`${src}/playback`:src;
  const audio=useRef<HTMLAudioElement>(null),activeRef=useRef(active),intent=useRef(0);
  activeRef.current=active;
  const [playing,setPlaying]=useState(false),[waiting,setWaiting]=useState(false),[failed,setFailed]=useState(false);
@@ -15,20 +16,20 @@ export function AudioPlayer({src,active=true,voiceNote=false,editor=false}:{src:
   const other=(event:Event)=>{if((event as CustomEvent).detail!==node){intent.current++;node.pause();}};
   document.addEventListener('visibilitychange',hide);window.addEventListener('newdrugs:media-play',other);
   return()=>{intent.current++;node.pause();document.removeEventListener('visibilitychange',hide);window.removeEventListener('newdrugs:media-play',other);};
- },[src]);
+ },[playbackSrc]);
  useEffect(()=>{if(!active){intent.current++;audio.current?.pause();setPlaying(false);setWaiting(false);}},[active]);
  const toggle=async()=>{
   const node=audio.current;if(!node||!activeRef.current)return;
   const ticket=++intent.current;
   if(!node.paused){node.pause();if(voiceNote){node.currentTime=0;setPosition(0);}return;}
   setFailed(false);setWaiting(true);
-  try{if(node.error)node.load();if(node.ended||voiceNote)node.currentTime=0;await node.play();if(ticket!==intent.current||!activeRef.current)node.pause();}
+  try{if(node.error)node.load();if((node.ended||voiceNote&&node.currentTime>0)&&node.readyState>0)node.currentTime=0;await node.play();if(ticket!==intent.current||!activeRef.current)node.pause();}
   catch(error){if(ticket===intent.current){setWaiting(false);setFailed(true);console.error('Audio playback:',error instanceof Error?error.message:'Unable to play.');}}
  };
  const seek=(value:number)=>{const node=audio.current;if(!node||!duration)return;const next=Math.min(duration,Math.max(0,value));node.currentTime=next;setPosition(next);};
  const updateTime=()=>{const node=audio.current!;setPosition(Number.isFinite(node.currentTime)?node.currentTime:0);setDuration(Number.isFinite(node.duration)&&node.duration>0?node.duration:0);};
  return <div className={voiceNote?'log-voice-player':'audio-player'} role="group" aria-label={voiceNote?'Voice note':'Audio player'} data-embed-interactive>
-  <audio ref={audio} src={src} preload={active?'metadata':'none'} hidden aria-hidden="true" controlsList="nodownload" onEmptied={()=>{setDuration(0);setPosition(0);}} onLoadedMetadata={updateTime} onDurationChange={updateTime} onTimeUpdate={updateTime}
+  <audio ref={audio} src={playbackSrc} preload={voiceNote?'none':active?'metadata':'none'} hidden aria-hidden="true" controlsList="nodownload" onEmptied={()=>{setDuration(0);setPosition(0);}} onLoadedMetadata={updateTime} onDurationChange={updateTime} onTimeUpdate={updateTime}
    onPlay={()=>{if(!activeRef.current){audio.current?.pause();return;}setPlaying(true);setFailed(false);window.dispatchEvent(new CustomEvent('newdrugs:media-play',{detail:audio.current}));}}
    onPlaying={()=>setWaiting(false)} onWaiting={()=>setWaiting(true)} onPause={()=>{setPlaying(false);setWaiting(false);}} onEnded={()=>{setPlaying(false);setWaiting(false);updateTime();}}
    onError={()=>{setFailed(true);setPlaying(false);setWaiting(false);}}/>

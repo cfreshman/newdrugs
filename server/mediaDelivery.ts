@@ -20,6 +20,17 @@ export function mediaRange(value:string|undefined,size:number):{start:number;end
  return start>end||start>=size?false:{start,end};
 }
 
+/** Range-capable response for a bounded generated media variant. */
+export function sendMediaBuffer(bytes:Buffer,mime:string,req:Request,res:Response){
+ const range=mediaRange(req.headers.range,bytes.length);
+ res.set({'Content-Type':mime,'Accept-Ranges':'bytes','Cache-Control':String(res.getHeader('Cache-Control')||'no-store'),'X-Content-Type-Options':'nosniff'});
+ if(range===false){res.status(416).set('Content-Range',`bytes */${bytes.length}`).end();return;}
+ const output=range?bytes.subarray(range.start,range.end+1):bytes;
+ res.set('Content-Length',String(output.length));
+ if(range)res.status(206).set('Content-Range',`bytes ${range.start}-${range.end}/${bytes.length}`);
+ res.end(req.method==='HEAD'?undefined:output);
+}
+
 /** Verified immutable files stream with backpressure, including single byte ranges. */
 export async function sendMedia(file:Upload,req:Request,res:Response){
  if(!/^[0-9a-f-]{36}$/.test(file._id))throw new AppError(404,'not_found','This file is unavailable.');

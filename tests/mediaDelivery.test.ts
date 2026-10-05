@@ -5,13 +5,25 @@ import {createHash,randomUUID} from 'node:crypto';
 import {mkdir,writeFile,unlink} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {config} from '../server/config';
-import {mediaRange,sendMedia} from '../server/mediaDelivery';
+import {mediaRange,sendMedia,sendMediaBuffer} from '../server/mediaDelivery';
 import type {Upload} from '../server/uploads';
 
 it('validates ordinary, suffix, open and invalid byte ranges',()=>{
  expect(mediaRange(undefined,100)).toBeNull();expect(mediaRange('bytes=10-19',100)).toEqual({start:10,end:19});
  expect(mediaRange('bytes=-10',100)).toEqual({start:90,end:99});expect(mediaRange('bytes=95-',100)).toEqual({start:95,end:99});
  for(const value of ['bytes=','bytes=-0','bytes=100-','bytes=9-2','bytes=0-1,5-6','bytes=9007199254740992-'])expect(mediaRange(value,100)).toBe(false);
+});
+it('serves generated audio with the byte ranges iOS requests',async()=>{
+ const bytes=Buffer.from('0123456789');
+ const app=express();app.get('/voice',(req,res)=>sendMediaBuffer(bytes,'audio/mp4',req,res));
+ const server=app.listen(0,'127.0.0.1');await new Promise<void>(resolve=>server.once('listening',resolve));
+ const url=`http://127.0.0.1:${(server.address() as AddressInfo).port}/voice`;
+ try{
+  const partial=await fetch(url,{headers:{Range:'bytes=2-5'}});
+  expect(partial.status).toBe(206);expect(partial.headers.get('content-type')).toContain('audio/mp4');expect(partial.headers.get('content-range')).toBe('bytes 2-5/10');expect(await partial.text()).toBe('2345');
+  const head=await fetch(url,{method:'HEAD'});expect(head.headers.get('content-length')).toBe('10');expect(await head.text()).toBe('');
+  expect((await fetch(url,{headers:{Range:'bytes=99-'}})).status).toBe(416);
+ }finally{await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });
 it('streams ranges and HEAD without full response buffers, and rechecks changed file contents',async()=>{
  const id=randomUUID(),path=resolve(config.DATA_DIR,'files',id),bytes=Buffer.alloc(256*1024,41);await mkdir(resolve(config.DATA_DIR,'files'),{recursive:true});await writeFile(path,bytes);
