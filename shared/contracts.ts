@@ -101,6 +101,7 @@ export const outputs: Record<string, z.ZodType> = {
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
   'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'call', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added', 'iou', 'alert']), title: z.string(), text: z.string(), createdAt: z.string(), photoId:z.string().optional(), connectionId: z.string().optional(), callId:z.string().optional(),callActive:z.boolean().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),
+  'notifications.read_all':z.object({read:z.literal(true),readAt:z.string()}),
   'notifications.preferences':notificationPreferences,'notifications.preference_set':notificationPreference,
   'notifications.rules':notificationRulesOutput,'notifications.rule_create':notificationRuleOutput,'notifications.rule_set':notificationRuleOutput,'notifications.rule_delete':z.object({deleted:z.literal(true),id:z.uuid()}),
   'people.block': z.object({ personId: id, blocked: z.boolean() }), 'people.report': z.object({ id, status: z.literal('unreviewed') }),

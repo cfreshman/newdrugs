@@ -36,3 +36,35 @@ it('keeps the same form rows for Settled up and Paid down',async()=>{
  expect(dom.container.querySelectorAll('.ious-direction-tabs button')).toHaveLength(1);
  expect(dom.container.querySelector<HTMLInputElement>('.ious-form input[placeholder="$0.00"]')?.readOnly).toBe(false);
 });
+it('places both payment apps above Add owed only when the other person will owe me',async()=>{
+ dom=setupDOM();
+ const ledger={person:{id:'other',name:'Laura',handle:'laura'},balanceCents:0,revision:0,updatedAt:'',lastEntry:null,entries:[],nextCursor:null,paymentHandles:{venmo:'Laura_2',cashApp:'Laura2'}};
+ api.operation.mockImplementation(async(name:string)=>name==='ious.get'?ledger:{items:[],nextCursor:null});
+ await act(async()=>dom!.root.render(createElement(IousPanel,{user:{id:'me',name:'Me',city:'',bio:'',interests:[],discoverable:false},personId:'other',choosing:false,setChoosing:vi.fn(),navigate:vi.fn()})));
+ const form=dom.container.querySelector<HTMLFormElement>('.ious-form')!,amount=form.querySelector<HTMLInputElement>('input[placeholder="$0.00"]')!;
+ expect([...form.querySelectorAll('.ious-payment-links button')].map(button=>button.textContent)).toEqual(['Pay with Venmo','Pay with Cash App']);
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(amount,'42.53');amount.dispatchEvent(new Event('input',{bubbles:true}));});
+ const links=[...form.querySelectorAll<HTMLAnchorElement>('.ious-payment-links a')];
+ expect(links.map(link=>link.href)).toEqual(['https://venmo.com/?txn=pay&recipients=Laura_2&amount=42.53','https://cash.app/$Laura2/42.53']);
+ expect(links[0].parentElement?.nextElementSibling?.textContent).toBe('Add to IOU');
+ await act(async()=>[...form.querySelectorAll<HTMLButtonElement>('.ious-direction-tabs button')][1].click());
+ expect(form.querySelector('.ious-payment-links')).toBeNull();
+});
+it('shows payment links for an amount owed by me, above the matching record action',async()=>{
+ dom=setupDOM();
+ const ledger={person:{id:'other',name:'Laura',handle:'laura'},balanceCents:-5234,revision:3,updatedAt:'',lastEntry:null,entries:[],nextCursor:null,paymentHandles:{venmo:'Laura_2',cashApp:''}};
+ api.operation.mockImplementation(async(name:string)=>name==='ious.get'?ledger:{items:[],nextCursor:null});
+ await act(async()=>dom!.root.render(createElement(IousPanel,{user:{id:'me',name:'Me',city:'',bio:'',interests:[],discoverable:false},personId:'other',choosing:false,setChoosing:vi.fn(),navigate:vi.fn()})));
+ const form=dom.container.querySelector<HTMLFormElement>('.ious-form')!,tabs=()=>[...form.querySelectorAll<HTMLButtonElement>('[aria-label="IOU change"] button')];
+ await act(async()=>tabs()[1].click());
+ expect(form.querySelector<HTMLAnchorElement>('.ious-payment-links a')?.href).toBe('https://venmo.com/?txn=pay&recipients=Laura_2&amount=52.34');
+ expect(form.querySelector('.ious-payment-links')?.nextElementSibling?.textContent).toBe('Settle up');
+ await act(async()=>tabs()[2].click());
+ const amount=form.querySelector<HTMLInputElement>('input[placeholder="$0.00"]')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(amount,'12.34');amount.dispatchEvent(new Event('input',{bubbles:true}));});
+ expect(form.querySelector<HTMLAnchorElement>('.ious-payment-links a')?.href).toBe('https://venmo.com/?txn=pay&recipients=Laura_2&amount=12.34');
+ expect(form.querySelector('.ious-payment-links')?.nextElementSibling?.textContent).toBe('Record paid down');
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(amount,'60.00');amount.dispatchEvent(new Event('input',{bubbles:true}));});
+ expect(form.querySelector('.ious-payment-links a')).toBeNull();
+ expect(form.querySelector<HTMLButtonElement>('.ious-payment-links button')?.disabled).toBe(true);
+});

@@ -25,3 +25,20 @@ it('retains a notification as read and lets it reopen the exact destination', as
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'messages', resourceId: 'connection' }));
   expect(transport.operation).not.toHaveBeenCalled();
 });
+it('marks the visible history read without removing the notification cards',async()=>{
+ const refresh=vi.fn().mockResolvedValue(undefined);
+ transport.operation.mockResolvedValue({read:true,readAt:'2026-10-05T12:00:00.000Z'});
+ await act(async()=>dom.root.render(createElement(NotificationsPanel,{state:{unread:1,items:[item]},navigate:vi.fn(),refresh})));
+ const link=dom.container.querySelector<HTMLAnchorElement>('.notification-list a')!;
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.notification-toolbar button')!.click());
+ expect(transport.operation).toHaveBeenCalledWith('notifications.read_all');
+ expect(refresh).toHaveBeenCalledOnce();
+ expect(dom.container.querySelector('.notification-list a')).toBe(link);
+ expect(link.dataset.read).toBe('true');
+ expect(link.textContent).toContain('Read');
+ expect(dom.container.querySelector('.notification-toolbar')).toBeNull();
+ await act(async()=>dom.root.render(createElement(NotificationsPanel,{state:{unread:1,items:[{...item,text:'A newer message',createdAt:'2026-10-05T12:01:00.000Z'}]},navigate:vi.fn(),refresh})));
+ expect(link.dataset.read).toBeUndefined();
+ expect(link.textContent).toContain('Unread');
+ expect(dom.container.querySelector('.notification-toolbar button')?.textContent).toBe('Mark all read');
+});

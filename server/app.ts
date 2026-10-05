@@ -60,6 +60,7 @@ import { replyToReview } from './reviewReply';
 import {websiteRequest} from './websiteServing';
 import {reservedWebsiteUsername} from '../shared/website';
 import {MAX_SQUARE_BYTES} from '../src/squareModel';
+import {paymentHandlesInput,paymentHandlesOutput} from '../shared/paymentHandles';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
 const passkeyProof=z.object({id:z.string().min(1).max(1024).regex(/^[A-Za-z0-9_-]+$/)}).passthrough();
@@ -252,6 +253,18 @@ export function createApp() {
   app.post('/api/account/password', limiter('/api/account/password', 10, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const actor = browserActor(req), data = z.strictObject({ password: credentials.shape.password, currentPassword: z.string().min(1).max(128) }).parse(req.body);
     const user = await verifyAccountPassword(actor.userId, data.currentPassword); await changeAccountPassword(user, data.password, req.cookies[config.SESSION_COOKIE]); res.json({ ok: true });
+  });
+  app.get('/api/account/payment-handles',async(req,res)=>{
+    const user=await currentUser(browserActor(req).userId);
+    res.set('Cache-Control','no-store').json(paymentHandlesOutput.parse({venmo:user.paymentHandles?.venmo||'',cashApp:user.paymentHandles?.cashApp||''}));
+  });
+  app.post('/api/account/payment-handles',limiter('/api/account/payment-handles',10,15*60000,{credentialAttempts:true}),async(req,res)=>{
+    const actor=browserActor(req),input=paymentHandlesInput.parse(req.body);
+    const user=await verifyAccountPassword(actor.userId,input.currentPassword);
+    const paymentHandles=paymentHandlesOutput.parse({venmo:input.venmo,cashApp:input.cashApp});
+    const changed=await users().updateOne({_id:actor.userId,passwordHash:user.passwordHash},{$set:{paymentHandles}});
+    if(!changed.matchedCount)throw new AppError(409,'account_changed','Your account changed. Sign in again.');
+    res.set('Cache-Control','no-store').json(paymentHandles);
   });
   app.get('/api/account/passkeys',async(req,res)=>{res.json(await listPasskeys(browserActor(req).userId));});
   app.post('/api/account/passkeys/register/options',limiter('/api/account/passkey/register',10,15*60000,{credentialAttempts:true}),async(req,res)=>{

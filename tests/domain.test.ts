@@ -3,7 +3,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import sharp from 'sharp';
 import { connectDatabase, db, mongo, rows } from '../server/db';
-import { createGuest, currentUser, users, hash, registerAccount, type Actor } from '../server/auth';
+import { createGuest, currentUser, users, hash, profile, registerAccount, type Actor } from '../server/auth';
 import { executeOperation } from '../server/operations';
 import { ensureStarterPool, ensureStarter, starterClaimKey, pools, starterPoolStatus, setStarterBudget } from '../server/starterPool';
 import { reserveRun, runs, recordTurnUsage, finishRun, wallet } from '../server/wallet';
@@ -453,6 +453,22 @@ describe('photo posts and typed review rejection', () => {
 });
 
 describe('notification history', () => {
+  it('marks existing notifications and invitation notices read while leaving later arrivals unread',async()=>{
+    const sender=await person(),recipient=await person();
+    await users().updateOne({_id:recipient.userId},{$set:{discoverable:true}});
+    const invitation=await executeOperation('connections.request',{personId:recipient.userId,note:'Hi'},sender,randomUUID(),{confirmed:true}) as any;
+    const earlier=new Date(Date.now()-60_000).toISOString(),later=new Date(Date.now()+60_000).toISOString();
+    await rows('notifications').insertMany([
+      {_id:randomUUID(),userId:recipient.userId,actorId:sender.userId,kind:'alert',resourceType:'credits',resourceId:'credit',title:'Earlier',text:'',createdAt:earlier,readAt:null},
+      {_id:randomUUID(),userId:recipient.userId,actorId:sender.userId,kind:'alert',resourceType:'credits',resourceId:'credit',title:'Later',text:'',createdAt:later,readAt:null},
+    ]);
+    await executeOperation('notifications.read_all',{},recipient,randomUUID());
+    const state=await executeOperation('notifications.list',{},recipient) as any;
+    expect(state.items.find((item:any)=>item.id===`invite:${invitation.id}`)?.read).toBe(true);
+    expect(state.items.find((item:any)=>item.title==='Earlier')?.read).toBe(true);
+    expect(state.items.find((item:any)=>item.title==='Later')?.read).toBe(false);
+    expect((await rows('connections').findOne({_id:invitation.id}))?.status).toBe('pending');
+  });
   it('retains read messages and invitations with exact links, restores unread for new messages, and respects blocks', async () => {
     const sender = await person(), recipient = await person(), stranger = await person();
     await users().updateOne({ _id: recipient.userId }, { $set: { discoverable: true } });
@@ -478,6 +494,20 @@ describe('notification history', () => {
     expect(await executeOperation('notifications.list', {}, recipient)).toMatchObject({ unread: 0 });
     await executeOperation('people.block', { personId: sender.userId, blocked: true }, recipient, randomUUID());
     expect(await executeOperation('notifications.list', {}, recipient)).toMatchObject({ unread: 0, items: [] });
+  });
+});
+
+describe('IOU payment destinations',()=>{
+  it('shares payment usernames only through an authorized pair ledger, never a public profile',async()=>{
+    const viewer=await person(),other=await person();
+    await users().updateOne({_id:other.userId},{$set:{discoverable:true,paymentHandles:{venmo:'Laura_2',cashApp:'Laura2'}}});
+    expect(profile(await currentUser(other.userId))).not.toHaveProperty('paymentHandles');
+    expect((await executeOperation('ious.get',{personId:other.userId},viewer) as any).paymentHandles).toEqual({venmo:'',cashApp:''});
+    const invitation=await executeOperation('connections.request',{personId:other.userId,note:'Hi'},viewer,randomUUID(),{confirmed:true}) as any;
+    await executeOperation('connections.respond',{connectionId:invitation.id,accept:true},other,randomUUID(),{confirmed:true});
+    expect((await executeOperation('ious.get',{personId:other.userId},viewer) as any).paymentHandles).toEqual({venmo:'Laura_2',cashApp:'Laura2'});
+    await executeOperation('people.block',{personId:other.userId,blocked:true},viewer,randomUUID());
+    expect((await executeOperation('ious.get',{personId:other.userId},viewer) as any).paymentHandles).toEqual({venmo:'',cashApp:''});
   });
 });
 

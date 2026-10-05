@@ -24,6 +24,7 @@ export interface User {
   inboxPushEnabled?: boolean; chatClearedAt?: string; chatGeneration?: number; internalTestAccount?: boolean; starterGranted?: boolean; starterClaimKey?: string;
   area?: CoarseArea | null;
   photos?:string[];storageBytes?:number;mediaUrl?:string|null;voiceFileId?:string|null;
+  paymentHandles?:import('../shared/paymentHandles').PaymentHandles;
   websiteCode?:string;
   logHandleGrams?:string[];logNameGrams?:string[];
 }

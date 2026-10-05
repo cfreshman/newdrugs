@@ -565,10 +565,16 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'notifications.read': {
       const id = String(d.notificationId);
       if (id.startsWith('inbox:')) await rows('agentInbox').updateOne({ _id: id.slice(6), userId }, { $set: { readAt: now } }, options);
-      if (id.startsWith('invite:')) requireValue(await rows('connections').findOneAndUpdate({ _id: id.slice(7), toId: userId }, { $set: { notificationReadAt: now } }, options));
+      else if (id.startsWith('invite:')) requireValue(await rows('connections').findOneAndUpdate({ _id: id.slice(7), toId: userId }, { $set: { notificationReadAt: now } }, options));
       else if (id.startsWith('review:')) requireValue(await rows('runs').findOne({ _id: id.slice(7), userId }, options));
       else { const changed = await rows('notifications').updateOne({ _id: id, userId }, { $set: { readAt: now } }, options); if (!changed.matchedCount) throw new AppError(404, 'not_found', 'This notification is unavailable.'); }
       return { read: true };
+    }
+    case 'notifications.read_all': {
+      await rows('notifications').updateMany({userId,readAt:null,createdAt:{$lte:now}},{$set:{readAt:now}},options);
+      await rows('connections').updateMany({toId:userId,status:'pending',notificationReadAt:null,createdAt:{$lte:now}},{$set:{notificationReadAt:now}},options);
+      await rows('recordEvents').insertOne({_id:randomUUID(),userIds:[userId],payload:{keys:['notifications']},expiresAt:new Date(Date.now()+3600000)},options);
+      return {read:true,readAt:now};
     }
     case 'people.block': {
       const other = String(d.personId);

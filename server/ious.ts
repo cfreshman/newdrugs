@@ -44,10 +44,12 @@ export async function listIous(userId:string,before?:string,session?:ClientSessi
  return {items:await Promise.all(page.flatMap(row=>{const other=people.find(person=>person._id===row.members.find(id=>id!==userId));return other?[summary(row,userId,other,last.find(entry=>entry._id===row.lastEntryId))]:[];})),nextCursor:found.length>30?Buffer.from(JSON.stringify({updatedAt:page.at(-1)!.updatedAt,id:page.at(-1)!._id})).toString('base64url'):null};
 }
 export async function getIou(userId:string,personId:string,before?:number,session?:ClientSession){
- const other=requireValue(await users().findOne({_id:personId,handle:{$type:'string'}},{session,projection:{name:1,handle:1,photos:1}}),'This person is unavailable.'),row=await ledgers().findOne({_id:pair(userId,personId),members:userId},{session});
- if(!row)return {person:person(other),balanceCents:0,revision:0,updatedAt:'',lastEntry:null,entries:[],nextCursor:null};
+ const other=requireValue(await users().findOne({_id:personId,handle:{$type:'string'}},{session,projection:{name:1,handle:1,photos:1,paymentHandles:1}}),'This person is unavailable.'),row=await ledgers().findOne({_id:pair(userId,personId),members:userId},{session});
+ const allowed=Boolean((row||await rows('connections').findOne({_id:pair(userId,personId),status:'accepted'},{session,projection:{_id:1}}))&&!await rows('blocks').findOne({pairId:pair(userId,personId)},{session,projection:{_id:1}}));
+ const paymentHandles=allowed?{venmo:other.paymentHandles?.venmo||'',cashApp:other.paymentHandles?.cashApp||''}:{venmo:'',cashApp:''};
+ if(!row)return {person:person(other),balanceCents:0,revision:0,updatedAt:'',lastEntry:null,entries:[],nextCursor:null,paymentHandles};
  const found=await entries().find({pairId:row._id,...(before?{revision:{$lt:before}}:{})},{session}).sort({revision:-1}).limit(31).toArray(),page=found.slice(0,30),last=row.lastEntryId?await entries().findOne({_id:row.lastEntryId},{session}):null;
- return {...await summary(row,userId,other,last),entries:page.map(entryView),nextCursor:found.length>30?String(page.at(-1)!.revision):null};
+ return {...await summary(row,userId,other,last),entries:page.map(entryView),nextCursor:found.length>30?String(page.at(-1)!.revision):null,paymentHandles};
 }
 export async function recordIou(actor:Actor,input:{personId:string;kind:'owe'|'settle'|'payment';direction?:'me_to_them'|'them_to_me';amountCents?:number;revision?:number;reason:string},session:ClientSession){
  const actorUser=requireValue(await users().findOne({_id:actor.userId,handle:{$type:'string'},suspendedAt:null},{session}),'Save your account before recording an IOU.');

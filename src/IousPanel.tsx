@@ -3,6 +3,7 @@ import {ChatCircle} from '@phosphor-icons/react';
 import type {Profile} from '../shared/types';
 import type {Destination} from '../shared/navigation';
 import type {IouEntry,IouLedger,IouSummary} from '../shared/ious';
+import {paymentLink} from '../shared/paymentHandles';
 import {operation,errorText} from './api';
 import {avatarImageUrl} from './logImageCache';
 import {NavLink} from './NavLink';
@@ -42,6 +43,13 @@ export function IousPanel({user,personId,choosing,setChoosing,navigate}:{user:Pr
   catch(cause){setError(errorText(cause));}finally{setBusy(false);}
  };
  const name=ledger?.person.handle?`@${ledger.person.handle}`:ledger?.person.name||'This person';
+ const enteredPaymentCents=ledger?(kind==='settle'?Math.abs(ledger.balanceCents):cents(amount)):null;
+ const paymentCents=kind==='payment'&&ledger&&enteredPaymentCents!==null&&enteredPaymentCents>=Math.abs(ledger.balanceCents)?null:enteredPaymentCents;
+ const showPaymentLinks=Boolean(ledger&&(kind==='owe'?direction==='them_to_me':ledger.balanceCents<0));
+ const paymentLinks=showPaymentLinks&&ledger?([
+  {provider:'venmo' as const,label:'Venmo',handle:ledger.paymentHandles?.venmo||''},
+  {provider:'cashApp' as const,label:'Cash App',handle:ledger.paymentHandles?.cashApp||''},
+ ].filter(link=>paymentLink(link.provider,link.handle,100)).map(link=>({...link,href:paymentCents?paymentLink(link.provider,link.handle,paymentCents):null}))):[];
  const signedChange=(entry:IouEntry)=>(entry.creditorId===user.id?1:-1)*(entry.kind==='owe'?1:-1)*entry.amountCents;
  if(personId)return <section className="ious-panel">
   {ledger&&<><ConversationHeader><div className="message-view-actions"><NavLink className="message-person" to={{view:'person',resourceId:ledger.person.id}} navigate={navigate}><IouAvatar name={ledger.person.name||name} photoId={ledger.person.photoId}/><span className="message-person-name"><strong>{ledger.person.name||name}</strong>{ledger.person.handle&&<span className="quiet">@{ledger.person.handle}</span>}</span></NavLink><NavLink className="call-start" to={{view:'messages',resourceId:[user.id,ledger.person.id].sort().join(':')}} navigate={navigate} aria-label={`Messages with ${name}`}><ChatCircle size={19}/><span className="call-start-label">Messages</span></NavLink></div></ConversationHeader><div className="ious-balance"><strong>{balance(ledger.balanceCents)}</strong></div>
@@ -49,6 +57,7 @@ export function IousPanel({user,personId,choosing,setChoosing,navigate}:{user:Pr
     <div className="view-tabs ious-direction-tabs" aria-label={kind==='owe'?'Who owes':kind==='settle'?'Settlement amount':'Payment'}>{kind==='owe'?<><button type="button" aria-pressed={direction==='them_to_me'} onClick={()=>setDirection('them_to_me')}>{name} owes me</button><button type="button" aria-pressed={direction==='me_to_them'} onClick={()=>setDirection('me_to_them')}>I owe {name}</button></>:<button type="button" aria-pressed="true">{kind==='settle'?'Full balance':ledger.balanceCents>0?`${name} paid me`:`I paid ${name}`}</button>}</div>
     <label>Amount<input inputMode="decimal" type="text" placeholder="$0.00" value={kind==='settle'?(Math.abs(ledger.balanceCents)/100).toFixed(2):amount} readOnly={kind==='settle'} onChange={event=>setAmount(event.target.value)} maxLength={11}/></label>
     <label>Note<input value={reason} onChange={event=>setReason(event.target.value)} maxLength={240}/></label>
+    {paymentLinks.length>0&&<div className="ious-payment-links" aria-label="Pay in another app">{paymentLinks.map(link=>link.href?<a key={link.provider} className="ious-payment-link" data-provider={link.provider} href={link.href} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" aria-label={`Pay ${usd(paymentCents!)} with ${link.label}`}>Pay with {link.label}</a>:<button key={link.provider} className="ious-payment-link" data-provider={link.provider} type="button" disabled>Pay with {link.label}</button>)}</div>}
     <button className="solid" disabled={busy||(kind==='settle'?!ledger.balanceCents:cents(amount)===null||kind==='payment'&&cents(amount)!>=Math.abs(ledger.balanceCents))}>{busy?'Saving…':kind==='owe'?'Add to IOU':kind==='settle'?'Settle up':'Record paid down'}</button>
    </form>
    <section className="ious-history"><h2>History</h2>{ledger.entries.length?<ol className="ious-ledger-list" aria-label={`IOU changes with ${name}`}>{ledger.entries.map(entry=>{const delta=signedChange(entry),positive=delta>0,[whole,fraction]=compactAmount(Math.abs(delta)).split('.');return <li className="ious-ledger-row" key={entry.id}><span className="ious-ledger-amount" data-tone={positive?'success':'error'} aria-label={`Balance ${positive?'increased':'decreased'} by ${usd(entry.amountCents)}`}><span aria-hidden="true" className="ious-ledger-sign">{positive?'+':'−'}</span><span aria-hidden="true" className="ious-ledger-whole">{whole}</span><span aria-hidden="true" className="ious-ledger-fraction">{fraction?`.${fraction}`:''}</span></span><span className="ious-ledger-detail">{entry.reason&&<span>{entry.reason}</span>}<small>{entry.actorId===user.id?'You':name} · <time dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'2-digit'})}</time></small></span></li>;})}</ol>:<p className="quiet">No changes yet.</p>}{ledger.nextCursor&&<button className="text-link" onClick={()=>void load(ledger.nextCursor!)}>Older changes</button>}</section>
