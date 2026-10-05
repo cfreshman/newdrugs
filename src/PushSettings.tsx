@@ -54,12 +54,12 @@ export function PushSettings({ userId }: { userId: string }) {
     } catch (reason) { setError(errorText(reason)); }
     finally { setBusy(false); }
   };
-  return <div className="push-settings"><strong>Device notifications</strong>
+  return <div className="push-settings">
     {ios && !standalone ? <p className="quiet">Add New Drugs to your Home Screen, then open it there to enable notifications.</p>
       : !supported ? <p className="quiet">Push notifications aren’t supported in this browser.</p>
         : !id ? <p className="quiet">Allow browser storage to enable notifications.</p>
           : state && !state.publicKey ? <p className="quiet">Push notifications aren’t available yet.</p>
-            : <button className="solid" disabled={!ready || busy} onClick={() => void toggle()}>{busy ? 'Saving…' : enabled ? 'Turn off on this device' : 'Enable notifications'}</button>}
+            : <button className="solid" disabled={!ready || busy} onClick={() => void toggle()}>{busy ? 'Saving…' : enabled ? 'Disable device notifications' : 'Enable device notifications'}</button>}
     {error && <p role="status" className="quiet">{error}</p>}
   </div>;
 }

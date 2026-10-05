@@ -549,9 +549,9 @@ blockquote { font-family: var(--font-ui); }
 .history-loader { display: flex; align-items: center; justify-content: center; flex: 0 0 32px; min-height: 32px; color: var(--muted); }
 .history-loader [role='status'] { display: grid; place-items: center; }
 
-.push-settings { display: grid; gap: var(--space-3); padding: var(--space-3); margin-bottom: var(--space-4); border-radius: var(--radius-control); background: var(--surface-soft); }
+.push-settings { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-4); }
 .push-settings p { margin: 0; }
-.push-settings button { justify-self: start; }
+.push-settings button { max-width: 100%; }
 
 .latest-chat { cursor: pointer; touch-action: manipulation; position: absolute; right: 0; bottom: calc(100% + var(--space-2)); z-index: 5; }
 .chat-search-results { display: grid; gap: var(--space-2); }
@@ -708,7 +708,7 @@ blockquote { font-family: var(--font-ui); }
 /* Interior padding stays independent of viewport gutters and control sizes. */
 .people-list > a, .posts-list > div, .inbox-list > article,
 .post-composer, .inbox-row, .automation-examples > button, .automation-history > article,
-.chat-search-result, .push-settings { padding: var(--card-inset); }
+.chat-search-result { padding: var(--card-inset); }
 .settings-menu button, .settings-menu a, .launcher-menu a { padding: var(--card-inset); }
 
 .direct-message-scroll { border-top: var(--border-width) solid var(--border); position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
