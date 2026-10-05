@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useRef,useState,useId,type CSSProperties,type PointerEvent} from 'react';
 import {CircleNotch} from '@phosphor-icons/react';
 import {usePanelVisible} from './PanelReadiness';
@@ -32,7 +33,7 @@ export function LogPhotoEditor({file,cancel,save}:{file:File;cancel():void;save(
     {!ready&&!error&&<span className="log-crop-loading" role="status" aria-label="Loading photo"><CircleNotch className="spin" size={26}/></span>}
    </div>
    <div className="log-crop-zoom"><label htmlFor={zoomId}>Zoom <output>{zoomValue.toFixed(1)}×</output></label><input id={zoomId} aria-label="Photo zoom" type="range" min="1" max="6" step="0.01" disabled={!ready||busy} value={zoomValue} onChange={event=>zoom(Number(event.target.value))} style={{'--crop-zoom':`${(zoomValue-1)/5*100}%`} as CSSProperties}/><button type="button" disabled={!ready||busy} onClick={()=>{if(size)update(centeredCrop(size));}}>Reset</button></div>
-   {error&&<p className="error" role="alert">{error}</p>}
+   {error&&<TransientError className="error" role="alert">{error}</TransientError>}
   </div>
   <footer className="log-task-footer panel-actions log-crop-actions"><button type="button" onClick={cancel}>Cancel</button><button type="button" className="solid" disabled={!ready||busy} onClick={()=>void finish()}>{busy?'Preparing…':'Use photo'}</button></footer>
  </section>;

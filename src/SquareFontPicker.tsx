@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import {CaretDown,CircleNotch} from '@phosphor-icons/react';
 import {squareFonts,type SquareLayer} from './squareModel';
@@ -20,6 +21,6 @@ export function SquareFontPicker({value,change,active}:{value:SquareLayer['font'
  },[open]);
  return <div className="square-font-picker"><button ref={trigger} type="button" className="square-font-trigger" aria-label="Text font" aria-haspopup="listbox" aria-controls={id} aria-expanded={open} aria-busy={loading||undefined} onClick={()=>void toggle()}><span style={{fontFamily:`"${squareFonts[value]}"`}}>{squareFonts[value]}</span>{loading?<CircleNotch className="spin" size={17}/>:<CaretDown size={17}/>}</button>
   <div ref={list} id={id} className="square-font-options" popover="manual" role="listbox" aria-label="Text fonts" onKeyDown={event=>{const options=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=option]')],at=options.indexOf(document.activeElement as HTMLButtonElement);if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setOpen(false);trigger.current?.focus({preventScroll:true});}else if(event.key==='ArrowDown'||event.key==='ArrowUp'||event.key==='Home'||event.key==='End'){event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?options.length-1:clamp(at+(event.key==='ArrowDown'?1:-1),0,options.length-1);options[next]?.focus({preventScroll:true});}else if(event.key==='Tab')setOpen(false);}}>{Object.entries(squareFonts).map(([key,family])=><button key={key} type="button" role="option" aria-selected={value===key} style={{fontFamily:`"${family}"`}} onClick={()=>{change(key as SquareLayer['font']);setOpen(false);trigger.current?.focus({preventScroll:true});}}>{family}</button>)}</div>
-  {error&&<span className="error" role="alert">{error}</span>}
+  {error&&<TransientError as="span" className="error" role="alert">{error}</TransientError>}
  </div>;
 }

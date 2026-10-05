@@ -13,6 +13,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 export const post = <T>(path: string, body?: unknown) => api<T>(path, { method: 'POST', body: JSON.stringify(body || {}) });
+export async function uploadReportAudio(reportId:string,body:Blob){
+ const response=await fetch(`/api/reports/${encodeURIComponent(reportId)}/audio`,{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream'},body});
+ const value=await response.json();
+ if(!response.ok)throw new ApiError(value.error?.message||'Could not attach Talk audio.',value.error?.code||'unknown',response.status);
+ return value as {attached:true;durationSeconds:number};
+}
 type OperationOptions={confirmed?:boolean;key?:string;signal?:AbortSignal;dedupe?:boolean};
 type ReadFlight={promise:Promise<unknown>;controller:AbortController;subscribers:number};
 const readFlights=new Map<string,ReadFlight>();

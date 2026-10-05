@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useState,type FormEvent} from 'react';
 import type {PaymentHandles} from '../shared/paymentHandles';
 import {api,post,errorText} from './api';
@@ -18,6 +19,6 @@ export function PaymentHandlesSettings({userId}:{userId:string}){
   <label>Cash App $cashtag<input name="cash-app-payment-handle" value={handles?.cashApp||''} onChange={event=>setHandles(previous=>previous&&{...previous,cashApp:event.target.value})} placeholder="$cashtag" autoComplete="off" autoCapitalize="none" autoCorrect="off" disabled={!handles||busy}/></label>
   <label>Current password<input name="currentPassword" type="password" autoComplete="current-password" required disabled={!handles||busy}/></label>
   <button className="solid" disabled={!handles||busy}>{busy?'Saving…':'Save payment apps'}</button>
-  {notice&&<p role="status">{notice}</p>}{error&&<p role="alert" className="error">{error}</p>}
+  {notice&&<p role="status">{notice}</p>}{error&&<TransientError role="alert" className="error">{error}</TransientError>}
  </form></section>;
 }

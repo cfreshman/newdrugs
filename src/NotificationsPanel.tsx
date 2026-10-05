@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {avatarImageUrl} from './logImageCache';
 import { PushSettings } from './PushSettings';
 import {useEffect,useRef,useState} from 'react';
@@ -14,7 +15,7 @@ export function NotificationsPanel({ state, navigate, userId, refresh }: { state
   const items=[...new Map([...older,...(state?.items||[])].map(item=>[item.id,item])).values()].map(item=>markedItems.get(item.id)===item.createdAt?{...item,read:true}:item).sort((a,b)=>Number(a.read)-Number(b.read)||b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id));
   const hasUnread=items.some(item=>!item.read&&item.kind!=='review')||Boolean(state?.unreadCapped);
   const markAll=async()=>{if(marking)return;setMarking(true);setError('');try{await operation<{read:true;readAt:string}>('notifications.read_all');setMarkedItems(previous=>new Map([...previous,...items.filter(item=>item.kind!=='review').map(item=>[item.id,item.createdAt] as const)]));const current=await operation<NotificationState>('notifications.list').catch(cause=>{console.error('Notification history refresh:',cause);return null;});if(current)setCursor(current.nextCursor);await refresh?.().catch(cause=>console.error('Notification refresh:',cause));}catch(cause){setError(errorText(cause));}finally{setMarking(false);}};
-  return <>{(userId||hasUnread)&&<div className="notification-toolbar">{userId&&<PushSettings key={userId} userId={userId}/>}{hasUnread&&<button className="text-link small" type="button" disabled={marking} onClick={()=>void markAll()}>{marking?'Marking…':'Mark all read'}</button>}</div>}{error&&<p className="error" role="alert">{error}</p>}<div className="notification-list">{items.map(item => <a href={item.link.url} key={item.id} data-read={item.read || undefined} onClick={event => {
+  return <>{(userId||hasUnread)&&<div className="notification-toolbar">{userId&&<PushSettings key={userId} userId={userId}/>}{hasUnread&&<button className="text-link small" type="button" disabled={marking} onClick={()=>void markAll()}>{marking?'Marking…':'Mark all read'}</button>}</div>}{error&&<TransientError className="error" role="alert">{error}</TransientError>}<div className="notification-list">{items.map(item => <a href={item.link.url} key={item.id} data-read={item.read || undefined} onClick={event => {
     if(!plainLinkClick(event))return;event.preventDefault();
     const destination = parseDestination(item.link.url, location.origin);
     if (destination) { navigate(destination); if (!item.read) void operation('notifications.read', { notificationId: item.id }).catch(error => console.error('Notification read:', error)); }

@@ -11,7 +11,7 @@ import {logPersonGrams} from '../shared/logPeople';
 import {logOperation,logEntryFor,hasSharedHangouts} from './log';
 import {makeOperation,normalizeMakeProject,stageMakePublish} from './make';
 import {endCallForConnection} from './calling';
-import {removeSpaceParticipantForBlock,spaceOperation} from './spaces';
+import {removeSpaceParticipantForBlock,spaceOperation,spaceReportTarget} from './spaces';
 import {enqueueCircleEdge,circleSummaries,circleCandidates,circleMutualIds} from './circle';
 import {hiddenPersonIds,hiddenPeoplePage,isPersonHidden,setPersonHidden} from './peopleHides';
 import {stageWebsiteMediaImport,websiteOperation} from './websites';
@@ -26,6 +26,8 @@ import { setCollection, collectionPage, postAudience } from './socialCollections
 import { profileVisibleTo } from './profileVisibility';
 import {profileMediaUrl} from '../shared/profileMedia';
 import {getIou,listIous,recordIou} from './ious';
+import {quizOperation} from './quizzes';
+import {clearBffPair,isBff,listBffs,setBff} from './bffs';
 import legacyOperationRevisions from '../shared/legacyOperationRevisions.json';
 import { automationOperation, ownAutomation,validateAutomationConfiguration } from './automations';
 import { wakeRun } from './sleep';
@@ -52,9 +54,12 @@ import {notificationEnabled,notificationPreferences,setNotificationPreference,li
 import {enqueueNotificationEvent} from './notificationEvents';
 import type {NotificationType} from '../shared/notificationSettings';
 import { postCards } from './postProjection';
+import {bindPostMentions,notifyPostMentions,resolvePostHandles} from './postMentions';
+import {newPostPoll,type PostPollInput} from '../shared/postFeatures';
 import { linkPreview,linkText } from './linkPreviews';
 import {enqueuePostVideoLinks,removePostVideoLinks} from './postVideoLinks';
 import { retainPostPhotos } from './uploads';
+import {archiveReportFiles} from './reportEvidence';
 
 import { enqueueSearch } from './search/queue';
 import { searchPublic, similarPublic, refinePublic, explainPublic, searchStatus, type SearchInput } from './search/retrieve';
@@ -79,7 +84,7 @@ async function withMutualCounts(userId:string,people:Profile[],session?:ClientSe
  const byId=new Map(friends.map(friend=>[friend._id,friend])),blockedIds=new Set(blocked.map(row=>row.pairId)),byConnection=new Map(connections.map(row=>[row._id,row]));
  return people.map(person=>{
   const row=summaries.get(person.id),connection=byConnection.get(pairId(userId,person.id));
-  const friendAction:Profile['friendAction']=person.id===userId?undefined:connection?.status==='accepted'?'friend':connection?.status==='pending'?connection.toId===userId?'accept':'invited':connection?.status==='declined'&&connection.toId!==userId||connection?.status==='disconnected'&&connection.disconnectedBy!==userId?'unavailable':'invite';
+  const friendAction:Profile['friendAction']=person.id===userId?undefined:connection?.status==='accepted'?'friend':connection?.status==='pending'?connection.toId===userId?'accept':'invited':'invite';
   const mutualFriends=row?.previewIds.filter(id=>byId.has(id)&&!blockedIds.has(pairId(userId,id))).map(id=>{const friend=byId.get(id)!;return {id,name:friend.handle?`@${friend.handle}`:String(friend.name||'Friend'),...(friend.photos?.[0]?{photoId:friend.photos[0]}:{})};});
   return {...person,...(row?.mutualCount?{mutualCount:row.mutualCount,mutualFriends}:{}),...(friendAction?{friendAction}:{}),...(connection?{connectionId:connection._id}:{})};
  });
@@ -128,6 +133,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){registered(user);return memoryOperation(name,d,actor,session);}
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
   if (name.startsWith('website.')) { registered(user); return websiteOperation(name,d,actor,session); }
+  if (name.startsWith('quizzes.')) { registered(user); return quizOperation(name,d,actor,session); }
   if (name.startsWith('make.')) { registered(user); return makeOperation(name,d,actor,session); }
   if (name.startsWith('spaces.')) { registered(user); return spaceOperation(name,d,actor,session); }
   if(name==='automations.validate'){
@@ -197,7 +203,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'ious.record':return recordIou(actor,d as unknown as Parameters<typeof recordIou>[1],session!);
     case 'identity.get': return profile(user);
     case 'agent.actions.list': {
-      const visibleReceipts = { userId, ...(actor.background ? { operation: { $in: ['posts.create','posts.reply','posts.like','posts.pin','posts.delete','connections.request','connections.respond','connections.withdraw','messages.send'] } } : {}) };
+      const visibleReceipts = { userId, ...(actor.background ? { operation: { $in: ['posts.create','posts.reply','posts.like','posts.vote','posts.pin','posts.delete','connections.request','connections.respond','connections.withdraw','messages.send'] } } : {}) };
       const cursor = d.before ? requireValue(await rows('receipts').findOne({ _id: String(d.before), ...visibleReceipts }, options)) : null;
       const receipts = await rows('receipts').find({ ...visibleReceipts, ...(cursor ? { $or: [{ createdAt: { $lt: cursor.createdAt } }, { createdAt: cursor.createdAt, _id: { $lt: cursor._id } }] } : {}) }, options).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
       return { items: receipts.slice(0, limit).map(receipt => ({ id: receipt._id, operation: receipt.operation, source: receipt.source, result: receipt.result, createdAt: receipt.createdAt })), nextCursor: receipts.length > limit ? receipts[limit - 1]._id : null };
@@ -218,6 +224,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if (d.view === 'inbox' && d.resourceId) await ownInbox(userId, String(d.resourceId), session);
       if (d.view === 'chat_history' && d.resourceId) requireValue(await rows('messages').findOne({ _id: String(d.resourceId), userId }, options));
       if(d.view==='post_list'){if(!Array.isArray(d.postIds)||!d.postIds.length)throw new AppError(422,'posts_required','Choose posts for this list.');const selected=await run('posts.list',{scope:'selected',postIds:d.postIds},actor,session) as {items:{id:string}[]};d.postIds=selected.items.map(post=>post.id);if(!(d.postIds as string[]).length)throw new AppError(404,'unavailable','These posts are no longer available.');}
+      if(d.view==='quizzes'&&d.resourceId)await quizOperation('quizzes.get',{personId:String(d.resourceId)},actor,session);
       if (['person','post'].includes(String(d.view)) && !d.resourceId) throw new AppError(422,'resource_required','Choose the specific person or post.');
       if (d.view==='person') await run('people.get',{personId:d.resourceId},actor,session);
       if (d.view==='post') await run('posts.get',{postId:d.resourceId},actor,session);
@@ -256,8 +263,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if(actor.background&&actor.privateAccess===false&&!person.discoverable)throw new AppError(404,'unavailable','This profile is not public.');
       if (!await profileVisibleTo(userId, person, session)) throw new AppError(404, 'unavailable', 'This profile is not available.');
       const [[view],hidden]=await Promise.all([withMutualCounts(userId,[profile(person)],session,actor),actor.background&&actor.privateAccess===false?Promise.resolve(false):isPersonHidden(userId,person._id,session)]);
-      return {...view,...(hidden?{hidden:true}:{}),...(!actor.background||actor.privateAccess!==false?{hasSharedHangouts:await hasSharedHangouts(userId,person._id,session)}:{})};
+      return {...view,...(hidden?{hidden:true}:{}),...(!actor.background||actor.privateAccess!==false?{hasSharedHangouts:await hasSharedHangouts(userId,person._id,session),bff:await isBff(userId,person._id,session)}:{})};
     }
+    case 'people.bffs':return listBffs(userId,limit,d.before?String(d.before):undefined,session);
+    case 'people.bff_set':return setBff(userId,String(d.personId),Boolean(d.bff),session);
     case 'people.mutuals':{
       const personId=String(d.personId);await notBlocked(userId,personId,session);
       const person=requireValue(await users().findOne({_id:personId},{session}));
@@ -287,6 +296,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'posts.save': {
       registered(user);const post=requireValue(await rows('posts').findOne({_id:String(d.postId)},options));await notBlocked(userId,String(post.userId),session);if(d.saved&&(post.deletedAt||post.moderatedAt))throw new AppError(404,'unavailable','This post is unavailable.');await setCollection('postSaves',userId,post._id,Boolean(d.saved),session);return (await postCards([post],userId,await blockedIds(userId,session),session))[0];
     }
+    case 'posts.mentions':return {items:await resolvePostHandles(userId,d.handles as string[],session)};
     case 'posts.pin': {
       const post=requireValue(await rows('posts').findOne({_id:String(d.postId),userId},options),'This post is not yours.');
       if(d.pinned){
@@ -352,6 +362,24 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       ],options).toArray();
       return {items:await withMutualCounts(userId,people.slice(0,limit).map(p=>({...profile(p),...sharedAreaDistance(cell,p.area!.cell,p.distanceMeters)})),session,actor),nextCursor:people.length>limit?paging.cursor(people[limit-1]):null};
     }
+    case 'posts.liked_by': {
+      if(actor.background&&actor.privateAccess===false)throw new AppError(403,'private_access_required','This view requires private account access.');
+      const personId=String(d.personId);
+      await notBlocked(userId,personId,session);
+      if(personId!==userId&&!await rows('connections').findOne({_id:pairId(userId,personId),status:'accepted'},options))throw new AppError(404,'unavailable','Likes are available for accepted friends.');
+      const cursor=d.before?await rows('postLikes').findOne({_id:String(d.before),userId:personId},options):null;
+      if(d.before&&!cursor)throw new AppError(409,'liked_page_changed','This liked-post page changed. Start from the first page.');
+      const blocked=await blockedIds(userId,session);
+      const scanLimit=limit*3;
+      const likes=await rows('postLikes').find({userId:personId,...(cursor?{$or:[{createdAt:{$lt:cursor.createdAt}},{createdAt:cursor.createdAt,_id:{$lt:cursor._id}}]}:{})},{...options,maxTimeMS:10000}).sort({createdAt:-1,_id:-1}).limit(scanLimit+1).toArray();
+      const scanned=likes.slice(0,scanLimit),postIds=scanned.map(like=>String(like.postId));
+      const posts=postIds.length?await rows('posts').find({_id:{$in:postIds},userId:{$nin:blocked},deletedAt:{$exists:false},moderatedAt:{$exists:false}},options).toArray():[];
+      const authors=posts.length?await users().find({_id:{$in:[...new Set(posts.map(post=>String(post.userId)))]},suspendedAt:{$not:{$type:'string'}}},{...options,projection:{_id:1}}).toArray():[];
+      const visibleAuthors=new Set(authors.map(author=>author._id)),byId=new Map(posts.filter(post=>visibleAuthors.has(String(post.userId))).map(post=>[post._id,post]));
+      const visible=scanned.flatMap(like=>{const post=byId.get(String(like.postId));return post?[{like,post}]:[];});
+      const page=visible.slice(0,limit),nextCursor=visible.length>limit?visible[limit-1].like._id:likes.length>scanLimit?scanned.at(-1)?._id:null;
+      return {items:await postCards(page.map(item=>item.post),userId,blocked,session),nextCursor:nextCursor||null};
+    }
     case 'posts.list': {
       const audience=await postAudience(d.scope,actor,session);
       const blocked = await blockedIds(userId, session);
@@ -379,7 +407,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         { $lookup: { from: 'users', localField: 'userId', foreignField: '_id', as: 'author' } },
         { $unwind: '$author' },{$match:{'author.suspendedAt':{$not:{$type:'string'}}}},
         { $limit: limit + 1 },
-        { $project: { _id: 1, text: 1, links:1, fileIds: 1, city: 1, area:1,distanceMeters:1,userId: 1, createdAt: 1, parentId:1,rootId:1 } },
+        { $project: { _id: 1, text: 1, mentions:1,poll:1,links:1, fileIds: 1, city: 1, area:1,distanceMeters:1,userId: 1, createdAt: 1, parentId:1,rootId:1 } },
       ], options).toArray();
       const showPinned=Boolean(d.authorId&&kind==='posts'&&!cell&&!d.before);
       const pinnedId=showPinned?(await users().findOne({_id:String(d.authorId),suspendedAt:null},{...options,projection:{pinnedPostId:1}}))?.pinnedPostId:null;
@@ -426,34 +454,53 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       }else{await rows('postLikes').deleteOne({_id:id},options);await rows('notifications').deleteOne({_id:noticeId},options);}
       return (await postCards([post],userId,await blockedIds(userId,session),session))[0];
     }
+    case 'posts.vote': {
+      const post=requireValue(await rows('posts').findOne({_id:String(d.postId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},options),'This poll is unavailable.');
+      await notBlocked(userId,String(post.userId),session);
+      const poll=post.poll as {items?:string[];expiresAt?:string|null;duration?:string}|undefined,index=Number(d.optionIndex);
+      if(!poll?.items||index>=poll.items.length)throw new AppError(422,'poll_option','Choose a poll option.');
+      if(poll.expiresAt&&poll.expiresAt<=now)throw new AppError(409,'poll_ended','This poll has ended.');
+      try{await rows('postPollVotes').insertOne({_id:`${post._id}:${userId}`,postId:post._id,userId,optionIndex:index,createdAt:now},options);}
+      catch(cause){if((cause as {code?:number}).code===11000)throw new AppError(409,'poll_voted','You already voted in this poll.');throw cause;}
+      // The dynamic array path is safe because optionIndex is an integer bounded by the poll's own items.
+      const updated=await rows('posts').updateOne({_id:post._id,deletedAt:{$exists:false},moderatedAt:{$exists:false},$or:[{'poll.expiresAt':{$gt:now}},{'poll.duration':'forever','poll.expiresAt':null}]},{$inc:{[`poll.counts.${index}`]:1,'poll.totalVotes':1,interactionRevision:1}} as never,options);
+      if(!updated.modifiedCount)throw new AppError(409,'poll_ended','This poll has ended.');
+      return (await postCards([requireValue(await rows('posts').findOne({_id:post._id},options))],userId,await blockedIds(userId,session),session))[0];
+    }
     case 'posts.reply': {
       registered(user);const parent=requireValue(await rows('posts').findOne({_id:String(d.postId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},options));await notBlocked(userId,String(parent.userId),session);
+      const mentions=await bindPostMentions(userId,String(d.text),session),poll=d.poll?newPostPoll(d.poll as PostPollInput,now):undefined;
       const fileIds = await retainPostPhotos(userId, d.fileIds as string[], session);
       await rows<{_id:string;interactionRevision:number}>('posts').updateOne({_id:parent._id},{$inc:{interactionRevision:1}},options);
-      const reply={_id:nextId(),userId,text:d.text,links:normalizedPostLinks(d.links),fileIds,parentId:parent._id,rootId:parent.rootId||parent._id,city:'',area:null,createdAt:now};await rows('posts').insertOne(reply,options);await enqueueSearch('posts',reply._id,session!);
+      const reply={_id:nextId(),userId,text:d.text,mentions,...(poll?{poll}:{}),links:normalizedPostLinks(d.links),fileIds,parentId:parent._id,rootId:parent.rootId||parent._id,city:'',area:null,createdAt:now};await rows('posts').insertOne(reply,options);await enqueueSearch('posts',reply._id,session!);
       await enqueuePostVideoLinks({...reply,text:String(d.text)},session);
       if(session)await enqueueNotificationEvent('post_reply',userId,reply._id,session,{parentId:parent._id,rootId:String(reply.rootId)});
-      if(parent.userId!==userId&&await notificationEnabled(String(parent.userId),'post_reply',session)){const noticeId=hash(`post_reply:${reply._id}`);await rows('notifications').insertOne({_id:noticeId,userId:parent.userId,actorId:userId,kind:'post_reply',postId:reply._id,text:String(d.text).slice(0,180),readAt:null,createdAt:now},options);await enqueueStoredPush(String(parent.userId),userId,reply._id,'post_reply',noticeId,session);}
+      let notifiedParent=false;
+      if(parent.userId!==userId&&await notificationEnabled(String(parent.userId),'post_reply',session)){const noticeId=hash(`post_reply:${reply._id}`);await rows('notifications').insertOne({_id:noticeId,userId:parent.userId,actorId:userId,kind:'post_reply',postId:reply._id,text:String(d.text).slice(0,180),readAt:null,createdAt:now},options);await enqueueStoredPush(String(parent.userId),userId,reply._id,'post_reply',noticeId,session);notifiedParent=true;}
+      await notifyPostMentions(userId,reply._id,String(d.text),mentions,session!,notifiedParent?[String(parent.userId)]:[]);
       return (await postCards([reply],userId,await blockedIds(userId,session),session))[0];
     }
     case 'posts.create': {
       registered(user);
+      const mentions=await bindPostMentions(userId,String(d.text),session),poll=d.poll?newPostPoll(d.poll as PostPollInput,now):undefined;
       const fileIds = await retainPostPhotos(userId, d.fileIds as string[], session);
       let area:CoarseArea|null=null;
       if(d.areaCell){const record=requireValue(await rows('locationAreas').findOne({_id:String(d.areaCell)},options));area={cell:String(d.areaCell),label:String(record.label),point:coarsePoint(String(d.areaCell))};}
-      const post = { _id: nextId(), userId, text: d.text, links:normalizedPostLinks(d.links),fileIds, area, city:area?.label||'', createdAt: now };
+      const post = { _id: nextId(), userId, text: d.text, mentions,...(poll?{poll}:{}),links:normalizedPostLinks(d.links),fileIds, area, city:area?.label||'', createdAt: now };
       await rows('posts').insertOne(post, options);
       await enqueuePostVideoLinks({...post,text:String(d.text)},session);
       await enqueueSearch('posts',post._id,session!);
       if(session)await enqueueNotificationEvent('post_create',userId,post._id,session);
+      await notifyPostMentions(userId,post._id,String(d.text),mentions,session!);
       return (await postCards([post],userId,[],session))[0];
     }
     case 'posts.delete': {
-      const result = await rows('posts').updateOne({ _id: String(d.postId), userId, deletedAt:{$exists:false} },{$set:{text:'',city:'',area:null,deletedAt:now}}, options);
+      const result = await rows('posts').updateOne({ _id: String(d.postId), userId, deletedAt:{$exists:false} },{$set:{text:'',city:'',area:null,deletedAt:now},$unset:{mentions:'',poll:''}}, options);
       if (!result.modifiedCount) throw new AppError(404, 'not_found', 'That post is not yours or no longer exists.');
       await users().updateOne({_id:userId,pinnedPostId:String(d.postId)},{$unset:{pinnedPostId:''}},options);
       await removePostVideoLinks(userId,String(d.postId),session!);
       await rows('postLikes').deleteMany({postId:d.postId},options);await rows('notifications').deleteMany({postId:d.postId},options);
+      await rows('postPollVotes').deleteMany({postId:d.postId},options);
       await enqueueSearch('posts',String(d.postId),session!);
       return { deleted: true, id: d.postId };
     }
@@ -498,10 +545,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       await notBlocked(userId, other, session);
       const id = pairId(userId, other);
       const existing = await rows('connections').findOne({ _id: id }, options);
-      if (!await profileVisibleTo(userId, person, session) && !(existing?.status==='disconnected'&&existing.disconnectedBy===userId)) throw new AppError(404,'unavailable','This person is unavailable.');
+      if (!await profileVisibleTo(userId, person, session)) throw new AppError(404,'unavailable','This person is unavailable.');
       if (existing && ['pending','accepted'].includes(String(existing.status))) return publicRow(existing);
-      if (existing?.status === 'declined' && existing.toId !== userId) throw new AppError(409, 'invitation_declined', 'This person declined. They can choose to invite you instead.');
-      if (existing?.status === 'disconnected' && existing.disconnectedBy !== userId) throw new AppError(409, 'connection_ended', 'This person ended the connection. They can choose to invite you again.');
       const enabled=await notificationEnabled(other,'invitation',session);
       const connection = { _id: id, members: [userId, other], fromId: userId, toId: other, note: d.note, status: 'pending', notificationEnabled:enabled, createdAt: now, updatedAt: now, ...(existing?.initialInvitation ? { initialInvitation: existing.initialInvitation } : {}) };
       await rows('connections').replaceOne({ _id: id }, connection, { ...options, upsert: true });
@@ -521,6 +566,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const saved = requireValue(await rows('connections').findOneAndUpdate({ _id: c._id, status: 'accepted' }, { $set: { status: 'disconnected', disconnectedBy: userId, disconnectedAt: now, updatedAt: now, initialInvitation: c.initialInvitation || { fromId: c.fromId, note: c.note, createdAt: c.createdAt } } }, { ...options, returnDocument: 'after' }));
       if(session)await endCallForConnection(c._id,session);
       if(session)await enqueueCircleEdge(String((c.members as string[])[0]),String((c.members as string[])[1]),'remove',session);
+      await clearBffPair(String((c.members as string[])[0]),String((c.members as string[])[1]),session);
       await rows('notifications').updateMany({ connectionId: c._id, kind: { $in: ['message','connection_accepted'] } }, { $set: { readAt: now } }, options);
       return publicRow(saved);
     }
@@ -600,6 +646,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         await rows('blocks').updateOne({ _id: id }, { $setOnInsert: { ownerId: userId, members: [userId, other], pairId: pairId(userId, other), createdAt: now } }, { ...options, upsert: true });
       } else await rows('blocks').deleteOne({ _id: id, ownerId: userId }, options);
       if(d.blocked&&session){await removeSpaceParticipantForBlock(userId,other,session);await endCallForConnection(pairId(userId,other),session);}
+      if(d.blocked)await clearBffPair(userId,other,session);
       if(session)await enqueueCircleEdge(userId,other,d.blocked?'remove':'add',session);
       if(session)await invalidateLogContacts([userId,other],session);
       return { personId: other, blocked: d.blocked };
@@ -613,11 +660,13 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       registered(user);
       const reportedPerson=requireValue(await users().findOne({ _id: String(d.personId) }, options));
       const profileVisible=await profileVisibleTo(userId,reportedPerson,session);
-      if(!profileVisible&&!d.postId&&!d.messageId)throw new AppError(404,'unavailable','This profile is not available.');
-      if(d.postId&&d.messageId)throw new AppError(422,'report_target','Choose one piece of evidence per report.');
+      if(!profileVisible&&!d.postId&&!d.messageId&&!d.spaceId)throw new AppError(404,'unavailable','This profile is not available.');
+      if([d.postId,d.messageId,d.spaceId].filter(Boolean).length>1)throw new AppError(422,'report_target','Choose one piece of evidence per report.');
       let evidence:Record<string,unknown>|undefined;
-      if(d.postId){const post=requireValue(await rows('posts').findOne({_id:String(d.postId),userId:String(d.personId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},options));await notBlocked(userId,String(post.userId),session);evidence={kind:'post',id:post._id,text:post.text,links:post.links||[],fileIds:post.fileIds||[],createdAt:post.createdAt};}
+      if(d.postId){const post=requireValue(await rows('posts').findOne({_id:String(d.postId),userId:String(d.personId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},options));await notBlocked(userId,String(post.userId),session);evidence={kind:'post',id:post._id,text:post.text,links:post.links||[],fileIds:post.fileIds||[],poll:post.poll||null,createdAt:post.createdAt};}
       if(d.messageId){const message=requireValue(await rows('directMessages').findOne({_id:String(d.messageId),fromId:String(d.personId),moderatedAt:{$exists:false}},options));requireValue(await rows('connections').findOne({_id:String(message.connectionId),members:userId},options));evidence={kind:'message',id:message._id,text:message.text,fromId:message.fromId,createdAt:message.createdAt};}
+      if(d.spaceId){const space=await spaceReportTarget(userId,String(d.personId),String(d.spaceId),session);evidence={kind:'talk',id:space.id,title:space.title,hostId:space.hostId,createdAt:space.createdAt};}
+      if(!evidence)evidence={kind:'profile',name:reportedPerson.name,handle:reportedPerson.handle,bio:reportedPerson.bio,interests:reportedPerson.interests,photos:reportedPerson.photos||[],mediaUrl:reportedPerson.mediaUrl||null,voiceFileId:reportedPerson.voiceFileId||null};
       const report = { _id: nextId(), fromId: userId, personId: d.personId, reason: d.reason, createdAt: now, status: 'unreviewed', profileSnapshot:profileVisible?profile(reportedPerson):null, ...(evidence?{evidence}:{}) };
       await rows('reports').insertOne(report, options);
       return { id: report._id, status: 'unreviewed' };
@@ -653,6 +702,7 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if(actor.background&&actor.privateAccess===false){
     if(['people.search','search.query','posts.search','search.similar'].includes(name)&&parsed.includeHidden===true||['people.search','posts.search','posts.list'].includes(name)&&['saved','friends','circle','hidden'].includes(String(parsed.scope))||['posts.create','posts.reply'].includes(name)&&Array.isArray(parsed.fileIds)&&parsed.fileIds.length>0)throw new AppError(403,'private_access_required','This task is limited to public data.');
   }
+  if(['posts.create','posts.reply'].includes(name)&&parsed.poll&&!parsed.text)throw new AppError(422,'poll_question','Write a question for this poll.');
   if(['posts.create','posts.reply'].includes(name)&&!parsed.text&&!(parsed.fileIds as string[]).length&&!(parsed.links as string[]|undefined)?.length)throw new AppError(422,'post_empty','Add text, a photo, or a URL before posting.');
   if (actor.source !== 'browser' && name === 'profile.update') throw new AppError(403, 'human_authored', 'Profiles are written by the person in the app.');
   if (actor.source === 'agent' && !op.agent) throw new AppError(403, 'unavailable', 'This operation is not available to the hosted agent.');
@@ -697,7 +747,7 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
     }
     // Contact permissions and a simultaneous block must serialize on the same
     // document; snapshot reads alone permit a send/block write-skew race.
-    if (['connections.request', 'connections.respond', 'connections.withdraw', 'connections.disconnect', 'posts.save', 'messages.send', 'people.block','posts.like','posts.reply'].includes(name)) {
+    if (['connections.request', 'connections.respond', 'connections.withdraw', 'connections.disconnect', 'posts.save', 'messages.send', 'people.block','people.bff_set','posts.like','posts.reply','quizzes.create','quizzes.answer'].includes(name)) {
       let other = parsed.personId as string | undefined;
       if(!other&&parsed.postId){const post=requireValue(await rows('posts').findOne({_id:String(parsed.postId)},{session}));other=String(post.userId);}
       if (!other && parsed.connectionId) {
@@ -723,6 +773,7 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   });}catch(error){if(makeFileId)await deleteUpload(actor,makeFileId).catch(()=>{});if(websiteFileId)await deleteUpload(actor,websiteFileId).catch(()=>{});throw error;}
   if(makeFileId&&(committed as {imageFileId?:string}).imageFileId!==makeFileId)await deleteUpload(actor,makeFileId).catch(()=>{});
   if(websiteFileId&&!(committed as {assets?:{fileId:string}[]}).assets?.some(asset=>asset.fileId===websiteFileId))await deleteUpload(actor,websiteFileId).catch(()=>{});
+  if(name==='people.report')await archiveReportFiles((committed as {id:string}).id);
   if(['files.delete','log.leave','log.delete','log.update','log.contribute','make.publish'].includes(name)||name==='profile.update'&&parsed.photos)await expireUploads({remote:false}).catch(error=>console.error('Upload deletion cleanup:',error.name));
   return committed;
 }

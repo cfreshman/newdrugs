@@ -1,5 +1,7 @@
 import {beforeAll,beforeEach,afterAll,it,expect,vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
+import {unlink} from 'node:fs/promises';
+import {resolve} from 'node:path';
 import {RoomServiceClient} from 'livekit-server-sdk';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {users,type User,type Actor} from '../server/auth';
@@ -12,6 +14,7 @@ import {notificationState} from '../server/notifications';
 import {indexOne} from '../server/search/worker';
 import {searchPublic} from '../server/search/retrieve';
 import {resetIndex} from '../server/search/index';
+import {attachTalkAudio,readReportEvidence,reportEvidenceFiles} from '../server/reportEvidence';
 
 const original={LIVEKIT_URL:config.LIVEKIT_URL,LIVEKIT_PUBLIC_URL:config.LIVEKIT_PUBLIC_URL,LIVEKIT_API_KEY:config.LIVEKIT_API_KEY,LIVEKIT_API_SECRET:config.LIVEKIT_API_SECRET,QDRANT_URL:config.QDRANT_URL};
 const actor=(userId='me'):Actor=>({userId,source:'external',scope:'write'});
@@ -66,6 +69,9 @@ it('indexes a live talk title and optional description and gates speaking and re
  const matched=await searchPublic({query:'ocean walks',datasets:['spaces'],mode:'semantic',limit:20},actor('other'),vector);
  expect(matched.matches[0]).toMatchObject({dataset:'spaces',entityType:'space',record:{id:space.id,description:'Talking about late walks by the ocean.'}});
  expect((await call('spaces.list',{},'other')).items.map((item:any)=>item.id)).toEqual([space.id]);
+ space=await call('spaces.edit',{spaceId:space.id,revision:space.revision,title:'Dusk walks',description:'New topic.'});
+ expect(space).toMatchObject({title:'Dusk walks',description:'New topic.'});
+ expect((await sourceDocument('spaces',space.id))?.text).toBe('title: Dusk walks\ndescription: New topic.');
  const request=await call('spaces.request_speak',{spaceId:space.id},'other');expect(request.status).toBe('pending');
  expect((await call('spaces.requests',{spaceId:space.id})).items[0].personId).toBe('other');
  await expect(call('spaces.respond_speaker',{spaceId:space.id,revision:space.revision,personId:'other',approve:true},'other',true)).rejects.toMatchObject({code:'space_host'});
@@ -81,6 +87,29 @@ it('indexes a live talk title and optional description and gates speaking and re
  const titleOnly=await call('spaces.create',{title:'Stargazing'},'me',true);
  await connectHost(titleOnly);
  expect((await sourceDocument('spaces',titleOnly.id))?.text).toBe('title: Stargazing');
+});
+it('lets a connected host invite a listener, shares a bounded Talk carousel, and attaches reported audio outside user storage',async()=>{
+ let space=await call('spaces.create',{title:'Favorite places'},'me',true);
+ space=await connectHost(space);
+ await spaceWebhook({event:'participant_joined',room:{name:spaceRoomName(space.id)},participant:{identity:'other',sid:'listener-1'}});
+ const post=await call('posts.create',{text:'Meet at the park'},'other',true);
+ space=await call('spaces.pin_post',{spaceId:space.id,postId:post.id});
+ space=await call('spaces.pin_link',{spaceId:space.id,url:'https://example.com/park'});
+ expect(space.pins).toMatchObject([{kind:'post',postText:'Meet at the park',postAuthor:'@other'},{kind:'link',url:'https://example.com/park'}]);
+ await expect(call('spaces.unpin',{spaceId:space.id,pinId:space.pins[0].id},'other')).rejects.toMatchObject({code:'space_pin_owner'});
+ space=await call('spaces.invite_speaker',{spaceId:space.id,personId:'other'});
+ expect(space.invitedSpeakerIds).toContain('other');
+ expect((await call('spaces.get',{spaceId:space.id},'other')).mySpeakerInvite).toBe(true);
+ space=await call('spaces.respond_speaker_invite',{spaceId:space.id,accept:true},'other');
+ expect(space.myRole).toBe('speaker');expect(space.mySpeakerInvite).toBeUndefined();
+ expect(await rows('liveMediaEffects').countDocuments({kind:'speaker',personId:'other'})).toBe(1);
+ const report=await call('people.report',{personId:'other',spaceId:space.id,reason:'Test Talk report'},'me',true);
+ const audio=Buffer.alloc(44+32000);audio.write('RIFF',0);audio.writeUInt32LE(audio.length-8,4);audio.write('WAVEfmt ',8);audio.writeUInt32LE(16,16);audio.writeUInt16LE(1,20);audio.writeUInt16LE(1,22);audio.writeUInt32LE(16000,24);audio.writeUInt32LE(32000,28);audio.writeUInt16LE(2,32);audio.writeUInt16LE(16,34);audio.write('data',36);audio.writeUInt32LE(audio.length-44,40);
+ await attachTalkAudio('me',report.id,audio);
+ expect((await reportEvidenceFiles(report.id)).items).toMatchObject([{id:'audio',mime:'audio/wav'}]);
+ expect((await readReportEvidence(report.id,'audio')).bytes).toEqual(audio);
+ await expect(attachTalkAudio('other',report.id,audio)).rejects.toMatchObject({status:404});
+ await unlink(resolve(config.DATA_DIR,'report-evidence',`${report.id}-audio`));
 });
 it('hands a live Talk space to a connected speaker only after acceptance',async()=>{
  let space=await call('spaces.create',{title:'Night walks'},'me',true);

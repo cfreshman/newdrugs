@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useRef,useState} from 'react';
 import {CircleNotch} from '@phosphor-icons/react';
 import type {LogEntry,LogPage,LogList,LogCalendarTile} from '../shared/log';
@@ -28,7 +29,7 @@ export function LogCalendarDay({date,today,filters,previews,open,openPreview,chi
    <span><span className="log-day-title">{entry.title||'(untitled)'}</span><small className="log-day-people" aria-hidden={!full||undefined}>{full?entry.contributors.map(person=>person.handle||person.name).join(', '):null}</small></span>
   </NavLink>;})}
   {busy&&!items.length&&<CircleNotch className="spin" size={18} aria-label="Loading entries"/>}
-  {error&&<p className="error">{error}</p>}
+  {error&&<TransientError className="error">{error}</TransientError>}
   {page.nextCursor&&<button className="more-messages" disabled={busy} onClick={()=>void load(true)}>More entries</button>}
   </div>
  </section>;

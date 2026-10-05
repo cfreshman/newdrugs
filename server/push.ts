@@ -11,7 +11,7 @@ import {notificationEnabled} from './notificationSettings';
 import {notificationType} from '../shared/notificationSettings';
 import {isPersonHidden} from './peopleHides';
 
-interface PushEvent { _id: string; userId: string; actorId: string; connectionId: string; kind: 'message' | 'invitation' | 'log_invitation' | 'log_added' | 'log_update' | 'iou' | 'agent_update' | 'automation_status' | 'connection_accepted' | 'call' | 'post_like' | 'post_reply' | 'alert' | 'review'; eventId: string; status: string; availableAt: number; attempts: number; delivered: string[]; expiresAt: Date; lease?: string }
+interface PushEvent { _id: string; userId: string; actorId: string; connectionId: string; kind: 'message' | 'invitation' | 'log_invitation' | 'log_added' | 'log_update' | 'iou' | 'quiz' | 'agent_update' | 'automation_status' | 'connection_accepted' | 'call' | 'post_like' | 'post_reply' | 'post_mention' | 'alert' | 'review'; eventId: string; status: string; availableAt: number; attempts: number; delivered: string[]; expiresAt: Date; lease?: string }
 const outbox = () => rows<PushEvent>('pushOutbox');
 export const pushConfigured = () => Boolean(config.VAPID_PUBLIC_KEY && config.VAPID_PRIVATE_KEY);
 export const subscriptionSchema = z.strictObject({ deviceId: z.uuid(), endpoint: z.url().max(2048), keys: z.strictObject({ p256dh: z.string().max(100), auth: z.string().max(30) }) });
@@ -76,16 +76,17 @@ export async function pushStillRelevant(event: { userId: unknown; actorId: unkno
   if (!await users().findOne({ _id: userId, suspendedAt:null, handle: { $type: 'string' } })) return false;
   if (await rows('blocks').findOne({ members: { $all: [userId, actorId] } })) return false;
   if(event.kind==='iou')return Boolean(await rows('notifications').findOne({_id:String(event.eventId),userId,kind:'iou',readAt:null})&&await rows('iousLedgers').findOne({_id:[userId,actorId].sort().join(':'),members:userId}));
+  if(event.kind==='quiz')return Boolean(await rows('notifications').findOne({_id:String(event.eventId),userId,kind:'quiz',readAt:null})&&await rows('quizzes').findOne({_id:connectionId,members:{$all:[userId,actorId]}}));
   if(event.kind==='log_invitation'||event.kind==='log_added'||event.kind==='log_update'){
     const {logEntryFor}=await import('./log');try{const entry=await logEntryFor(userId,connectionId);if(event.kind==='log_invitation'?!entry.invited.includes(userId):!entry.members.includes(userId))return false;}catch(error){if(error instanceof AppError&&[403,404].includes(error.status))return false;throw error;}
     return Boolean(await rows('notifications').findOne({_id:`log:${connectionId}:${userId}`,userId,actorId,kind:event.kind,revision:Number(event.eventId),readAt:null}));
   }
-  if(['connection_accepted','call','post_like','post_reply','alert'].includes(String(event.kind))){
+  if(['connection_accepted','call','post_like','post_reply','post_mention','alert'].includes(String(event.kind))){
     const notice=await rows('notifications').findOne({_id:String(event.eventId),userId,readAt:null});if(!notice)return false;
     if(await isPersonHidden(userId,actorId))return false;
     if(notice.alertType==='security_login'||notice.alertType==='security_credential')return false;
     if(notice.ruleId&&!await rows('notificationRules').findOne({_id:String(notice.ruleId),userId,enabled:true},{projection:{_id:1}}))return false;
-    if(event.kind==='post_like'||event.kind==='post_reply')return Boolean(await rows('posts').findOne({_id:connectionId,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{projection:{_id:1}}));
+    if(event.kind==='post_like'||event.kind==='post_reply'||event.kind==='post_mention')return Boolean(await rows('posts').findOne({_id:connectionId,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{projection:{_id:1}}));
     if(event.kind==='alert'){
       if(notice.resourceType==='space')return Boolean(await rows('spaces').findOne({_id:connectionId,status:'live'},{projection:{_id:1}}));
       if(notice.resourceType==='post')return Boolean(await rows('posts').findOne({_id:connectionId,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{projection:{_id:1}}));
@@ -119,7 +120,8 @@ export async function deliverPush(send = webpush.sendNotification) {
     if(event.kind==='alert'||event.kind==='iou'){const notice=await rows('notifications').findOne({_id:String(event.eventId),userId:String(event.userId)},{projection:{title:1,text:1}});title=String(notice?.title||'IOU update');body=String(notice?.text||'');}
     else if(event.kind==='automation_status'){const notice=await rows('notifications').findOne({_id:String(event.eventId),userId:String(event.userId)},{projection:{title:1,text:1}});title=String(notice?.title||'Automation update');body=String(notice?.text||'');}
     else if(event.kind==='agent_update'){const item=await rows('agentInbox').findOne({_id:String(event.eventId),userId:String(event.userId)},{projection:{title:1}});title=String(item?.title||'Agent update');}
-    else title=event.kind === 'review'?'Your agent has a change to review':event.kind === 'invitation' ? `${actor} invited you to connect` : event.kind==='connection_accepted'?`${actor} accepted your invitation` : event.kind==='call'?`Video call from ${actor}` : event.kind==='post_like'?`${actor} liked your post` : event.kind==='post_reply'?`${actor} replied to your post` : `${actor} sent you a message`;
+    else title=event.kind === 'review'?'Your agent has a change to review':event.kind === 'invitation' ? `${actor} invited you to connect` : event.kind==='connection_accepted'?`${actor} accepted your invitation` : event.kind==='call'?`Video call from ${actor}` : event.kind==='post_like'?`${actor} liked your post` : event.kind==='post_reply'?`${actor} replied to your post` : event.kind==='post_mention'?`${actor} mentioned you` : event.kind==='quiz'?`${actor} sent you a quiz` : `${actor} sent you a message`;
+    if(event.kind==='post_mention'){const notice=await rows('notifications').findOne({_id:String(event.eventId),userId:String(event.userId)},{projection:{text:1}});body=String(notice?.text||'');}
   }
   const devices = await rows('pushSubscriptions').find({ userId: event.userId, revokedAt: null }).limit(8).toArray();
   let retry = false;
@@ -129,9 +131,9 @@ export async function deliverPush(send = webpush.sendNotification) {
     if (!await rows('sessions').findOne({ _id: String(device.sessionId), userId: event.userId, expiresAt: { $gt: new Date() } })) { await revokePush(String(event.userId), String(device.deviceId)); continue; }
     if (!await pushStillRelevant(event)) break;
     try {
-      const target=event.kind==='alert'?String((await rows('notifications').findOne({_id:event.eventId},{projection:{resourceType:1}}))?.resourceType||''):'',section=event.kind==='iou'?'ious':['log_invitation','log_added','log_update'].includes(event.kind)?'log':event.kind==='automation_status'?'automations':event.kind==='agent_update'?'inbox':event.kind==='review'?'chat':event.kind==='post_like'||event.kind==='post_reply'?'posts':event.kind==='alert'?target==='space'?'spaces':target==='post'?'posts':target==='person'?'people':target==='log'?'log':target==='credits'?'billing':target==='storage'?'storage':target==='account'?'account':'agents':'messages';
+      const target=event.kind==='alert'?String((await rows('notifications').findOne({_id:event.eventId},{projection:{resourceType:1}}))?.resourceType||''):'',section=event.kind==='iou'?'ious':event.kind==='quiz'?'quizzes':['log_invitation','log_added','log_update'].includes(event.kind)?'log':event.kind==='automation_status'?'automations':event.kind==='agent_update'?'inbox':event.kind==='review'?'chat':['post_like','post_reply','post_mention'].includes(event.kind)?'posts':event.kind==='alert'?target==='space'?'spaces':target==='post'?'posts':target==='person'?'people':target==='log'?'log':target==='credits'?'billing':target==='storage'?'storage':target==='account'?'account':'agents':'messages';
       const alert=event.kind==='alert'?await rows('notifications').findOne({_id:event.eventId},{projection:{photoId:1}}):null;
-      await send({ endpoint: String(device.endpoint), keys: device.keys as { p256dh: string; auth: string } }, JSON.stringify({ title, body,kind:event.kind,url: section==='chat'?'/':['billing','storage','agents','account'].includes(section)?`/${section}`:`/${section}/${encodeURIComponent(String(event.connectionId))}`, tag: `notice-${hash(`${event.kind}:${String(event.connectionId)}`).slice(0, 24)}`,...(alert?.photoId?{icon:`/api/files/${encodeURIComponent(String(alert.photoId))}`}:{}) }), { vapidDetails: { subject: config.VAPID_SUBJECT, publicKey: config.VAPID_PUBLIC_KEY, privateKey: config.VAPID_PRIVATE_KEY }, timeout: 10000, TTL: 3600, urgency: 'normal', topic: hash(String(event.connectionId)).slice(0, 32) });
+      await send({ endpoint: String(device.endpoint), keys: device.keys as { p256dh: string; auth: string } }, JSON.stringify({ title, body,kind:event.kind,url: section==='chat'?'/':['billing','storage','agents','account'].includes(section)?`/${section}`:`/${section}/${encodeURIComponent(String(event.kind==='quiz'?event.actorId:event.connectionId))}`, tag: `notice-${hash(`${event.kind}:${String(event.connectionId)}`).slice(0, 24)}`,...(alert?.photoId?{icon:`/api/files/${encodeURIComponent(String(alert.photoId))}`}:{}) }), { vapidDetails: { subject: config.VAPID_SUBJECT, publicKey: config.VAPID_PUBLIC_KEY, privateKey: config.VAPID_PRIVATE_KEY }, timeout: 10000, TTL: 3600, urgency: 'normal', topic: hash(String(event.connectionId)).slice(0, 32) });
       await outbox().updateOne({ _id: event._id, lease }, { $addToSet: { delivered: device._id } });
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode;

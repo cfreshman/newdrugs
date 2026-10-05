@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import { useEffect, useRef, useState } from 'react';
 import { api, post, errorText } from './api';
 
@@ -60,6 +61,6 @@ export function PushSettings({ userId }: { userId: string }) {
         : !id ? <p className="quiet">Allow browser storage to enable notifications.</p>
           : state && !state.publicKey ? <p className="quiet">Push notifications aren’t available yet.</p>
             : <button className="text-link small" disabled={!ready || busy} onClick={() => void toggle()}>{busy ? 'Saving…' : enabled ? 'Disable device notifications' : 'Enable device notifications'}</button>}
-    {error && <p role="status" className="quiet">{error}</p>}
+    {error && <TransientError role="status" className="quiet error-notice">{error}</TransientError>}
   </div>;
 }

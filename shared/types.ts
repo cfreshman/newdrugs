@@ -1,5 +1,6 @@
 export interface Profile {
   hasSharedHangouts?: boolean;
+  bff?:boolean;
   mutualCount?:number;
   mutualFriends?:{id:string;name:string;photoId?:string}[];
   friendAction?:'invite'|'accept'|'invited'|'friend'|'unavailable';connectionId?:string;hidden?:boolean;

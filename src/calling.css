@@ -4,6 +4,8 @@
 .call-square{position:relative;flex:none;width:var(--call-size);height:var(--call-size);border-radius:16px;overflow:hidden;background:var(--call-surface);}
 .call-square>video{display:block;width:100%;height:100%;}
 .call-local>video{object-fit:cover;transform:scaleX(-1);}
+.call-local.is-environment-camera>video{transform:none;}
+.camera-switch-target{position:absolute;z-index:1;inset:0;width:100%;height:100%;padding:0;border:0;background:transparent;cursor:pointer;}.camera-switch-target:disabled{cursor:wait;}
 .call-remote>video{object-fit:cover;}
 .call-square.camera-off>video{visibility:hidden;}
 .call-square>audio{display:none;}

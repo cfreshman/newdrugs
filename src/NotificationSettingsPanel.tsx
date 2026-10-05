@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useRef,useState} from 'react';
 import type {NotificationType,NotificationRuleInput} from '../shared/notificationSettings';
 import {notificationTypeLabels} from '../shared/notificationSettings';
@@ -28,5 +29,5 @@ export function NotificationSettingsPanel(){
  return <section className="notification-preferences">{items.map(item=><label className="notification-preference" key={item.type}><span>{notificationTypeLabels[item.type]}</span><input type="checkbox" checked={item.enabled} disabled={saving.has(item.type)} onChange={event=>void update(item.type,event.target.checked)}/></label>)}
   {rules.length>0&&<><h3>Saved alerts</h3>{rules.map(item=><div className="notification-rule" key={item.id}><span>{ruleLabel(item)}{item.indexing&&<small>Setting up</small>}</span><button type="button" disabled={Boolean(busy)} onClick={()=>void toggleRule(item)}>{item.enabled?'On':'Off'}</button><button type="button" disabled={Boolean(busy)} onClick={()=>void removeRule(item)}>Remove</button></div>)}{cursor&&<button type="button" className="text-link" disabled={Boolean(busy)} onClick={()=>void more()}>More alerts</button>}</>}
   <p className="quiet small">Your agent can set up more specific alerts. For example: “Notify me when a Talk opens about live music.”</p>
-  {error&&<p className="error" role="alert">{error}</p>}</section>;
+  {error&&<TransientError className="error" role="alert">{error}</TransientError>}</section>;
 }

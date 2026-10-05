@@ -11,11 +11,15 @@ import {liveMediaReady,liveRoomService} from './calling';
 import {queueLiveMediaEffect} from './liveMediaEffects';
 import {enqueueSearch} from './search/queue';
 import {enqueueNotificationEvent} from './notificationEvents';
+import {attachmentUrl} from '../shared/postLinks';
 
-interface SpaceRow {_id:string;title:string;description:string;hostId:string;status:'starting'|'live'|'ended';revision:number;createdAt:string;endedAt?:string;speakerIds:string[];hostOffer?:{id:string;toId:string;createdAt:string;expiresAt:string}}
+interface SpacePin {id:string;kind:'post'|'link';url:string;postId?:string;addedBy:string;createdAt:string}
+interface SpaceRow {_id:string;title:string;description:string;hostId:string;status:'starting'|'live'|'ended';revision:number;createdAt:string;endedAt?:string;speakerIds:string[];pins?:SpacePin[];hostOffer?:{id:string;toId:string;createdAt:string;expiresAt:string}}
 interface PresenceRow {_id:string;spaceId:string;userId:string;sid:string;joinedAt:string}
-interface RequestRow {_id:string;spaceId:string;personId:string;status:'pending'|'approved'|'declined';createdAt:string;updatedAt:string}
+interface PresenceHistory {_id:string;spaceId:string;userId:string;lastSeenAt:string;expiresAt:Date}
+interface RequestRow {_id:string;spaceId:string;personId:string;status:'pending'|'invited'|'approved'|'declined';createdAt:string;updatedAt:string}
 const spaces=()=>rows<SpaceRow>('spaces'),requests=()=>rows<RequestRow>('spaceSpeakerRequests'),presence=()=>rows<PresenceRow>('spacePresence');
+const history=()=>rows<PresenceHistory>('spacePresenceHistory');
 const START_GRACE_MS=120000,START_HARD_EXPIRY_MS=300000;
 export const spaceRoomName=(id:string)=>`${config.APP_ENV}:space:${id}`;
 async function account(userId:string,session?:ClientSession){return requireValue(await users().findOne({_id:userId,handle:{$type:'string'},suspendedAt:null},{session}),'Save your account before joining a Talk space.');}
@@ -26,8 +30,12 @@ async function owned(userId:string,id:string,session?:ClientSession){const row=r
 async function projectMany(source:SpaceRow[],userId:string,session?:ClientSession,includeProfiles=false){
  if(!source.length)return [];
  const active=await presence().find({spaceId:{$in:source.map(row=>row._id)}},{session,projection:{spaceId:1,userId:1,joinedAt:1}}).limit(source.length*101).toArray();
- const ids=[...new Set([...source.flatMap(row=>row.speakerIds),...active.map(row=>row.userId)])],requestIds=source.map(row=>`${row._id}:${userId}`),otherIds=ids.filter(id=>id!==userId);
- const [people,ownRequests,blocks]=await Promise.all([users().find({_id:{$in:ids}},{session,projection:{handle:1,name:1,photos:1,discoverable:1,suspendedAt:1}}).toArray(),requests().find({_id:{$in:requestIds}},{session,projection:{status:1}}).toArray(),includeProfiles&&otherIds.length?rows('blocks').find({pairId:{$in:otherIds.map(id=>[userId,id].sort().join(':'))}},{session,projection:{members:1}}).limit(otherIds.length).toArray():Promise.resolve([])]);
+ const ids=[...new Set([...source.flatMap(row=>row.speakerIds),...active.map(row=>row.userId),...(includeProfiles?source.flatMap(row=>(row.pins||[]).map(pin=>pin.addedBy)):[])])],requestIds=source.map(row=>`${row._id}:${userId}`),otherIds=ids.filter(id=>id!==userId);
+ const postIds=includeProfiles?[...new Set(source.flatMap(row=>(row.pins||[]).flatMap(pin=>pin.postId?[pin.postId]:[])))]:[];
+ const [people,ownRequests,invites,blocks,pinnedPosts]=await Promise.all([users().find({_id:{$in:ids}},{session,projection:{handle:1,name:1,photos:1,discoverable:1,suspendedAt:1}}).toArray(),requests().find({_id:{$in:requestIds}},{session,projection:{status:1}}).toArray(),includeProfiles?requests().find({spaceId:{$in:source.map(row=>row._id)},status:'invited'},{session,projection:{spaceId:1,personId:1}}).limit(source.length*100).toArray():Promise.resolve([]),includeProfiles&&otherIds.length?rows('blocks').find({pairId:{$in:otherIds.map(id=>[userId,id].sort().join(':'))}},{session,projection:{members:1}}).limit(otherIds.length).toArray():Promise.resolve([]),postIds.length?rows<{_id:string;userId:string;text:string}>('posts').find({_id:{$in:postIds},deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session,projection:{userId:1,text:1}}).limit(postIds.length).toArray():Promise.resolve([])]);
+ const postAuthors=[...new Set(pinnedPosts.map(post=>post.userId))],extraAuthors=postAuthors.length?await users().find({_id:{$in:postAuthors}},{session,projection:{handle:1,name:1,suspendedAt:1}}).limit(postAuthors.length).toArray():[];
+ const postBlocks=postAuthors.length?await rows<{_id:string;pairId:string}>('blocks').find({pairId:{$in:postAuthors.map(id=>[userId,id].sort().join(':'))}},{session,projection:{pairId:1}}).limit(postAuthors.length).toArray():[];
+ const hiddenPostAuthors=new Set(postBlocks.map(row=>row.pairId));
  const byPerson=new Map(people.map(person=>[person._id,person])),byRequest=new Map(ownRequests.map(row=>[row._id,row])),bySpace=new Map<string,PresenceRow[]>(),blocked=new Set(blocks.flatMap(row=>(row.members as string[]).filter(id=>id!==userId)));
  for(const row of active){const list=bySpace.get(row.spaceId)||[];list.push(row);bySpace.set(row.spaceId,list);}
  const publicPerson=(person:(typeof people)[number])=>({id:person._id,name:person.handle?`@${person.handle}`:String(person.name||'Member'),...(person.photos?.[0]?{photoId:person.photos[0]}:{})});
@@ -36,12 +44,22 @@ async function projectMany(source:SpaceRow[],userId:string,session?:ClientSessio
   const connected=(bySpace.get(row._id)||[]).sort((a,b)=>a.joinedAt.localeCompare(b.joinedAt)).flatMap(item=>{const person=byPerson.get(item.userId);return person&&!person.suspendedAt?[person]:[]});
   const speaking=new Set(row.speakerIds),presentSpeakers=connected.filter(person=>speaking.has(person._id)),presentListeners=connected.filter(person=>!speaking.has(person._id));
   const present=[...new Map([...connected,...members.filter(person=>person._id===userId)].map(person=>[person._id,person])).values()];
-  return {id:row._id,title:row.title,description:row.description,hostId:row.hostId,hostName:host?.handle?`@${host.handle}`:String(host?.name||'Member'),status:row.status,revision:row.revision,createdAt:row.createdAt,...(row.endedAt?{endedAt:row.endedAt}:{}),speakerIds:members.map(person=>person._id),speakers:members.map(publicPerson),...(includeProfiles?{profileIds:present.filter(person=>(person._id===userId||person.discoverable)&&!blocked.has(person._id)).map(person=>person._id),participantCards:present.map(person=>({id:person._id,name:String(person.name||'Member'),...(person.handle?{handle:person.handle}:{})}))}:{}),speakingCount:presentSpeakers.length,listeningCount:presentListeners.length,presentSpeakers:presentSpeakers.slice(0,4).map(publicPerson),presentListeners:presentListeners.slice(0,4).map(publicPerson),myRole:row.hostId===userId?'host':row.speakerIds.includes(userId)?'speaker':'listener',myRequest:byRequest.get(`${row._id}:${userId}`)?.status||null,...(row.status==='live'&&row.hostOffer&&row.hostOffer.expiresAt>new Date().toISOString()&&(userId===row.hostId||userId===row.hostOffer.toId)?{hostOffer:{id:row.hostOffer.id,toId:row.hostOffer.toId,expiresAt:row.hostOffer.expiresAt}}:{})};
+  const ownRequest=byRequest.get(`${row._id}:${userId}`);
+  const pins=includeProfiles?(row.pins||[]).flatMap(pin=>{const sender=byPerson.get(pin.addedBy),addedByName=sender?.handle?`@${sender.handle}`:String(sender?.name||'Member');if(pin.kind==='link')return [{...pin,addedByName}];const post=pinnedPosts.find(item=>item._id===pin.postId),author=extraAuthors.find(item=>item._id===post?.userId);if(!post||!author||author.suspendedAt||hiddenPostAuthors.has([userId,author._id].sort().join(':')))return [];return [{...pin,addedByName,postText:post.text,postAuthor:author.handle?`@${author.handle}`:String(author.name||'Member')}];}):[];
+  return {id:row._id,title:row.title,description:row.description,hostId:row.hostId,hostName:host?.handle?`@${host.handle}`:String(host?.name||'Member'),status:row.status,revision:row.revision,createdAt:row.createdAt,...(row.endedAt?{endedAt:row.endedAt}:{}),speakerIds:members.map(person=>person._id),speakers:members.map(publicPerson),...(includeProfiles?{profileIds:present.filter(person=>(person._id===userId||person.discoverable)&&!blocked.has(person._id)).map(person=>person._id),participantCards:present.map(person=>({id:person._id,name:String(person.name||'Member'),...(person.handle?{handle:person.handle}:{})})),pins,...(row.hostId===userId?{invitedSpeakerIds:invites.filter(item=>item.spaceId===row._id).map(item=>item.personId)}:{})}:{}),speakingCount:presentSpeakers.length,listeningCount:presentListeners.length,presentSpeakers:presentSpeakers.slice(0,4).map(publicPerson),presentListeners:presentListeners.slice(0,4).map(publicPerson),myRole:row.hostId===userId?'host':row.speakerIds.includes(userId)?'speaker':'listener',myRequest:ownRequest?.status==='invited'?null:ownRequest?.status||null,...(ownRequest?.status==='invited'?{mySpeakerInvite:true}:{}),...(row.status==='live'&&row.hostOffer&&row.hostOffer.expiresAt>new Date().toISOString()&&(userId===row.hostId||userId===row.hostOffer.toId)?{hostOffer:{id:row.hostOffer.id,toId:row.hostOffer.toId,expiresAt:row.hostOffer.expiresAt}}:{})};
  });
 }
 async function project(row:SpaceRow,userId:string,session?:ClientSession){return (await projectMany([row],userId,session,true))[0];}
 async function event(userIds:string[],session?:ClientSession){if(userIds.length)await rows('recordEvents').insertOne({_id:randomUUID(),userIds:[...new Set(userIds)],payload:{keys:['spaces']},expiresAt:new Date(Date.now()+3600000)},{session});}
 async function audience(row:SpaceRow,session?:ClientSession){const connected=await presence().find({spaceId:row._id},{session,projection:{userId:1}}).limit(101).toArray();return [...new Set([...row.speakerIds,...connected.map(person=>person.userId)])];}
+export async function spaceReportTarget(reporterId:string,personId:string,spaceId:string,session?:ClientSession){
+ const row=requireValue(await spaces().findOne({_id:spaceId},{session,projection:{title:1,hostId:1,createdAt:1}}),'This Talk space is unavailable.');
+ const ids=[reporterId,personId],active=await presence().find({spaceId,userId:{$in:ids}},{session,projection:{userId:1}}).limit(2).toArray();
+ const recent=await history().find({spaceId,userId:{$in:ids},lastSeenAt:{$gte:new Date(Date.now()-120000).toISOString()}},{session,projection:{userId:1}}).limit(2).toArray();
+ const known=new Set([...active,...recent].map(item=>item.userId));
+ if(reporterId===personId||ids.some(id=>!known.has(id)))throw new AppError(404,'space_report','Choose someone who was recently in this Talk with you.');
+ return {id:row._id,title:row.title,hostId:row.hostId,createdAt:row.createdAt};
+}
 async function activateSpace(id:string,hostId:string){await transaction(async session=>{
  const row=await spaces().findOne({_id:id,status:'starting',hostId},{session});
  if(!row||!await presence().findOne({_id:`${id}:${hostId}`},{session,projection:{_id:1}}))return;
@@ -96,6 +114,32 @@ export async function spaceOperation(name:string,d:Record<string,unknown>,actor:
   await presence().deleteMany({spaceId:row._id},{session});await event([userId],session);if(session)await queueLiveMediaEffect('close',spaceRoomName(row._id),session);return project(row,userId,session);
  }
  if(row.status!=='live')throw new AppError(409,'space_ended','This Talk space has ended.');
+ if(name==='spaces.pin_post'||name==='spaces.pin_link'||name==='spaces.unpin'){
+  if(!await presence().findOne({_id:`${row._id}:${userId}`},{session,projection:{_id:1}}))throw new AppError(409,'space_presence','Join this Talk space first.');
+  const pins=row.pins||[];
+  if(name==='spaces.unpin'){
+   const pin=requireValue(pins.find(item=>item.id===d.pinId),'This Talk link is no longer here.');
+   if(pin.addedBy!==userId&&row.hostId!==userId)throw new AppError(403,'space_pin_owner','Only the person who added this link or the host can remove it.');
+   row.pins=pins.filter(item=>item.id!==pin.id);
+  }else{
+   if(!row.speakerIds.includes(userId))throw new AppError(403,'space_speaker','Only speakers can add links to Talk.');
+   if(pins.length>=12)throw new AppError(422,'space_pin_limit','Remove a Talk link before adding another.');
+   let pin:SpacePin;
+   if(name==='spaces.pin_post'){
+    const post=requireValue(await rows<{_id:string;userId:string}>('posts').findOne({_id:String(d.postId),deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session,projection:{userId:1}}),'This post is unavailable.');
+    if(await rows('blocks').findOne({pairId:[userId,post.userId].sort().join(':')},{session})||!await users().findOne({_id:post.userId,suspendedAt:null},{session,projection:{_id:1}}))throw new AppError(404,'post_unavailable','This post is unavailable.');
+    if(pins.some(item=>item.postId===post._id))return project(row,userId,session);
+    pin={id:randomUUID(),kind:'post',url:`/posts/${post._id}`,postId:post._id,addedBy:userId,createdAt:now};
+   }else{
+    let url:string;try{url=attachmentUrl(String(d.url));}catch{throw new AppError(422,'space_link','Choose a public website URL.');}
+    if(pins.some(item=>item.url===url))return project(row,userId,session);
+    pin={id:randomUUID(),kind:'link',url,addedBy:userId,createdAt:now};
+   }
+   row.pins=[...pins,pin];
+  }
+  row.revision++;const updated=await spaces().replaceOne({_id:row._id,status:'live',revision:row.revision-1},row,{session});if(!updated.matchedCount)throw new AppError(409,'space_changed','Talk links changed. Try again.');
+  await event(await audience(row,session),session);return project(row,userId,session);
+ }
  if(name==='spaces.accept_host'||name==='spaces.decline_host'){
   if(row.revision!==Number(d.revision))throw new AppError(409,'space_changed','Read the current Talk space before responding.');
   const offer=row.hostOffer;
@@ -120,6 +164,7 @@ export async function spaceOperation(name:string,d:Record<string,unknown>,actor:
  if(name==='spaces.request_speak'){
   if(row.speakerIds.includes(userId))throw new AppError(409,'already_speaking','You can already speak in this Talk space.');
   const id=`${row._id}:${userId}`;
+  if(await requests().findOne({_id:id,status:'invited'},{session,projection:{_id:1}}))throw new AppError(409,'speaker_invited','Respond to your invitation to speak.');
   await requests().updateOne({_id:id},{$set:{status:'pending',updatedAt:now},$setOnInsert:{spaceId:row._id,personId:userId,createdAt:now}},{session,upsert:true});
   await event([row.hostId,userId],session);const person=await account(userId,session);
   return {spaceId:row._id,personId:userId,name:person.handle?`@${person.handle}`:String(person.name||'Member'),status:'pending',createdAt:now};
@@ -127,8 +172,40 @@ export async function spaceOperation(name:string,d:Record<string,unknown>,actor:
  if(name==='spaces.cancel_request'){
   await requests().deleteOne({_id:`${row._id}:${userId}`,status:'pending'},{session});await event([row.hostId,userId],session);return {cancelled:true};
  }
+ if(name==='spaces.respond_speaker_invite'){
+  const invite=requireValue(await requests().findOne({_id:`${row._id}:${userId}`,status:'invited'},{session}),'This speaking invitation is no longer available.');
+  if(!await presence().findOne({_id:`${row._id}:${userId}`},{session,projection:{_id:1}}))throw new AppError(409,'space_listener','Join the Talk space before responding.');
+  if(d.accept){
+   if(row.speakerIds.length>=13)throw new AppError(422,'space_speakers','A Talk space can have up to thirteen speakers.');
+   if(!row.speakerIds.includes(userId)){row.speakerIds.push(userId);row.revision++;const changed=await spaces().replaceOne({_id:row._id,status:'live',revision:row.revision-1},row,{session});if(!changed.matchedCount)throw new AppError(409,'space_changed','The Talk space changed. Try again.');}
+   if(session)await queueLiveMediaEffect('speaker',spaceRoomName(row._id),session,row._id,userId);
+  }
+  await requests().updateOne({_id:invite._id,status:'invited'},{$set:{status:d.accept?'approved':'declined',updatedAt:now}},{session});
+  await event([row.hostId,userId],session);return project(row,userId,session);
+ }
  if(row.hostId!==userId)throw new AppError(403,'space_host','Only the host can manage this Talk space.');
- if(row.revision!==Number(d.revision))throw new AppError(409,'space_changed','Read the current Talk space before changing it.');
+ if(d.revision!==undefined&&row.revision!==Number(d.revision))throw new AppError(409,'space_changed','Read the current Talk space before changing it.');
+ if(name==='spaces.edit'){
+  row.title=String(d.title).trim();row.description=String(d.description).trim();row.revision++;
+  const updated=await spaces().replaceOne({_id:row._id,status:'live',hostId:userId,revision:row.revision-1},row,{session});if(!updated.matchedCount)throw new AppError(409,'space_changed','This Talk space changed. Read it again.');
+  if(session)await enqueueSearch('spaces',row._id,session);
+  await event(await audience(row,session),session);return project(row,userId,session);
+ }
+ if(name==='spaces.invite_speaker'){
+  const personId=String(d.personId);
+  if(personId===userId||row.speakerIds.includes(personId)||!await presence().findOne({_id:`${row._id}:${personId}`},{session,projection:{_id:1}}))throw new AppError(409,'space_listener','Choose a connected listener.');
+  await account(personId,session);await allowed(personId,row,session);
+  if(row.speakerIds.length>=13)throw new AppError(422,'space_speakers','A Talk space can have up to thirteen speakers.');
+  const id=`${row._id}:${personId}`,current=await requests().findOne({_id:id},{session});
+  if(current?.status==='pending')throw new AppError(409,'speaker_requested','This person already requested to speak. Approve their request.');
+  if(current?.status==='invited')return project(row,userId,session);
+  await requests().updateOne({_id:id},{$set:{status:'invited',updatedAt:now},$setOnInsert:{spaceId:row._id,personId,createdAt:now}},{session,upsert:true});
+  await event([personId,userId],session);return project(row,userId,session);
+ }
+ if(name==='spaces.cancel_speaker_invite'){
+  const personId=String(d.personId);
+  await requests().deleteOne({_id:`${row._id}:${personId}`,status:'invited'},{session});await event([personId,userId],session);return project(row,userId,session);
+ }
  if(name==='spaces.offer_host'){
   const personId=String(d.personId);
   if(personId===userId||!row.speakerIds.includes(personId)||!await presence().findOne({_id:`${row._id}:${personId}`},{session,projection:{_id:1}}))throw new AppError(409,'space_speaker','Choose a connected speaker to host this Talk space.');
@@ -176,7 +253,7 @@ export async function spaceAccess(userId:string,id:string){
  const service=liveRoomService();await service.createRoom({name:spaceRoomName(id),maxParticipants:100,emptyTimeout:120,departureTimeout:90});
  const owner=await account(userId),speaker=row.speakerIds.includes(userId);
  const token=new AccessToken(config.LIVEKIT_API_KEY,config.LIVEKIT_API_SECRET,{identity:userId,name:owner.handle?`@${owner.handle}`:String(owner.name||'Member'),metadata:JSON.stringify({photoId:owner.photos?.[0]||null}),ttl:'2m'});
- token.addGrant({roomJoin:true,room:spaceRoomName(id),canPublish:speaker,canPublishSources:speaker?[TrackSource.MICROPHONE]:[],canSubscribe:true,canPublishData:false});
+ token.addGrant({roomJoin:true,room:spaceRoomName(id),canPublish:speaker,canPublishSources:speaker?[TrackSource.MICROPHONE]:[],canSubscribe:true,canPublishData:true});
  const current=await spaces().findOne({_id:id,status:{$in:['starting','live']}});
  if(!current||current.status==='starting'&&current.hostId!==userId)throw new AppError(409,'space_ended','This Talk space is no longer available.');
  return {url:config.LIVEKIT_PUBLIC_URL,token:await token.toJwt(),space:await project(current,userId)};
@@ -191,11 +268,14 @@ export async function spaceWebhook(signal:{event:string;room?:{name?:string};par
    if(row.status==='starting'&&participantId!==row.hostId){await transaction(session=>queueLiveMediaEffect('remove',spaceRoomName(id),session,id,participantId));return;}
    try{await account(participantId);await allowed(participantId,row);}
    catch(error){if(!(error instanceof AppError))throw error;await transaction(async session=>{await rows('spaceRemovals').updateOne({_id:key},{$setOnInsert:{spaceId:id,userId:participantId,removedAt:new Date().toISOString()}},{session,upsert:true});await queueLiveMediaEffect('remove',spaceRoomName(id),session,id,participantId);});return;}
-   await presence().updateOne({_id:key},{$set:{spaceId:id,userId:participantId,sid,joinedAt:new Date().toISOString()}},{upsert:true});
+   const joinedAt=new Date().toISOString();
+   await presence().updateOne({_id:key},{$set:{spaceId:id,userId:participantId,sid,joinedAt}},{upsert:true});
+   await history().updateOne({_id:key},{$set:{spaceId:id,userId:participantId,lastSeenAt:joinedAt,expiresAt:new Date(Date.now()+7*86400000)}},{upsert:true});
    if(row.status==='starting'&&participantId===row.hostId)await activateSpace(id,participantId);
    if(!await spaces().findOne({_id:id,status:{$in:['starting','live']}},{projection:{_id:1}})){await presence().deleteOne({_id:key});await transaction(session=>queueLiveMediaEffect('remove',spaceRoomName(id),session,id,participantId));return;}
   }else{
    const removed=await presence().deleteOne(sid?{_id:key,sid}:{_id:key});
+   if(removed.deletedCount)await history().updateOne({_id:key},{$set:{lastSeenAt:new Date().toISOString(),expiresAt:new Date(Date.now()+7*86400000)}});
    if(removed.deletedCount&&row.hostOffer?.toId===participantId){const result=await spaces().updateOne({_id:id,status:'live','hostOffer.toId':participantId},{$unset:{hostOffer:''},$inc:{revision:1}});if(result.modifiedCount)await event([row.hostId,participantId]);}
   }
   const current=await presence().find({spaceId:id},{projection:{userId:1}}).limit(101).toArray();

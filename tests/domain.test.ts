@@ -522,6 +522,30 @@ describe('profile post pin',()=>{
   });
 });
 
+describe('post mentions and polls',()=>{
+  it('binds username text to the person at publish time and records one exact vote per person',async()=>{
+    const author=await person(),mentioned=await person(),voter=await person();
+    const handle=(await currentUser(mentioned.userId)).handle!;
+    const preview=await executeOperation('posts.mentions',{handles:[handle]},author) as any;
+    expect(preview.items).toMatchObject([{handle,userId:mentioned.userId}]);
+    const post=await executeOperation('posts.create',{text:`Hi @${handle}, pick one`,poll:{items:['Yes','No'],duration:'day'}},author,randomUUID(),{confirmed:true}) as any;
+    expect(post.mentions).toEqual([{start:3,end:4+handle.length,userId:mentioned.userId}]);
+    expect(post.poll).toMatchObject({items:['Yes','No'],counts:[0,0],totalVotes:0,userVoteIndex:null});
+    expect((await executeOperation('notifications.list',{},mentioned) as any).items).toMatchObject([{kind:'post_mention',link:{resourceId:post.id}}]);
+    await users().updateOne({_id:mentioned.userId},{$set:{handle:`changed_${randomUUID().slice(0,8)}`}});
+    const afterRename=await executeOperation('posts.get',{postId:post.id},author) as any;
+    expect(afterRename.text).toContain(`@${handle}`);expect(afterRename.mentions[0].userId).toBe(mentioned.userId);
+    const voted=await executeOperation('posts.vote',{postId:post.id,optionIndex:1},voter,randomUUID()) as any;
+    expect(voted.poll).toMatchObject({counts:[0,1],totalVotes:1,userVoteIndex:1});
+    expect((await executeOperation('posts.get',{postId:post.id},author) as any).poll.userVoteIndex).toBeNull();
+    await expect(executeOperation('posts.vote',{postId:post.id,optionIndex:0},voter,randomUUID())).rejects.toMatchObject({code:'poll_voted'});
+    await expect(executeOperation('posts.vote',{postId:post.id,optionIndex:2},author,randomUUID())).rejects.toMatchObject({code:'poll_option'});
+    await executeOperation('posts.delete',{postId:post.id},author,randomUUID(),{confirmed:true});
+    expect(await rows('postPollVotes').countDocuments({postId:post.id})).toBe(0);
+    expect((await executeOperation('posts.get',{postId:post.id},author) as any).poll).toBeUndefined();
+  });
+});
+
 describe('IOU payment destinations',()=>{
   it('shares payment usernames only through an authorized pair ledger, never a public profile',async()=>{
     const viewer=await person(),other=await person();

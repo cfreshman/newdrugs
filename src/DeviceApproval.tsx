@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {api,post,errorText} from './api';
 import {normalizeUserCode,type DevicePreview} from '../shared/agentAccess';
@@ -25,6 +26,6 @@ export function DeviceApproval({initialCode='',registered,handle,onAccount}:{ini
     </form>:<p role="status">{request.status==='approved'?'Approved. Your agent can finish connecting.':'Denied. No access was granted.'}</p>}
    </>}
   </>}
-  {error&&<p className="error" role="alert">{error}</p>}
+  {error&&<TransientError className="error" role="alert">{error}</TransientError>}
  </div>;
 }

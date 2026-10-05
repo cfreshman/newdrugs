@@ -53,7 +53,7 @@ import {acceptUpload,publicUploadMetadata} from './uploads';
 import { streamLiveState, readLiveState } from './liveState';
 import { buildResourceLinks } from './resourceLinks';
 import { devApiGate,trustedDevKey } from './devGate';
-import { previewImage } from './linkPreviews';
+import { previewIcon,previewImage } from './linkPreviews';
 import {uploadVideoPoster} from './videoPosters';
 import {postVideoPoster} from './postVideoLinks';
 import { replyToReview } from './reviewReply';
@@ -61,6 +61,7 @@ import {websiteRequest} from './websiteServing';
 import {reservedWebsiteUsername} from '../shared/website';
 import {MAX_SQUARE_BYTES} from '../src/squareModel';
 import {paymentHandlesInput,paymentHandlesOutput} from '../shared/paymentHandles';
+import {attachTalkAudio} from './reportEvidence';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
 const passkeyProof=z.object({id:z.string().min(1).max(1024).regex(/^[A-Za-z0-9_-]+$/)}).passthrough();
@@ -205,11 +206,17 @@ export function createApp() {
     requireActor(req);
     res.set({ 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' }).send(await previewImage(String(req.params.id)));
   });
+  app.get('/api/link-previews/:id/icon',async(req,res)=>{
+    requireActor(req);
+    const icon=await previewIcon(String(req.params.id));
+    res.set({'Content-Type':icon.mime,'Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'}).send(icon.bytes);
+  });
   app.get('/api/post-video-links/:id/poster',async(req,res)=>{
     const image=await postVideoPoster(requireActor(req),String(req.params.id));
     res.set({'Content-Type':'image/webp','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}).send(image);
   });
   app.put('/api/uploads/:id',limiter('/api/uploads/:id', 20),(req,_res,next)=>{requireActor(req);next();},uploadAdmission(),express.raw({type:'application/octet-stream',limit:'12mb'}),async(req,res)=>{res.json(await acceptUpload(requireActor(req),String(req.params.id),req.body));});
+  app.put('/api/reports/:id/audio',limiter('/api/reports/audio',6),uploadAdmission(2),express.raw({type:'application/octet-stream',limit:'2mb'}),async(req,res)=>{res.json(await attachTalkAudio(browserActor(req).userId,z.string().regex(/^[0-9a-f]{24}$/).parse(req.params.id),req.body));});
   app.get('/api/admin/session', async (req, res) => { res.json(await adminStatus(req)); });
   app.post('/api/admin/login', limiter('/api/admin/login', 10, 15 * 60000, {credentialAttempts:true}), async (req, res) => {
     const data = z.strictObject({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,40}$/), password: z.string().min(8).max(128) }).parse(req.body);

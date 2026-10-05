@@ -9,7 +9,7 @@ import {setupDOM} from './dom';
 let dom:ReturnType<typeof setupDOM>;
 const on={identity:'host',name:'@host',metadata:'{}',audioTrackPublications:new Map([['mic',{track:{},isMuted:false}]])};
 const muted={identity:'friend',name:'@friend',metadata:'{}',audioTrackPublications:new Map()};
-function Harness({mic=true,role='host',profileIds=[]}:{mic?:boolean;role?:'host'|'listener';profileIds?:string[]}){const [expanded,setExpanded]=useState(false);const talk={space:{id:'space',title:'Night walks',description:'Outside',createdAt:new Date(Date.now()-90000).toISOString(),hostId:'host',speakerIds:['host','friend'],profileIds,participantCards:[{id:'host',name:'Host Person',handle:'host'},{id:'friend',name:'Friend Person',handle:'friend'}],myRole:role},room:{localParticipant:on},members:[on,muted],speaking:new Set(),requests:[{personId:'guest',name:'@guest'}],mic,audioBlocked:false,expanded,busy:false,error:'',copied:false,setExpanded,share:vi.fn(),end:vi.fn(),toggleMic:vi.fn(),respond:vi.fn()} as any;return createElement(TalkContext.Provider,{value:talk,children:createElement(TalkDock)});}
+function Harness({mic=true,role='host',profileIds=[],onEnd=vi.fn(),onLeave=vi.fn()}:{mic?:boolean;role?:'host'|'listener';profileIds?:string[];onEnd?:()=>Promise<void>;onLeave?:()=>Promise<void>}){const [expanded,setExpanded]=useState(false);const talk={space:{id:'space',title:'Night walks',description:'Outside',createdAt:new Date(Date.now()-90000).toISOString(),hostId:'host',speakerIds:['host','friend'],profileIds,participantCards:[{id:'host',name:'Host Person',handle:'host'},{id:'friend',name:'Friend Person',handle:'friend'}],myRole:role},room:{localParticipant:on},members:[on,muted],speaking:new Set(),reactions:[],requests:[{personId:'guest',name:'@guest'}],mic,audioBlocked:false,expanded,busy:false,error:'',copied:false,setExpanded,share:vi.fn(),end:onEnd,leave:onLeave,toggleMic:vi.fn(),respond:vi.fn()} as any;return createElement(TalkContext.Provider,{value:talk,children:createElement(TalkDock)});}
 beforeEach(()=>{dom=setupDOM();});afterEach(()=>dom.cleanup());
 it('shows compact participant photos without visible counts and keeps detailed controls in the expanded panel',async()=>{
  await act(async()=>dom.root.render(createElement(Harness)));
@@ -25,7 +25,8 @@ it('shows compact participant photos without visible counts and keeps detailed c
  expect(dom.container.querySelector('.talk-dock-footer button[aria-label="Share talk space"]')).not.toBeNull();
  await act(async()=>dom.container.querySelector<HTMLButtonElement>('button[aria-label="Options for @friend"]')!.click());
  expect(dom.container.querySelector('.talk-dock-people>.space-avatar-grid + .space-person-menu')?.textContent).toContain('Offer host');
- expect(dom.container.querySelector('.space-person-menu .space-person-actions')?.querySelectorAll('button')).toHaveLength(4);
+ expect(dom.container.querySelector('.space-person-menu .space-person-actions')?.querySelectorAll('button')).toHaveLength(5);
+ expect(dom.container.querySelector('.space-person-menu .space-person-actions')?.textContent).toContain('Report');
  expect([...dom.container.querySelectorAll('.talk-dock-bar>button')].map(button=>button.getAttribute('aria-label'))).toEqual([null,'End talk space','Mic on. Mute microphone','Collapse talk space']);
 });
 it('uses a slashed microphone icon while muted',async()=>{
@@ -34,6 +35,23 @@ it('uses a slashed microphone icon while muted',async()=>{
  await act(async()=>dom.root.render(createElement(Harness,{mic:false})));
  expect(dom.container.querySelector('.talk-mic')?.getAttribute('aria-label')).toBe('Mic off. Unmute microphone');
  expect(dom.container.querySelector('.talk-mic svg')?.innerHTML).not.toBe(liveIcon);
+});
+it('confirms before leaving or ending a Talk',async()=>{
+ const onEnd=vi.fn(async()=>{}),onLeave=vi.fn(async()=>{});
+ await act(async()=>dom.root.render(createElement(Harness,{onEnd})));
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.talk-hangup')!.click());
+ expect(onEnd).not.toHaveBeenCalled();
+ expect(dom.container.textContent).toContain('End this talk space?');
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.delete-confirmation-actions button')!.click());
+ expect(onEnd).not.toHaveBeenCalled();
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.talk-hangup')!.click());
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.delete-confirmation-submit')!.click());
+ expect(onEnd).toHaveBeenCalledTimes(1);
+ await act(async()=>dom.root.render(createElement(Harness,{role:'listener',onLeave})));
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.talk-hangup')!.click());
+ expect(dom.container.textContent).toContain('Leave this talk space?');
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.delete-confirmation-submit')!.click());
+ expect(onLeave).toHaveBeenCalledTimes(1);
 });
 it('uses one two-step card for profile access and host controls without repeating the photo',async()=>{
  const navigate=vi.fn();

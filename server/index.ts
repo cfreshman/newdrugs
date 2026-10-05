@@ -24,9 +24,11 @@ import {startNotificationRuleIndex} from './notificationRuleIndex';
 import {startNotificationSchedule} from './notificationSchedule';
 import {startPostVideoLinkWorker} from './postVideoLinks';
 import {migrateAutomationAuthority} from './automations';
+import {reconcileQuizViews} from './quizzes';
 
 await connectDatabase();
 if(config.PROCESS_ROLE!=='web')await migrateAutomationAuthority();
+if(config.PROCESS_ROLE!=='web')void reconcileQuizViews().catch(error=>console.error('Quiz view backfill:',error instanceof Error?error.name:'error'));
 await ensureStarterPool();
 const background = config.PROCESS_ROLE !== 'web';
 const stopWorkerHealth = background ? startWorkerHealth() : async () => {};

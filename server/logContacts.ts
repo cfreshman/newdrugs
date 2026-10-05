@@ -41,32 +41,41 @@ async function readyContacts(userId:string,session?:ClientSession){
 export async function listLogContacts(actor:Actor,input:{query?:string;limit?:number;before?:string},session?:ClientSession){
  const userId=actor.userId,ready=await readyContacts(userId,session),limit=input.limit||20,canReadFriends=true;
  const blocked=new Set((await rows('blocks').find({members:userId},{session,projection:{members:1}}).toArray()).flatMap(row=>(row.members as string[]).filter(id=>id!==userId)));
- const signature=createHash('sha256').update(JSON.stringify(['seek-v2',userId,input.query||'',canReadFriends,ready])).digest('hex');
- type Cursor={phase:'contacts'|'friends';count:number;id:string};let cursor:Cursor={phase:ready?'contacts':'friends',count:0,id:''};
- if(input.before){try{const value=JSON.parse(Buffer.from(input.before,'base64url').toString());if(value.signature!==signature||!['contacts','friends'].includes(value.phase)||!Number.isInteger(value.count)||value.count<0||typeof value.id!=='string')throw Error();cursor=value;}catch{throw new AppError(422,'log_cursor','Reload the people picker.');}}
- const pair=(id:string)=>[userId,id].sort().join(':'),items:LogContact[]=[],query=input.query?.trim().toLocaleLowerCase()||'';
+ const signature=createHash('sha256').update(JSON.stringify(['seek-v3',userId,input.query||'',canReadFriends,ready])).digest('hex');
+ type Cursor={phase:'bffs'|'contacts'|'friends';count:number;id:string};let cursor:Cursor={phase:'bffs',count:0,id:''};
+ if(input.before){try{const value=JSON.parse(Buffer.from(input.before,'base64url').toString());if(value.signature!==signature||!['bffs','contacts','friends'].includes(value.phase)||!Number.isInteger(value.count)||value.count<0||typeof value.id!=='string')throw Error();cursor=value;}catch{throw new AppError(422,'log_cursor','Reload the people picker.');}}
+ const pair=(id:string)=>[userId,id].sort().join(':'),bffId=(id:string)=>createHash('sha256').update(`bff:${userId}:${id}`).digest('hex'),items:LogContact[]=[],query=input.query?.trim().toLocaleLowerCase()||'';
  let scanned=0,more=false;
  while(scanned<200&&items.length<limit){
   if(cursor.phase==='friends'&&!canReadFriends)break;
-  const take=Math.min(50,200-scanned),contactPhase=cursor.phase==='contacts';
-  const candidates=contactPhase
-   ?await counts().find({userId,count:{$gt:0},...(cursor.id?{$or:[{count:{$lt:cursor.count}},{count:cursor.count,personId:{$gt:cursor.id}}]}:{})},{session}).sort({count:-1,personId:1}).limit(take+1).toArray()
-   :(await rows('connections').find({members:userId,status:'accepted',...(cursor.id?{_id:{$gt:pair(cursor.id)}}:{})},{session,projection:{members:1}}).sort({_id:1}).limit(take+1).toArray()).map(row=>({_id:row._id,userId,personId:(row.members as string[]).find(id=>id!==userId)!,count:0}));
+  const take=Math.min(50,200-scanned),bffPhase=cursor.phase==='bffs',contactPhase=cursor.phase==='contacts',friendPhase=cursor.phase==='friends';
+  const candidates=bffPhase
+   ?(await rows<{_id:string;userId:string;personId:string}>('bffs').find({userId,...(cursor.id?{_id:{$gt:cursor.id}}:{})},{session}).sort({_id:1}).limit(take+1).toArray()).map(row=>({...row,count:0}))
+   :contactPhase
+    ?await counts().find({userId,count:{$gt:0},...(cursor.id?{$or:[{count:{$lt:cursor.count}},{count:cursor.count,personId:{$gt:cursor.id}}]}:{})},{session}).sort({count:-1,personId:1}).limit(take+1).toArray()
+    :(await rows('connections').find({members:userId,status:'accepted',...(cursor.id?{_id:{$gt:pair(cursor.id)}}:{})},{session,projection:{members:1}}).sort({_id:1}).limit(take+1).toArray()).map(row=>({_id:row._id,userId,personId:(row.members as string[]).find(id=>id!==userId)!,count:0}));
   const page=candidates.slice(0,take),ids=page.map(row=>row.personId).filter(Boolean);
-  const [people,friendRows,shared]=await Promise.all([
+  const [people,friendRows,shared,bffRows]=await Promise.all([
    users().find({_id:{$in:ids},handle:{$type:'string'},suspendedAt:null},{session,projection:{name:1,handle:1,photos:1}}).toArray(),
-   contactPhase&&canReadFriends?rows('connections').find({_id:{$in:ids.map(pair)},members:userId,status:'accepted'},{session,projection:{members:1}}).toArray():Promise.resolve([]),
-   !contactPhase&&ready?counts().find({_id:{$in:ids.map(id=>counterId(userId,id))},count:{$gt:0}},{session,projection:{personId:1}}).toArray():Promise.resolve([]),
+   (bffPhase||contactPhase)&&canReadFriends?rows('connections').find({_id:{$in:ids.map(pair)},members:userId,status:'accepted'},{session,projection:{members:1}}).toArray():Promise.resolve([]),
+   (bffPhase||friendPhase)&&ready?counts().find({_id:{$in:ids.map(id=>counterId(userId,id))},count:{$gt:0}},{session,projection:{personId:1,count:1}}).toArray():Promise.resolve([]),
+   !bffPhase&&ids.length?rows('bffs').find({_id:{$in:ids.map(bffId)}},{session,projection:{personId:1}}).limit(ids.length).toArray():Promise.resolve([]),
   ]);
-  const byId=new Map(people.map(person=>[person._id,person])),friendIds=new Set(friendRows.flatMap(row=>row.members as string[])),alreadyShared=new Set(shared.map(row=>row.personId));
+  const byId=new Map(people.map(person=>[person._id,person])),friendIds=new Set(friendRows.flatMap(row=>row.members as string[])),alreadyShared=new Set(friendPhase?shared.map(row=>row.personId):[]),sharedCounts=new Map(shared.map(row=>[row.personId,Number(row.count||0)])),bffIds=new Set(bffRows.map(row=>row.personId));
   for(let index=0;index<page.length;index++){
-   const row=page[index];scanned++;cursor={phase:contactPhase?'contacts':'friends',count:row.count,id:row.personId};
-   const person=byId.get(row.personId);
-   if(person&&!blocked.has(person._id)&&person._id!==userId&&!alreadyShared.has(person._id)&&(!query||`${person.name||''} ${person.handle}`.toLocaleLowerCase().includes(query)))items.push({id:person._id,name:person.name||person.handle!,handle:person.handle,...(person.photos?.[0]?{photoId:person.photos[0]}:{}),sharedHangouts:row.count,...(canReadFriends?{friend:!contactPhase||friendIds.has(person._id)}:{})});
-   if(items.length===limit){more=index+1<page.length||candidates.length>take;if(!more&&contactPhase&&canReadFriends){cursor={phase:'friends',count:0,id:''};more=Boolean(await rows('connections').findOne({members:userId,status:'accepted'},{session,projection:{_id:1}}));}break;}
+   const row=page[index];scanned++;cursor={phase:bffPhase?'bffs':contactPhase?'contacts':'friends',count:row.count,id:bffPhase?row._id:row.personId};
+   const person=byId.get(row.personId),friend=bffPhase||friendPhase||friendIds.has(row.personId);
+   if(person&&!blocked.has(person._id)&&person._id!==userId&&!alreadyShared.has(person._id)&&(bffPhase?friendIds.has(person._id):!bffIds.has(person._id))&&(!query||`${person.name||''} ${person.handle}`.toLocaleLowerCase().includes(query)))items.push({id:person._id,name:person.name||person.handle!,handle:person.handle,...(person.photos?.[0]?{photoId:person.photos[0]}:{}),sharedHangouts:bffPhase?sharedCounts.get(person._id)||0:row.count,...(canReadFriends?{friend}:{}),...(bffPhase?{bff:true}:{})});
+   if(items.length===limit){
+    more=index+1<page.length||candidates.length>take;
+    if(!more&&bffPhase){cursor={phase:ready?'contacts':'friends',count:0,id:''};more=Boolean(ready&&await counts().findOne({userId,count:{$gt:0}},{session,projection:{_id:1}})||await rows('connections').findOne({members:userId,status:'accepted'},{session,projection:{_id:1}}));}
+    else if(!more&&contactPhase&&canReadFriends){cursor={phase:'friends',count:0,id:''};more=Boolean(await rows('connections').findOne({members:userId,status:'accepted'},{session,projection:{_id:1}}));}
+    break;
+   }
   }
   if(items.length===limit)break;
   if(candidates.length>take){more=true;continue;}
+  if(bffPhase){cursor={phase:ready?'contacts':'friends',count:0,id:''};more=true;continue;}
   if(contactPhase&&canReadFriends){cursor={phase:'friends',count:0,id:''};more=true;continue;}
   more=false;break;
  }

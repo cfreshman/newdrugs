@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {BillingActivity} from './BillingActivity';
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Bootstrap, Profile } from '../shared/types';
@@ -37,7 +38,7 @@ export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAcc
     {!data.config.paymentsEnabled && <p className="quiet small">Payments aren’t connected yet.</p>}
     <p className="quiet small">Or use your own <NavLink className="text-link" to={{view:'agents'}} navigate={onConnect}>Codex, Claude Code, or other agent</NavLink> for <strong>free</strong>.</p>
     {data.wallet.reservedNanos > 0 && <p className="quiet small">{money(data.wallet.reservedNanos)} is held for your current reply. Any unused amount returns when it finishes.</p>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <TransientError className="error" role="alert">{error}</TransientError>}
     <BillingActivity key={data.user.id} wallet={data.wallet}/>
     {data.config.development && <p className="local-note">Development environment.</p>}
   </>;
@@ -84,7 +85,7 @@ export function Account({ data, refresh, close, saved: onSaved, initialMode = 'r
       <ProfileEditor key={data.user.id} person={data.user} saved={async () => { await refresh(); onSaved(); }} />
       {onboarding && <button className="text-link profile-later" onClick={onSaved}>Set up my profile later</button>}
     </>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <TransientError className="error" role="alert">{error}</TransientError>}
   </>;
 }
 
@@ -142,6 +143,6 @@ export function Connections({ registered, onAccount }: { registered: boolean; on
     <details className="device-login-option"><summary>Browser approval for a cloud agent</summary><p>Use this optional setup when your agent runs on another computer. It gives you an approval link and code, then saves its credentials automatically.</p><pre className="setup-prompt">{agentDeviceSetup(window.location.origin)}</pre><button type="button" className="solid wide" onClick={async()=>{try{await navigator.clipboard.writeText(agentDeviceSetup(window.location.origin));setDeviceCopied(true);setTimeout(()=>setDeviceCopied(false),2000);}catch{setError('Select the setup prompt and copy it manually.');}}}>{deviceCopied?'Copied':'Copy device setup prompt'}</button></details>
     {tokens.length > 0 && <ul className="token-list">{tokens.map(token => <li key={token.id}><span>{token.name}<small>{token.scope === 'read' ? 'Read only' : 'Read & write'} · {token.expiresAt ? `until ${new Date(token.expiresAt).toLocaleDateString()}` : 'No expiry'}</small></span>
       <button className="text-link" onClick={async () => { try { await api(`/tokens/${token.id}`, { method: 'DELETE' }); setSecret('');setShowPromptFallback(false); await load(); } catch (e) { setError(errorText(e)); } }}>Revoke</button></li>)}</ul>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <TransientError className="error" role="alert">{error}</TransientError>}
   </>;
 }

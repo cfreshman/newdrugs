@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {avatarImageUrl} from './logImageCache';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Eye, CameraPlus, PencilSimple, X } from '@phosphor-icons/react';
@@ -65,7 +66,7 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
           <div className="photo-order"><button type="button" disabled={index === 0 || uploading} aria-label={`Move photo ${index + 1} earlier`} onClick={() => move(index, -1)}><ArrowLeft size={16} /></button><span>{index === 0 ? 'Main' : index + 1}</span><button type="button" disabled={index === photos.length - 1 || uploading} aria-label={`Move photo ${index + 1} later`} onClick={() => move(index, 1)}><ArrowRight size={16} /></button></div>
         </div>)}</div>
         <input ref={picker} type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" tabIndex={-1} aria-label="Choose profile photos" onChange={event => { const selected = Array.from(event.target.files || []); event.target.value = ''; void upload(selected); }} />
-        <button className="photo-add" type="button" disabled={uploading || photos.length >= 6} onClick={() => picker.current?.click()}><CameraPlus size={20} />{uploading ? 'Uploading photos…' : 'Add photos'}</button>
+        <button className="photo-add text-action" type="button" disabled={uploading || photos.length >= 6} onClick={() => picker.current?.click()}><CameraPlus size={20} />{uploading ? 'Uploading photos…' : 'Add photos'}</button>
         <p className="quiet small">Up to six photos. JPEG, PNG or WebP, 12 MB each.</p>
       </fieldset>
       <label>Name<input value={person.name} maxLength={80} onChange={event => setPerson({ ...person, name: event.target.value })} autoComplete="given-name" /></label>
@@ -78,6 +79,6 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
       <p className="quiet small">Turn this on to appear nearby. Public posts show your name and first photo.</p>
       <button className="solid" disabled={busy || uploading||recording}>{busy ? 'Saving…' : 'Save profile'}</button>
     </form>}
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <TransientError className="error" role="alert">{error}</TransientError>}
   </>;
 }

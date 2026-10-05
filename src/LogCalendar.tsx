@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useLogCalendarData,CALENDAR_CHUNK_WEEKS} from './useLogCalendarData';
 import {LogCalendarDay} from './LogCalendarDay';
 import {LogDayDialog} from './LogDayDialog';
@@ -125,7 +126,7 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
  return <div ref={root} className="log-calendar-history">
   <LogCalendarHeader><button type="button" className="log-weekday-row" aria-label="Scroll calendar to top" onClick={()=>root.current?.closest<HTMLElement>('.composer-view')?.scrollTo({top:0,behavior:'smooth'})}><span/>{['S','M','T','W','T','F','S'].map((day,index)=><span className="log-weekday" key={index}>{day}</span>)}<span/></button></LogCalendarHeader>
   {grid}
-  <div ref={sentinel} className="log-calendar-edge" aria-live="polite">{busy?<CircleNotch className="spin spinner-immediate" size={22} aria-label="Loading older weeks"/>:error?<><p className="error">{error}</p><button onClick={retry}>Try again</button></>:<button onClick={append}>Older weeks</button>}</div>
+  <div ref={sentinel} className="log-calendar-edge" aria-live="polite">{busy?<CircleNotch className="spin spinner-immediate" size={22} aria-label="Loading older weeks"/>:error?<><TransientError className="error">{error}</TransientError><button onClick={retry}>Try again</button></>:<button onClick={append}>Older weeks</button>}</div>
   {selectedDay&&<LogDayDialog active={visible} anchor={root} close={closeDay} previous={neighboringDays.previous?()=>changeDay(neighboringDays.previous):undefined} next={neighboringDays.next?()=>changeDay(neighboringDays.next):undefined} pendingPrevious={neighboringDays.pending?()=>{pendingDayIntent.current='previous';}:undefined} pendingNext={neighboringDays.pending?()=>{pendingDayIntent.current='next';}:undefined} previousTo={neighboringDays.previous?{view:'log',date:neighboringDays.previous,logScope:scope,query:query||undefined,personId}:undefined} nextTo={neighboringDays.next?{view:'log',date:neighboringDays.next,logScope:scope,query:query||undefined,personId}:undefined}><LogCalendarDay key={selectedDay} date={selectedDay} today={today.toString()} filters={filters} previews={onDay(selectedDay).filter(entry=>!entry.id.startsWith('offline:'))} openPreview={chooseEntry} open={chooseEntry}>{birthdaysOn(selectedDay).map(person=><NavLink className="log-day-choice" key={`birthday:${person.personId}`} to={{view:'person',resourceId:person.personId}} navigate={()=>showPerson(person.personId)}><Cake size={24}/><span>{person.handle||person.name}’s birthday</span></NavLink>)}{onDay(selectedDay).some(entry=>entry.id.startsWith('offline:'))&&<p className="quiet small">Waiting for signal</p>}</LogCalendarDay></LogDayDialog>}
  </div>;
 }

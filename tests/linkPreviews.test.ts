@@ -45,6 +45,10 @@ describe('public preview fetch boundary', () => {
     await expect(fetchPublic('https://example.com', 'page', AbortSignal.timeout(1000))).rejects.toThrow();
     response(200, { 'content-type': 'image/svg+xml' }, '<svg/>');
     await expect(fetchPublic('https://example.com/image', 'image', AbortSignal.timeout(1000))).rejects.toThrow();
+    response(200, { 'content-type': 'image/x-icon' }, 'icon bytes');
+    expect((await fetchPublic('https://example.com/favicon.ico','icon',AbortSignal.timeout(1000))).mime).toBe('image/x-icon');
+    response(200, { 'content-type': 'image/svg+xml' }, '<svg/>');
+    await expect(fetchPublic('https://example.com/icon.svg','icon',AbortSignal.timeout(1000))).rejects.toThrow();
   });
   it('classifies a direct video from its MIME type without buffering the file',async()=>{
     response(200,{'content-type':'video/mp4','content-length':'900000000'},'video bytes');
@@ -55,8 +59,9 @@ describe('public preview fetch boundary', () => {
   });
 });
 it('uses OG then Twitter then ordinary head metadata, resolves relative images and ignores body forgeries', () => {
-  expect(pageMetadata('<head><title>Fallback &amp; title</title><meta content="OG &amp; title" property="og:title"><meta name="twitter:description" content="A description"><meta property="og:image" content="../photo.png"><meta property="og:url" content="https://evil.example/"></head><body><meta property="og:title" content="Wrong"></body>', 'https://example.com/articles/post')).toEqual({ title: 'OG & title', description: 'A description', image: 'https://example.com/photo.png' });
-  expect(pageMetadata('<title>Just a title</title><meta name="description" content="Details"><meta property="og:image" content="http://127.0.0.1/private">', 'https://example.com')).toEqual({ title: 'Just a title', description: 'Details', image: undefined });
+  expect(pageMetadata('<head><title>Fallback &amp; title</title><meta content="OG &amp; title" property="og:title"><meta name="twitter:description" content="A description"><meta property="og:image" content="../photo.png"><meta property="og:url" content="https://evil.example/"></head><body><meta property="og:title" content="Wrong"></body>', 'https://example.com/articles/post')).toEqual({ title: 'OG & title', description: 'A description', image: 'https://example.com/photo.png',iconUrls:['https://example.com/favicon.ico'] });
+  expect(pageMetadata('<title>Just a title</title><meta name="description" content="Details"><meta property="og:image" content="http://127.0.0.1/private">', 'https://example.com')).toEqual({ title: 'Just a title', description: 'Details', image: undefined,iconUrls:['https://example.com/favicon.ico'] });
+  expect(pageMetadata('<head><link href="/tiny.ico" rel="shortcut icon"><link rel="apple-touch-icon" href="../touch.png"><link rel="icon" type="image/svg+xml" href="/unsafe.svg"></head><body><link rel="icon" href="/forged.png">','https://example.com/articles/post').iconUrls).toEqual(['https://example.com/touch.png','https://example.com/tiny.ico','https://example.com/favicon.ico']);
 });
 it('keeps parentheses in links, excludes credentials and leaves sentence punctuation out', () => {
   const text = 'Read (https://example.com/wiki/Plant_(life)). Or https://example.org/a?x=1&y=2! https://user:pass@example.com/secret';

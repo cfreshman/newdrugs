@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useLayoutEffect,useRef,useState,type DragEvent,type PointerEvent,type CSSProperties} from 'react';
 import {ArrowCounterClockwise,ArrowClockwise,ArrowDown,ArrowUp,ArrowsOutSimple,Check,CircleNotch,CopySimple,Eraser,FadersHorizontal,Image,PencilSimple,SelectionSlash,Shapes,PaintBrush,Crop,Shuffle,TextAa,TextAlignCenter,TextAlignLeft,TextAlignRight,Trash,X} from '@phosphor-icons/react';
 import {usePanelVisible} from './PanelReadiness';
@@ -130,7 +131,7 @@ export function SquareEditor({active,cancel,useImage}:{active:boolean;cancel():v
     {project.layers.length>1&&!editing&&!moreOpen&&<div className="square-layers" aria-label="Layers">{[...project.layers].reverse().map((layer,index)=><button type="button" key={layer.id} aria-pressed={layer.id===selected} onClick={()=>setSelected(layer.id)}>{layer.type==='text'?layer.text||'Text':layer.type==='shape'?(layer.oval?'Oval':'Shape'):layer.type==='draw'?'Drawing':`Image ${project.layers.length-index}`}</button>)}</div>}
     </div></div>
    </>}
-   {error&&<p className="error" role="alert">{error}</p>}
+   {error&&<TransientError className="error" role="alert">{error}</TransientError>}
   </div>
   <footer className="log-task-footer panel-actions square-footer"><button type="button" onClick={cancel}>Cancel</button><button type="button" className="solid" disabled={busy||loading||placingText||Boolean(cropping)} onClick={()=>void finish()}>{busy&&<CircleNotch className="spin" size={18}/>}Add to Log entry</button></footer>
  </section>;

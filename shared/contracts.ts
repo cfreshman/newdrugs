@@ -8,6 +8,7 @@ import {logOutputs} from './log';
 import {notificationPreferences,notificationPreference,notificationRuleOutput,notificationRulesOutput} from './notificationSettings';
 import {makeDraftOutput,makeDraftSummary,makeRenderOutput,makePublishOutput} from './make';
 import {iouList,iouLedger,iouRecorded} from './ious';
+import {quizOutput,quizPage,quizPerson} from './quizzes';
 import {spaceSchema,spacePageSchema,speakerRequestSchema,speakerRequestsSchema} from './spaces';
 import {timeResolveOutput,timeConvertOutput,timeOverlapOutput} from './utilitySchemas';
 import {customDocumentSchema} from './customMedia';
@@ -15,13 +16,14 @@ import { recordAttachmentSchema } from './recordContext';
 import { automationSchema,automationValidationSchema } from './automations';
 import { inboxItemSchema } from './inbox';
 import { z } from 'zod';
+import {postMention,postPollOutput} from './postFeatures';
 
 const id = z.string();
 export const areaOutput=z.object({cell:z.string(),label:z.string(),point:z.object({type:z.literal('Point'),coordinates:z.tuple([z.number(),z.number()])})});
-export const profileOutput = z.object({ hasSharedHangouts:z.boolean().optional(), mutualCount:z.number().int().positive().optional(),mutualFriends:z.array(z.object({id,name:z.string(),photoId:z.string().optional()})).optional(),friendAction:z.enum(['invite','accept','invited','friend','unavailable']).optional(),connectionId:id.optional(),hidden:z.boolean().optional(), websiteUrl:z.url().optional(),mediaUrl:z.url().optional(),voiceFileId:id.optional(), id, handle: z.string().optional(), name: z.string(), city: z.string(), area:areaOutput.nullable().optional(), bio: z.string(), interests: z.array(z.string()), discoverable: z.boolean(), photos: z.array(z.string()).optional(), approximateMiles:z.number().optional(),sameArea:z.boolean().optional(),distanceLabel:z.string().optional() });
+export const profileOutput = z.object({ hasSharedHangouts:z.boolean().optional(), bff:z.boolean().optional(), mutualCount:z.number().int().positive().optional(),mutualFriends:z.array(z.object({id,name:z.string(),photoId:z.string().optional()})).optional(),friendAction:z.enum(['invite','accept','invited','friend','unavailable']).optional(),connectionId:id.optional(),hidden:z.boolean().optional(), websiteUrl:z.url().optional(),mediaUrl:z.url().optional(),voiceFileId:id.optional(), id, handle: z.string().optional(), name: z.string(), city: z.string(), area:areaOutput.nullable().optional(), bio: z.string(), interests: z.array(z.string()), discoverable: z.boolean(), photos: z.array(z.string()).optional(), approximateMiles:z.number().optional(),sameArea:z.boolean().optional(),distanceLabel:z.string().optional() });
 const author = z.object({ name: z.string(), handle: z.string().optional(), photoId: z.string().optional(), profileVisible:z.boolean().optional() });
 export const postPhoto = z.object({ id, name: z.string(), url: z.string() });
-const post = z.object({ id, saved:z.boolean().optional(), pinned:z.boolean().default(false), userId: id, text: z.string(), links:z.array(z.string()).default([]), photos: z.array(postPhoto).default([]), city: z.string(), area:areaOutput.nullable().optional(), createdAt: z.string(), author: author.optional(), approximateMiles:z.number().optional(),sameArea:z.boolean().optional(),distanceLabel:z.string().optional(), parentId:id.optional(),rootId:id.optional(),parent:z.object({id,text:z.string(),deleted:z.boolean(),author:author.optional()}).optional(),moderated:z.boolean().optional(),deleted:z.boolean().default(false),likeCount:z.number().default(0),liked:z.boolean().default(false),replyCount:z.number().default(0) });
+const post = z.object({ id, saved:z.boolean().optional(), pinned:z.boolean().default(false), userId: id, text: z.string(), mentions:z.array(postMention).default([]),poll:postPollOutput.optional(), links:z.array(z.string()).default([]), photos: z.array(postPhoto).default([]), city: z.string(), area:areaOutput.nullable().optional(), createdAt: z.string(), author: author.optional(), approximateMiles:z.number().optional(),sameArea:z.boolean().optional(),distanceLabel:z.string().optional(), parentId:id.optional(),rootId:id.optional(),parent:z.object({id,text:z.string(),deleted:z.boolean(),author:author.optional()}).optional(),moderated:z.boolean().optional(),deleted:z.boolean().default(false),likeCount:z.number().default(0),liked:z.boolean().default(false),replyCount:z.number().default(0) });
 const connection = z.object({ id, members: z.array(id), fromId: id, toId: id, note: z.string(), status: z.enum(['pending', 'accepted', 'declined', 'withdrawn', 'disconnected']), createdAt: z.string(), initialInvitation: z.object({fromId:id,note:z.string(),createdAt:z.string()}).optional(), disconnectedBy:id.optional(), disconnectedAt:z.string().optional(), respondedAt: z.string().optional(), updatedAt: z.string().optional(), lastMessage: z.object({ text: z.string(), fromId: id, createdAt: z.string() }).optional(), unread: z.boolean().optional() });
 const message = z.object({ id, connectionId: id, fromId: id, text: z.string(), createdAt: z.string(), clientId:z.string().optional() });
 const page = (item: z.ZodType) => z.object({ items: z.array(item), nextCursor: z.string().nullable() });
@@ -36,10 +38,11 @@ const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetr
 export const outputs: Record<string, z.ZodType> = {
   ...logOutputs,
   'make.create':makeDraftSummary,'make.get':makeDraftOutput,'make.edit':makeDraftSummary,'make.render':makeRenderOutput,'make.publish':makePublishOutput,'make.discard':z.object({discarded:z.literal(true),draftId:z.uuid()}),
-  'spaces.list':spacePageSchema,'spaces.get':spaceSchema,'spaces.create':spaceSchema,'spaces.end':spaceSchema,'spaces.offer_host':spaceSchema,'spaces.cancel_host_offer':spaceSchema,'spaces.accept_host':spaceSchema,'spaces.decline_host':spaceSchema,'spaces.requests':speakerRequestsSchema,'spaces.request_speak':speakerRequestSchema,'spaces.cancel_request':z.object({cancelled:z.literal(true)}),'spaces.respond_speaker':z.object({space:spaceSchema,personId:z.string(),approved:z.boolean()}),'spaces.revoke_speaker':z.object({space:spaceSchema,personId:z.string()}),'spaces.remove_person':z.object({space:spaceSchema,personId:z.string(),removed:z.literal(true)}),
+  'spaces.list':spacePageSchema,'spaces.get':spaceSchema,'spaces.create':spaceSchema,'spaces.end':spaceSchema,'spaces.edit':spaceSchema,'spaces.offer_host':spaceSchema,'spaces.cancel_host_offer':spaceSchema,'spaces.accept_host':spaceSchema,'spaces.decline_host':spaceSchema,'spaces.requests':speakerRequestsSchema,'spaces.request_speak':speakerRequestSchema,'spaces.cancel_request':z.object({cancelled:z.literal(true)}),'spaces.invite_speaker':spaceSchema,'spaces.cancel_speaker_invite':spaceSchema,'spaces.respond_speaker_invite':spaceSchema,'spaces.pin_post':spaceSchema,'spaces.pin_link':spaceSchema,'spaces.unpin':spaceSchema,'spaces.respond_speaker':z.object({space:spaceSchema,personId:z.string(),approved:z.boolean()}),'spaces.revoke_speaker':z.object({space:spaceSchema,personId:z.string()}),'spaces.remove_person':z.object({space:spaceSchema,personId:z.string(),removed:z.literal(true)}),
   'access.get':z.object({source:z.enum(['browser','external','agent']),scope:z.enum(['read','write']),background:z.boolean(),credential:z.object({name:z.string(),createdAt:z.string().optional(),expiresAt:z.string().nullable()}).optional(),grants:z.object({privateAccess:z.boolean(),writeAccess:z.boolean()}).optional(),operations:z.object({read:z.array(z.string()),write:z.array(z.string()),confirmationRequired:z.array(z.string())})}),
   'account.preferences':accountPreferencesSchema,'account.preferences_update':accountPreferencesSchema,
   'ious.list':iouList,'ious.get':iouLedger,'ious.record':iouRecorded,
+  'quizzes.list':quizPage,'quizzes.get':z.object({person:quizPerson,quiz:quizOutput.nullable()}),'quizzes.create':quizOutput,'quizzes.answer':quizOutput,'quizzes.pin':z.object({personId:id,pinned:z.boolean()}),
   'automations.validate':automationValidationSchema,
   'automations.create': automationSchema, 'automations.get': automationSchema, 'automations.update': automationSchema, 'automations.enable': automationSchema, 'automations.pause': automationSchema, 'automations.delete': automationSchema,
   'automations.list': z.object({ items: z.array(automationSchema) }), 'automations.run_now': z.object({ runId: id }),
@@ -48,7 +51,7 @@ export const outputs: Record<string, z.ZodType> = {
   'inbox.publish': inboxItemSchema, 'inbox.get': inboxItemSchema, 'inbox.mark_read': inboxItemSchema, 'inbox.archive': inboxItemSchema,
   'inbox.list': page(inboxItemSchema), 'inbox.delete': z.object({ deleted: z.literal(true) }),
   'links.text':z.object({url:z.string(),text:z.string()}),
-  'links.preview': z.object({custom:customDocumentSchema.optional(), url: z.string(), hostname: z.string(), title: z.string(), description: z.string(), imageUrl: z.string().optional(),kind:z.enum(['image','video']).optional(),embed:z.object({provider:z.string(),src:z.string(),height:z.number(),video:z.boolean().optional()}).optional() }),
+  'links.preview': z.object({custom:customDocumentSchema.optional(), url: z.string(), hostname: z.string(), title: z.string(), description: z.string(), imageUrl: z.string().optional(),iconUrl:z.string().optional(),videoAspectRatio:z.number().positive().optional(),kind:z.enum(['image','video']).optional(),embed:z.object({provider:z.string(),src:z.string(),height:z.number(),video:z.boolean().optional()}).optional() }),
   'files.prepare':upload,'files.get':upload,'files.list':z.object({items:z.array(upload)}),
   'files.discard':z.object({discarded:z.literal(true),id}),
   'files.delete':z.object({deleted:z.literal(true),id,bytesFreed:z.number()}),
@@ -83,6 +86,8 @@ export const outputs: Record<string, z.ZodType> = {
   'people.context':z.object({person:profileOutput.nullable(),profileAvailable:z.boolean(),connection:connection.nullable(),recentPosts:page(post)}),
   'activity.since':z.object({items:z.array(z.object({id,kind:z.enum(['invitation','connection_accepted','connection_declined','message','post_reply','post_like','log_entry']),createdAt:z.string(),actor:z.object({id,name:z.string(),handle:z.string().optional()}).nullable(),sourceId:id,text:z.string(),textTruncated:z.boolean(),postId:id.optional(),connectionId:id.optional(),entryId:id.optional(),link:resourceLinkOutput})),since:z.string(),until:z.string(),nextCursor:z.string().nullable(),notice:z.string()}),
   'identity.get': profileOutput, 'profile.update': profileOutput, 'people.get': profileOutput,
+  'people.bffs':page(z.object({id,name:z.string(),handle:z.string().optional(),photoId:id.optional(),connectionId:id})),
+  'people.bff_set':z.object({personId:id,bff:z.boolean()}),
   'people.mutuals':page(z.object({id,name:z.string(),photoId:z.string().optional()})),
   'people.hide':z.object({personId:id,hidden:z.boolean()}),
   'app.open': z.object({ open: z.string(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), messageId:z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
@@ -90,16 +95,16 @@ export const outputs: Record<string, z.ZodType> = {
   'search.global':z.object({items:z.array(z.object({source:z.enum(['public','log','chat','messages']),kind:z.enum(['person','post','talk','log','chat','message']),id,title:z.string(),snippet:z.string(),url:z.url(),score:z.number()})),notices:z.array(z.object({source:z.enum(['public','log','chat','messages']),text:z.string()})),errors:z.array(z.object({source:z.enum(['public','log','chat','messages']),message:z.string()}))}),
   'search.explain':z.object({match:searchMatch,retrieval:searchRetrieval}),
   'search.datasets':z.object({datasets:z.array(z.object({dataset:z.string(),count:z.number()})),pending:z.number(),failed:z.number(),model:z.string(),dimensions:z.number(),indexVersion:z.string(),capacity:z.number().nullable().describe("Fixed fallback capacity, or null for provisioned persistent retrieval."),notice:z.string()}),
-  'people.search': page(profileOutput).extend({retrieval:searchRetrieval.optional(),matches:z.array(searchMatch).optional(),indexing:z.boolean().optional()}), 'posts.list': page(post).extend({pinned:post.nullable().optional()}), 'posts.get': post, 'posts.ancestors':z.object({items:z.array(post).max(50),earlierId:id.nullable(),unavailable:z.boolean()}), 'posts.create': post,
+  'people.search': page(profileOutput).extend({retrieval:searchRetrieval.optional(),matches:z.array(searchMatch).optional(),indexing:z.boolean().optional()}), 'posts.list': page(post).extend({pinned:post.nullable().optional()}), 'posts.liked_by':page(post), 'posts.get': post, 'posts.ancestors':z.object({items:z.array(post).max(50),earlierId:id.nullable(),unavailable:z.boolean()}), 'posts.create': post,
   'posts.incoming_replies':page(post),'posts.thread_updates':page(post),
-  'posts.save':post, 'posts.pin':post, 'posts.replies': page(post), 'posts.reply': post, 'posts.like': post,
+  'posts.save':post, 'posts.pin':post, 'posts.vote':post, 'posts.mentions':z.object({items:z.array(z.object({handle:z.string(),userId:id,name:z.string(),photoId:id.optional()}))}), 'posts.replies': page(post), 'posts.reply': post, 'posts.like': post,
   'posts.delete': z.object({ deleted: z.literal(true), id }),
   'connections.list': page(connection).extend({ people: z.array(profileOutput) }),
   'connections.status': z.object({ connection: connection.nullable() }),
   'connections.get': z.object({ connection, people: z.array(profileOutput) }),
   'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.window':z.object({items:z.array(message),targetId:id,connection,people:z.array(profileOutput),olderCursor:id.nullable(),newerCursor:id.nullable()}), 'messages.search':z.object({items:z.array(z.object({id,connectionId:id,fromId:id,text:z.string(),createdAt:z.string(),score:z.number(),person:z.object({id,name:z.string(),handle:z.string().optional(),photoId:z.string().optional()})})),nextCursor:id.nullable(),mode:z.enum(['hybrid','keyword']),indexing:z.boolean(),notices:z.array(z.string())}), 'messages.list': page(message), 'messages.send': message,
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
-  'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'call', 'connection_accepted', 'review', 'post_like', 'post_reply', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added', 'iou', 'alert']), title: z.string(), text: z.string(), createdAt: z.string(), photoId:z.string().optional(), connectionId: z.string().optional(), callId:z.string().optional(),callActive:z.boolean().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
+  'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'call', 'connection_accepted', 'review', 'post_like', 'post_reply', 'post_mention', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added', 'iou', 'quiz', 'alert']), title: z.string(), text: z.string(), createdAt: z.string(), photoId:z.string().optional(), connectionId: z.string().optional(), callId:z.string().optional(),callActive:z.boolean().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),
   'notifications.read_all':z.object({read:z.literal(true),readAt:z.string()}),
   'notifications.preferences':notificationPreferences,'notifications.preference_set':notificationPreference,
@@ -114,6 +119,8 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'quizzes.create':'Send this quiz and your answers to the selected friend, who will be notified.',
+  'quizzes.answer':'Publish these replacement answers in the shared quiz. Your friend can read them.',
   'ious.record':'Add this exact amount and reason to the shared IOU history and notify the other person. It records an amount or an outside settlement.',
   'website.delete':'Permanently delete your website, including its draft, saved revisions, checkpoints and published copy. Its preview and public pages will stop working. Uploaded media stays in Storage.',
   'website.publish':'Publish this exact website draft revision on your public username and permanent code addresses.',
@@ -136,7 +143,7 @@ export const consequences: Record<string, string> = {
   'files.delete': 'Permanently delete this file. It will be removed from attached posts and Log entries, and existing chat attachments will no longer open; a current profile photo will also be removed from the profile.',
   'posts.create': 'Publish this exact text and its attachments publicly.', 'posts.delete': 'Permanently delete this post.',
   'posts.reply': 'Publish this exact reply and its attachments to the selected public post.',
-  'connections.disconnect': 'End this connection and stop new messages. Both people retain the existing conversation. Only you can initiate reconnection.',
+  'connections.disconnect': 'End this connection and stop new messages. Both people retain the existing conversation and may send a new invitation later.',
   'connections.request': 'Send this invitation and note to the selected person.',
   'connections.respond': 'Accept or decline this invitation. Accepting opens direct messages.',
   'people.report': 'Submit this report for operator review.',

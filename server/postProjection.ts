@@ -13,6 +13,7 @@ export async function postCards(records: Row[], userId: string, blocked: string[
   const photos = await uploads().find({ _id: { $in: records.flatMap(post => !post.deletedAt && Array.isArray(post.fileIds) ? post.fileIds as string[] : []) }, ready: true, deletedAt: { $exists: false }, moderatedAt: { $exists: false }, mime: /^image\// }, options).toArray();
   const parents = await rows('posts').find({_id:{$in:[...new Set(records.flatMap(post=>post.parentId?[String(post.parentId)]:[]))]},userId:{$nin:blocked}},options).toArray();
   const authors = await users().find({ _id: { $in: [...new Set([...records,...parents].map(post => String(post.userId)))] } }, options).toArray();
+  const ownVotes=await rows('postPollVotes').find({_id:{$in:ids.map(id=>`${id}:${userId}`)}},{session,projection:{postId:1,optionIndex:1}}).limit(ids.length).toArray();
   const savedPosts=new Set((await rows('postSaves').find({userId,targetId:{$in:ids}},options).toArray()).map(row=>String(row.targetId)));
   const visibleAuthors=new Set((await Promise.all(authors.map(async author=>await profileVisibleTo(userId,author,session)?author._id:null))).filter(Boolean));
   const likes = await rows('postLikes').aggregate<{ _id: string; count: number; liked: number }>([
@@ -26,7 +27,10 @@ export async function postCards(records: Row[], userId: string, blocked: string[
     const post:Row={...record,deletedAt:record.deletedAt || record.moderatedAt};
     const rawParent=parents.find(parent=>parent._id===post.parentId&&!authors.find(author=>author._id===parent.userId)?.suspendedAt),parent:Row|undefined=rawParent?{...rawParent,deletedAt:rawParent.deletedAt||rawParent.moderatedAt}:undefined,parentAuthor=authors.find(author=>author._id===parent?.userId);
     const author = authors.find(user => user._id === post.userId), like = likes.find(row => row._id === post._id);
-    return { id: post._id, saved:savedPosts.has(post._id), pinned:!post.deletedAt&&author?.pinnedPostId===post._id, userId: String(post.userId), text: post.deletedAt ? '' : String(post.text),links:post.deletedAt?[]:Array.isArray(post.links)?post.links:[], city: post.deletedAt ? '' : String(post.city || ''), area: post.deletedAt ? null : post.area,
+    const poll=post.deletedAt?undefined:post.poll as {items:string[];duration:'day'|'week'|'forever';expiresAt:string|null;counts:number[];totalVotes:number}|undefined;
+    const vote=ownVotes.find(row=>row.postId===post._id);
+    return { id: post._id, saved:savedPosts.has(post._id), pinned:!post.deletedAt&&author?.pinnedPostId===post._id, userId: String(post.userId), text: post.deletedAt ? '' : String(post.text),mentions:post.deletedAt?[]:Array.isArray(post.mentions)?post.mentions:[],links:post.deletedAt?[]:Array.isArray(post.links)?post.links:[], city: post.deletedAt ? '' : String(post.city || ''), area: post.deletedAt ? null : post.area,
+      ...(poll?{poll:{items:poll.items,duration:poll.duration,expiresAt:poll.expiresAt,counts:poll.counts,totalVotes:poll.totalVotes,userVoteIndex:typeof vote?.optionIndex==='number'?vote.optionIndex:null,expired:Boolean(poll.expiresAt&&Date.parse(poll.expiresAt)<=Date.now())}}:{}),
       photos: post.deletedAt ? [] : (Array.isArray(post.fileIds) ? post.fileIds as string[] : []).flatMap(id => { const file = photos.find(file => file._id === id && file.userId === post.userId); return file ? [{ id, name: publicUploadName(file), url: `/api/files/${id}` }] : []; }),
       createdAt: String(post.createdAt), parentId: post.parentId as string | undefined, rootId: post.rootId as string | undefined, deleted: Boolean(post.deletedAt),...(post.moderatedAt?{moderated:true}:{}),
       likeCount: post.deletedAt ? 0 : like?.count || 0, liked: !post.deletedAt && Boolean(like?.liked), replyCount: replies.find(row => row._id === post._id)?.count || 0,

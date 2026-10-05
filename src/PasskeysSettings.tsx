@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useEffect,useState,type FormEvent} from 'react';
 import type {PublicKeyCredentialCreationOptionsJSON} from '@simplewebauthn/browser';
 import {api,post,errorText} from './api';
@@ -32,6 +33,6 @@ export function PasskeysSettings(){
   {items.length>0?<div className="passkey-list">{items.map(item=><div className="passkey-row" key={item.id}><span>Added {new Date(item.createdAt).toLocaleDateString()}</span><button type="button" className="text-link" disabled={busy} onClick={()=>choose({kind:'remove',id:item.id})}>Remove</button></div>)}</div>:<p className="quiet small">Sign in with your device or password manager.</p>}
   {!action&&supported&&<button type="button" className="solid" disabled={busy} onClick={()=>choose({kind:'add'})}>Add passkey</button>}
   {action&&<form className="fields" onSubmit={event=>void save(event)}><label>Current password<input type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)} required/></label><div className="panel-actions"><button type="button" disabled={busy} onClick={()=>{setAction(null);setPassword('');}}>Cancel</button><button className="solid" disabled={busy}>{action.kind==='add'?'Add passkey':'Remove passkey'}</button></div></form>}
-  {notice&&<p role="status">{notice}</p>}{error&&<p className="error" role="alert">{error}</p>}
+  {notice&&<p role="status">{notice}</p>}{error&&<TransientError className="error" role="alert">{error}</TransientError>}
  </section>;
 }

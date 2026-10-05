@@ -24,7 +24,7 @@ async function apply(effect:Effect){
    return;
   }
   const speaker=(space.speakerIds as string[]||[]).includes(effect.personId!);
-  await rooms.updateParticipant(effect.room,effect.personId!,{permission:{canPublish:speaker,canSubscribe:true,canPublishData:false,canPublishSources:speaker?[TrackSource.MICROPHONE]:[]}});
+  await rooms.updateParticipant(effect.room,effect.personId!,{permission:{canPublish:speaker,canSubscribe:true,canPublishData:true,canPublishSources:speaker?[TrackSource.MICROPHONE]:[]}});
  }catch(error){if(!unavailable(error))throw error;}
 }
 let running=false;

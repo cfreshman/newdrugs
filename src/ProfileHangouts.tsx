@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {useOpenLogList} from './logSequence';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {CircleNotch} from '@phosphor-icons/react';
@@ -19,5 +20,5 @@ export function ProfileHangouts({personId,navigate}:{personId:string;navigate(de
  useEffect(()=>{if(visible)void load();return()=>{generation.current++;pending.current=false;};},[load,visible]);
  useRecordRefresh(['log'],()=>{if(visible)void load();});
  useEffect(()=>{const node=edge.current,root=node?.closest('.composer-view');if(!visible||loading||!page?.nextCursor||!node||!root||typeof IntersectionObserver==='undefined')return;const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting))void load(page.nextCursor!);},{root,rootMargin:'100px'});observer.observe(node);return()=>observer.disconnect();},[visible,loading,page?.nextCursor,load]);
- return <div className="profile-hangouts"><LogList entries={page?.items||[]} open={entry=>openList(entry,page?.items||[],{personId,scope:'shared'},page?.nextCursor)}/>{loading&&<div className="log-loading" role="status" aria-label="Loading hangouts"><CircleNotch className={page?.items.length?'spin spinner-immediate':'spin'} size={22}/></div>}{page&&!page.items.length&&!loading&&<p className="quiet">No shared hangouts yet.</p>}{error&&<p className="error" role="alert">{error}</p>}<div ref={edge}>{page?.nextCursor&&<button disabled={loading} onClick={()=>void load(page.nextCursor!)}>More hangouts</button>}</div></div>;
+ return <div className="profile-hangouts"><LogList entries={page?.items||[]} open={entry=>openList(entry,page?.items||[],{personId,scope:'shared'},page?.nextCursor)}/>{loading&&<div className="log-loading" role="status" aria-label="Loading hangouts"><CircleNotch className={page?.items.length?'spin spinner-immediate':'spin'} size={22}/></div>}{page&&!page.items.length&&!loading&&<p className="quiet">No shared hangouts yet.</p>}{error&&<TransientError className="error" role="alert">{error}</TransientError>}<div ref={edge}>{page?.nextCursor&&<button disabled={loading} onClick={()=>void load(page.nextCursor!)}>More hangouts</button>}</div></div>;
 }

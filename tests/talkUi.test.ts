@@ -10,7 +10,7 @@ import {setupDOM} from './dom';
 const api=vi.hoisted(()=>({operation:vi.fn()}));
 vi.mock('../src/api',async original=>({...await original<typeof import('../src/api')>(),operation:api.operation}));
 let dom:ReturnType<typeof setupDOM>;
-function Harness(){const compose=useTalkCompose()!;return createElement('div',null,createElement('button',{onClick:()=>compose.setComposing(!compose.composing)},compose.composing?'Cancel':'Open a talk space'),createElement(SpacesPanel,{navigate:vi.fn()}));}
+function Harness(){const compose=useTalkCompose()!;return createElement('div',null,createElement('button',{onClick:()=>compose.setComposing(!compose.composing)},compose.composing?'Cancel':'Open a talk space'),createElement(SpacesPanel,{viewerId:'me',navigate:vi.fn()}));}
 beforeEach(()=>{dom=setupDOM();api.operation.mockReset().mockImplementation(async(name:string)=>name==='spaces.list'?{items:[],nextCursor:null}:name==='search.query'?{matches:[{record:{id:'talk-1',title:'Night walks',description:'',hostName:'Friend',speakerIds:[],speakers:[]}}],nextCursor:null,retrieval:{notices:[]}}:null);});
 afterEach(()=>dom.cleanup());
 it('replaces Talk search with a title-required creation form from the header action',async()=>{
@@ -54,7 +54,7 @@ it('accepts a Talk room in shared search response contracts',()=>{
 it('shows an ended shared Talk immediately without a Join action',async()=>{
  const id='9e6839fc-79c7-4fb1-a574-58adb74cdb63',ended={id,title:'Night walks',description:'The room is over.',hostId:'me',hostName:'@me',status:'ended',revision:2,createdAt:'2026-10-03T00:00:00Z',endedAt:'2026-10-03T01:00:00Z',speakerIds:['me'],speakers:[{id:'me',name:'@me'}]};
  api.operation.mockImplementation(async(name:string)=>name==='spaces.get'?ended:name==='spaces.list'?{items:[],nextCursor:null}:null);
- await act(async()=>dom.root.render(createElement(TalkContext.Provider,{value:{room:null,join:vi.fn()} as any,children:createElement(TalkComposeProvider,{children:createElement(SpacesPanel,{spaceId:id,navigate:vi.fn()})})})));
+ await act(async()=>dom.root.render(createElement(TalkContext.Provider,{value:{room:null,join:vi.fn()} as any,children:createElement(TalkComposeProvider,{children:createElement(SpacesPanel,{viewerId:'me',spaceId:id,navigate:vi.fn()})})})));
  const preview=dom.container.querySelector('.talk-preview')!;
  expect(preview.querySelector('.space-ended')?.textContent).toBe('ENDED');
  expect(preview.textContent).not.toContain('LIVE');

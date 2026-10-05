@@ -15,12 +15,13 @@ const mount=async(personId='friend')=>act(async()=>dom.root.render(createElement
 const choose=async(label:string)=>act(async()=>{const menu=dom.container.querySelector<HTMLDetailsElement>('.profile-menu')!;menu.open=true;[...menu.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===label)!.click();});
 it('keeps messages beside a single action menu and preserves explicit unfriend review',async()=>{
  await mount();const row=dom.container.querySelector('.profile-contact')!;
- expect([...row.querySelectorAll(':scope > a')].map(link=>link.textContent)).toEqual(['Open messages']);
- expect([...row.querySelectorAll('.profile-menu button')].map(button=>button.textContent)).toEqual(['Unfriend','Block','Report']);
+ expect([...row.querySelectorAll(':scope > a')].map(link=>link.textContent)).toEqual(['Messages','Quiz']);
+ expect([...row.querySelectorAll('.profile-menu button')].map(button=>button.textContent)).toEqual(['Mark BFF','Unfriend','Block','Report']);
  await act(async()=>row.querySelector<HTMLAnchorElement>(':scope > a')!.click());expect(navigate).toHaveBeenCalledWith({view:'messages',resourceId:'connection'});
  await choose('Unfriend');expect(dom.container.querySelector<HTMLDetailsElement>('.profile-menu')!.open).toBe(false);
  expect(transport.operation.mock.calls.some(([name])=>name==='connections.disconnect')).toBe(false);
- await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.action-review button')].find(button=>button.textContent==='Unfriend')!.click());
+ expect(dom.container.querySelector('.profile-unfriend-confirmation')?.textContent).toContain('Unfriend this person?');
+ await act(async()=>dom.container.querySelector<HTMLButtonElement>('.profile-unfriend-confirmation .delete-confirmation-submit')!.click());
  expect(transport.operation).toHaveBeenCalledWith('connections.disconnect',{connectionId:'connection'},{confirmed:true});
 });
 it('opens block and report forms from the menu without submitting either action',async()=>{
@@ -28,6 +29,13 @@ it('opens block and report forms from the menu without submitting either action'
  await choose('Report');expect(dom.container.querySelector('.person-safety textarea')).not.toBeNull();expect(dom.container.querySelector('.action-review')).toBeNull();
  expect(transport.operation.mock.calls.some(([name])=>name==='people.block'||name==='people.report')).toBe(false);
  await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.person-safety button')].find(button=>button.textContent==='Cancel')!.click());expect(dom.container.querySelector('.person-safety')).toBeNull();
+});
+it('marks a friend as BFF from the profile menu',async()=>{
+ let bff=false;const original=transport.operation.getMockImplementation()!;
+ transport.operation.mockImplementation((name:string,...args:unknown[])=>name==='people.get'?Promise.resolve({...friend,bff}):name==='people.bff_set'?(bff=true,Promise.resolve({personId:'friend',bff:true})):original(name,...args));
+ await mount();await choose('Mark BFF');
+ expect(transport.operation).toHaveBeenCalledWith('people.bff_set',{personId:'friend',bff:true});
+ expect(dom.container.querySelector('.profile-menu')?.textContent).toContain('Unmark BFF');
 });
 it('omits unfriend for non-friends and all safety actions on your own profile',async()=>{
  const original=transport.operation.getMockImplementation()!;transport.operation.mockImplementation((name:string,...args:unknown[])=>name==='connections.status'?Promise.resolve({connection:null}):original(name,...args));

@@ -1,10 +1,12 @@
-import {useEffect,useRef,useState} from 'react';
+import {TransientError} from './TransientError';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {Room,RoomEvent,Track} from 'livekit-client';
+import {Room,RoomEvent,Track,type LocalVideoTrack} from 'livekit-client';
 import {Squircle} from 'html-squircle/react';
 import {Microphone,MicrophoneSlash,PhoneDisconnect,VideoCamera,VideoCameraSlash} from '@phosphor-icons/react';
 import type {CallAccess} from '../shared/calling';
 import {errorText} from './api';
+import {majorCameras,type CameraChoice} from './cameraChoices';
 import './calling.css';
 
 function AudioVisualizer({track}:{track?:MediaStreamTrack}){
@@ -25,6 +27,8 @@ function AudioVisualizer({track}:{track?:MediaStreamTrack}){
 export function CallStage({access,otherName,onEnd,onClosed}:{access:CallAccess;otherName:string;onEnd():Promise<void>;onClosed():void}){
  const roomRef=useRef<Room|null>(null),localVideo=useRef<HTMLVideoElement>(null),remoteVideo=useRef<HTMLVideoElement>(null),remoteAudio=useRef<HTMLAudioElement>(null);
  const [connected,setConnected]=useState(false),[peer,setPeer]=useState(false),[mic,setMic]=useState(false),[camera,setCamera]=useState(false),[peerMic,setPeerMic]=useState(false),[peerCamera,setPeerCamera]=useState(false),[localAudioTrack,setLocalAudioTrack]=useState<MediaStreamTrack>(),[remoteAudioTrack,setRemoteAudioTrack]=useState<MediaStreamTrack>(),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [cameraChoices,setCameraChoices]=useState<CameraChoice[]>([]),[cameraFacing,setCameraFacing]=useState<CameraChoice['facing']>('user'),[cameraBusy,setCameraBusy]=useState(false),cameraChoicesRef=useRef<CameraChoice[]>([]);
+ const refreshCameras=useCallback(async()=>{const track=roomRef.current?.localParticipant.getTrackPublication(Track.Source.Camera)?.track as LocalVideoTrack|undefined;if(!track){cameraChoicesRef.current=[];setCameraChoices([]);return;}try{const settings=track.mediaStreamTrack.getSettings(),devices=await navigator.mediaDevices.enumerateDevices(),choices=majorCameras(devices,settings.deviceId||'',settings.facingMode,window.matchMedia('(pointer:coarse)').matches);cameraChoicesRef.current=choices;setCameraChoices(choices);const active=choices.find(item=>item.id===settings.deviceId);setCameraFacing(active?.facing||(settings.facingMode==='environment'?'environment':'user'));}catch{cameraChoicesRef.current=[];setCameraChoices([]);}},[]);
  useEffect(()=>{
   const previous=document.body.style.overflow;document.body.style.overflow='hidden';let active=true;
   const room=new Room({adaptiveStream:true,dynacast:true});roomRef.current=room;
@@ -41,7 +45,7 @@ export function CallStage({access,otherName,onEnd,onClosed}:{access:CallAccess;o
    setPeerCamera(Boolean(video?.track&&!video.isMuted));setPeerMic(Boolean(audio?.track&&!audio.isMuted));
    setMic(room.localParticipant.isMicrophoneEnabled);setCamera(room.localParticipant.isCameraEnabled);
   };
-  room.on(RoomEvent.ParticipantConnected,sync).on(RoomEvent.ParticipantDisconnected,sync).on(RoomEvent.TrackSubscribed,sync).on(RoomEvent.TrackUnsubscribed,sync).on(RoomEvent.TrackMuted,sync).on(RoomEvent.TrackUnmuted,sync).on(RoomEvent.LocalTrackPublished,sync).on(RoomEvent.LocalTrackUnpublished,sync);
+  room.on(RoomEvent.ParticipantConnected,sync).on(RoomEvent.ParticipantDisconnected,sync).on(RoomEvent.TrackSubscribed,sync).on(RoomEvent.TrackUnsubscribed,sync).on(RoomEvent.TrackMuted,sync).on(RoomEvent.TrackUnmuted,sync).on(RoomEvent.LocalTrackPublished,()=>{sync();void refreshCameras();}).on(RoomEvent.LocalTrackUnpublished,()=>{sync();void refreshCameras();});
   room.on(RoomEvent.Disconnected,()=>{if(active){setConnected(false);onClosed();}});
   void(async()=>{try{
    await room.connect(access.url,access.token);if(!active)return;setConnected(true);sync();
@@ -58,20 +62,21 @@ export function CallStage({access,otherName,onEnd,onClosed}:{access:CallAccess;o
     const results=await Promise.allSettled([room.localParticipant.setMicrophoneEnabled(true),room.localParticipant.setCameraEnabled(true)]);
     results.forEach((result,index)=>{if(result.status==='rejected'&&active)setError(previous=>previous||`${index?'Camera':'Microphone'}: ${errorText(result.reason)}`);});
    }
-   sync();
+   sync();void refreshCameras();
   }catch(error){if(active){setError(errorText(error));setConnected(false);}}})();
   return()=>{active=false;document.body.style.overflow=previous;roomRef.current=null;void room.disconnect();};
- },[access.call.id,access.token]);
+ },[access.call.id,access.token,refreshCameras]);
  useEffect(()=>{if(!connected||!('wakeLock' in navigator))return;let cancelled=false,lock:WakeLockSentinel|null=null;const acquire=async()=>{if(cancelled||document.hidden||lock)return;try{lock=await navigator.wakeLock.request('screen');if(cancelled){await lock.release();lock=null;}}catch{lock=null;}};void acquire();document.addEventListener('visibilitychange',acquire);return()=>{cancelled=true;document.removeEventListener('visibilitychange',acquire);void lock?.release().catch(()=>{});};},[connected]);
- const toggle=async(kind:'mic'|'camera')=>{const room=roomRef.current;if(!room||busy)return;setBusy(true);setError('');try{if(kind==='mic'){await room.localParticipant.setMicrophoneEnabled(!mic);setMic(room.localParticipant.isMicrophoneEnabled);}else{await room.localParticipant.setCameraEnabled(!camera);setCamera(room.localParticipant.isCameraEnabled);}}catch(error){setError(errorText(error));}finally{setBusy(false);}};
+ const toggle=async(kind:'mic'|'camera')=>{const room=roomRef.current;if(!room||busy||cameraBusy)return;setBusy(true);setError('');try{if(kind==='mic'){await room.localParticipant.setMicrophoneEnabled(!mic);setMic(room.localParticipant.isMicrophoneEnabled);}else{await room.localParticipant.setCameraEnabled(!camera);setCamera(room.localParticipant.isCameraEnabled);void refreshCameras();}}catch(error){setError(errorText(error));}finally{setBusy(false);}};
+ const switchCamera=async()=>{const room=roomRef.current,track=room?.localParticipant.getTrackPublication(Track.Source.Camera)?.track as LocalVideoTrack|undefined,choices=cameraChoicesRef.current;if(!room||!track||!camera||busy||cameraBusy||choices.length<2)return;const settings=track.mediaStreamTrack.getSettings(),index=choices.findIndex(item=>item.id===settings.deviceId),target=choices[(index+1+choices.length)%choices.length];setCameraBusy(true);setError('');try{await track.restartTrack({deviceId:{exact:target.id}});if(localVideo.current)track.attach(localVideo.current);setCameraFacing(target.facing);void refreshCameras();}catch(cause){try{if(settings.deviceId)await track.restartTrack({deviceId:{exact:settings.deviceId}});else await track.restartTrack({facingMode:settings.facingMode==='environment'?'environment':'user'});if(localVideo.current)track.attach(localVideo.current);}catch{await room.localParticipant.setCameraEnabled(false).catch(()=>{});setCamera(false);}setError(errorText(cause));}finally{setCameraBusy(false);}};
  const leave=async()=>{if(busy)return;setBusy(true);try{await onEnd();onClosed();}catch(error){setError(errorText(error));setBusy(false);}};
  return createPortal(<div className="call-stage" role="dialog" aria-modal="true" aria-label={`Video call with ${otherName}`}>
   <div className="call-pair">
-   <Squircle as="section" className={`call-square call-local${camera?'':' camera-off'}`} aria-label="Your video"><video ref={localVideo} muted autoPlay playsInline/>{!camera&&(mic?<AudioVisualizer track={localAudioTrack}/>:<span className="call-input-status">Inputs off</span>)}<div className="call-controls">
+   <Squircle as="section" className={`call-square call-local${camera?'':' camera-off'}${cameraFacing==='environment'?' is-environment-camera':''}`} aria-label="Your video"><video ref={localVideo} muted autoPlay playsInline/>{camera&&cameraChoices.length>1&&<button type="button" className="camera-switch-target" aria-label="Switch camera" title="Switch camera" disabled={cameraBusy||busy} onClick={()=>void switchCamera()}/>}{!camera&&(mic?<AudioVisualizer track={localAudioTrack}/>:<span className="call-input-status">Inputs off</span>)}<div className="call-controls">
     <button type="button" aria-label={mic?'Mute microphone':'Unmute microphone'} title={mic?'Mute microphone':'Unmute microphone'} className={mic?'':'off'} disabled={!connected||busy} onClick={()=>void toggle('mic')}>{mic?<Microphone size={21} weight="bold"/>:<MicrophoneSlash size={21} weight="bold"/>}</button>
     <button type="button" aria-label={camera?'Turn camera off':'Turn camera on'} title={camera?'Turn camera off':'Turn camera on'} className={camera?'':'off'} disabled={!connected||busy} onClick={()=>void toggle('camera')}>{camera?<VideoCamera size={21} weight="bold"/>:<VideoCameraSlash size={21} weight="bold"/>}</button>
     <button type="button" aria-label="End call" title="End call" className="end" disabled={busy} onClick={()=>void leave()}><PhoneDisconnect size={21} weight="bold"/></button>
-   </div>{error&&<p className="call-error" role="alert">{error}</p>}</Squircle>
+   </div>{error&&<TransientError className="call-error" role="alert">{error}</TransientError>}</Squircle>
    <Squircle as="section" className={`call-square call-remote${peerCamera?'':' camera-off'}`} aria-label={`${otherName}'s video`}><video ref={remoteVideo} autoPlay playsInline/><audio ref={remoteAudio} autoPlay/>{!peer?<span className="call-waiting">Waiting for {otherName}</span>:!peerCamera?(peerMic?<AudioVisualizer track={remoteAudioTrack}/>:<span className="call-input-status">Inputs off</span>):null}</Squircle>
   </div>
  </div>,document.body);

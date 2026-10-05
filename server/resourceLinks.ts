@@ -14,6 +14,9 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   if(name.startsWith('agent.memory.')){add({view:'agent_memory'},'Agent memory','surface','agent_memory');return links;}
   if(name==='access.get'){add({view:'agents'},'Connected agents','surface','agents');return links;}
   if(name==='account.preferences'||name==='account.preferences_update'){add({view:'preferences'},'Preferences','surface','preferences');return links;}
+  if(name.startsWith('quizzes.')){for(const row of name==='quizzes.list'?rows:[object(data.quiz||data)]){const personId=row.personId||row.person?.id||row.people?.find((person:{id:string})=>person.id!==actor.userId)?.id||data.person?.id;if(personId)add({view:'quizzes',resourceId:personId},'Open quiz','exact','quiz',personId);}if(!links.length)add({view:'quizzes'},'Quizzes','surface','quizzes');return links;}
+  if(name==='people.bff_set'){add({view:'person',resourceId:String(input.personId)},'Open profile','exact','person',String(input.personId));return links;}
+  if(name==='people.bffs'){for(const row of rows)if(row.id)add({view:'person',resourceId:row.id},'Open BFF profile','exact','person',row.id);add({view:'messages'},'Messages','surface','bffs');return links;}
   if(name.startsWith('ious.')){for(const row of name==='ious.list'?rows:[object(data.ledger||data)])if(row.person?.id)add({view:'ious',resourceId:row.person.id},`IOU with ${row.person.handle?`@${row.person.handle}`:row.person.name}`,'exact','iou',row.person.id);if(!links.length)add({view:'ious'},'IOUs','surface','ious');return links;}
   if(name==='log.birthday_get'||name==='log.birthday_update'){add({view:'log_settings'},'Log settings','surface','log_settings');return links;}
   if(name==='log.birthdays'){for(const item of data.items||[])add({view:'person',resourceId:item.personId},item.name,'exact','person',item.personId);return links;}
@@ -47,9 +50,9 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
     if (name === 'people.search') input.scope==='hidden'?add({view:'hidden_people'},'Hidden people','surface','hidden_people'):add({ view: 'people', areaCell: input.near as string | undefined, radiusMiles: input.radiusMiles as number | undefined, query:input.query as string|undefined,scope:input.scope as Destination['scope'] }, 'Browse people', 'surface', 'people');
   } else if(name==='people.hide'){
     add({view:'hidden_people'},'Hidden people','surface','hidden_people');
-  } else if (['posts.incoming_replies','posts.thread_updates'].includes(name)) {
-    for(const row of rows)if(typeof row.id==='string')add({view:'post',resourceId:row.id},'View reply','exact','post',row.id);
-    if(rows.length&&rows.every(row=>typeof row.id==='string'))add({view:'post_list',postIds:rows.map(row=>row.id)},name==='posts.incoming_replies'?'Replies to you':'Thread updates','surface','post_list');
+  } else if (['posts.incoming_replies','posts.thread_updates','posts.liked_by'].includes(name)) {
+    for(const row of rows)if(typeof row.id==='string')add({view:'post',resourceId:row.id},name==='posts.liked_by'?'View post':'View reply','exact','post',row.id);
+    if(rows.length&&rows.every(row=>typeof row.id==='string'))add({view:'post_list',postIds:rows.map(row=>row.id)},name==='posts.incoming_replies'?'Replies to you':name==='posts.liked_by'?'Liked posts':'Thread updates','surface','post_list');
   } else if (['posts.save', 'posts.get', 'posts.ancestors', 'posts.create', 'posts.list', 'posts.replies', 'posts.reply', 'posts.like'].includes(name)) {
     for (const row of rows) if (typeof row.id === 'string') add({ view: 'post', resourceId: row.id }, 'View post', 'exact', 'post', row.id);
     if (name === 'posts.list' && input.scope === 'selected' && rows.length) add({view:'post_list',postIds:rows.map(row=>row.id)},'Posts for you','surface','post_list');

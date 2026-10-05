@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import {LocationLabel,useLocationLabel} from './LocationLabel';
 import { useEffect, useRef, useState } from 'react';
 import { NavigationArrow, X } from '@phosphor-icons/react';
@@ -40,6 +41,6 @@ export function LocationPicker({ value, onChange }: { value: CoarseArea | null; 
       {value && <button type="button" className="text-link" aria-label="Remove saved area" onClick={() => { generation.current++; setBusy(false); onChange(null); }}><X size={16} />Clear</button>}</div>
     {value && <p className="small"><LocationLabel label={value.label}/></p>}
     <p className="quiet small">Only an approximate area is shared.</p>
-    {error && <p className="error" role="alert">{error}</p>}
+    {error && <TransientError className="error" role="alert">{error}</TransientError>}
   </div>;
 }

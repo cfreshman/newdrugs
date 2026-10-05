@@ -20,12 +20,20 @@ export function previewRaster(bytes: Buffer) {
     bytes.toString('ascii', 4, 8) === 'ftyp' && ['avif', 'avis'].includes(bytes.toString('ascii', 8, 12));
 }
 export function pageMetadata(html: string, finalUrl: string) {
-  const meta = new Map<string, string>(); let title = '', inTitle = false;
+  const meta = new Map<string, string>(), icons: {url:string;rank:number}[] = []; let title = '', inTitle = false;
   const parser = new Parser({
     onopentag(name, attributes) {
       if (name === 'body') { parser.pause(); return; }
       if (name === 'title') inTitle = true;
       if (name === 'meta') { const key = (attributes.property || attributes.name || '').toLowerCase(); if (!meta.has(key) && attributes.content) meta.set(key, attributes.content); }
+      if(name==='link'&&attributes.href){
+        const rel=(attributes.rel||'').toLowerCase().split(/\s+/),touch=rel.includes('apple-touch-icon')||rel.includes('apple-touch-icon-precomposed');
+        if(touch||rel.includes('icon'))try{
+          const url=publicUrl(new URL(attributes.href,finalUrl).href);
+          if(attributes.type?.toLowerCase()==='image/svg+xml'||/\.svg$/i.test(url.pathname))return;
+          icons.push({url:url.href,rank:touch?3:/(?:png|webp|avif|jpe?g)$/i.test(url.pathname)?2:1});
+        }catch{/* An invalid icon cannot replace the preview. */}
+      }
     },
     ontext(text) { if (inTitle) title += text; },
     onclosetag(name) { if (name === 'title') inTitle = false; if (name === 'head') parser.pause(); },
@@ -33,11 +41,13 @@ export function pageMetadata(html: string, finalUrl: string) {
   parser.end(html);
   let image: string | undefined;
   try { const raw = meta.get('og:image') || meta.get('og:image:url') || meta.get('twitter:image'); if (raw) image = publicUrl(new URL(raw, finalUrl).href).href; } catch { /* Text-only card. */ }
+  const fallbackIcon=publicUrl(new URL('/favicon.ico',finalUrl).href).href;
+  const iconUrls=[...new Set([...icons.sort((a,b)=>b.rank-a.rank).map(icon=>icon.url).slice(0,3),fallbackIcon])];
   const media=meta.get('og:video:secure_url')||meta.get('og:video');
   const embed=media&&new URL(finalUrl).hostname.endsWith('.bandcamp.com')?providerEmbed(media):null;
-  return { ...(embed?.provider==='Bandcamp'?{embed}:{}),title: clean(meta.get('og:title') || meta.get('twitter:title') || title, 180), description: clean(meta.get('og:description') || meta.get('twitter:description') || meta.get('description') || '', 300), image };
+  return { ...(embed?.provider==='Bandcamp'?{embed}:{}),title: clean(meta.get('og:title') || meta.get('twitter:title') || title, 180), description: clean(meta.get('og:description') || meta.get('twitter:description') || meta.get('description') || '', 300), image,iconUrls };
 }
-interface CachedPreview { _id: string; preview: LinkPreview; image?: Binary; expiresAt: Date }
+interface CachedPreview { _id: string; preview: LinkPreview; image?: Binary; icon?:Binary; iconMime?:'image/webp'|'image/x-icon'; expiresAt: Date }
 const cache = () => rows<CachedPreview>('linkPreviews');
 const pending = new Map<string, Promise<LinkPreview>>();
 function ownPreviewUrl(value:string){
@@ -55,7 +65,7 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
 
   let url: URL;
   try { url = publicUrl(value); } catch { throw new AppError(422, 'preview_url', 'Choose a public HTTP or HTTPS link.'); }
-  const id = hash(`rich-v6:${url.href}`), existing = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } }, { projection: { image: 0 } });
+  const id = hash(`rich-v8:${url.href}`), existing = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } }, { projection: { image: 0,icon:0 } });
   if (existing) return { ...existing.preview, url: value };
   if (pending.has(id)) return { ...await pending.get(id)!, url: value };
   const fallback: LinkPreview = { url: url.href, hostname: url.hostname, title: url.hostname, description: '',...(providerEmbed(url.href)?{embed:providerEmbed(url.href)!}:{}) };
@@ -64,7 +74,7 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
   if (pending.has(id)) return { ...await pending.get(id)!, url: value };
   if (rate!.count > 40 || pending.size >= 6) throw new AppError(429, 'preview_busy', 'Link previews are busy. Try again shortly.');
   const job = (async () => {
-    let preview = fallback, image: Buffer | undefined, success = false;
+    let preview = fallback, image: Buffer | undefined,icon:Buffer|undefined,iconMime:'image/webp'|'image/x-icon'|undefined,success = false;
     const signal = AbortSignal.timeout(15000);
     try {
       const customKind=customMediaKind(url.href);
@@ -75,18 +85,21 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
         preview={...fallback,custom,title:custom.spec==='CIF'?custom.caption||'CIF':custom.title||custom.spec,description:custom.spec==='MUSE'?[custom.artist,custom.album].filter(Boolean).join(' · '):''};success=true;
       }else{
 
-      let imageResponse:Awaited<ReturnType<typeof fetchPublic>>|undefined;
+      let imageResponse:Awaited<ReturnType<typeof fetchPublic>>|undefined,iconUrls:string[]=[];
       if(page.mime.startsWith('video/')){
         preview={...fallback,kind:'video',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Video')};success=true;
         try{
           const source=await fetchPublic(page.url,'video_poster',signal);
           image=await videoPoster(source.bytes,source.mime);
+          const dimensions=await sharp(image).metadata();
+          if(dimensions.width&&dimensions.height)preview.videoAspectRatio=dimensions.width/dimensions.height;
           preview.imageUrl=`/api/link-previews/${id}/image`;
         }catch{/* Keep the playable video with a neutral play tile. */}
       }
       else if(page.mime.startsWith('image/')){preview={...fallback,kind:'image',title:decodeURIComponent(new URL(page.url).pathname.split('/').pop()||'Image')};imageResponse=page;success=true;}
       else{
         const metadata=pageMetadata(page.bytes.toString('utf8'),page.url);
+        iconUrls=metadata.iconUrls;
         const embed=providerEmbed(page.url)||metadata.embed;
         preview={...fallback,title:metadata.title||fallback.title,description:metadata.description,...(embed?{embed}:{})};success=true;
         if(metadata.image)try{imageResponse=await fetchPublic(metadata.image,'image',signal);}catch{/* Keep text and players when artwork is unavailable. */}
@@ -96,6 +109,16 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
         image=await sharp(imageResponse.bytes,{limitInputPixels:20_000_000,animated:false}).rotate().resize(512,512,{fit:'inside',withoutEnlargement:true}).webp({quality:75}).toBuffer();
         if(image.length>200000)image=undefined;else preview.imageUrl=`/api/link-previews/${id}/image`;
       }catch{/* Metadata remains useful without artwork. */}
+      if(!preview.kind)for(const iconUrl of iconUrls)try{
+        const response=await fetchPublic(iconUrl,'icon',signal);
+        const bytes=response.bytes,ico=bytes.length>=6&&bytes.readUInt16LE(0)===0&&bytes.readUInt16LE(2)===1&&bytes.readUInt16LE(4)>0;
+        if(ico){if(bytes.length>200000)continue;icon=bytes;iconMime='image/x-icon';}
+        else if(previewRaster(bytes)){
+          const converted=await sharp(bytes,{limitInputPixels:1_000_000,animated:false}).resize(96,96,{fit:'inside',withoutEnlargement:true}).webp({quality:80}).toBuffer();
+          if(converted.length>100000)continue;icon=converted;iconMime='image/webp';
+        }else continue;
+        preview.iconUrl=`/api/link-previews/${id}/icon`;break;
+      }catch{/* Try the next declared icon or the standard favicon. */}
       }
     } catch { /* A link remains clickable when unfurling is unavailable. */ }
     // Platform cache, outside account storage. Bounded size plus TTL on Mongo.
@@ -104,7 +127,7 @@ export async function linkPreview(value: string, userId: string): Promise<LinkPr
       await cache().deleteMany({ _id: { $in: oldest.map(row => row._id) } });
     }
     const ttl=success?(preview.kind==='video'&&!image?3600000:86400000):300000;
-    await cache().replaceOne({ _id: id }, { preview, ...(image ? { image: new Binary(image) } : {}), expiresAt: new Date(Date.now() + ttl) }, { upsert: true });
+    await cache().replaceOne({ _id: id }, { preview, ...(image ? { image: new Binary(image) } : {}),...(icon&&iconMime?{icon:new Binary(icon),iconMime}:{}), expiresAt: new Date(Date.now() + ttl) }, { upsert: true });
     return preview;
   })();
   pending.set(id, job);
@@ -115,6 +138,12 @@ export async function previewImage(id: string) {
   const cached = await cache().findOne({ _id: id, expiresAt: { $gt: new Date() } });
   if (!cached?.image || ownPreviewUrl(cached.preview.url)) throw new AppError(404, 'not_found', 'Preview unavailable.');
   return Buffer.from(cached.image.buffer);
+}
+export async function previewIcon(id:string){
+  if(!/^[a-f0-9]{64}$/.test(id))throw new AppError(404,'not_found','Preview unavailable.');
+  const cached=await cache().findOne({_id:id,expiresAt:{$gt:new Date()}});
+  if(!cached?.icon||!cached.iconMime||ownPreviewUrl(cached.preview.url))throw new AppError(404,'not_found','Preview unavailable.');
+  return {bytes:Buffer.from(cached.icon.buffer),mime:cached.iconMime};
 }
 
 const textCache=new Map<string,{text:string;expires:number}>();

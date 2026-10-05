@@ -1,5 +1,7 @@
 import {beforeAll,beforeEach,afterAll,it,expect} from 'vitest';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
+import {mkdir,writeFile,unlink} from 'node:fs/promises';
+import {resolve} from 'node:path';
 import {connectDatabase,db,mongo,rows} from '../server/db';
 import {createGuest,users,hash,type Actor,currentUser} from '../server/auth';
 import {executeOperation,canonicalJSON} from '../server/operations';
@@ -11,6 +13,7 @@ import {config} from '../server/config';
 import {adminKeys,executeAdminOperation} from '../server/adminCli';
 import {sourceDocument} from '../server/search/sources';
 import {buildResourceLinks} from '../server/resourceLinks';
+import {readReportEvidence} from '../server/reportEvidence';
 const ai=config.aiEnabled;
 async function clean(){if(db().databaseName!=='newdrugs_test')throw Error('Isolated cloud tests only');for(const c of await db().collections())await c.deleteMany({});}
 beforeAll(async()=>{await connectDatabase();});beforeEach(async()=>{await clean();config.aiEnabled=true;});afterAll(async()=>{config.aiEnabled=ai;await clean();await mongo.close();});
@@ -34,17 +37,17 @@ it('browses an author timeline and replies without inventing a search query',asy
  expect((await list('posts')).items.map((p:any)=>p.text)).toEqual(['A public post']);expect((await list('replies')).items.map((p:any)=>p.text)).toEqual(['A reply']);expect((await list('all')).items).toHaveLength(2);
  await write('people.block',{personId:a.userId,blocked:true},b);await expect(list('posts')).rejects.toThrow();
 });
-it('keeps contact profiles readable and permits consent-based reconnection with original history',async()=>{
+it('keeps contact profiles readable and lets either person invite again with original history',async()=>{
  const a=await person(),b=await person(),c=await connect(a,b);await users().updateOne({_id:b.userId},{$set:{discoverable:false}});
  const privateProfile=await executeOperation('people.get',{personId:b.userId},a);expect(buildResourceLinks('people.get',{},privateProfile,a)[0].targetKind).toBe('exact');
  const stranger=await person();await expect(executeOperation('people.get',{personId:b.userId},stranger)).rejects.toThrow();
  await write('messages.send',{connectionId:c.id,text:'Original message'},a);await write('connections.disconnect',{connectionId:c.id},b);
- expect((await executeOperation('messages.list',{connectionId:c.id},a) as any).items[0].text).toBe('Original message');await expect(write('messages.send',{connectionId:c.id,text:'Unwanted'},a)).rejects.toThrow();await expect(write('connections.request',{personId:b.userId,note:'Again'},a)).rejects.toThrow();
- const again=await write('connections.request',{personId:a.userId,note:'Reconnect'},b);await write('connections.respond',{connectionId:again.id,accept:true},a);expect(again.initialInvitation.note).toBe('A test invitation');expect((await executeOperation('messages.list',{connectionId:c.id},b) as any).items).toHaveLength(1);
+ expect((await executeOperation('messages.list',{connectionId:c.id},a) as any).items[0].text).toBe('Original message');await expect(write('messages.send',{connectionId:c.id,text:'Unwanted'},a)).rejects.toThrow();
+ const again=await write('connections.request',{personId:b.userId,note:'Again'},a);await write('connections.respond',{connectionId:again.id,accept:true},b);expect(again.initialInvitation.note).toBe('A test invitation');expect((await executeOperation('messages.list',{connectionId:c.id},b) as any).items).toHaveLength(1);
 });
-it('lets the person who declined initiate a new invitation without allowing repeated unwanted requests',async()=>{
+it('allows either person to invite again after a decline while retaining one pending invitation',async()=>{
  const a=await person(),b=await person(),c=await write('connections.request',{personId:b.userId,note:'Hello'},a);await write('connections.respond',{connectionId:c.id,accept:false},b);
- await expect(write('connections.request',{personId:b.userId,note:'Again'},a)).rejects.toMatchObject({code:'invitation_declined'});expect((await write('connections.request',{personId:a.userId,note:'Changed my mind'},b)).toId).toBe(a.userId);
+ const again=await write('connections.request',{personId:b.userId,note:'Again'},a);expect(again.toId).toBe(b.userId);expect((await write('connections.request',{personId:a.userId,note:'At once'},b)).id).toBe(again.id);
 });
 it('defers insufficient-credit automation admission, notifies once, and recovers automatically',async()=>{
  const a=await person();await users().updateOne({_id:a.userId},{$set:{balanceNanos:0}});const id=randomUUID();await automations().insertOne({_id:id,userId:a.userId,name:'Test automation',instruction:'Read current interests',schedule:{kind:'weekly',timeZone:'UTC',hour:7,minute:0,weekdays:[0,1,2,3,4,5,6]},maxRunNanos:50000000,dailyBudgetNanos:200000000,privateAccess:true,writeAccess:true,status:'active',revision:1,generation:1,nextRunAt:Date.now()-1000,createdAt:new Date().toISOString()});
@@ -79,7 +82,12 @@ it('keeps daily-budget deferrals enabled and reports failed runs separately from
 });
 it('limits operator evidence files to photos in the reported post',async()=>{
  const a=await person(),b=await person(),key=await admin(),postId=randomUUID(),fileId=randomUUID(),unrelatedId=randomUUID();
- await rows('uploads').insertMany([{_id:fileId,userId:a.userId,name:'reported.webp',mime:'image/webp',bytes:10,ready:true},{_id:unrelatedId,userId:a.userId,name:'private.webp',mime:'image/webp',bytes:10,ready:true}]);
+ const bytes=Buffer.from('0123456789'),sha256=createHash('sha256').update(bytes).digest('hex'),source=resolve(config.DATA_DIR,'files',fileId);
+ await mkdir(resolve(config.DATA_DIR,'files'),{recursive:true});await writeFile(source,bytes);
+ await rows('uploads').insertMany([{_id:fileId,userId:a.userId,name:'reported.webp',mime:'image/webp',bytes:10,sha256,ready:true},{_id:unrelatedId,userId:a.userId,name:'private.webp',mime:'image/webp',bytes:10,sha256,ready:true}]);
  await rows('posts').insertOne({_id:postId,userId:a.userId,text:'Test photo',fileIds:[fileId],createdAt:new Date().toISOString()});const report=await write('people.report',{personId:a.userId,postId,reason:'Test evidence'},b);
  const files=await executeAdminOperation(key,'reports.files',{reportId:report.id}) as any;expect(files.items.map((file:any)=>file.id)).toEqual([fileId]);
+ await unlink(source);await rows('uploads').updateOne({_id:fileId},{$set:{deletedAt:new Date().toISOString()}});
+ expect((await readReportEvidence(report.id,fileId)).bytes).toEqual(bytes);
+ await unlink(resolve(config.DATA_DIR,'report-evidence',`${report.id}-${fileId}`));
 });

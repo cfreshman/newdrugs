@@ -57,6 +57,9 @@ export async function dispatchLiveChange(event:ChangeStreamDocument<Document>){
   const friendships=await rows('connections').find({members:key,status:'accepted'},{projection:{members:1}}).toArray();records([key,...friendships.flatMap(row=>row.members as string[])],{keys:['log_birthdays']});return;
  }
  if(collection==='logPreferences'){records([key],{keys:['log_preferences']});return;}
+ if(collection==='quizzes'){records(document?.members||[],{keys:['quizzes']});return;}
+ if(collection==='quizViews'){if(document?.userId)records([String(document.userId)],{keys:['quizzes']});return;}
+ if(collection==='bffs'){if(document?.userId)records([String(document.userId)],{keys:['quizzes','people','log','connections']});return;}
  if(collection==='posts'||collection==='postLikes'){publicRecords(['posts']);return;}
  if(collection==='searchDocuments'){publicRecords(['people','posts']);return;}
  if(collection==='users'){
@@ -96,7 +99,7 @@ export async function dispatchLiveChange(event:ChangeStreamDocument<Document>){
 async function startWatch(){
  if(starting)return starting;
  starting=(async()=>{
-  const stream=db().watch([{$match:{'ns.coll':{$in:['recordEvents','liveSubscriptions','users','runs','messages','ledger','sessions','connections','directMessages','blocks','posts','postLikes','notifications','uploads','searchDocuments','chatSearchChunks','agentInbox','automations','postSaves','logEntries','logPreferences','logBirthdays']}}}],{fullDocument:'updateLookup',maxAwaitTimeMS:1000});watcher=stream;
+  const stream=db().watch([{$match:{'ns.coll':{$in:['recordEvents','liveSubscriptions','users','runs','messages','ledger','sessions','connections','directMessages','blocks','posts','postLikes','notifications','uploads','searchDocuments','chatSearchChunks','agentInbox','automations','postSaves','quizzes','quizViews','bffs','logEntries','logPreferences','logBirthdays']}}}],{fullDocument:'updateLookup',maxAwaitTimeMS:1000});watcher=stream;
   try{const first=await stream.tryNext();if(first)await dispatchLiveChange(first);}catch(error){starting=undefined;watcher=undefined;await stream.close();throw error;}
   void(async()=>{try{for await(const event of stream)await dispatchLiveChange(event);}catch(error){if(watcher===stream)console.error('Live state connection interrupted',{name:error instanceof Error?error.name:'Error'});}finally{if(watcher===stream){watcher=undefined;starting=undefined;for(const listener of [...subscribers])listener.close();}}})();
   if(!leaseTimer)leaseTimer=setInterval(()=>{const active=[...subscribers];if(active.length)void liveLeases().bulkWrite(active.map(listener=>({updateOne:{filter:{_id:listener.lease._id,connectionId:listener.lease.connectionId,instance:liveInstance},update:{$set:{expiresAt:new Date(Date.now()+180000)}}}}))).catch(()=>{for(const listener of active)listener.close();});},60000);

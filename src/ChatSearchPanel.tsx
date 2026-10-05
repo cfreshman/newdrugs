@@ -1,3 +1,4 @@
+import {TransientError} from './TransientError';
 import type {Destination} from '../shared/navigation';
 import { AgentMarkdown } from './AgentMarkdown';
 import { usePanelVisible } from './PanelReadiness';
@@ -46,6 +47,6 @@ export function ChatSearchPanel({ initialQuery = '', initialRole = 'all', onStat
     {loading && <div className="history-loader"><span role="status" aria-label="Searching your chat"><CircleNotch className={appending?'agent-spinner spinner-immediate':'agent-spinner'} size={16} /></span></div>}
     {result && !loading && !result.items.length && <p className="quiet">No matching messages.</p>}
     {result?.nextCursor && !loading && <button className="text-link chat-search-more" onClick={() => void load(result.nextCursor!)}>More messages</button>}
-    {error && <p role="status" className="error">{error}</p>}
+    {error && <TransientError role="status" className="error">{error}</TransientError>}
   </>;
 }

@@ -20,7 +20,7 @@ export function publicUrl(value: string) {
 }
 
 /** DNS is validated at every redirect and pinned to the actual socket lookup. */
-export async function fetchPublic(value: string, kind: 'page' | 'image' | 'preview' | 'video_poster' | 'manifest' | 'text' | 'site_source', signal: AbortSignal, redirects = 0, requireHttps = false): Promise<{ bytes: Buffer; url: string; mime: string }> {
+export async function fetchPublic(value: string, kind: 'page' | 'image' | 'icon' | 'preview' | 'video_poster' | 'manifest' | 'text' | 'site_source', signal: AbortSignal, redirects = 0, requireHttps = false): Promise<{ bytes: Buffer; url: string; mime: string }> {
   if (redirects > 3) throw new Error('Too many redirects.');
   const url = publicUrl(value), hostname = url.hostname.replace(/^\[|\]$/g, '');
   if(requireHttps&&url.protocol!=='https:')throw new Error('HTTPS is required.');
@@ -31,7 +31,7 @@ export async function fetchPublic(value: string, kind: 'page' | 'image' | 'previ
   signal.throwIfAborted();
   if (!answers.length || answers.some(answer => !publicAddress(answer.address))) throw new Error('Non-public preview address.');
   const picked = answers.find(answer => answer.family === 4) || answers[0];
-  const limit=kind==='video_poster'?12*1024*1024:kind==='text'?256*1024:kind==='site_source'?512*1024:['page','manifest'].includes(kind)?1024*1024:5*1024*1024;
+  const limit=kind==='video_poster'?12*1024*1024:kind==='text'?256*1024:kind==='icon'||kind==='site_source'?512*1024:['page','manifest'].includes(kind)?1024*1024:5*1024*1024;
   return new Promise((resolve, reject) => {
     const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, {
       agent: false, signal, family: picked.family,
@@ -47,7 +47,7 @@ export async function fetchPublic(value: string, kind: 'page' | 'image' | 'previ
       const mime = (response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       const html=['text/html','application/xhtml+xml'].includes(mime),image=['image/jpeg','image/png','image/webp','image/gif','image/avif'].includes(mime),video=['preview','video_poster'].includes(kind)&&['video/mp4','video/webm','video/ogg','video/quicktime'].includes(mime);
       const siteSource=['text/css','text/javascript','application/javascript','application/x-javascript','text/plain'].includes(mime)||html||['application/octet-stream',''].includes(mime)&&/\.(?:css|m?js)$/.test(url.pathname);
-      const allowed=kind==='manifest'?(/(?:^|[+/])json$/.test(mime)||['text/plain','application/octet-stream','application/muse','application/cif','application/pops'].includes(mime)):kind==='site_source'?siteSource:kind==='text'?['text/plain','text/markdown'].includes(mime):kind==='page'?html:kind==='image'?image:kind==='video_poster'?video:html||image||video;
+      const allowed=kind==='manifest'?(/(?:^|[+/])json$/.test(mime)||['text/plain','application/octet-stream','application/muse','application/cif','application/pops'].includes(mime)):kind==='site_source'?siteSource:kind==='text'?['text/plain','text/markdown'].includes(mime):kind==='page'?html:kind==='image'?image:kind==='icon'?image||['image/x-icon','image/vnd.microsoft.icon','image/ico'].includes(mime)||mime==='application/octet-stream'&&/\.ico$/i.test(url.pathname):kind==='video_poster'?video:html||image||video;
       const partial=kind==='video_poster'&&status===206&&/^bytes 0-\d+\/\d+$/.test(String(response.headers['content-range']||''));
       const headersOnlyVideo=kind==='preview'&&video;
       if ((status!==200&&!partial) || !allowed || (response.headers['content-encoding']&&response.headers['content-encoding']!=='identity') || (!headersOnlyVideo&&Number(response.headers['content-length'])>limit)) {

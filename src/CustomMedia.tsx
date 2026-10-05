@@ -16,16 +16,16 @@ export function VideoMedia({src,active,muted=false,autoplay=false,onError,poster
  const play=()=>{onPlay?.();if(ref.current&&!ref.current.muted)window.dispatchEvent(new CustomEvent('newdrugs:media-play',{detail:ref.current}));};
  return <video ref={node=>{ref.current=node;if(videoRef)videoRef.current=node;}} controls playsInline preload="metadata" muted={muted} autoPlay={active&&autoplay&&muted} src={src} poster={poster} onPlay={play} onError={onError} onLoadedMetadata={event=>onLoadedMetadata?.(event.currentTarget)}/>;
 }
-export function PosterVideo({src,active,poster,className='',muted=false,autoplay=false,onError}:{src:string;active:boolean;poster?:string;className?:string;muted?:boolean;autoplay?:boolean;onError?:()=>void}){
- const video=useRef<HTMLVideoElement>(null),[started,setStarted]=useState(false),[ratio,setRatio]=useState(16/9),[fetchedPoster,setFetchedPoster]=useState<string|undefined>(),[posterBroken,setPosterBroken]=useState(false);
- useEffect(()=>{setStarted(false);setRatio(16/9);},[src]);
+export function PosterVideo({src,active,poster,initialRatio,className='',muted=false,autoplay=false,onError}:{src:string;active:boolean;poster?:string;initialRatio?:number;className?:string;muted?:boolean;autoplay?:boolean;onError?:()=>void}){
+ const video=useRef<HTMLVideoElement>(null),[started,setStarted]=useState(false),[ratio,setRatio]=useState(initialRatio||16/9),[fetchedPoster,setFetchedPoster]=useState<string|undefined>(),[posterBroken,setPosterBroken]=useState(false);
+ useLayoutEffect(()=>{setStarted(false);setRatio(initialRatio||16/9);},[src,initialRatio]);
  useEffect(()=>{setFetchedPoster(undefined);if(poster||!active||!/^https?:\/\//.test(src))return;let cancelled=false;void loadLinkPreview(src).then(preview=>{if(!cancelled&&preview.kind==='video')setFetchedPoster(preview.imageUrl);}).catch(()=>{});return()=>{cancelled=true;};},[src,active,poster]);
  const imageUrl=poster||fetchedPoster;
  useEffect(()=>setPosterBroken(false),[imageUrl]);
  const style={'--video-ratio':ratio} as CSSProperties;
  return <div className={`poster-video ${className}`} style={style} data-embed-interactive onClick={event=>event.stopPropagation()}>
-  <VideoMedia src={src} active={active} poster={imageUrl} muted={muted} autoplay={autoplay} videoRef={video} onError={onError} onPlay={()=>setStarted(true)} onLoadedMetadata={node=>{if(node.videoWidth&&node.videoHeight)setRatio(node.videoWidth/node.videoHeight);}}/>
-  {!started&&<button className="poster-video-start" type="button" aria-label="Play video" onClick={event=>{event.stopPropagation();void video.current?.play().catch(()=>{});}}>{imageUrl&&!posterBroken&&<img src={imageUrl} alt="" onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight)setRatio(image.naturalWidth/image.naturalHeight);}} onError={()=>setPosterBroken(true)}/>}<span className="poster-video-play"><Play size={23} weight="fill"/></span></button>}
+  <VideoMedia src={src} active={active} poster={imageUrl} muted={muted} autoplay={autoplay} videoRef={video} onError={onError} onPlay={()=>setStarted(true)} onLoadedMetadata={node=>{if(node.videoWidth&&node.videoHeight){const next=node.videoWidth/node.videoHeight;setRatio(previous=>Math.abs(previous-next)/previous<.02?previous:next);}}}/>
+  {!started&&<button className="poster-video-start" type="button" aria-label="Play video" onClick={event=>{event.stopPropagation();void video.current?.play().catch(()=>{});}}>{imageUrl&&!posterBroken&&<img src={imageUrl} alt="" onLoad={event=>{const image=event.currentTarget;if(image.naturalWidth&&image.naturalHeight&&!initialRatio)setRatio(image.naturalWidth/image.naturalHeight);}} onError={()=>setPosterBroken(true)}/>}<span className="poster-video-play"><Play size={23} weight="fill"/></span></button>}
  </div>;
 }
 function Artwork({src,alt,onDimensions}:{src:string;alt:string;onDimensions?:(size:{width:number;height:number})=>void}){

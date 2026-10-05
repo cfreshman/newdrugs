@@ -3,7 +3,8 @@ import tlds from 'tlds' with {type:'json'};
 import type {CustomDocument} from './customMedia';
 import type {ProviderEmbed} from './postLinks';
 export interface TextLink { url: string; start: number; end: number }
-export interface LinkPreview { url: string; hostname: string; title: string; description: string; imageUrl?: string; kind?:'image'|'video'; embed?:ProviderEmbed;custom?:CustomDocument }
+export interface LinkPreview { url: string; hostname: string; title: string; description: string; imageUrl?: string; iconUrl?:string; videoAspectRatio?:number; kind?:'image'|'video'; embed?:ProviderEmbed;custom?:CustomDocument }
+export function directVideoUrl(value:string){try{return /\.(?:mp4|m4v|mov|webm|ogv)$/i.test(new URL(value).pathname);}catch{return false;}}
 
 const parser=new LinkifyIt({fuzzyLink:true,fuzzyIP:false,fuzzyEmail:false,urlAuth:true}).tlds(tlds).add('ftp:',null).add('mailto:',null);
 
