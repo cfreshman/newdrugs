@@ -59,7 +59,7 @@ export function PushSettings({ userId }: { userId: string }) {
       : !supported ? <p className="quiet">Push notifications aren’t supported in this browser.</p>
         : !id ? <p className="quiet">Allow browser storage to enable notifications.</p>
           : state && !state.publicKey ? <p className="quiet">Push notifications aren’t available yet.</p>
-            : <button className="solid" disabled={!ready || busy} onClick={() => void toggle()}>{busy ? 'Saving…' : enabled ? 'Disable device notifications' : 'Enable device notifications'}</button>}
+            : <button className="text-link small" disabled={!ready || busy} onClick={() => void toggle()}>{busy ? 'Saving…' : enabled ? 'Disable device notifications' : 'Enable device notifications'}</button>}
     {error && <p role="status" className="quiet">{error}</p>}
   </div>;
 }
