@@ -46,7 +46,7 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
   const resize=()=>viewer?.updateSize(true);
   const dimensions:Array<{width:number;height:number}|null|undefined>=items.map(item=>item.width&&item.height?{width:item.width,height:item.height}:undefined);
   let dataSource:SlideData[]=[];
-  const viewport=()=>({x:window.visualViewport?.width||document.documentElement.clientWidth,y:window.visualViewport?.height||window.innerHeight});
+  const viewport=()=>({x:document.documentElement.clientWidth||window.innerWidth,y:window.innerHeight});
   const slide=(i:number):SlideData=>dimensions[i]?{src:items[i].url,msrc:items[i].previewUrl||items[i].url,alt:items[i].name,...dimensions[i],element:items[i].element}:{width:viewport().x,height:viewport().y,html:dimensions[i]===null?'<p class="image-viewer-error">Photo unavailable</p>':`<div class="image-viewer-pending"><span class="image-viewer-spinner" role="status" aria-label="Loading photo">${icon(loadingIcon)}</span></div>`};
   const load=()=>{
    try{
@@ -78,8 +78,8 @@ export function ImageViewer({items,index,close}:{items:MediaItem[];index:number;
     items.forEach((item,i)=>{if(dimensions[i])return;void imageDimensions(item,controller.signal).then(value=>{if(controller.signal.aborted||!viewer)return;dimensions[i]=value;dataSource[i]=slide(i);viewer.refreshSlideContent(i);});});
    }catch(error){if(!controller.signal.aborted){console.error('Image viewer:',error);viewerRef.current=null;setFailed(true);setLoading(false);}}
   };
-  load();window.visualViewport?.addEventListener('resize',resize);
-  return()=>{controller.abort();window.visualViewport?.removeEventListener('resize',resize);viewerRef.current=null;viewer?.destroy();requestAnimationFrame(()=>{if(sourceFocus?.isConnected&&!sourceFocus.closest('[inert]'))sourceFocus.focus({preventScroll:true});});};
+  load();window.addEventListener('resize',resize);
+  return()=>{controller.abort();window.removeEventListener('resize',resize);viewerRef.current=null;viewer?.destroy();requestAnimationFrame(()=>{if(sourceFocus?.isConnected&&!sourceFocus.closest('[inert]'))sourceFocus.focus({preventScroll:true});});};
  },[items,index]);
  return <dialog ref={layer} className="image-viewer-layer" aria-label="Photos" onCancel={event=>{event.preventDefault();requestClose();}}>{(loading||failed)&&<div className="image-viewer-loading"><button ref={dismiss} aria-label="Close image viewer" onClick={requestClose}><X size={23}/></button>{failed?<a href={items[index]?.url} target="_blank" rel="noopener noreferrer">Open photo</a>:<CircleNotch size={28} className="image-viewer-spinner" aria-label="Loading photo"/>}</div>}</dialog>;
 }

@@ -14,13 +14,16 @@ it('opens below when it fits and limits both dimensions in tiny panels',()=>{
  const tiny=placeMenu(rect(80,225,52,44),{width:240,height:180},rect(50,200,140,100));
  expect(tiny).toMatchObject({placement:'within',left:56,top:206,width:128,maxHeight:88});
 });
-it('intersects nested clipping containers with the panned visual viewport',()=>{
- vi.stubGlobal('visualViewport',{offsetLeft:10,offsetTop:200,width:350,height:400});
+it('intersects nested clipping containers with the layout viewport',()=>{
  const outer=document.createElement('div'),inner=document.createElement('div'),anchor=document.createElement('summary');document.body.append(outer);outer.append(inner);inner.append(anchor);
  outer.style.overflowX='hidden';outer.style.overflowY='hidden';inner.style.overflowY='auto';
  outer.getBoundingClientRect=()=>rect(20,50,340,700);inner.getBoundingClientRect=()=>rect(25,150,330,400);
  Object.defineProperties(outer,{clientWidth:{value:340},clientHeight:{value:700}});Object.defineProperty(inner,'clientHeight',{value:400});
- expect(menuVisibleBounds(anchor)).toEqual({left:20,right:360,top:200,bottom:550});
+ expect(menuVisibleBounds(anchor)).toEqual({left:20,right:360,top:150,bottom:550});
+});
+it('keeps post menus reachable across the layout viewport',()=>{
+ const anchor=document.createElement('summary');document.body.append(anchor);
+ expect(menuVisibleBounds(anchor)).toEqual({left:0,top:0,right:390,bottom:844});
 });
 function Probe(){const ref=useRef<HTMLDetailsElement>(null);useEdgeAwareMenu(ref,true);return createElement('section',{style:{overflowX:'hidden',overflowY:'hidden'}},createElement('details',{ref},createElement('summary',null,'More'),createElement('div',null,createElement('button',null,'Unfriend'))));}
 it('positions before revealing, follows scrolling, and closes when the trigger leaves the panel',async()=>{

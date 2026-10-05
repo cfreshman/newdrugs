@@ -1,6 +1,6 @@
 import {TransientError} from './TransientError';
 import {avatarImageUrl} from './logImageCache';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Eye, CameraPlus, PencilSimple, X } from '@phosphor-icons/react';
 import type { Profile } from '../shared/types';
 import { operation, errorText } from './api';
@@ -11,11 +11,15 @@ import {profileMediaUrl} from '../shared/profileMedia';
 import {LogVoiceRecorder} from './LogVoiceRecorder';
 import {AudioPlayer} from './AudioPlayer';
 import {usePanelVisible} from './PanelReadiness';
+import {SettingsHeaderActionContext} from './Dialog';
 
 export function ProfileEditor({ person: initial, saved }: { person: Profile; saved(): Promise<void> }) {
   const visible=usePanelVisible();
+  const setHeaderAction=useContext(SettingsHeaderActionContext),formId=useId();
   const [person, setPerson] = useState(initial), [interests, setInterests] = useState(initial.interests.join(', '));
   const [preview, setPreview] = useState(false), [busy, setBusy] = useState(false), [uploading, setUploading] = useState(false),[recording,setRecording]=useState(false), [error, setError] = useState('');
+  useLayoutEffect(()=>{if(setHeaderAction)setHeaderAction(preview?null:<button type="submit" form={formId} className="solid profile-header-save" aria-busy={busy} disabled={busy||uploading||recording}>{busy?'Saving…':'Save profile'}</button>);},[setHeaderAction,formId,preview,busy,uploading,recording]);
+  useLayoutEffect(()=>()=>setHeaderAction?.(null),[setHeaderAction]);
   const picker = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
   const stagedVoice=useRef<string|null>(null);
@@ -48,7 +52,7 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
   };
   const interestsList = () => [...new Set(interests.split(',').map(value => value.trim()).filter(Boolean))];
   const save = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); if(busy||uploading||recording)return; setBusy(true); setError('');
     try {
       await operation<Profile>('profile.update', { name: person.name.trim(), bio: person.bio, interests: interestsList(),
         locationCell: person.area?.cell || null, photos, discoverable: person.discoverable,mediaUrl:person.mediaUrl?.trim()?profileMediaUrl(person.mediaUrl):null,voiceFileId:person.voiceFileId||null });
@@ -58,7 +62,7 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
   };
   return <>
     <div className="profile-editor-actions"><span className="quiet">@{person.handle}</span><button type="button" className="text-link" aria-pressed={preview} onClick={() => setPreview(value => !value)}>{preview ? <PencilSimple size={17} /> : <Eye size={17} />}{preview ? 'Edit profile' : 'Preview profile'}</button></div>
-    {preview ? <><ProfileCard person={{ ...person, interests: interestsList() }} />{!person.discoverable && <p className="quiet small">Your profile is currently private. This is how it will look when you share it.</p>}</> : <form className="fields" onSubmit={save}>
+    {preview ? <><ProfileCard person={{ ...person, interests: interestsList() }} />{!person.discoverable && <p className="quiet small">Your profile is currently private. This is how it will look when you share it.</p>}</> : <form id={formId} className="fields" onSubmit={save}>
       <fieldset className="profile-photos"><legend>Photos</legend>
         <div className="photo-editor-grid">{photos.map((id, index) => <div className="photo-editor-item" key={id}>
           <img src={avatarImageUrl(id)} alt={`Profile photo ${index + 1}`} />
@@ -77,7 +81,7 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
       <label>Media link<input type="url" inputMode="url" placeholder="Spotify, Apple Music, SoundCloud, Bandcamp or YouTube" maxLength={2048} value={person.mediaUrl||''} onChange={event=>setPerson({...person,mediaUrl:event.target.value})}/></label>
       <label className="check-label"><input type="checkbox" checked={person.discoverable} onChange={event => setPerson({ ...person, discoverable: event.target.checked })} />Make my profile discoverable</label>
       <p className="quiet small">Turn this on to appear nearby. Public posts show your name and first photo.</p>
-      <button className="solid" disabled={busy || uploading||recording}>{busy ? 'Saving…' : 'Save profile'}</button>
+      {!setHeaderAction&&<button className="solid" disabled={busy || uploading||recording}>{busy ? 'Saving…' : 'Save profile'}</button>}
     </form>}
     {error && <TransientError className="error" role="alert">{error}</TransientError>}
   </>;

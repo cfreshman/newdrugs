@@ -43,8 +43,8 @@ export function TalkDock({anchor,user}:{anchor?:RefObject<HTMLElement|null>;user
   let frame=0;const sync=()=>{frame=0;const expanded=node.hasAttribute('data-expanded'),carousel=node.hasAttribute('data-has-carousel'),mobile=window.matchMedia('(max-width:760px)').matches,fullscreen=expanded&&mobile&&(carousel||window.matchMedia('(max-height:820px)').matches);if(fullscreen){for(const name of ['left','top','width','height'])node.style.removeProperty(name);return;}const rect=slot.getBoundingClientRect();node.style.left=`${rect.left}px`;node.style.width=`${rect.width}px`;if(expanded&&carousel){node.style.removeProperty('top');node.style.removeProperty('height');return;}node.style.top=`${rect.top}px`;node.style.height=`${rect.height}px`;};
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(sync);};
   const resize=new ResizeObserver(schedule),position=new MutationObserver(schedule);resize.observe(slot);resize.observe(parent);position.observe(parent,{attributes:true,attributeFilter:['style','class']});
-  window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);window.visualViewport?.addEventListener('scroll',schedule);sync();
-  return()=>{cancelAnimationFrame(frame);resize.disconnect();position.disconnect();window.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('scroll',schedule);};
+  window.addEventListener('resize',schedule);sync();
+  return()=>{cancelAnimationFrame(frame);resize.disconnect();position.disconnect();window.removeEventListener('resize',schedule);};
  },[anchor,talk?.expanded,talk?.space?.pins?.length]);
  if(!talk?.space||!talk.room)return null;
  const {space,members,speaking,requests,mic,audioBlocked,expanded,busy,error,copied}=talk,role=space.myRole||'listener',canSpeak=role==='host'||role==='speaker';

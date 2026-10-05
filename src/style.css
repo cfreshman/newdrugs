@@ -127,7 +127,7 @@ a { color: inherit; }
   radial-gradient(ellipse 64% 42% at 10% 96%, var(--gradient-indigo) 0%, transparent 100%),
   radial-gradient(ellipse 58% 44% at 14% 7%, var(--gradient-violet) 0%, transparent 100%), var(--canvas); }
 .grain { position: absolute; z-index: -1; inset: 0; pointer-events: none; opacity: .12; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23000' filter='url(%23n)' opacity='.38' d='M0 0h180v180H0z'/%3E%3C/svg%3E"); mix-blend-mode: multiply; }
-.workspace { position: fixed; left: var(--chat-x, 50%); top: calc(var(--chat-y, 70dvh) + var(--orb-radius)); transform: translate(-50%, -100%); width: min(var(--chat-width), calc(var(--viewport-width, 100vw) - var(--chat-gutter) * 2)); max-height: max(0px, calc(var(--chat-y, 70dvh) + var(--orb-radius) - var(--viewport-top, 0px))); display: flex; flex-direction: column; }
+.workspace { position: fixed; left: var(--chat-x, 50%); top: calc(var(--chat-y, 70dvh) + var(--orb-radius)); transform: translate(-50%, -100%); width: min(var(--chat-width), calc(100vw - var(--chat-gutter) * 2)); max-height: max(0px, calc(var(--chat-y, 70dvh) + var(--orb-radius))); display: flex; flex-direction: column; }
 .conversation { --top-fade: 0px; flex: 0 1 auto; min-height: 0; position: relative; margin-bottom: calc(-1 * var(--chat-underlap)); overflow-y: auto; overflow-x: hidden; overflow-anchor: none; overscroll-behavior: contain; mask-image: linear-gradient(to bottom, transparent, #000 var(--top-fade), #000 calc(100% - var(--chat-underlap)), transparent); -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--top-fade), #000 calc(100% - var(--chat-underlap)), transparent); }
 .conversation[data-fade-top='true'] { --top-fade: var(--chat-fade); }
 .conversation-content { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: calc(var(--space-3) + var(--chat-underlap)); }
@@ -182,7 +182,7 @@ a { color: inherit; }
 .composer-switcher { position: relative; min-height: 76px; border-radius: var(--radius-input); overflow: hidden; background: var(--surface); }
 .composer-input-layer, .composer-menu-layer { width: 100%; transition: opacity 110ms ease; }
 .composer-menu-layer { position: absolute; inset: 0 0 auto; opacity: 0; visibility: hidden; pointer-events: none; padding: var(--panel-inset); }
-.composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) - var(--orb-spacing) - var(--viewport-top) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); max-height: var(--panel-available-height); overflow-y: auto; overscroll-behavior: contain; }
+.composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) - var(--orb-spacing) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); max-height: var(--panel-available-height); overflow-y: auto; overscroll-behavior: contain; }
 .composer-menu-layer { height: 100%; }
 .composer-menu-layer:has(.composer-view:not([hidden]) .composer-surface) { padding: 0; overflow: hidden; }
 .composer-surface { height: 100%; display: flex; flex-direction: column; max-height: var(--panel-available-height); overflow: hidden; font-size: var(--text-body); line-height: 1.6; }
@@ -197,7 +197,7 @@ a { color: inherit; }
 .launcher-open .composer-input-layer { opacity: 0; pointer-events: none; }
 .launcher-open .composer-menu-layer { opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 55ms; }
 .composer-switcher.side-open { overflow: visible; }
-.side-open .composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) + var(--launcher-size) - var(--viewport-top) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); inset: auto auto calc(-1 * (var(--orb-spacing) + var(--launcher-size))) calc(-100% - 12px); border-radius: var(--radius-input); background: var(--surface); overflow: hidden; }
+.side-open .composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) + var(--launcher-size) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); inset: auto auto calc(-1 * (var(--orb-spacing) + var(--launcher-size))) calc(-100% - 12px); border-radius: var(--radius-input); background: var(--surface); overflow: hidden; }
 .side-open.launcher-open .composer-input-layer { opacity: 1; pointer-events: auto; }
 .launcher-controls { display: flex; align-items: flex-start; gap: var(--space-2); }
 .reset-panel { cursor: pointer; }
@@ -244,8 +244,7 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .settings-menu svg, .launcher-menu svg { flex: 0 0 24px; width: 24px; height: 24px; }
 .settings-menu .settings-credit { display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-2);margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--text-sm); }
 .settings-menu .settings-credit a { display: inline; padding: 0; min-height: 0; background: none; border-radius: 0; font-size: inherit; font-weight: 400; color: inherit; text-decoration: underline; }
-.sheet:has(> .sheet-body > .settings-menu) { padding-inline: var(--panel-inset); padding-bottom: var(--panel-inset); }
-.sheet:has(> .sheet-body > .settings-menu) .sheet-heading { margin-bottom: var(--space-4); }
+.sheet:has(> .sheet-body > .settings-menu) { --settings-heading-gap:var(--space-4); padding-inline: var(--panel-inset); padding-bottom: var(--panel-inset); }
 .notification-list { gap: var(--space-2); }
 .notification-list > a {border:0;background:var(--surface-soft);border-radius:var(--radius-control);color:inherit;text-decoration:none;padding:var(--space-3);}
 .notification-list > a:not([data-read]) { background: var(--primary-soft); }
@@ -254,8 +253,12 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .notification-list > a > .notification-person {display:flex;align-items:center;gap:var(--space-2);color:var(--ink);}.notification-person img{width:32px;height:32px;flex:none;border-radius:50%;object-fit:cover;}.notification-person strong{min-width:0;overflow-wrap:anywhere;}
 .notification-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--muted); font-size: var(--text-xs); width: 100%; }
 .sheet { width: min(440px, calc(100vw - 24px)); padding: var(--panel-inset); max-height: calc(100dvh - 24px); color: var(--ink); border: var(--border-width) solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--panel-shadow); font-size: var(--text-body); line-height: 1.6; overscroll-behavior: contain; }
+.settings-sheet { --settings-heading-gap:var(--space-6); display:flex; flex-direction:column; height:max-content; overflow:hidden; }
+.settings-sheet>.sheet-heading { flex:none; margin-bottom:calc(var(--settings-heading-gap) / 2); }
+.settings-sheet>.sheet-body { flex:0 1 auto; min-height:0; min-width:0; padding-top:calc(var(--settings-heading-gap) / 2); overflow-y:auto; overscroll-behavior:contain; }
 .sheet::backdrop { background: var(--backdrop); backdrop-filter: blur(6px); }
 .sheet-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-6); }
+.sheet-heading h2 { min-width:0; }
 .sheet-actions { display: flex; align-items: center; gap: var(--space-1); }
 .sheet-heading h2 { font-size: 18px; font-weight: 700; line-height: 1.3; margin: 0; }
 .close { width: 44px; height: 44px; display: grid; place-items: center; background: var(--surface-soft); border-radius: var(--radius-sm); padding: 0; color: var(--border-strong); }
@@ -455,9 +458,9 @@ blockquote { font-family: var(--font-ui); }
 @media (max-width: 760px) { :root { --panel-inset: 6px; --card-inset: 6px; } }
 @media (min-width: 640px) {
   :root { --chat-width: 600px; }
-  .settings-sheet { position: fixed; margin: 0; inset: var(--settings-top) var(--settings-right) auto auto; max-height: calc(100dvh - var(--settings-top) - var(--space-3)); padding-top: 0; transform-origin: top right; }
+  .settings-sheet { --settings-heading-gap:var(--space-4); position: fixed; margin: 0; inset: var(--settings-top) var(--settings-right) auto auto; max-height: calc(100dvh - var(--settings-top) - var(--space-3)); padding-top: 0; transform-origin: top right; }
   .settings-sheet[open] { animation: sheet-open var(--sheet-open-duration) cubic-bezier(.22, 1, .36, 1); }
-  .settings-sheet .sheet-heading { min-height: var(--settings-control-size); padding-right: calc(var(--settings-control-size) * 2 - var(--space-6)); margin-bottom: var(--space-4); }
+  .settings-sheet .sheet-heading { min-height: var(--settings-control-size); padding-right: calc(var(--settings-control-size) * 2 - var(--space-6)); }
   .settings-sheet .sheet-actions { position: absolute; top: calc(-1 * var(--border-width)); right: calc(-1 * var(--border-width)); gap: 0; }
   .settings-sheet .sheet-actions .close { width: var(--settings-control-size); height: var(--settings-control-size); border-radius: 50%; background: none; }
   .task-sheet { width: min(640px, calc(100vw - 48px)); }
@@ -466,6 +469,8 @@ blockquote { font-family: var(--font-ui); }
   from { clip-path: inset(0 0 calc(100% - var(--settings-control-size)) calc(100% - var(--settings-control-size)) round 22px); }
   to { clip-path: inset(0 round var(--radius-panel)); }
 }
+.settings-sheet .sheet-actions .profile-header-save { height:36px; min-height:36px; min-width:0; padding:0 var(--space-3); border-radius:var(--radius-control); font-size:var(--text-body); line-height:1; white-space:nowrap; }
+@media(max-width:639px){.settings-sheet .sheet-actions .profile-header-save{height:var(--settings-control-size);min-height:var(--settings-control-size);}}
 
 .discovery-search { display:flex; gap:4px; align-items:center; background:var(--surface-soft, #f0f2f6); border-radius:var(--radius-control, 16px); padding:4px 6px 4px 12px; margin:0 0 var(--space-3); }
 .discovery-search input { flex:1; min-width:0; width:100%; border:0; background:transparent; box-shadow:none; padding:8px 0; }
@@ -547,10 +552,10 @@ blockquote { font-family: var(--font-ui); }
 }
 .app[data-keyboard-open] .sheet {
   position: fixed;
-  top: calc(var(--viewport-top) + var(--panel-top-gap));
+  top: var(--panel-top-gap);
   bottom: auto;
   margin-block: 0;
-  max-height: max(0px, calc(var(--viewport-height) - var(--panel-top-gap) - var(--space-3)));
+  max-height: max(0px, calc(100dvh - var(--panel-top-gap) - var(--space-3)));
   padding-top: var(--space-4);
 }
 .history-loader { display: flex; align-items: center; justify-content: center; flex: 0 0 32px; min-height: 32px; color: var(--muted); }
@@ -756,12 +761,9 @@ button, [role="button"], summary, input[type="button"], input[type="submit"], in
 
 /* Floating sheets stay inside the usable viewport, including the home indicator. */
 @media(max-width:760px),(pointer:coarse){
- .sheet{position:fixed;top:calc(var(--viewport-top,0px) + max(6px,env(safe-area-inset-top,0px)));bottom:calc(6px + var(--safe-area-bottom));height:fit-content;margin-block:auto;max-height:calc(var(--viewport-height,100dvh) - max(6px,env(safe-area-inset-top,0px)) - 6px - var(--safe-area-bottom));}
- .settings-sheet{height:max-content;display:flex;flex-direction:column;}
- .settings-sheet:has(> .sheet-body > .settings-menu){top:max(6px,env(safe-area-inset-top,0px));height:fit-content;max-height:calc(100dvh - max(6px,env(safe-area-inset-top,0px)) - 6px - var(--safe-area-bottom));overflow:hidden;}
+ .sheet{position:fixed;top:max(6px,env(safe-area-inset-top,0px));bottom:calc(6px + var(--safe-area-bottom));height:fit-content;margin-block:auto;max-height:calc(100dvh - max(6px,env(safe-area-inset-top,0px)) - 6px - var(--safe-area-bottom));}
+ .settings-sheet{height:max-content;}
  .settings-sheet:not([open]){visibility:hidden;pointer-events:none;}
- .settings-sheet>.sheet-body{flex:0 1 auto;min-height:0;overflow-y:auto;}
- .settings-sheet:has(> .sheet-body > .settings-menu)>.sheet-body{flex:1 1 auto;}
 }
 
 .storage-types.view-tabs{overflow-x:auto;flex-wrap:nowrap;flex:none;max-width:100%;}

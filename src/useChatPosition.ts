@@ -3,8 +3,7 @@ import { flushSync } from 'react-dom';
 import { clampChat, mobileChatLayout, type ChatDimensions, type Point, type Viewport } from './chatPosition';
 
 const readViewport = (): Viewport => {
-  const v = window.visualViewport;
-  return { width: v?.width ?? innerWidth, height: v?.height ?? innerHeight, left: v?.offsetLeft ?? 0, top: v?.offsetTop ?? 0 };
+  return { width: innerWidth, height: innerHeight, left: 0, top: 0 };
 };
 const readDimensions = (keyboard = false): ChatDimensions => {
   const css = getComputedStyle(document.documentElement);
@@ -28,7 +27,7 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
   const dimensions = useRef(readDimensions());
   const [viewport, setViewport] = useState(readViewport);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const keyboard = useRef({ width: innerWidth, height: Math.max(innerHeight, document.documentElement.clientHeight), open: false, staleClosed: false });
+  const keyboard = useRef({ width: innerWidth, height: Math.max(innerHeight, document.documentElement.clientHeight), open: false });
   const [composerHeight, setComposerHeight] = useState(156);
   const [revision, setRevision] = useState(0);
   // Keep only the horizontal preference. Every layout anchors to the visible bottom.
@@ -36,8 +35,6 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
   const width = Math.min(dimensions.current.width, viewport.width - dimensions.current.gutter * 2), gap = 12;
   const sideBySide = launcherOpen && !mobile && viewport.width >= width * 2 + gap + dimensions.current.gutter * 2;
   const inputHeight = (composer.current?.querySelector<HTMLElement>('.composer-input-layer')?.offsetHeight || 76) + dimensions.current.radius * 2 + 6;
-  // iOS standalone can both resize the window and pan the visual viewport for
-  // its keyboard. A window-height anchor then lands near the visible top.
   const base = clampChat({ x: mobile ? viewport.left + viewport.width / 2 : preferred.current.x * innerWidth, y: viewport.top + viewport.height }, viewport, launcherOpen ? 156 : inputHeight, dimensions.current);
   const position = sideBySide ? { ...base, x: Math.max(viewport.left + dimensions.current.gutter + width * 1.5 + gap, base.x) } : base;
   const anchor = position;
@@ -55,54 +52,27 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
   }, []);
   useLayoutEffect(() => {
     if (!ready) return;
-    let recoveryTimer:ReturnType<typeof setTimeout>|undefined;
     const editing = () => document.activeElement instanceof HTMLElement && document.activeElement.matches('textarea, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]), [contenteditable="true"]');
     const fit = () => {
-      const next = readViewport(), scale = window.visualViewport?.scale || 1;
-      // Normalize zoom before comparing heights. iOS may shrink innerHeight
-      // along with visualViewport, so retain the unobscured height per width.
-      const height = next.height * scale;
+      const next = readViewport();
       const baseline = keyboard.current;
-      if (baseline.width !== innerWidth) {
-        baseline.width = innerWidth;
-        baseline.height = Math.max(innerHeight, document.documentElement.clientHeight, height);
-        baseline.staleClosed = false;
-      } else baseline.height = Math.max(baseline.height, height);
+      if (baseline.width !== innerWidth) { baseline.width = innerWidth; baseline.height = next.height; }
       const active = editing();
-      if (active || baseline.height - height <= 100) baseline.staleClosed = false;
-      // Keep the inset removed through the closing animation, even after blur.
-      baseline.open = mobileChatLayout() && baseline.height - height > 100 && !baseline.staleClosed && (active || baseline.open);
+      if (!active && !baseline.open) baseline.height = Math.max(baseline.height, next.height);
+      baseline.open = mobileChatLayout() && active && baseline.height - next.height > 100;
       dimensions.current = readDimensions(baseline.open);
-      // WebKit can omit the final visualViewport resize after an input blurs.
-      // Once closing has settled, use the known unobscured viewport until it catches up.
-      setKeyboardOpen(baseline.open); setViewport(baseline.staleClosed && !active ? {...next,top:0,height:baseline.height/scale} : next);
+      setKeyboardOpen(baseline.open); setViewport(next);
     };
-    const focusOut = () => {
-      fit();clearTimeout(recoveryTimer);
-      recoveryTimer=setTimeout(() => {
-        if(editing())return;
-        const scale=window.visualViewport?.scale||1;
-        if(keyboard.current.open&&keyboard.current.height-readViewport().height*scale>100)keyboard.current.staleClosed=true;
-        flushSync(fit);
-      },500);
-    };
-    const focusIn = () => {clearTimeout(recoveryTimer);fit();};
     fit();
-    // Apply visual-viewport geometry before the browser paints its next keyboard
-    // frame. Deferred React updates otherwise expose one frame of the old anchor.
     const fitViewport = () => flushSync(fit);
     const observer = new ResizeObserver(() => setComposerHeight(composer.current?.offsetHeight ?? 156));
     if (composer.current) observer.observe(composer.current);
     window.addEventListener('resize', fitViewport);
-    document.addEventListener('focusin', focusIn);
-    document.addEventListener('focusout', focusOut);
-    window.visualViewport?.addEventListener('resize', fitViewport);
-    window.visualViewport?.addEventListener('scroll', fitViewport);
+    document.addEventListener('focusin', fitViewport);
+    document.addEventListener('focusout', fitViewport);
     return () => {
-      clearTimeout(recoveryTimer);observer.disconnect(); window.removeEventListener('resize', fitViewport);
-      document.removeEventListener('focusin', focusIn); document.removeEventListener('focusout', focusOut);
-      window.visualViewport?.removeEventListener('resize', fitViewport);
-      window.visualViewport?.removeEventListener('scroll', fitViewport);
+      observer.disconnect(); window.removeEventListener('resize', fitViewport);
+      document.removeEventListener('focusin', fitViewport); document.removeEventListener('focusout', fitViewport);
     };
   }, [composer, ready]);
   void revision;
@@ -110,7 +80,7 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
     sideBySide,
     keyboardOpen,
     draggable: !mobile,
-    style: { '--chat-x': `${position.x}px`, '--chat-y': `${position.y}px`, '--chat-gutter': `${dimensions.current.gutter}px`, '--viewport-width': `${viewport.width}px`, '--viewport-height': `${viewport.height}px`, '--viewport-top': `${viewport.top}px`, '--safe-area-bottom': keyboardOpen ? '0px' : undefined,
+    style: { '--chat-x': mobile ? '50vw' : `${position.x}px`, '--chat-y': mobile ? 'calc(100dvh - var(--chat-gutter) - var(--safe-area-bottom) - var(--orb-radius))' : `${position.y}px`, '--chat-gutter': `${dimensions.current.gutter}px`, '--safe-area-bottom': keyboardOpen ? '0px' : undefined,
       '--orb-size': keyboardOpen ? 'var(--launcher-size)' : undefined, '--orb-radius': keyboardOpen ? 'calc(var(--launcher-size) / 2)' : undefined } as CSSProperties,
     onDragStart: () => { dragOrigin.current = positionRef.current; },
     onDrag: (dx: number, dy: number) => move({ x: dragOrigin.current.x + dx, y: dragOrigin.current.y + dy }),

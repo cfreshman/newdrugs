@@ -47,8 +47,8 @@ export function ComposerPanel({ open, input, children, contentKey = '', extentKe
     fit(animatePresentation);
     const fitLayout = () => fit(false), fitViewport = () => { animation.current?.cancel(); fit(false); }, observer = new ResizeObserver(fitLayout);
     observer.observe(input); if (content) observer.observe(content); if (footer) observer.observe(footer);
-    window.addEventListener('resize', fitViewport); window.visualViewport?.addEventListener('resize', fitViewport); readiness.current.listeners.add(fitLayout);
-    return () => { observer.disconnect(); window.removeEventListener('resize', fitViewport); window.visualViewport?.removeEventListener('resize', fitViewport); readiness.current.listeners.delete(fitLayout); };
+    window.addEventListener('resize', fitViewport); readiness.current.listeners.add(fitLayout);
+    return () => { observer.disconnect(); window.removeEventListener('resize', fitViewport); readiness.current.listeners.delete(fitLayout); };
   }, [open, contentKey, extentKey, dragging, sideBySide,topClearance]);
   useLayoutEffect(() => () => animation.current?.cancel(), []);
   return <PanelReadinessContext.Provider value={readiness.current}><div className={`composer-switcher ${open ? 'launcher-open' : ''} ${sideBySide ? 'side-open' : ''}`} ref={frame}>

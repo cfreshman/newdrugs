@@ -14,10 +14,9 @@ export function placeMenu(anchor:MenuBounds,size:{width:number;height:number},bo
   return {left:Math.max(left,Math.min(anchor.left,right-width)),top:Math.max(top,Math.min(idealTop,bottom-height)),width,maxHeight:available,placement};
 }
 
-/** The intersection of the visual viewport and every clipping/scrolling ancestor. */
+/** The intersection of the layout viewport and every clipping/scrolling ancestor. */
 export function menuVisibleBounds(anchor:HTMLElement):MenuBounds {
-  const viewport=window.visualViewport;
-  const bounds={left:viewport?.offsetLeft||0,top:viewport?.offsetTop||0,right:(viewport?.offsetLeft||0)+(viewport?.width||innerWidth),bottom:(viewport?.offsetTop||0)+(viewport?.height||innerHeight)};
+  const bounds={left:0,top:0,right:innerWidth,bottom:innerHeight};
   for(let parent=anchor.parentElement;parent;parent=parent.parentElement){
     const css=getComputedStyle(parent),clipX=/auto|scroll|hidden|clip/.test(css.overflowX||css.overflow),clipY=/auto|scroll|hidden|clip/.test(css.overflowY||css.overflow);
     if(!clipX&&!clipY)continue;
@@ -51,7 +50,7 @@ export function useEdgeAwareMenu(ref:RefObject<HTMLDetailsElement|null>,ready:bo
     const changes=new MutationObserver(fit);changes.observe(details,{attributes:true,attributeFilter:['open']});
     const resize=new ResizeObserver(()=>schedule());resize.observe(trigger);resize.observe(menu);
     for(let parent=details.parentElement;parent;parent=parent.parentElement)resize.observe(parent);
-    window.addEventListener('resize',schedule);window.addEventListener('scroll',schedule,true);window.visualViewport?.addEventListener('resize',schedule);window.visualViewport?.addEventListener('scroll',schedule);
-    fit();return()=>{cancelAnimationFrame(frame);changes.disconnect();resize.disconnect();window.removeEventListener('resize',schedule);window.removeEventListener('scroll',schedule,true);window.visualViewport?.removeEventListener('resize',schedule);window.visualViewport?.removeEventListener('scroll',schedule);};
+    window.addEventListener('resize',schedule);window.addEventListener('scroll',schedule,true);
+    fit();return()=>{cancelAnimationFrame(frame);changes.disconnect();resize.disconnect();window.removeEventListener('resize',schedule);window.removeEventListener('scroll',schedule,true);};
   },[ref,ready,visible]);
 }

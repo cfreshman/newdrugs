@@ -9,8 +9,8 @@ export function observeLogLayerGeometry(dialog:HTMLElement,panel:HTMLElement,fit
  const layout=new MutationObserver(place),app=panel.closest('.app');
  if(app)layout.observe(app,{attributes:true,attributeFilter:['data-agent-dock','data-mode','data-standalone']});
  layout.observe(panel,{attributes:true,attributeFilter:['style']});
- window.addEventListener('resize',place);window.visualViewport?.addEventListener('resize',place);window.visualViewport?.addEventListener('scroll',place);
- return()=>{observer.disconnect();layout.disconnect();window.removeEventListener('resize',place);window.visualViewport?.removeEventListener('resize',place);window.visualViewport?.removeEventListener('scroll',place);};
+ window.addEventListener('resize',place);
+ return()=>{observer.disconnect();layout.disconnect();window.removeEventListener('resize',place);};
 }
 /** A nonblocking top-layer panel escapes clipping while leaving the side agent usable. */
 export function LogModal({active,close,children,anchor,closeLabel='Close'}:{closeLabel?:string;active:boolean;close():void;children:ReactNode;anchor:RefObject<HTMLElement|null>}){

@@ -7,7 +7,7 @@ export const holdConversationScroll = (element: HTMLElement) => { heldUntil.set(
 const held = (element: HTMLElement) => (heldUntil.get(element) || 0) > performance.now();
 export function shouldFadeConversationTop(element: HTMLElement) {
   return element.scrollTop > 1 || element.clientHeight > 0 && element.scrollHeight > 0 &&
-    element.getBoundingClientRect().top <= (window.visualViewport?.offsetTop || 0) + 1;
+    element.getBoundingClientRect().top <= 1;
 }
 
 export function useConversationScroll(signals: { viewId?:string; submittedId?:string; completedId?:string; approvalIds?:string } = {}) {

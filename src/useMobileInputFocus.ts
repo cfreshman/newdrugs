@@ -10,7 +10,8 @@ function textField(target: EventTarget | null): HTMLElement | null {
 
 /** Reveal within app scrollers only. Native scrollIntoView can pan the whole iOS page. */
 function revealField(field: HTMLElement, root: HTMLElement) {
-  const viewport = window.visualViewport, top = (viewport?.offsetTop || 0) + 12, bottom = (viewport?.offsetTop || 0) + (viewport?.height || innerHeight) - 12;
+  const bounds = root.getBoundingClientRect();
+  const top = bounds.top + 12, bottom = bounds.bottom - 12;
   for (let parent = field.parentElement; parent && parent !== root; parent = parent.parentElement) {
     if (parent.scrollHeight <= parent.clientHeight || !/auto|scroll/.test(getComputedStyle(parent).overflowY)) continue;
     const box = parent.getBoundingClientRect(), input = field.getBoundingClientRect();
@@ -59,11 +60,11 @@ export function bindMobileInputFocus(root: HTMLElement, preventNativeFocus = tru
     root.addEventListener('touchcancel', cancel, true);
   }
   root.addEventListener('focusin', reveal);
-  window.visualViewport?.addEventListener('resize', reveal);
+  window.addEventListener('resize', reveal);
   return () => {
     cancelAnimationFrame(frame);
     root.removeEventListener('touchstart', start, true); root.removeEventListener('touchmove', move, true); root.removeEventListener('touchend', end, true); root.removeEventListener('touchcancel', cancel, true);
-    root.removeEventListener('focusin', reveal); window.visualViewport?.removeEventListener('resize', reveal);
+    root.removeEventListener('focusin', reveal); window.removeEventListener('resize', reveal);
   };
 }
 

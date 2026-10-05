@@ -191,7 +191,7 @@
 .log-today-floaters:not([data-presentation=full]) .log-today-placeholder{display:none;}
 
 /* Native top-layer dialogs cannot be clipped by the calendar's scrollport or corners. */
-.log-modal{position:fixed;inset:auto;left:50%;top:calc(var(--viewport-top,0px) + var(--mode-top,12px));transform:translateX(-50%);width:min(680px,calc(100% - 2 * var(--mode-gutter,12px)));height:calc(var(--viewport-height,100dvh) - var(--mode-top,12px) - var(--mode-bottom,12px));max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:var(--radius-panel);background:linear-gradient(var(--panel-surface-top),var(--panel-surface-bottom));color:var(--ink);overflow:hidden;}
+.log-modal{position:fixed;inset:auto;left:50%;top:var(--mode-top,12px);transform:translateX(-50%);width:min(680px,calc(100% - 2 * var(--mode-gutter,12px)));height:calc(100dvh - var(--mode-top,12px) - var(--mode-bottom,12px));max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:var(--radius-panel);background:linear-gradient(var(--panel-surface-top),var(--panel-surface-bottom));color:var(--ink);overflow:hidden;}
 .log-modal[data-open=true]{display:block;}.log-modal:not([data-open=true]){display:none;}.log-modal::backdrop{background:transparent;pointer-events:none;}
 .log-modal>.composer-view{height:100%;min-height:0;overflow:hidden;}.log-modal .mode-page{height:100%;min-height:0;padding:var(--panel-inset);padding-bottom:calc(var(--panel-inset) + var(--panel-safe-bottom,0px));}
 .log-modal :is(.log-detail,.log-editor,.log-task){height:100%;min-height:0;gap:8px;}
@@ -302,7 +302,7 @@
 .log-modal.log-day-layer[data-open=true]{display:grid;place-items:center;background:transparent;overflow:visible;pointer-events:none;outline:none;}
 .log-day-scrim{position:absolute;inset:0;border-radius:var(--mode-panel-radius,var(--radius-input));background:color-mix(in srgb,var(--control-black) 65%,transparent);pointer-events:auto;}
 :root[data-theme=dark] .log-day-scrim{background:color-mix(in srgb,var(--ink) 20%,transparent);}
-.log-day-card{--log-day-arrow-size:40px;--log-day-arrow-gap:12px;--log-day-edge-gap:12px;position:relative;width:min(400px,calc(100% - 2 * (var(--log-day-arrow-size) + var(--log-day-arrow-gap) + var(--log-day-edge-gap))));max-height:min(560px,calc(var(--log-layer-height,var(--viewport-height,100dvh)) * .8));border-radius:var(--radius-panel);pointer-events:auto;touch-action:pan-y pinch-zoom;}
+.log-day-card{--log-day-arrow-size:40px;--log-day-arrow-gap:12px;--log-day-edge-gap:12px;position:relative;width:min(400px,calc(100% - 2 * (var(--log-day-arrow-size) + var(--log-day-arrow-gap) + var(--log-day-edge-gap))));max-height:min(560px,calc(var(--log-layer-height,100dvh) * .8));border-radius:var(--radius-panel);pointer-events:auto;touch-action:pan-y pinch-zoom;}
 .log-day-card>.log-day-picker{max-height:inherit;gap:var(--space-2);padding:var(--panel-inset);border-radius:inherit;background:var(--surface);overflow:hidden;}
 .log-detail-body{touch-action:pan-y pinch-zoom;}.log-entry-facts,.log-contributions,.log-today-floaters{touch-action:pan-y pinch-zoom;}
 .log-day-heading h2{margin:0;font:600 var(--text-body)/1.4 var(--font-ui);overflow-wrap:anywhere;}
