@@ -26,3 +26,17 @@ it('copies a reply link when native sharing is unavailable and briefly shows a c
  expect(copy).toHaveBeenCalledWith(new URL(destinationPath({view:'post',resourceId:reply.id}),location.origin).href);expect(button.getAttribute('aria-label')).toBe('Link copied');
  act(()=>vi.advanceTimersByTime(1500));expect(button.getAttribute('aria-label')).toBe('Share reply');
 });
+it('uses the bounded post menu for pin and delete, and report for another author',async()=>{
+ const own={...post,userId:'me',pinned:false},changed=vi.fn();
+ transport.operation.mockResolvedValue({...own,pinned:true});
+ await act(async()=>dom.root.render(createElement(PostList,{posts:[own],user,navigate:vi.fn(),changed,deleted:vi.fn()})));
+ const ownMenu=dom.container.querySelector<HTMLDetailsElement>('.post-more-menu')!;
+ expect(ownMenu.classList.contains('profile-menu')).toBe(true);
+ expect([...ownMenu.querySelectorAll('button')].map(button=>button.textContent)).toEqual(['Pin to profile','Delete post']);
+ await act(async()=>ownMenu.querySelector<HTMLButtonElement>('button')!.click());
+ expect(transport.operation).toHaveBeenCalledWith('posts.pin',{postId:'post',pinned:true});
+ expect(changed).toHaveBeenCalledWith(expect.objectContaining({pinned:true}));
+ await render();
+ const otherMenu=dom.container.querySelector<HTMLDetailsElement>('.post-more-menu')!;
+ expect([...otherMenu.querySelectorAll('button')].map(button=>button.textContent)).toEqual(['Report post']);
+});

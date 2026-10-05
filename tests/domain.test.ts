@@ -497,6 +497,31 @@ describe('notification history', () => {
   });
 });
 
+describe('profile post pin',()=>{
+  it('keeps one active top-level pin separate from chronological posts and clears it on deletion',async()=>{
+    const author=await person(),other=await person();
+    const older=await executeOperation('posts.create',{text:'Older post'},author,randomUUID(),{confirmed:true}) as any;
+    const newer=await executeOperation('posts.create',{text:'Newer post'},author,randomUUID(),{confirmed:true}) as any;
+    const pinned=await executeOperation('posts.pin',{postId:older.id,pinned:true},author,randomUUID()) as any;
+    expect(pinned.pinned).toBe(true);
+    const first=await executeOperation('posts.list',{scope:'public',authorId:author.userId,kind:'posts',limit:1},author) as any;
+    expect(first.pinned.id).toBe(older.id);expect(first.items.map((post:any)=>post.id)).toEqual([newer.id]);
+    const second=await executeOperation('posts.list',{scope:'public',authorId:author.userId,kind:'posts',limit:1,before:first.nextCursor},author) as any;
+    expect(second.items.map((post:any)=>post.id)).toEqual([older.id]);expect(second.pinned).toBeUndefined();
+    await executeOperation('posts.pin',{postId:newer.id,pinned:true},author,randomUUID());
+    expect((await currentUser(author.userId)).pinnedPostId).toBe(newer.id);
+    expect((await executeOperation('posts.get',{postId:older.id},author) as any).pinned).toBe(false);
+    await executeOperation('posts.pin',{postId:older.id,pinned:false},author,randomUUID());
+    expect((await currentUser(author.userId)).pinnedPostId).toBe(newer.id);
+    const reply=await executeOperation('posts.reply',{postId:older.id,text:'A reply'},author,randomUUID(),{confirmed:true}) as any;
+    await expect(executeOperation('posts.pin',{postId:reply.id,pinned:true},author,randomUUID())).rejects.toMatchObject({code:'post_unavailable'});
+    await expect(executeOperation('posts.pin',{postId:older.id,pinned:true},other,randomUUID())).rejects.toMatchObject({code:'not_found'});
+    await executeOperation('posts.delete',{postId:newer.id},author,randomUUID(),{confirmed:true});
+    expect((await currentUser(author.userId)).pinnedPostId).toBeUndefined();
+    expect((await executeOperation('posts.list',{scope:'public',authorId:author.userId,kind:'posts'},author) as any).pinned).toBeNull();
+  });
+});
+
 describe('IOU payment destinations',()=>{
   it('shares payment usernames only through an authorized pair ledger, never a public profile',async()=>{
     const viewer=await person(),other=await person();

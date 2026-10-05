@@ -10,6 +10,19 @@ it('loads and paginates an author timeline, then changes to replies without a se
  const more=[...dom.container.querySelectorAll('button')].find(button=>button.textContent==='More posts')!;await act(async()=>more.click());expect(dom.container.querySelectorAll('.post-card')).toHaveLength(2);
  await act(async()=>dom.container.querySelectorAll<HTMLButtonElement>('[aria-label="Profile activity"] button')[1].click());expect(api.operation).toHaveBeenLastCalledWith('posts.list',{scope:'public',authorId:'friend',kind:'replies'});expect(dom.container.querySelectorAll('.post-card')).toHaveLength(1);expect(dom.container.textContent).toContain('A reply');
 });
+it('keeps an older pinned post in its historical place, but avoids an immediate duplicate',async()=>{
+ const posts=['newest','middle','older'].map(id=>({id,userId:'friend',text:id,createdAt:new Date().toISOString(),city:'',likeCount:0,liked:false,replyCount:0,pinned:id==='older'}));
+ let pinned=posts[2];
+ api.operation.mockImplementation(async(_name,input)=>({items:input.scope==='selected'?posts.filter(post=>input.postIds.includes(post.id)):posts,pinned:input.scope==='selected'?undefined:pinned,nextCursor:null}));
+ await act(async()=>dom.root.render(React.createElement(ProfilePosts,{personId:'friend',user:me,navigate:vi.fn()})));
+ const ids=()=>[...dom.container.querySelectorAll<HTMLElement>('.post-card')].map(card=>card.dataset.postId);
+ expect(ids()).toEqual(['older','newest','middle','older']);
+ expect(dom.container.querySelectorAll('.post-pinned-label')).toHaveLength(1);
+ pinned={...posts[0],pinned:true};
+ await act(async()=>{await api.refresh?.();});
+ expect(ids()).toEqual(['newest','middle','older']);
+ expect(dom.container.querySelectorAll('.post-pinned-label')).toHaveLength(1);
+});
 it('shows ended conversation history and its original invitation without a send form',async()=>{
  api.operation.mockImplementation(async(name)=>name==='connections.get'?{connection:{id:'connection',members:['me','friend'],fromId:'friend',toId:'me',status:'disconnected',disconnectedBy:'friend',note:'A later invitation',createdAt:'2026-09-25T00:00:00.000Z',initialInvitation:{fromId:'me',note:'Original invitation',createdAt:'2026-09-01T00:00:00.000Z'}},people:[]}:{items:[{id:'message',fromId:'me',text:'Old message',createdAt:'2026-09-02T00:00:00.000Z'}],nextCursor:null});
  await act(async()=>dom.root.render(React.createElement(MessagesPanel,{userId:'me',connectionId:'connection',navigate:vi.fn()})));expect(dom.container.textContent).toContain('Original invitation');expect(dom.container.textContent).toContain('Old message');expect(dom.container.querySelector('.message-compose')).toBeNull();expect(dom.container.textContent).toContain('read-only');

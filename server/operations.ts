@@ -197,7 +197,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'ious.record':return recordIou(actor,d as unknown as Parameters<typeof recordIou>[1],session!);
     case 'identity.get': return profile(user);
     case 'agent.actions.list': {
-      const visibleReceipts = { userId, ...(actor.background ? { operation: { $in: ['posts.create','posts.reply','posts.like','posts.delete','connections.request','connections.respond','connections.withdraw','messages.send'] } } : {}) };
+      const visibleReceipts = { userId, ...(actor.background ? { operation: { $in: ['posts.create','posts.reply','posts.like','posts.pin','posts.delete','connections.request','connections.respond','connections.withdraw','messages.send'] } } : {}) };
       const cursor = d.before ? requireValue(await rows('receipts').findOne({ _id: String(d.before), ...visibleReceipts }, options)) : null;
       const receipts = await rows('receipts').find({ ...visibleReceipts, ...(cursor ? { $or: [{ createdAt: { $lt: cursor.createdAt } }, { createdAt: cursor.createdAt, _id: { $lt: cursor._id } }] } : {}) }, options).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
       return { items: receipts.slice(0, limit).map(receipt => ({ id: receipt._id, operation: receipt.operation, source: receipt.source, result: receipt.result, createdAt: receipt.createdAt })), nextCursor: receipts.length > limit ? receipts[limit - 1]._id : null };
@@ -287,6 +287,14 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'posts.save': {
       registered(user);const post=requireValue(await rows('posts').findOne({_id:String(d.postId)},options));await notBlocked(userId,String(post.userId),session);if(d.saved&&(post.deletedAt||post.moderatedAt))throw new AppError(404,'unavailable','This post is unavailable.');await setCollection('postSaves',userId,post._id,Boolean(d.saved),session);return (await postCards([post],userId,await blockedIds(userId,session),session))[0];
     }
+    case 'posts.pin': {
+      const post=requireValue(await rows('posts').findOne({_id:String(d.postId),userId},options),'This post is not yours.');
+      if(d.pinned){
+        if(post.parentId||post.deletedAt||post.moderatedAt)throw new AppError(422,'post_unavailable','Only an active post can be pinned to your profile.');
+        await users().updateOne({_id:userId},{$set:{pinnedPostId:post._id}},options);
+      }else await users().updateOne({_id:userId,pinnedPostId:post._id},{$unset:{pinnedPostId:''}},options);
+      return (await postCards([post],userId,[],session))[0];
+    }
     case 'people.search': {
       if(d.scope==='circle'&&actor.background&&actor.privateAccess===false)throw new AppError(403,'private_access_required','This task cannot read your Circle.');
       if(d.scope==='nearby'&&actor.background&&actor.privateAccess===false&&!d.near)throw new AppError(422,'location_required','Provide a public area for nearby search.');
@@ -373,8 +381,12 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         { $limit: limit + 1 },
         { $project: { _id: 1, text: 1, links:1, fileIds: 1, city: 1, area:1,distanceMeters:1,userId: 1, createdAt: 1, parentId:1,rootId:1 } },
       ], options).toArray();
-      const projected=await postCards(posts.slice(0,limit),userId,blocked,session);
-      return {items:projected.map((post,index)=>({...post,...(cell?sharedAreaDistance(cell,(posts.find(record=>record._id===post.id)!.area as CoarseArea).cell,posts.find(record=>record._id===post.id)!.distanceMeters):{})})),nextCursor:posts.length>limit?(paging?paging.cursor(posts[limit-1]):posts[limit-1]._id):null};
+      const showPinned=Boolean(d.authorId&&kind==='posts'&&!cell&&!d.before);
+      const pinnedId=showPinned?(await users().findOne({_id:String(d.authorId),suspendedAt:null},{...options,projection:{pinnedPostId:1}}))?.pinnedPostId:null;
+      const pinnedRow=pinnedId?await rows('posts').findOne({_id:pinnedId,...filter,parentId:{$exists:false}},options):null;
+      const pageRows=posts.slice(0,limit),projected=await postCards([...pageRows,...(pinnedRow&&!pageRows.some(row=>row._id===pinnedRow._id)?[pinnedRow]:[])],userId,blocked,session);
+      const pageIds=new Set(pageRows.map(row=>row._id));
+      return {items:projected.filter(post=>pageIds.has(post.id)).map(post=>({...post,...(cell?sharedAreaDistance(cell,(posts.find(record=>record._id===post.id)!.area as CoarseArea).cell,posts.find(record=>record._id===post.id)!.distanceMeters):{})})),nextCursor:posts.length>limit?(paging?paging.cursor(posts[limit-1]):posts[limit-1]._id):null,...(showPinned?{pinned:projected.find(post=>post.id===pinnedRow?._id)||null}:{})};
     }
     case 'posts.ancestors': {
       requireValue(await run('posts.get',{postId:d.postId},actor,session),'This post is unavailable.');
@@ -439,6 +451,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'posts.delete': {
       const result = await rows('posts').updateOne({ _id: String(d.postId), userId, deletedAt:{$exists:false} },{$set:{text:'',city:'',area:null,deletedAt:now}}, options);
       if (!result.modifiedCount) throw new AppError(404, 'not_found', 'That post is not yours or no longer exists.');
+      await users().updateOne({_id:userId,pinnedPostId:String(d.postId)},{$unset:{pinnedPostId:''}},options);
       await removePostVideoLinks(userId,String(d.postId),session!);
       await rows('postLikes').deleteMany({postId:d.postId},options);await rows('notifications').deleteMany({postId:d.postId},options);
       await enqueueSearch('posts',String(d.postId),session!);

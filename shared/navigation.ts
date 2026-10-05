@@ -105,6 +105,7 @@ export const operationUiBindings: Record<string, { route: string; targetKind: Re
   'posts.replies': [{ route: '/posts/[id]', targetKind: 'exact', resourceType: 'post' }],
   'posts.reply': [{ route: '/posts/[id]', targetKind: 'exact', resourceType: 'post' }],
   'posts.like': [{ route: '/posts/[id]', targetKind: 'exact', resourceType: 'post' }],
+  'posts.pin': [{ route: '/posts/[id]', targetKind: 'exact', resourceType: 'post' }],
   'posts.get': [{ route: '/posts/[id]', targetKind: 'exact', resourceType: 'post' }],
   'posts.create': [{ route: '/posts/[id]', targetKind: 'exact', resourceType: 'post' }],
   'posts.list': [{ route: '/posts/[id]', targetKind: 'exact', resourceType: 'post' }, { route: '/feed', targetKind: 'surface', resourceType: 'feed' }],

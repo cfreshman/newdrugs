@@ -25,6 +25,7 @@ export interface User {
   area?: CoarseArea | null;
   photos?:string[];storageBytes?:number;mediaUrl?:string|null;voiceFileId?:string|null;
   paymentHandles?:import('../shared/paymentHandles').PaymentHandles;
+  pinnedPostId?:string;
   websiteCode?:string;
   logHandleGrams?:string[];logNameGrams?:string[];
 }

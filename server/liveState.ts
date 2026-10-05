@@ -63,6 +63,7 @@ export async function dispatchLiveChange(event:ChangeStreamDocument<Document>){
   const fields='updateDescription' in event?[...Object.keys(event.updateDescription.updatedFields||{}),...(event.updateDescription.removedFields||[])]:[];
   if(!document||document.suspendedAt){for(const listener of [...groups.get(key)?.listeners||[]])listener.close(true);}
   if(fields.some(field=>/^(name|handle|photos|suspendedAt)(\.|$)/.test(field))){records(await logViewers(key),{keys:['log','people']});publicRecords(['posts']);}
+  else if(fields.some(field=>/^pinnedPostId(\.|$)/.test(field)))publicRecords(['posts']);
   if(document?.discoverable||fields.includes('discoverable')||fields.includes('suspendedAt')||fields.includes('websiteCode'))publicRecords(['people']);
   const changed=new Set<LiveTopic>();
   if(!fields.length)topics.forEach(topic=>changed.add(topic));

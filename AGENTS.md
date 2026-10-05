@@ -47,6 +47,8 @@ agent-written rules (you are allowed to edit below this line)
 
 ### Canonical UI styling
 
+**Core rule: reuse code first, then reuse the existing design.** Before building any UI interaction, search this app for the same use case. Use its existing component, hook or shared class when it fits. If the code cannot be shared, carry over that interaction's structure, behavior, tokens and spacing. Never start a new design from scratch for a use case the app has already decided.
+
 Treat the existing New Drugs UI as one design system. Before adding a control or form, find the same kind of interaction elsewhere in this checkout and copy its structure and classes. Do not design a new button family, card skin, field layout, disabled state or spacing scale for one screen. A visually similar result made with different CSS is still a mismatch.
 
 | Need | Canonical source |
@@ -57,6 +59,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 | Human invitation flow and note field | `src/PersonPanel.tsx` |
 | Profile rendering, including image shape and typography | `src/ProfileCard.tsx` |
 | Explore filters and person-card composition | `src/NativePanels.tsx` |
+| Overflow menus and viewport-safe placement | `src/PersonPanel.tsx`, `src/useEdgeAwareMenu.ts`, and `.profile-menu` in `src/style.css` |
 | Settings rows and option controls | `src/App.tsx` and `src/appearance.css` |
 
 - Use `.solid` for a standalone primary action such as Send invitation, Save or Publish. It uses `--primary`, `--on-primary`, `--primary-hover` and `--radius-control`. `.panel-actions` is a shared row of neutral pills; `.panel-actions .solid` intentionally changes a primary action to a black pill in that row. Do not substitute the row treatment for a standalone primary button.
