@@ -5,6 +5,7 @@ import {rememberAuthReturn,readAuthReturn,clearAuthReturn} from './authReturn';
 import {usePageBoundaryScroll} from './pageBoundaryScroll';
 import {bindLogEntryCache} from './logEntryCache';
 import {bindLogImageCache} from './logImageCache';
+import {bindOfflineLog,offlineBootstrap,offlineNetworkError,saveOfflineBootstrap,startOfflineLogReplay,unbindOfflineLog} from './offlineLog';
 import {PreferencesPanel} from './PreferencesPanel';
 import {useAppearance,useFont} from './useAppearance';
 import {defaultPreferences,initialDestination as landingDestination} from '../shared/preferences';
@@ -32,7 +33,7 @@ import { AutomationsPanel } from './AutomationsPanel';
 import type { InboxAttachment, InboxItem } from '../shared/inbox';
 import { ChatSearchPanel } from './ChatSearchPanel';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Star, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Shield, EyeSlash, HardDrives, ArrowClockwise, VideoCamera, Waveform } from '@phosphor-icons/react';
+import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Star, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Image, Shield, EyeSlash, HardDrives, ArrowClockwise, VideoCamera, Waveform } from '@phosphor-icons/react';
 import type { Bootstrap, Message, RunView } from '../shared/types';
 import { api, post, errorText, ApiError, balanceLabel } from './api';
 import { useDictation } from './useDictation';
@@ -64,6 +65,7 @@ import { NavigationContext } from './NavigationContext';
 import { NotificationsPanel } from './NotificationsPanel';
 import {NotificationSettingsPanel} from './NotificationSettingsPanel';
 import { UploadPanel } from './UploadPanel';
+import {uploadFile} from './uploads';
 import type { UploadRef } from '../shared/uploads';
 import { cleanDestinationContext, parseDestination, surfaceTitles, surfaceViews, type Destination } from '../shared/navigation';
 import {applyAppRelease,observeAppRelease,type AppReleaseState} from './appRelease';
@@ -116,6 +118,7 @@ export function App() {
   const [availableRelease,setAvailableRelease]=useState<string|null>(null),releaseState=useRef<AppReleaseState>({observed:null,available:null});
   const observeRelease=useCallback((version:string|undefined)=>{const previous=releaseState.current,next=observeAppRelease(previous,version,release.version);if(next===previous)return;releaseState.current=next;if(next.available!==previous.available)setAvailableRelease(next.available);},[]);
   useLayoutEffect(()=>{if(data){const account=data.user.handle?data.user.id:null;bindLogImageCache(account);bindLogEntryCache(account);}},[data?.user.id,data?.user.handle]);
+  useEffect(()=>{if(data?.user.handle)return startOfflineLogReplay();},[data?.user.id,data?.user.handle]);
   useFont(data?(data.preferences?.font||'mono'):undefined);
   useAppearance(data?(data.preferences||defaultPreferences).appearance:undefined);
   const chatHistory = useChatHistory(() => scroll.preparePrepend());
@@ -142,12 +145,14 @@ export function App() {
   const [surface, setSurface] = useState<{ runId: string; id: string; view: string } | null>(null);
   const [inboxAttachments, setInboxAttachments] = useState<InboxAttachment[]>([]);
   const [attachments, setAttachments] = useState<UploadRef[]>([]);
+  const quickFileInput=useRef<HTMLInputElement>(null),[quickUploading,setQuickUploading]=useState(false),[quickError,setQuickError]=useState('');
   const composer = useRef<HTMLDivElement>(null);
   const inputForm = useRef<HTMLFormElement>(null);
   const page = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const {available:dockAvailable,belowControls}=useAgentDockAvailability(page,available=>{if(mode!=='agent'&&agentDockOpen){if(!available)tabWorkspaces.current[mode]=captureWorkspace();else scroll.restore(tabWorkspaces.current[mode]?.scroll||null);}});
   const agentDockVisible=agentDockOpen&&dockAvailable;
+  const chatVisible=mode==='agent'||agentDockVisible,chatVisibleRef=useRef(chatVisible);chatVisibleRef.current=chatVisible;
   const { style, sideBySide, keyboardOpen, ...dragHandlers } = useChatPosition(composer, Boolean(data), launcherOpen && Boolean(panelSpace === 'composer' ? panel : underlay?.panel), launcherOpen);
   useMobileInputFocus(page, Boolean(data));
   const dockStyle=useAgentDockGeometry(page,mode!=='agent'&&agentDockVisible,`${mode}:${keyboardOpen}`);
@@ -176,7 +181,7 @@ export function App() {
   const liveRevision = useRef(0), refreshRequest = useRef(0);
   const refresh = useCallback(async () => {
     const revision = liveRevision.current, request = ++refreshRequest.current;
-    const next = await api<Bootstrap>('/bootstrap');
+    const next = await api<Bootstrap>(`/bootstrap?chat=${chatVisibleRef.current?'1':'0'}`);
     if (request !== refreshRequest.current) return;
     const changedIdentity = identity.current !== next.user.id;
     if (!changedIdentity && revision !== liveRevision.current) return;
@@ -186,13 +191,13 @@ export function App() {
       dictation.cancel(); setLauncherOpen(false); setUnderlay(null); lastComposer.current = null; setAfterAccount(null); setResumeChat(null); setSubmitting(false); setSurface(null); setAttachments([]); setInboxAttachments([]); setPanel(null); setPanelHistory([]); seenSurfaces.current.clear();
       let outbox: Message[] = [];
       try { setDraft(localStorage.getItem(activeModeRef.current==='agent'?`nd-draft:${next.user.id}`:`nd-draft:${next.user.id}:${activeModeRef.current}`) || ''); outbox = JSON.parse(localStorage.getItem(`nd-outbox:${next.user.id}`) || '[]'); } catch { /* Optional storage. */ }
-      chatHistory.receive(next.user.id, next.messages, next.conversationCursor, outbox.map(message => ({ ...message, status: 'failed' as const })), next.conversationGeneration);
+      chatHistory.receive(next.user.id, next.messages||[], next.conversationCursor, outbox.map(message => ({ ...message, status: 'failed' as const })), next.conversationGeneration);
     }
-    rememberCompleted(next.messages);
-    setData(next); setRun(previous => next.run && completedRuns.current.has(next.run.id) ? null : mergeRun(previous, next.run ?? null));
-    if (!changedIdentity) chatHistory.receive(next.user.id, next.messages, next.conversationCursor, undefined, next.conversationGeneration);
+    if(next.messages)rememberCompleted(next.messages);
+    setData(previous=>({...next,messages:next.messages??(changedIdentity?[]:previous?.messages||[])})); setRun(previous => next.run && completedRuns.current.has(next.run.id) ? null : mergeRun(previous, next.run ?? null));
+    if (!changedIdentity&&next.messages) chatHistory.receive(next.user.id, next.messages, next.conversationCursor, undefined, next.conversationGeneration);
   }, [observeRelease]);
-  useLiveState(data?.user.id, (change, actorId) => {
+  useLiveState(data?.user.id,chatVisible, (change, actorId) => {
     if (actorId !== identity.current) return;
     liveRevision.current++;
     if (change.conversationGeneration !== undefined && change.conversationGeneration !== (data?.conversationGeneration || 0)) { try{for(const tab of ['agent','friends','posts','log'])localStorage.removeItem(tab==='agent'?`nd-draft:${actorId}`:`nd-draft:${actorId}:${tab}`);}catch{}for(const saved of Object.values(tabWorkspaces.current)){saved.draft='';saved.attachments=[];saved.inboxAttachments=[];saved.recordAttachments=[];saved.scroll=null;}setDraft(''); setRecordAttachments([]); setInboxAttachments([]); setAttachments([]); setSubmitting(false); submission.current = null; completedRuns.current.clear(); }
@@ -210,9 +215,12 @@ export function App() {
     let cancelled = false;
     void (async () => {
       try {
-        await post('/session'); const initial = await api<Bootstrap>('/bootstrap'); if (cancelled) return;
+        let loaded:Bootstrap,offline=false;
+        try{await post('/session');loaded=await api<Bootstrap>('/bootstrap');if(loaded.user.handle){void bindOfflineLog(loaded.user.id).then(()=>saveOfflineBootstrap(loaded)).catch(()=>{});}else unbindOfflineLog();}
+        catch(error){if(!offlineNetworkError(error))throw error;const snapshot=await offlineBootstrap();if(!snapshot)throw error;loaded=snapshot;offline=true;}
+        if (cancelled) return; const initial={...loaded,messages:loaded.messages||[]};
         identity.current = initial.user.id;
-        observeRelease(initial.config.version);
+        if(!offline)observeRelease(initial.config.version);
         const initialDestination=landingDestination(location.href,location.origin,initial.preferences?.landingPage||'agent');
         const initialMode=initialDestination?.mode|| (initialDestination?modeForDestination(initialDestination):'agent');
         if(authDestination.current){
@@ -465,9 +473,19 @@ export function App() {
     const messageId = pendingChatJump; setPendingChatJump(null);
     void openChatMessage(messageId).catch(e => logError(errorText(e)));
   }, [pendingChatJump, data?.user.id, data?.user.handle]);
+  const attachQuick=async(selected:File[])=>{
+    if(!selected.length)return;
+    if(selected.length+attachments.length>5){setQuickError('Choose up to five files.');return;}
+    if(launcherOpen)void closePanel();
+    setQuickUploading(true);setQuickError('');
+    const targetMode=mode;
+    try{for(const file of selected){const uploaded=await uploadFile(file,'agent_input');if(activeModeRef.current===targetMode)setAttachments(previous=>[...previous,uploaded]);else if(tabWorkspaces.current[targetMode])tabWorkspaces.current[targetMode]!.attachments=[...tabWorkspaces.current[targetMode]!.attachments,uploaded];}}
+    catch(error){setQuickError(errorText(error));}
+    finally{setQuickUploading(false);}
+  };
   const send = async (event?: FormEvent, textOverride?: string, retry?: Message, fromExample = false, contextOverride?:Partial<ChatInputContext>) => {
     event?.preventDefault();
-    if (inputOccupied && !fromExample || (dictation.active && textOverride === undefined) || busyRef.current || !data || data.user.id !== identity.current) return;
+    if (inputOccupied && !fromExample || (dictation.active && textOverride === undefined) || quickUploading&&!retry || busyRef.current || !data || data.user.id !== identity.current) return;
     const text = (textOverride ?? draft).trim(); const files = fromExample ? [] : retry?.files || attachments; const attachedUpdates = fromExample ? [] : retry?.inbox || inboxAttachments; const records=fromExample?[]:retry?.records||recordAttachments; if (!text && !files.length && !attachedUpdates.length && !records.length) return;
     const inputContext=retry?.inputContext||{mobile:contextOverride?.mobile??mobileNotificationLink(),dictated:contextOverride?.dictated??false};
     const commands: Record<string, Panel> = { '/profile': 'account', '/account': 'account', '/credits': 'credits', '/connect': 'agents', '/nearby': 'people', '/feed': 'feed', '/location': 'location', '/messages': 'messages', '/upload': 'uploads' };
@@ -480,7 +498,7 @@ export function App() {
     const runId = `${data.user.id}:${requestId}`;
     submission.current = runId;
     if (chatHistory.windowed) chatHistory.returnLatest();
-    if (!retry && !fromExample) { if (!files.length && !attachedUpdates.length && !records.length) placeMessage(id, text); dictation.stop(); setDraft(''); setAttachments([]); setInboxAttachments([]);setRecordAttachments([]); }
+    if (!retry && !fromExample) { if (!files.length && !attachedUpdates.length && !records.length) placeMessage(id, text); dictation.stop(); setDraft(''); setAttachments([]);setQuickError(''); setInboxAttachments([]);setRecordAttachments([]); }
     setRun(null);
     busyRef.current = true; setSubmitting(true); scroll.follow();
     const message: Message = { id, role: 'user', text, files, createdAt: new Date().toISOString(), source: 'app', status: 'pending', review, inputContext, ...(pageContext?{pageContext}:{}), ...(attachedUpdates.length ? { inbox: attachedUpdates } : {}),...(records.length?{records}:{}) };
@@ -558,7 +576,7 @@ export function App() {
           : panel === 'log_code' ? <LogCodePanel closeLabel={panelHistory.length?'Back':'Close'} entryId={panelContext.resourceId||''} navigate={navigate} close={backPanel}/>
           : panel === 'log_scan' ? <LogScanPanel navigate={navigate} close={backPanel}/>
           : panel === 'log_join' ? <LogJoinPanel code={panelContext.resourceId||''} registered={Boolean(data.user.handle)} onAccount={()=>startAccount({...panelContext,view:'log_join',mode})} onJoined={entryId=>{setPanel('log');setPanelContext({resourceId:entryId});}} navigate={navigate} close={backPanel}/>
-          : panel === 'log_compose' ? <LogEditor user={data.user} date={panelContext.date} cancel={()=>{completeLog();backPanel();}} onSaved={entry=>{completeLog(entry);navigate({view:'log',resourceId:entry.id});}}/>
+          : panel === 'log_compose' ? <LogEditor user={data.user} date={panelContext.date} cancel={()=>{completeLog();backPanel();}} onQueued={()=>{completeLog();backPanel();}} onSaved={entry=>{completeLog(entry);navigate({view:'log',resourceId:entry.id});}}/>
           : panel === 'person' ? <PersonPanel personId={panelContext.resourceId || ''} user={data.user} navigate={navigate} />
             : panel === 'location' ? <LocationPanel user={data.user} areaCell={panelContext.areaCell} saved={async () => { await refresh(); if (surface) await closePanel(true); else if (panelHistory.length) backPanel(); else await closePanel(); }} />
               : panel === 'people' ? <PeoplePanel user={data.user} {...panelContext} initialQuery={panelContext.query} initialScope={panelContext.scope} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} navigate={navigate} />
@@ -602,15 +620,15 @@ export function App() {
       </div>
       <div className="composer-area" ref={composer}>
         {!inputOccupied && (scroll.awayFromBottom || chatHistory.windowed) && <button className="latest-chat" type="button" aria-label="Latest messages" title="Latest messages" onClick={() => { if (chatHistory.windowed) chatHistory.returnLatest(); scroll.follow(); }}><ArrowDown size={22} weight="bold" /></button>}
-        <ComposerPanel open={launcherOpen} sideBySide={sideBySide} obscured={Boolean(panel && panelSpace === 'modal')||mode!=='agent'&&!agentDockVisible} dragging={launcherDrag.dragging} extentKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${style['--viewport-top' as keyof typeof style]}:${talk.space?.id||''}:${talk.expanded}`} contentKey={composerScreen?screenKey(composerScreen):'launcher'} input={<form className={`composer ${dictation.listening ? 'is-listening' : ''} ${attachments.length || inboxAttachments.length ? 'has-files' : ''}`} ref={inputForm} onSubmit={send}>
+        <ComposerPanel open={launcherOpen} sideBySide={sideBySide} obscured={Boolean(panel && panelSpace === 'modal')||mode!=='agent'&&!agentDockVisible} dragging={launcherDrag.dragging} extentKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${style['--viewport-top' as keyof typeof style]}:${talk.space?.id||''}:${talk.expanded}`} contentKey={composerScreen?screenKey(composerScreen):'launcher'} input={<form className={`composer ${dictation.listening ? 'is-listening' : ''} ${attachments.length || inboxAttachments.length || quickUploading || quickError ? 'has-files' : ''}`} ref={inputForm} onSubmit={send}>
           <label htmlFor="thought" className="sr-only">Message your agent</label>
           <textarea id="thought" ref={textarea} value={draft} maxLength={6000} rows={2} enterKeyHint="send" onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
-          {recordAttachments.length>0&&<div className="composer-files record-contexts">{recordAttachments.map(item=><button type="button" key={`${item.kind}:${item.id}`} onClick={()=>setRecordAttachments(items=>items.filter(value=>value!==item))} aria-label={`Remove ${item.title}`}><span>{item.title}</span><X size={14}/></button>)}</div>}{attachments.length > 0 && <div className="composer-files">{attachments.map(file => <button type="button" key={file.id} aria-label={`Remove ${file.originalName??file.name}`} onClick={() => setAttachments(previous => previous.filter(candidate => candidate.id !== file.id))}><span>{file.originalName??file.name}</span><X size={14} aria-hidden="true" /></button>)}</div>}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if(!quickUploading)void send(); } }} />
+          {recordAttachments.length>0&&<div className="composer-files record-contexts">{recordAttachments.map(item=><button type="button" key={`${item.kind}:${item.id}`} onClick={()=>setRecordAttachments(items=>items.filter(value=>value!==item))} aria-label={`Remove ${item.title}`}><span>{item.title}</span><X size={14}/></button>)}</div>}{(attachments.length > 0||quickUploading||quickError)&&<div className="composer-files">{attachments.map(file => <button type="button" key={file.id} aria-label={`Remove ${file.originalName??file.name}`} onClick={() => setAttachments(previous => previous.filter(candidate => candidate.id !== file.id))}><span>{file.originalName??file.name}</span><X size={14} aria-hidden="true" /></button>)}{quickUploading&&<span className="quiet small" role="status">Uploading…</span>}{quickError&&<span className="error small" role="alert">{quickError}</span>}</div>}
           {inboxAttachments.length > 0 && <div className="composer-files inbox-attachments">{inboxAttachments.map(item => <button type="button" key={item.id} aria-label={`Remove ${item.title}`} onClick={() => setInboxAttachments(prior => prior.filter(value => value.id !== item.id))}><span>{item.title}</span><X size={14} /></button>)}</div>}
-          {(draft.trim() || attachments.length > 0 || inboxAttachments.length > 0 || recordAttachments.length>0) && !dictation.active && <button className="send" type="submit" disabled={sendBusy || !data} aria-label="Send message" title={reviewing ? 'Reject pending actions and send message' : undefined}><ArrowUp size={19} weight="bold" /></button>}
+          {(draft.trim() || attachments.length > 0 || inboxAttachments.length > 0 || recordAttachments.length>0) && !dictation.active && <button className="send" type="submit" disabled={sendBusy || quickUploading || !data} aria-label="Send message" title={reviewing ? 'Reject pending actions and send message' : undefined}><ArrowUp size={19} weight="bold" /></button>}
         </form>}><PreservedPanels retainVisited key={data.user.id} activeKey={workspaceViewKey(mode,composerScreen)} ancestorKeys={workspaceAncestors} reset={0}>{composerScreen?.panel ? <ConversationHeaderProvider><section className="composer-surface" aria-label={composerScreen.title}><header className="composer-surface-header" onClick={event=>scrollFromPanelHeader(event,event.currentTarget.parentElement?.querySelector<HTMLElement>('.composer-surface-content')||null)}><button type="button" className="close" aria-label="Back" onClick={backPanel}><ArrowLeft size={21} /></button>{data.user.handle&&['messages','connections'].includes(composerScreen.panel)&&composerScreen.context.resourceId?<ConversationHeaderHost/>:<h2>{composerScreen.title}</h2>}</header><div className="composer-surface-content" key={`${composerScreen.panel}:${composerScreen.context.resourceId || ''}:${composerScreen.reset}`}><div className="composer-surface-body">{composerScreen.content}</div></div><footer className="composer-surface-footer"><button type="button" className="close" aria-label="Back" onClick={backPanel}><ArrowLeft size={21} /></button><h2>{composerScreen.title}</h2></footer></section></ConversationHeaderProvider> : <nav className="launcher-menu" aria-label="New Drugs"><NavLink to={{view:'inbox'}} navigate={()=>open('inbox',{},'composer')}><Tray size={24} />Agent inbox</NavLink><NavLink to={{view:'automations'}} navigate={()=>open('automations',{},'composer')}><Lightning size={24} />Automations</NavLink><NavLink to={{view:'chat_history'}} navigate={()=>open('chat_history',{},'composer')}><Robot size={24} />Chat search</NavLink><hr className="launcher-divider" /><NavLink to={{view:'people'}} navigate={()=>open('people',{},'composer')}><Users size={24} />People nearby</NavLink><NavLink to={{view:'feed'}} navigate={()=>open('feed',{},'composer')}><Article size={24} />Posts</NavLink><NavLink to={{view:'messages'}} navigate={()=>open('messages',{},'composer')}><ChatCircle size={24} />Messages &amp; invites</NavLink><NavLink to={{view:'spaces',mode:'posts'}} navigate={()=>navigate({view:'spaces',mode:'posts'})}><Waveform size={24}/>Talk</NavLink><NavLink to={{view:'uploads'}} navigate={()=>open('uploads',{},'composer')}><Paperclip size={24} />Attach files</NavLink></nav>}</PreservedPanels></ComposerPanel>
-        {mode==='agent'&&<div className="composer-controls"><div className="launcher-controls"><button type="button" className={`launcher-button ${launcherDrag.dragging ? 'dragging' : ''}`} {...launcherDrag.handlers} aria-label={launcherOpen ? 'Close launcher' : 'Open New Drugs'} aria-expanded={launcherOpen} onClick={() => launcherDrag.click(() => { dictation.stop(); if (launcherOpen) void closePanel(); else { if (lastComposer.current) { setPanel(lastComposer.current.panel); setPanelContext(lastComposer.current.context); setPanelHistory(lastComposer.current.history); } else { setPanel(null); setPanelHistory([]); } setPanelSpace('composer'); setLauncherOpen(true); } })}>{launcherOpen ? <X size={24} /> : <SquaresFour size={24} />}</button>{launcherOpen && composerScreen?.panel && <button type="button" className="launcher-button reset-panel" aria-label="Reset launcher" title="Return to launcher options and clear this view" onClick={() => { setPanel(null); setPanelContext({}); setPanelHistory([]); setPanelReset(value => value + 1); }}><ArrowClockwise size={22} /></button>}</div>
+        {mode==='agent'&&<div className="composer-controls"><div className="launcher-controls"><button type="button" className={`launcher-button ${launcherDrag.dragging ? 'dragging' : ''}`} {...launcherDrag.handlers} aria-label={launcherOpen ? 'Close launcher' : 'Open New Drugs'} aria-expanded={launcherOpen} onClick={() => launcherDrag.click(() => { dictation.stop(); if (launcherOpen) void closePanel(); else { if (lastComposer.current) { setPanel(lastComposer.current.panel); setPanelContext(lastComposer.current.context); setPanelHistory(lastComposer.current.history); } else { setPanel(null); setPanelHistory([]); } setPanelSpace('composer'); setLauncherOpen(true); } })}>{launcherOpen ? <X size={24} /> : <SquaresFour size={24} />}</button><input ref={quickFileInput} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,application/pdf,.txt,.md,.csv,.json,.jsonl,.log" onChange={event=>{const files=Array.from(event.target.files||[]);event.currentTarget.value='';void attachQuick(files);}}/><button type="button" className="launcher-button quick-attach-button" aria-label={quickUploading?'Uploading attachment':'Attach image or file'} disabled={quickUploading} onClick={()=>quickFileInput.current?.click()}><Image size={24}/></button>{launcherOpen && composerScreen?.panel && <button type="button" className="launcher-button reset-panel" aria-label="Reset launcher" title="Return to launcher options and clear this view" onClick={() => { setPanel(null); setPanelContext({}); setPanelHistory([]); setPanelReset(value => value + 1); }}><ArrowClockwise size={22} /></button>}</div>
         {dictationControl}</div>}
         <span id="orb-hint" className="sr-only">{dictation.active ? 'Cancel on the left or send on the right. Either clears the draft.' : effectiveDrag.draggable ? 'Tap to dictate. Drag sideways to move chat, or use left and right arrow keys while focused.' : 'Tap to dictate.'}</span>
       </div>

@@ -1,4 +1,4 @@
-/* Private Log photos only. No HTML/API/audio/video caching. */
+/* Bounded account-scoped cache for marked Log photos and profile pictures. */
 (function(scope) {
   const MiB=1024*1024;
   function createLogImageCache({factory=indexedDB,estimate=()=>navigator.storage?.estimate?.()||Promise.resolve({}),now=Date.now,maxBytes=32*MiB,maxItems=384,maxAge=14*86400000}={}) {
@@ -58,7 +58,7 @@
   });
   scope.addEventListener('fetch',event=>{
     const url=new URL(event.request.url);
-    if(event.request.method!=='GET'||event.request.mode==='navigate'||event.request.headers.has('range')||url.origin!==scope.location.origin||url.searchParams.get('log-image')!=='1'||!/^\/api\/files\/[^/]+$/.test(url.pathname))return;
+    if(event.request.method!=='GET'||event.request.mode==='navigate'||event.request.headers.has('range')||url.origin!==scope.location.origin||url.searchParams.get('log-image')!=='1'&&url.searchParams.get('avatar')!=='1'||!/^\/api\/files\/[^/]+$/.test(url.pathname))return;
     const fileId=url.pathname.split('/').at(-1);
     event.respondWith((async()=>{
       let account,cached;try{account=await cache.account();cached=await cache.get(account,fileId);}catch{/* Normal loading works without IndexedDB. */}

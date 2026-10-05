@@ -73,7 +73,7 @@ export function retrievalScope(kind:RetrievalKind,userId:string|undefined,filter
 export async function replaceRetrievalSource(kind:RetrievalKind,sourceKey:string,documents:RetrievalDocument[]){
  await ensureRetrievalCollection(kind);
  if(documents.some(doc=>doc.kind!==kind||doc.sourceKey!==sourceKey||doc.vector.length!==DIMENSIONS||!doc.vector.every(Number.isFinite)||kind!=='public'&&!doc.viewerIds?.length))throw Error('retrieval_document_invalid');
- const points=documents.map(({text,vector,area,...payload})=>({id:retrievalPointId(payload.id),vector:{dense:vector,lexical:{text,model:'qdrant/bm25'}},payload:{...payload,...(area?{area}:{})}}));
+ const points=documents.map(({text,vector,area,...payload})=>({id:retrievalPointId(payload.id),vector:{dense:vector,...(text.trim()?{lexical:{text,model:'qdrant/bm25'}}:{})},payload:{...payload,...(area?{area}:{})}}));
  // The canonical source is authoritative. Stale results are reauthorized by the
  // caller and a durable reconciliation job repairs interrupted replacement.
  await request(`/collections/${collection(kind)}/points/batch?wait=true&ordering=strong`,'POST',{operations:[{delete:{filter:{must:[{key:'kind',match:{value:kind}},{key:'sourceKey',match:{value:sourceKey}}]}}},...(points.length?[{upsert:{points}}]:[])]});

@@ -35,6 +35,11 @@ describe('public preview fetch boundary', () => {
     response(302, { location: 'http://169.254.169.254/latest/meta-data' });
     await expect(fetchPublic('https://example.com', 'page', AbortSignal.timeout(1000))).rejects.toThrow(); expect(network.request).toHaveBeenCalledTimes(1);
   });
+  it('does not downgrade a Make image fetch to HTTP on redirect', async () => {
+    response(302, { location: 'http://images.example.com/picture.png' });
+    await expect(fetchPublic('https://example.com/picture.png', 'image', AbortSignal.timeout(1000),0,true)).rejects.toThrow(/HTTPS/);
+    expect(network.request).toHaveBeenCalledTimes(1);
+  });
   it('rejects oversized responses and active image formats', async () => {
     response(200, { 'content-type': 'text/html', 'content-length': '2097152' });
     await expect(fetchPublic('https://example.com', 'page', AbortSignal.timeout(1000))).rejects.toThrow();

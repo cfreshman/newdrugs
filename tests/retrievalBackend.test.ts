@@ -31,6 +31,14 @@ it('persists vectors and server-generated lexical weights without storing raw te
  const write=(fetcher.mock.calls as unknown as [URL,RequestInit][]).find(([url])=>url.pathname.endsWith('/points/batch'))!;
  const point=JSON.parse(String(write[1].body)).operations[1].upsert.points[0];expect(point.vector.lexical).toEqual({text:'a weekend hike',model:'qdrant/bm25'});expect(point.payload.text).toBeUndefined();expect(point.id).toBe(retrievalPointId('posts:one'));
 });
+it('keeps generated photo descriptions in the semantic vector lane only',async()=>{
+ config.QDRANT_URL='https://retrieval.invalid';config.SEARCH_NAMESPACE='fixture_photos';
+ const fetcher=vi.fn(async(url:URL)=>new Response(JSON.stringify({result:url.pathname.endsWith('/exists')?{exists:true}:{}})));vi.stubGlobal('fetch',fetcher);
+ await replaceRetrievalSource('log','entry',[{id:'photo',sourceKey:'entry',kind:'log',ownerId:'owner',viewerIds:['owner'],sourceHash:'hash',sourceRevision:'1',indexVersion:'log-photos',text:'',vector:Array(DIMENSIONS).fill(1),createdAt:'2026-09-27T00:00:00Z'}]);
+ const write=(fetcher.mock.calls as unknown as [URL,RequestInit][]).find(([url])=>url.pathname.endsWith('/points/batch'))!;
+ const point=JSON.parse(String(write[1].body)).operations[1].upsert.points[0];
+ expect(point.vector).toHaveProperty('dense');expect(point.vector).not.toHaveProperty('lexical');expect(point.payload).not.toHaveProperty('text');
+});
 it('carries dataset, author, visibility and collection constraints into indexed retrieval',()=>{
  const filter=publicRetrievalFilter({query:'walks',datasets:['threads'],mode:'hybrid',limit:20,authorId:'friend'},'me',['blocked'],{authorIds:new Set(['friend'])},['posts:excluded']);
  expect(filter.must).toContainEqual({key:'dataset',match:{any:['posts','replies']}});expect(filter.must).toContainEqual({key:'ownerId',match:{any:['friend']}});expect(filter.must).toContainEqual({key:'ownerId',match:{value:'friend'}});expect(filter.must_not).toContainEqual({key:'ownerId',match:{any:['blocked']}});expect(filter.must_not).toContainEqual({key:'id',match:{any:['posts:excluded']}});

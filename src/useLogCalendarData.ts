@@ -18,7 +18,7 @@ export function useLogCalendarData(anchor:Temporal.PlainDate,today:string,filter
    if(requests.current.size>=2)break;
    if(requests.current.has(index)||cache.current.has(index)&&!dirty.current.has(index))continue;
    const controller=new AbortController();requests.current.set(index,controller);started=true;dirty.current.delete(index);
-   void operation<LogCalendarPage>('log.calendar',{...filters,...range(index),today},{signal:controller.signal}).then(page=>{
+   void operation<LogCalendarPage>('log.calendar',{...filters,...range(index),today},{signal:controller.signal,dedupe:true}).then(page=>{
     if(controller.signal.aborted||!alive.current)return;
     cache.current.delete(index);cache.current.set(index,page);
     while(cache.current.size>CALENDAR_CACHE_CHUNKS){const old=[...cache.current.keys()].find(key=>!targets.current.includes(key));if(old===undefined)break;cache.current.delete(old);dirty.current.delete(old);}

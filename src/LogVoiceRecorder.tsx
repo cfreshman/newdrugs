@@ -4,7 +4,7 @@ import {usePanelVisible} from './PanelReadiness';
 import {errorText} from './api';
 
 // Logcal's short voice note: a filling arrow, tap to finish, then play/remove.
-export function LogVoiceRecorder({add,error,disabled,change}:{add(file:File):Promise<void>;error(message:string):void;disabled:boolean;change(recording:boolean):void}){
+export function LogVoiceRecorder({add,error,disabled,change,uploadHint=true}:{add(file:File):Promise<void>;error(message:string):void;disabled:boolean;change(recording:boolean):void;uploadHint?:boolean}){
  const visible=usePanelVisible(),alive=useRef(true),visibleRef=useRef(visible),locked=useRef(false);
  visibleRef.current=visible;
  const [phase,setPhase]=useState<'idle'|'starting'|'recording'|'processing'>('idle');
@@ -23,7 +23,7 @@ export function LogVoiceRecorder({add,error,disabled,change}:{add(file:File):Pro
  const start=async()=>{
   if(locked.current||disabled)return;locked.current=true;setPhase('starting');
   try{
-   if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')throw Error('Recording is unavailable in this browser. You can attach an audio file.');
+   if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined')throw Error(uploadHint?'Recording is unavailable in this browser. You can attach an audio file.':'Recording is unavailable in this browser.');
    stream.current=await navigator.mediaDevices.getUserMedia({audio:true});
    if(!alive.current||!visibleRef.current){release();locked.current=false;if(alive.current)setPhase('idle');return;}
    discard.current=false;

@@ -17,6 +17,7 @@ it('keeps Log blank until the saved Grid or List arrangement is known',async()=>
  await act(async()=>resolvePreferences({arrangement:'list',todayPresentation:'full',views:[]}));
  expect(dom.container.querySelector('.log-list')).not.toBeNull();
  expect(dom.container.querySelector('.log-retained-calendar:not([hidden])')).toBeNull();
+ expect(api.operation.mock.calls.some(([name])=>name==='log.calendar'||name==='log.birthdays'||name==='log.birthday_get')).toBe(false);
 });
 it('opens Today cards into full Log chronology instead of a Today-only sequence',async()=>{
  const date=Temporal.Now.plainDateISO().toString(),entry={id:'today',ownerId:'me',date,title:'Today',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,createdAt:`${date}T12:00:00Z`,updatedAt:`${date}T12:00:00Z`,cover:null,membership:'member',contributors:[],invitations:[]};
@@ -50,7 +51,7 @@ it('reshapes loaded calendar tiles immediately, retaining the calendar and avoid
  const click=async(label:string)=>act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('[aria-label="Log view"] button')].find(button=>button.textContent===label)!.click());
  await click('Grid');expect(dom.container.querySelector('.log-gallery')?.textContent).toContain('A day together');expect(dom.container.querySelector('[aria-label="Loading entries"]')).toBeNull();expect(dom.container.querySelector('.log-calendar-history')).toBe(calendar);
  await click('List');expect(dom.container.querySelector('.log-list')?.textContent).toContain('A day together');expect(api.operation.mock.calls.filter(call=>call[0]==='log.list'&&!call[1].from)).toHaveLength(1);
- const requests=api.operation.mock.calls.filter(call=>call[0]==='log.calendar').length;await click('Calendar');expect(dom.container.querySelector('.log-calendar-history')).toBe(calendar);expect(dom.container.querySelector('.log-day')).toBe(firstDay);expect(scroller.scrollTop).toBe(40000);expect(api.operation.mock.calls.filter(call=>call[0]==='log.calendar')).toHaveLength(requests);
+ const requests=api.operation.mock.calls.filter(call=>call[0]==='log.calendar').length;await click('Mosaic');expect(dom.container.querySelector('.log-calendar-history')).toBe(calendar);expect(dom.container.querySelector('.log-day')).toBe(firstDay);expect(scroller.scrollTop).toBe(40000);expect(api.operation.mock.calls.filter(call=>call[0]==='log.calendar')).toHaveLength(requests);
  await act(async()=>finish({items:[],nextCursor:null}));
 });
 

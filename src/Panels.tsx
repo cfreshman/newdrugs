@@ -6,6 +6,7 @@ import type { PaymentQuote } from '../shared/paymentQuote';
 import { ProfileEditor } from './ProfileEditor';
 import { agentSetup,agentDeviceSetup } from '../shared/agentSetup';
 import {NavLink} from './NavLink';
+import type {PublicKeyCredentialRequestOptionsJSON} from '@simplewebauthn/browser';
 
 export function Credits({ data, onAccount, onConnect }: { data: Bootstrap; onAccount(): void; onConnect(): void }) {
   const [amount, setAmount] = useState(500);
@@ -57,6 +58,18 @@ export function Account({ data, refresh, close, saved: onSaved, initialMode = 'r
     }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
+  const passkeySignIn=async()=>{
+    setError('');setBusy(true);
+    try{
+      const options=await post<PublicKeyCredentialRequestOptionsJSON>('/account/passkeys/login/options');
+      const {startAuthentication}=await import('@simplewebauthn/browser');
+      const response=await startAuthentication({optionsJSON:options});
+      await post('/account/passkeys/login/complete',{response});
+      await refresh();
+      if(onboarding)onSaved();else close();
+    }catch(e){setError(errorText(e));}finally{setBusy(false);}
+  };
+  const passkeysSupported=typeof window!=='undefined'&&window.isSecureContext&&'PublicKeyCredential' in window;
   return <>
     {!data.user.handle ? <>
       <p>{mode === 'register' ? 'Create an account to meet people, post, message, and use your agent.' : 'Sign in to your account.'}</p>
@@ -66,7 +79,7 @@ export function Account({ data, refresh, close, saved: onSaved, initialMode = 'r
         {mode === 'register' && <p className="quiet small">Save this in your password manager. Password recovery isn’t available yet.</p>}
         <button className="solid" disabled={busy}>{busy ? 'Saving…' : mode === 'register' ? 'Create account' : 'Sign in'}</button>
       </form>
-      <button className="text-link switch-account" onClick={() => { setError(''); const next = mode === 'register' ? 'login' : 'register'; setMode(next); onModeChange?.(next); }}>{mode === 'register' ? 'Already here? Sign in' : 'Make an account'}</button>
+      <div className="account-alternatives">{mode==='login'&&passkeysSupported&&<button type="button" className="text-link" disabled={busy} onClick={()=>void passkeySignIn()}>Sign in with passkey</button>}<button type="button" className="text-link" disabled={busy} onClick={() => { setError(''); const next = mode === 'register' ? 'login' : 'register'; setMode(next); onModeChange?.(next); }}>{mode === 'register' ? 'Already here? Sign in' : 'Make an account'}</button></div>
     </> : <>
       <ProfileEditor key={data.user.id} person={data.user} saved={async () => { await refresh(); onSaved(); }} />
       {onboarding && <button className="text-link profile-later" onClick={onSaved}>Set up my profile later</button>}

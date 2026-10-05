@@ -18,6 +18,10 @@ export async function croppedPhoto(image:HTMLImageElement,crop:SquareCrop,origin
  const context=canvas.getContext('2d');if(!context)throw Error('Photo editing is unavailable in this browser.');
  context.imageSmoothingEnabled=true;context.imageSmoothingQuality='high';
  context.drawImage(image,crop.x,crop.y,crop.size,crop.size,0,0,size,size);
- const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(Error('Could not prepare this photo. Try again.')),'image/webp',.9));
- return new File([blob],`${originalName.replace(/\.[^.]+$/,'')||'Photo'}.${blob.type==='image/webp'?'webp':'png'}`,{type:blob.type});
+ const appleMobile=/iPhone|iPad|iPod/.test(navigator.userAgent)||navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
+ const encode=(type:'image/webp'|'image/jpeg',quality:number)=>new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(Error('Could not prepare this photo. Try again.')),type,quality));
+ let blob=await encode(appleMobile?'image/jpeg':'image/webp',appleMobile?.85:.9);
+ if(blob.type!=='image/webp'&&blob.type!=='image/jpeg')blob=await encode('image/jpeg',.85);
+ if(blob.type!=='image/webp'&&blob.type!=='image/jpeg')throw Error('This browser could not prepare a compact photo. Try another browser.');
+ return new File([blob],`${originalName.replace(/\.[^.]+$/,'')||'Photo'}.${blob.type==='image/webp'?'webp':'jpg'}`,{type:blob.type});
 }

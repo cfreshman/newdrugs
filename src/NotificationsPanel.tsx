@@ -1,3 +1,4 @@
+import {avatarImageUrl} from './logImageCache';
 import { PushSettings } from './PushSettings';
 import {useEffect,useRef,useState} from 'react';
 import type { NotificationState } from '../shared/notifications';
@@ -14,7 +15,7 @@ export function NotificationsPanel({ state, navigate, userId }: { state?: Notifi
     if(!plainLinkClick(event))return;event.preventDefault();
     const destination = parseDestination(item.link.url, location.origin);
     if (destination) { navigate(destination); if (!item.read) void operation('notifications.read', { notificationId: item.id }).catch(error => console.error('Notification read:', error)); }
-  }}>{item.photoId?<span className="notification-person"><img src={`/api/files/${encodeURIComponent(item.photoId)}`} alt=""/><strong>{item.title}</strong></span>:<strong>{item.title}</strong>}{item.text && <span>{item.text}</span>}<small className="notification-meta"><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time><span>{item.read ? 'Read' : 'Unread'}</span></small></a>)}</div>
+  }}>{item.photoId?<span className="notification-person"><img src={avatarImageUrl(item.photoId)} alt=""/><strong>{item.title}</strong></span>:<strong>{item.title}</strong>}{item.text && <span>{item.text}</span>}<small className="notification-meta"><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time><span>{item.read ? 'Read' : 'Unread'}</span></small></a>)}</div>
     {!items.length&&!cursor && <p className="quiet">No notifications yet.</p>}
     {cursor&&<button className="more-messages" disabled={busy} onClick={()=>void more()}>{busy?'Loading...':'More notifications'}</button>}
   </>;

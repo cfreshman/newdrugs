@@ -1,0 +1,113 @@
+{
+  "source": "Google Fonts CSS2",
+  "assets": [
+    {
+      "file": "noto-sans-normal-latin-ext.woff2",
+      "source": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5aDdu3mhPy1Fig.woff2",
+      "bytes": 168144,
+      "sha256": "be4f6d04a074f3887553c9b1c09e563470f3fe975456a13fc5bf7e20b5612976"
+    },
+    {
+      "file": "noto-sans-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7du3mhPy0.woff2",
+      "bytes": 35856,
+      "sha256": "afc7a910f4ff04ee2ff7b3a2ef8b24f8340b8ea8d8125f2779f1f0b69d1b56b9"
+    },
+    {
+      "file": "noto-sans-mono-normal-latin-ext.woff2",
+      "source": "https://fonts.gstatic.com/s/notosansmono/v37/BngcUXNETWXI6LwhGYvaxZikqZqK6fBq6kPvUce2oAZ2dPCj_9SrdWM_.woff2",
+      "bytes": 158936,
+      "sha256": "4f894ee27e92cfb08693e053ab4d272af9bab7d26d47e6ce1f529e78f1e91e8e"
+    },
+    {
+      "file": "noto-sans-mono-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/notosansmono/v37/BngcUXNETWXI6LwhGYvaxZikqZqK6fBq6kPvUce2oAZ2evCj_9SrdQ.woff2",
+      "bytes": 32072,
+      "sha256": "82b5f644afea857da6400c45aff99ddc65f801569aacc6bb20a9a1a894b4a65d"
+    },
+    {
+      "file": "noto-serif-italic-latin-ext.woff2",
+      "source": "https://fonts.gstatic.com/s/notoserif/v33/ga6saw1J5X9T9RW6j9bNfFIMZhhWnFTyNZIQD1-_FXP0RgnaOg9MYBNLg_cGrqvgyjUjHaCQUw.woff2",
+      "bytes": 66776,
+      "sha256": "b22817e582290c28665b866de21f1aba7e23c4c4d4c3ba14c3c8637af4adfa39"
+    },
+    {
+      "file": "noto-serif-italic-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/notoserif/v33/ga6saw1J5X9T9RW6j9bNfFIMZhhWnFTyNZIQD1-_FXP0RgnaOg9MYBNLg_cIrqvgyjUjHaA.woff2",
+      "bytes": 15684,
+      "sha256": "c56c4604b4b81a1506b3bda18c440dfd4aec0d121a1b5b078c44345c072738a6"
+    },
+    {
+      "file": "noto-serif-normal-latin-ext.woff2",
+      "source": "https://fonts.gstatic.com/s/notoserif/v33/ga6daw1J5X9T9RW6j9bNVls-hfgvz8JcMofYTYf0D33WsNFHuQk.woff2",
+      "bytes": 186628,
+      "sha256": "ffa443a880b36a1a1c223e23b139dba6a35ffa9c3512bfcdaf92b81ae3f5c002"
+    },
+    {
+      "file": "noto-serif-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/notoserif/v33/ga6daw1J5X9T9RW6j9bNVls-hfgvz8JcMofYTYf6D33WsNFH.woff2",
+      "bytes": 36696,
+      "sha256": "9f36107f7918309d0ffcc7d12ba636a247af36ba337f91f836173dab66a3b27e"
+    },
+    {
+      "file": "anton-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/anton/v27/1Ptgg87LROyAm3Kz-C8CSKlv.woff2",
+      "bytes": 12004,
+      "sha256": "23aab0b2692a0c89eb7997d3c7cf5bda41276d6cd4ab6cc0edc3edfcece32b09"
+    },
+    {
+      "file": "bebas-neue-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXoo9WlhyyTh89Y.woff2",
+      "bytes": 8596,
+      "sha256": "441b026df205d28954f61b6989c7bbd228c0adff42f746a266c6a5d89134bc34"
+    },
+    {
+      "file": "bungee-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/bungee/v17/N0bU2SZBIuF2PU_0DXR1C9zfmQ.woff2",
+      "bytes": 14296,
+      "sha256": "12967d744bb0811af26a8bed1f6734238ba9bbca6e2e70dfdc677fcffa882905"
+    },
+    {
+      "file": "caveat-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/caveat/v23/WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9eIWpYT5Kmgq3sw.woff2",
+      "bytes": 48864,
+      "sha256": "7bd727afb3d294b5be1f3df1e47f875144e35d2ec9ba8f4c2484b885722dadb9"
+    },
+    {
+      "file": "fredoka-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/fredoka/v17/X7nP4b87HvSqjb_WIi2yDCRwoQ_k7367_B-i2yQag0-mac3O8SL8EemKttxNbikt.woff2",
+      "bytes": 16140,
+      "sha256": "110ced7187e7f7dc6e73668f3271716ec1802e5ac77cd1fae5b074fc9d8007f9"
+    },
+    {
+      "file": "orbitron-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/orbitron/v35/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1nyGy6BoWgzfDAlp7lk.woff2",
+      "bytes": 6408,
+      "sha256": "67fe7ba5a64ba2463f080e38c054d6a6c02b41518ba700c29cd32ed766d2e658"
+    },
+    {
+      "file": "pacifico-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/pacifico/v23/FwZY7-Qmy14u9lezJ-6H6MmBp0u-.woff2",
+      "bytes": 22296,
+      "sha256": "1a47a54e53bbfd3cfb4673636eac5edc98a7ecbf36c41340f48086a4f4796b18"
+    },
+    {
+      "file": "permanent-marker-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/permanentmarker/v16/Fh4uPib9Iyv2ucM6pGQMWimMp004La2Cf5b6jlg.woff2",
+      "bytes": 29296,
+      "sha256": "37202f2915830dbf5ca57d32ee0a2a9e8dc876e92720214ddef1e0c4bfe8bb98"
+    },
+    {
+      "file": "press-start-2p-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK3nVivNm4I81.woff2",
+      "bytes": 4704,
+      "sha256": "42144b97bd2942ea606e5d880684eae0f7be5c804bdd57b1faac5a8d7699ae6e"
+    },
+    {
+      "file": "quicksand-normal-latin.woff2",
+      "source": "https://fonts.gstatic.com/s/quicksand/v37/6xK-dSZaM9iE8KbpRA_LJ3z8mH9BOJvgkP8o58a-wjwxUD2GFw.woff2",
+      "bytes": 15852,
+      "sha256": "efe3312147466e8433b9f538bc90fee49f3610559b2b2e71a525b294d7162604"
+    }
+  ]
+}

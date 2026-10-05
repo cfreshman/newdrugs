@@ -20,9 +20,10 @@ export function publicUrl(value: string) {
 }
 
 /** DNS is validated at every redirect and pinned to the actual socket lookup. */
-export async function fetchPublic(value: string, kind: 'page' | 'image' | 'preview' | 'video_poster' | 'manifest' | 'text' | 'site_source', signal: AbortSignal, redirects = 0): Promise<{ bytes: Buffer; url: string; mime: string }> {
+export async function fetchPublic(value: string, kind: 'page' | 'image' | 'preview' | 'video_poster' | 'manifest' | 'text' | 'site_source', signal: AbortSignal, redirects = 0, requireHttps = false): Promise<{ bytes: Buffer; url: string; mime: string }> {
   if (redirects > 3) throw new Error('Too many redirects.');
   const url = publicUrl(value), hostname = url.hostname.replace(/^\[|\]$/g, '');
+  if(requireHttps&&url.protocol!=='https:')throw new Error('HTTPS is required.');
   const answers = await Promise.race([lookup(hostname, { all: true }), new Promise<never>((_, reject) => {
     if (signal.aborted) { reject(signal.reason); return; }
     signal.addEventListener('abort', () => reject(signal.reason), { once: true });
@@ -40,7 +41,7 @@ export async function fetchPublic(value: string, kind: 'page' | 'image' | 'previ
       const status = response.statusCode || 0;
       if ([301, 302, 303, 307, 308].includes(status) && response.headers.location) {
         response.destroy();
-        try { resolve(fetchPublic(new URL(response.headers.location, url).href, kind, signal, redirects + 1)); } catch (error) { reject(error); }
+        try { resolve(fetchPublic(new URL(response.headers.location, url).href, kind, signal, redirects + 1,requireHttps)); } catch (error) { reject(error); }
         return;
       }
       const mime = (response.headers['content-type'] || '').split(';')[0].trim().toLowerCase();

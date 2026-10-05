@@ -15,12 +15,14 @@ import {listAdminUsers} from './adminUsers';
 import {mountAdminFrontend} from './adminFrontend';
 import {EMBED_ORIGINS} from '../shared/postLinks';
 import { recordReferenceSchema } from '../shared/recordContext';
+import type {LiveTopic} from '../shared/liveState';
 import { revokeAutomationCredential } from './automations';
 import { clearAgentChat, changeUsername, changeAccountPassword, verifyAccountPassword } from './account';
+import {beginPasskeyLogin,beginPasskeyRegistration,completePasskeyLogin,completePasskeyRegistration,listPasskeys,removePasskey} from './passkeys';
 import { operationAvailable } from './backgroundAuthority';
 import { adminCliRouter } from './adminCli';
 import { pushConfigured, pushDevices, saveSubscription, revokePush, subscriptionSchema } from './push';
-import express, { type ErrorRequestHandler } from 'express';
+import express, { type ErrorRequestHandler,type Request } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { z, ZodError } from 'zod';
@@ -28,6 +30,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { config } from './config';
 import { registerAccount, authenticate, browserActor, checkPassword, createGuest, csrf, currentUser, hash, logout, newSession, passwordHash, profile, requireActor, users } from './auth';
+import type {AuthenticationResponseJSON,RegistrationResponseJSON} from '@simplewebauthn/server';
 import { AppError, requireValue } from './errors';
 import { rows, db, transaction } from './db';
 import { wallet, reserveRun, runs } from './wallet';
@@ -58,6 +61,8 @@ import {reservedWebsiteUsername} from '../shared/website';
 import {MAX_SQUARE_BYTES} from '../src/squareModel';
 
 const credentials = z.strictObject({ handle: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, 'Use 3–24 lowercase letters, numbers, or underscores.'), password: z.string().min(8, 'Use at least 8 characters.').max(128) });
+const passkeyProof=z.object({id:z.string().min(1).max(1024).regex(/^[A-Za-z0-9_-]+$/)}).passthrough();
+const passkeySessionId=(req:Request)=>{const token=req.cookies?.[config.SESSION_COOKIE];if(typeof token!=='string'||!token)throw new AppError(401,'session','Sign in again to continue.');return hash(token);};
 const availableHandle=credentials.shape.handle.refine(handle=>!reservedWebsiteUsername(handle),'Usernames cannot begin with u_.');
 const registrationCredentials=credentials.extend({handle:availableHandle});
 const makeRequestBytes=MAX_SQUARE_BYTES+1024*1024;
@@ -69,7 +74,7 @@ export function createApp() {
   if (config.production) app.set('trust proxy', 'loopback');
   app.use(websiteRequest);
   app.use(helmet({ contentSecurityPolicy: config.production ? {
-    directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+    directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], fontSrc: ["'self'"],
       connectSrc: ["'self'"], workerSrc:["'self'",'blob:'], frameSrc:EMBED_ORIGINS, imgSrc: ["'self'", 'data:','blob:','https:'], mediaSrc:["'self'",'https:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
   } : false, crossOriginEmbedderPolicy: false }));
   app.get('/api/health', async (_req, res) => { await db().command({ ping: 1 }); res.json({ ok: true }); });
@@ -139,12 +144,12 @@ export function createApp() {
     const image=await uploadVideoPoster({userId:file.userId,source:'external',scope:'read'},file._id);
     res.set({'Content-Type':'image/webp','X-Content-Type-Options':'nosniff'}).send(image);
   });
-  const ordinaryJson=express.json({limit:'32kb'}),websiteJson=express.json({limit:'2200kb'}),makeJson=express.json({limit:makeRequestBytes}),websiteSourceLimit=limiter('/api/website/source',30);
+  const ordinaryJson=express.json({limit:'32kb'}),passkeyJson=express.json({limit:'64kb'}),websiteJson=express.json({limit:'2200kb'}),makeJson=express.json({limit:makeRequestBytes}),websiteSourceLimit=limiter('/api/website/source',30);
   const requestLimits=apiRequestLimits();
   app.use('/api', devApiGate, cookieParser(), csrf, (req,res,next)=>authenticate(req,res,authError=>{
     if(authError)delete req.actor;
     requestLimits(req,res,limitError=>next(limitError||authError));
-  }), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):/^\/operations\/make\.(?:create|edit)$/.test(req.path)?makeJson(req,res,next):ordinaryJson(req,res,next));
+  }), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):/^\/operations\/make\.(?:create|edit)$/.test(req.path)?makeJson(req,res,next):/^\/account\/passkeys\/(?:register|login)\/complete$/.test(req.path)?passkeyJson(req,res,next):ordinaryJson(req,res,next));
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
   app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
     if (!req.actor) {
@@ -156,7 +161,8 @@ export function createApp() {
   });
   app.get('/api/bootstrap', async (req, res) => {
     const actor = requireActor(req);
-    res.json({ ...await readLiveState(actor.userId),
+    const topics:LiveTopic[]=['preferences','user','wallet','run','notifications',...(req.query.chat==='1'?['messages' as const]:[])];
+    res.json({ ...await readLiveState(actor.userId,topics),
       config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
   });
   app.get('/api/calls/incoming',async(req,res)=>{res.json({call:await incomingCall(browserActor(req).userId)});});
@@ -234,6 +240,27 @@ export function createApp() {
     const actor = browserActor(req), data = z.strictObject({ password: credentials.shape.password, currentPassword: z.string().min(1).max(128) }).parse(req.body);
     const user = await verifyAccountPassword(actor.userId, data.currentPassword); await changeAccountPassword(user, data.password, req.cookies[config.SESSION_COOKIE]); res.json({ ok: true });
   });
+  app.get('/api/account/passkeys',async(req,res)=>{res.json(await listPasskeys(browserActor(req).userId));});
+  app.post('/api/account/passkeys/register/options',limiter('/api/account/passkey/register',10,15*60000,{credentialAttempts:true}),async(req,res)=>{
+    const actor=browserActor(req),data=z.strictObject({currentPassword:z.string().min(1).max(128)}).parse(req.body);
+    res.json(await beginPasskeyRegistration(actor.userId,passkeySessionId(req),data.currentPassword));
+  });
+  app.post('/api/account/passkeys/register/complete',limiter('/api/account/passkey/register-complete',15,15*60000,{credentialAttempts:true}),async(req,res)=>{
+    const actor=browserActor(req),data=z.strictObject({response:passkeyProof}).parse(req.body);
+    res.json(await completePasskeyRegistration(actor.userId,passkeySessionId(req),data.response as unknown as RegistrationResponseJSON));
+  });
+  app.post('/api/account/passkeys/login/options',limiter('/api/account/passkey/login-options',30,15*60000),async(req,res)=>{
+    browserActor(req);res.json(await beginPasskeyLogin(passkeySessionId(req)));
+  });
+  app.post('/api/account/passkeys/login/complete',limiter('/api/account/passkey/login-complete',15,15*60000,{credentialAttempts:true}),async(req,res)=>{
+    browserActor(req);const data=z.strictObject({response:passkeyProof}).parse(req.body);
+    const user=await completePasskeyLogin(passkeySessionId(req),data.response as unknown as AuthenticationResponseJSON);
+    await newSession(res,user._id,req);await ensureIntroduction(user._id);res.json({user:profile(user)});
+  });
+  app.post('/api/account/passkeys/remove',limiter('/api/account/passkey/remove',10,15*60000,{credentialAttempts:true}),async(req,res)=>{
+    const actor=browserActor(req),data=z.strictObject({id:z.string().min(1).max(1024).regex(/^[A-Za-z0-9_-]+$/),currentPassword:z.string().min(1).max(128)}).parse(req.body);
+    res.json(await removePasskey(actor.userId,data.id,data.currentPassword));
+  });
   app.post('/api/account/clear-chat', limiter('/api/account/clear-chat', 5, 15 * 60000), async (req, res) => {
     const actor = browserActor(req); z.strictObject({ confirmed: z.literal(true) }).parse(req.body); await clearAgentChat(actor.userId); res.json({ ok: true });
   });
@@ -309,9 +336,10 @@ export function createApp() {
   }
   if (config.production && config.APP_ENV === 'production') {
     mountAdminFrontend(app);
-    app.use(express.static(resolve('dist/web'), { index: false, setHeaders: (res, path) => { if (path.endsWith('/sw.js')) res.setHeader('Cache-Control', 'no-cache'); } }));
+    app.use('/assets',express.static(resolve('dist/web/assets'),{index:false,maxAge:'1y',immutable:true}));
+    app.use(express.static(resolve('dist/web'), { index: false, setHeaders: (res, path) => { if (path.endsWith('/sw.js')||path.endsWith('/index.html')) res.setHeader('Cache-Control', 'no-cache'); } }));
     const template=readFile(resolve('dist/web/index.html'),'utf8');
-    app.get('/{*path}', async (req, res) => { const metadata=await pagePreview(req.originalUrl);res.set('Cache-Control','no-store');if(metadata.private)res.set('X-Robots-Tag','noindex, nofollow');res.type('html').send(renderPagePreview(await template,metadata,config.uiOrigin)); });
+    app.get('/{*path}', async (req, res) => { const metadata=await pagePreview(req.originalUrl);res.set('Cache-Control',metadata.private?'no-store':'no-cache');if(metadata.private)res.set('X-Robots-Tag','noindex, nofollow');res.type('html').send(renderPagePreview(await template,metadata,config.uiOrigin)); });
   }
   if (config.APP_ENV === 'staging') app.use((_req, res) => { res.status(404).set('Cache-Control', 'no-store').end(); });
   const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {

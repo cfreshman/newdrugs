@@ -76,7 +76,7 @@ export async function automationOperation(name: string, data: Record<string, unk
   if (name === 'automations.update') {
     const input = automationConfigSchema.parse(data.configuration); nextAutomationTime(input.schedule);
     if (input.dailyBudgetNanos < input.maxRunNanos) throw new AppError(422, 'budget', 'Daily allowance must cover one run.');
-    Object.assign(row, input); row.status = 'paused';
+    Object.assign(row, input);
   } else row.status = name === 'automations.enable' ? 'active' : name === 'automations.delete' ? 'deleted' : 'paused';
   row.revision++; row.generation++; delete row.blockedReason; delete row.blockedCode; delete row.retryAt;
   row.nextRunAt = row.status === 'active' ? nextAutomationTime(row.schedule) : null;

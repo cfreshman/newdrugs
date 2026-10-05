@@ -18,6 +18,7 @@ export function startLogImageCache(){
 export function bindLogImageCache(id:string|null){account=id;void post({type:'log-images:account',account});}
 export async function clearLogImageCache(){account=null;await post({type:'log-images:clear'},true);}
 export function logImageUrl(url:string){if(!url.startsWith('/api/files/'))return url;const parsed=new URL(url,location.origin);parsed.searchParams.set('log-image','1');return parsed.pathname+parsed.search;}
+export function avatarImageUrl(fileId:string){return `/api/files/${encodeURIComponent(fileId)}?avatar=1`;}
 export function updateLogImageCache(name:string,input:unknown,result:unknown){
  const request=input as {fileId?:string;entryId?:string},data=result as any;
  if(['files.delete','files.discard'].includes(name))void post({type:'log-images:invalidate',fileId:request.fileId});

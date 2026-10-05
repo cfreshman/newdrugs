@@ -10,7 +10,7 @@ export async function syncSourceAttachments(kind:AttachmentKind,sourceId:string,
  const source=await rows(sources[kind]).findOne({_id:sourceId},{session});
  let candidates:{ownerId:string;fileId:string}[]=[];
  if(source&&!source.deletedAt&&!source.moderatedAt){
-  if(kind==='profile')candidates=(source.photos as string[]||[]).map(fileId=>({ownerId:source._id,fileId}));
+  if(kind==='profile')candidates=[...(source.photos as string[]||[]),...(typeof source.voiceFileId==='string'?[source.voiceFileId]:[])].map(fileId=>({ownerId:source._id,fileId}));
   if(kind==='posts')candidates=(source.fileIds as string[]||[]).map(fileId=>({ownerId:String(source.userId),fileId}));
   if(kind==='chat')candidates=(source.files as {id:string}[]||[]).map(file=>({ownerId:String(source.userId),fileId:file.id}));
   if(kind==='hangouts')candidates=(source.contributions as {userId:string;fileIds:string[]}[]||[]).filter(person=>(source.members as string[]||[]).includes(person.userId)).flatMap(person=>person.fileIds.map(fileId=>({ownerId:person.userId,fileId})));

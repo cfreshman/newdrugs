@@ -14,7 +14,7 @@ it('shows mutual friends and their photos on the person card in every Explore sc
  await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
  const card=dom.container.querySelector('.person-result-main')!;
  expect(card.textContent).toContain('2 mutual friends: @one, @two');
- expect(card.querySelector<HTMLImageElement>('.person-mutual-avatars img')?.getAttribute('src')).toBe('/api/files/photo-one');
+ expect(card.querySelector<HTMLImageElement>('.person-mutual-avatars img')?.getAttribute('src')).toBe('/api/files/photo-one?avatar=1');
  expect(card.querySelectorAll('.person-mutual-avatars>span')).toHaveLength(2);
  expect([...dom.container.querySelectorAll('.view-tabs button')].map(button=>button.textContent)).toEqual(['Nearby','All people','Circle']);
 });
@@ -37,7 +37,10 @@ it('opens a human-written invitation note from the card and offers Hide for a no
  expect(actions.querySelector<HTMLButtonElement>('button.solid')?.classList.contains('solid')).toBe(true);
  await act(async()=>actions.querySelector<HTMLButtonElement>('button.solid')!.click());
  expect(dom.container.querySelector('.person-card-invite.fields textarea')).not.toBeNull();
+ expect(dom.container.querySelector('.person-card-actions')).toBeNull();
  expect(dom.container.querySelector('.person-card-invite>.solid')?.textContent).toBe('Send invitation');
+ await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.person-card-invite button')].find(button=>button.textContent==='Cancel')!.click());
+ expect(dom.container.querySelector('.person-card-actions')?.textContent).toContain('Add friend');
 });
 it('replaces a hidden card with Undo and retains it through a same-filter refresh',async()=>{
  let hidden=false;

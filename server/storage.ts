@@ -35,7 +35,7 @@ async function projectReferences(user:User,refs:AttachmentReference[],session?:C
  const projected=new Map<string,StorageAttachment>();
  for(const ref of refs){
   let destination:StorageAttachment['destination']|undefined,label='';
-  if(ref.kind==='profile'&&ref.sourceId===user._id&&user.photos?.includes(ref.fileId)){destination={view:'person',resourceId:user._id};label='Profile photo';}
+  if(ref.kind==='profile'&&ref.sourceId===user._id&&(user.photos?.includes(ref.fileId)||user.voiceFileId===ref.fileId)){destination={view:'person',resourceId:user._id};label=user.voiceFileId===ref.fileId?'Profile voice note':'Profile photo';}
   if(ref.kind==='posts'){const post=posts.find(row=>row._id===ref.sourceId&&(row.fileIds as string[]||[]).includes(ref.fileId));if(post){destination={view:'post',resourceId:post._id};label=`${post.parentId?'Reply':'Post'}${snippet(post.text)}`;}}
   if(ref.kind==='chat'){const message=messages.find(row=>row._id===ref.sourceId&&(row.files as {id:string}[]||[]).some(file=>file.id===ref.fileId));if(message){destination={view:'chat',resourceId:message._id};label=`Chat${snippet(message.text)}`;}}
   if(ref.kind==='hangouts'){const log=logs.find(row=>row._id===ref.sourceId&&row.contributions.some(person=>person.userId===user._id&&person.fileIds.includes(ref.fileId)));if(log){destination={view:'log',resourceId:log._id};label=log.title?`Hangout: ${log.title}`:`Hangout · ${log.date}`;}}
@@ -64,7 +64,7 @@ export async function listStorage(user:User,{type='all',attachedTo='all',before,
  const projected=await projectReferences(user,groups.flat(),session);
  const order={person:0,post:1,chat:2,log:3,website:4};
  const uploadItems=new Map<string,StoredFile>();
- filePage.forEach((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);if(attachedTo==='all'||refs.length>6||refs.some(ref=>ref.kind===attachedTo&&projected.has(ref._id)))uploadItems.set(file._id,{...ownedUploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)),inWebsite:refs.some(ref=>ref.kind==='websites'),...(file.posterBytes?{posterBytes:file.posterBytes}:{}),attachments,attachmentCursor:refs.length>6?refs[5]._id:null});});
+ filePage.forEach((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);if(attachedTo==='all'||refs.length>6||refs.some(ref=>ref.kind===attachedTo&&projected.has(ref._id)))uploadItems.set(file._id,{...ownedUploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)||user.voiceFileId===file._id),inWebsite:refs.some(ref=>ref.kind==='websites'),...(file.posterBytes?{posterBytes:file.posterBytes}:{}),attachments,attachmentCursor:refs.length>6?refs[5]._id:null});});
  const postIds=[...new Set(page.flatMap(item=>item.kind==='link'?[item.link.postId]:[]))];
  const activePosts=postIds.length?await rows('posts').find({_id:{$in:postIds},userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session,projection:{_id:1}}).toArray():[];
  const visiblePosts=new Set(activePosts.map(post=>post._id));

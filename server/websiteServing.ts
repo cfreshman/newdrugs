@@ -1,4 +1,5 @@
 import type {Request,Response,NextFunction} from 'express';
+import {createHash} from 'node:crypto';
 import {users} from './auth';
 import {config} from './config';
 import {websiteAssetPath,websitePath,websiteHostLabel,reservedWebsiteLabel} from '../shared/website';
@@ -47,6 +48,11 @@ async function sendSite(req:Request,res:Response,site:WebsiteDoc,preview:boolean
  res.set('Content-Security-Policy',`sandbox allow-scripts allow-forms allow-popups allow-downloads; default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; connect-src 'self' https:${preview&&config.APP_ENV!=='production'?' http://localhost:7330':''}`);
  if(asset){const upload=await uploads().findOne({_id:asset.fileId,userId:site._id,ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false}});if(!upload||!websiteMediaExtension(upload.mime)||!asset.path.endsWith(`.${websiteMediaExtension(upload.mime)}`))return res.status(404).end();res.set('Content-Disposition','inline');await sendMedia(upload,req,res);return;}
  res.set('Content-Type',mime(file!.path));const content=prefix?rewritePreview(file!.content,prefix,file!.path):file!.content;
+ if(!preview){
+  const etag=`"${site.published!.revision}-${createHash('sha256').update(content).digest('base64url')}"`;
+  res.set({'Cache-Control':'no-cache','ETag':etag});
+  if(req.headers['if-none-match']?.split(',').some(value=>value.trim()===etag))return res.status(304).end();
+ }
  return res.send(preview&&file!.path.endsWith('.html')?livePreview(content,site.revision,prefix):content);
 }
 function hostLabel(host:unknown){if(typeof host!=='string')return null;const match=/^([a-z0-9-]+)\.druggie\.org(?::443)?$/i.exec(host);return match?.[1].toLowerCase()||null;}

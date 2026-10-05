@@ -14,6 +14,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   if(name.startsWith('agent.memory.')){add({view:'agent_memory'},'Agent memory','surface','agent_memory');return links;}
   if(name==='access.get'){add({view:'agents'},'Connected agents','surface','agents');return links;}
   if(name==='account.preferences'||name==='account.preferences_update'){add({view:'preferences'},'Preferences','surface','preferences');return links;}
+  if(name.startsWith('ious.')){for(const row of name==='ious.list'?rows:[object(data.ledger||data)])if(row.person?.id)add({view:'ious',resourceId:row.person.id},`IOU with ${row.person.handle?`@${row.person.handle}`:row.person.name}`,'exact','iou',row.person.id);if(!links.length)add({view:'ious'},'IOUs','surface','ious');return links;}
   if(name==='log.birthday_get'||name==='log.birthday_update'){add({view:'log_settings'},'Log settings','surface','log_settings');return links;}
   if(name==='log.birthdays'){for(const item of data.items||[])add({view:'person',resourceId:item.personId},item.name,'exact','person',item.personId);return links;}
   if(name==='log.code'){add({view:'log_join',resourceId:data.code},'Join hangout','exact','log_join',data.entryId);return links;}

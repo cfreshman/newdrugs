@@ -1,3 +1,4 @@
+import {avatarImageUrl} from './logImageCache';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Eye, CameraPlus, PencilSimple, X } from '@phosphor-icons/react';
 import type { Profile } from '../shared/types';
@@ -5,12 +6,18 @@ import { operation, errorText } from './api';
 import { uploadFile } from './uploads';
 import { ProfileCard } from './ProfileCard';
 import { LocationPicker } from './LocationPicker';
+import {profileMediaUrl} from '../shared/profileMedia';
+import {LogVoiceRecorder} from './LogVoiceRecorder';
+import {AudioPlayer} from './AudioPlayer';
+import {usePanelVisible} from './PanelReadiness';
 
 export function ProfileEditor({ person: initial, saved }: { person: Profile; saved(): Promise<void> }) {
+  const visible=usePanelVisible();
   const [person, setPerson] = useState(initial), [interests, setInterests] = useState(initial.interests.join(', '));
-  const [preview, setPreview] = useState(false), [busy, setBusy] = useState(false), [uploading, setUploading] = useState(false), [error, setError] = useState('');
+  const [preview, setPreview] = useState(false), [busy, setBusy] = useState(false), [uploading, setUploading] = useState(false),[recording,setRecording]=useState(false), [error, setError] = useState('');
   const picker = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
+  const stagedVoice=useRef<string|null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   const photos = person.photos || [];
   const deletionKeys = useRef(new Map<string, string>());
@@ -32,6 +39,8 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
     } catch (e) { if (!control.signal.aborted) setError(errorText(e)); }
     finally { if (!control.signal.aborted) setUploading(false); }
   };
+  const addVoice=async(file:File)=>{setUploading(true);setError('');try{const uploaded=await uploadFile(file,'profile_voice');stagedVoice.current=uploaded.id;setPerson(current=>({...current,voiceFileId:uploaded.id}));}catch(cause){setError(errorText(cause));}finally{setUploading(false);}};
+  const removeVoice=()=>{const id=person.voiceFileId;if(id&&stagedVoice.current===id){stagedVoice.current=null;void operation('files.discard',{fileId:id}).catch(()=>{});}setPerson(current=>({...current,voiceFileId:undefined}));};
   const move = (index: number, direction: number) => {
     const next = [...photos]; [next[index], next[index + direction]] = [next[index + direction], next[index]];
     setPerson({ ...person, photos: next });
@@ -41,7 +50,7 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
     event.preventDefault(); setBusy(true); setError('');
     try {
       await operation<Profile>('profile.update', { name: person.name.trim(), bio: person.bio, interests: interestsList(),
-        locationCell: person.area?.cell || null, photos, discoverable: person.discoverable });
+        locationCell: person.area?.cell || null, photos, discoverable: person.discoverable,mediaUrl:person.mediaUrl?.trim()?profileMediaUrl(person.mediaUrl):null,voiceFileId:person.voiceFileId||null });
       await saved();
     } catch (e) { setError(errorText(e)); }
     finally { setBusy(false); }
@@ -51,7 +60,7 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
     {preview ? <><ProfileCard person={{ ...person, interests: interestsList() }} />{!person.discoverable && <p className="quiet small">Your profile is currently private. This is how it will look when you share it.</p>}</> : <form className="fields" onSubmit={save}>
       <fieldset className="profile-photos"><legend>Photos</legend>
         <div className="photo-editor-grid">{photos.map((id, index) => <div className="photo-editor-item" key={id}>
-          <img src={`/api/files/${encodeURIComponent(id)}`} alt={`Profile photo ${index + 1}`} />
+          <img src={avatarImageUrl(id)} alt={`Profile photo ${index + 1}`} />
           <button className="photo-remove" type="button" aria-label={`Delete photo ${index + 1}`} disabled={uploading || busy} onClick={() => void remove(id)}><X size={16} /></button>
           <div className="photo-order"><button type="button" disabled={index === 0 || uploading} aria-label={`Move photo ${index + 1} earlier`} onClick={() => move(index, -1)}><ArrowLeft size={16} /></button><span>{index === 0 ? 'Main' : index + 1}</span><button type="button" disabled={index === photos.length - 1 || uploading} aria-label={`Move photo ${index + 1} later`} onClick={() => move(index, 1)}><ArrowRight size={16} /></button></div>
         </div>)}</div>
@@ -63,9 +72,11 @@ export function ProfileEditor({ person: initial, saved }: { person: Profile; sav
       <LocationPicker value={person.area || null} onChange={area => setPerson(current => ({ ...current, area, city: area?.label || '' }))} />
       <label>About you<textarea value={person.bio} maxLength={500} rows={3} onChange={event => setPerson({ ...person, bio: event.target.value })} /></label>
       <label>Interests<input value={interests} placeholder="Separate with commas" onChange={event => setInterests(event.target.value)} /></label>
+      <section className="profile-voice-editor"><h3>Voice note</h3>{person.voiceFileId?<div className="log-voice-row"><AudioPlayer src={`/api/files/${encodeURIComponent(person.voiceFileId)}`} active={visible} voiceNote editor/><button type="button" disabled={busy||uploading} onClick={removeVoice}>Remove</button></div>:<LogVoiceRecorder add={addVoice} error={setError} disabled={busy||uploading} change={setRecording} uploadHint={false}/>}</section>
+      <label>Media link<input type="url" inputMode="url" placeholder="Spotify, Apple Music, SoundCloud, Bandcamp or YouTube" maxLength={2048} value={person.mediaUrl||''} onChange={event=>setPerson({...person,mediaUrl:event.target.value})}/></label>
       <label className="check-label"><input type="checkbox" checked={person.discoverable} onChange={event => setPerson({ ...person, discoverable: event.target.checked })} />Make my profile discoverable</label>
       <p className="quiet small">Turn this on to appear nearby. Public posts show your name and first photo.</p>
-      <button className="solid" disabled={busy || uploading}>{busy ? 'Saving…' : 'Save profile'}</button>
+      <button className="solid" disabled={busy || uploading||recording}>{busy ? 'Saving…' : 'Save profile'}</button>
     </form>}
     {error && <p className="error" role="alert">{error}</p>}
   </>;

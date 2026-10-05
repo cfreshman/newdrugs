@@ -23,7 +23,8 @@ export const uploadRef=(file:Upload):UploadRef=>({id:file._id,name:publicUploadN
 /** Only call after an owner-scoped lookup or owner-scoped upload creation. */
 export const ownedUploadRef=(file:Upload):UploadRef=>({...uploadRef(file),originalName:originalUploadName(file)});
 export async function prepareUpload(data:{name:string;bytes:number;sha256:string;purpose:UploadPurpose;requestId?:string},actor:Actor,session?:ClientSession,options:{allowWebsiteImport?:boolean}={}){
-  if(actor.source==='agent'&&!options.allowWebsiteImport||(data.purpose==='profile_photo'&&actor.source!=='browser'))throw new AppError(403,'human_authored','Choose profile photos yourself in the profile editor.');
+  if(actor.source==='agent'&&!options.allowWebsiteImport||(['profile_photo','profile_voice'].includes(data.purpose)&&actor.source!=='browser'))throw new AppError(403,'human_authored','Profile media is chosen by the person in the profile editor.');
+  if(data.purpose==='profile_voice'&&data.bytes>2*1024*1024)throw new AppError(422,'profile_voice','Keep the profile voice note short.');
   if(data.purpose==='log_media'&&!await users().findOne({_id:actor.userId,handle:{$type:'string'}},{session,projection:{_id:1}}))throw new AppError(403,'account_required','Save your account before uploading to Log.');
   if(data.purpose==='log_media'&&/\.(mp4|mov|webm)$/i.test(data.name))throw new AppError(422,'log_video_upload','Upload a photo or voice note. Add videos as links instead.');
   if(data.requestId)requireValue(await rows('runs').findOne({userId:actor.userId,status:'waiting_for_input','surface.id':data.requestId,'surface.view':'uploads','surface.completed':{$ne:true},cancelRequested:{$ne:true}},{session}),'This upload request is no longer active.');
@@ -40,18 +41,19 @@ async function acceptUploadBytes(actor:Actor,id:string,body:Buffer){
   if(actor.scope!=='write')throw new AppError(403,'scope','Uploading requires write access.');
   const file=await ownUpload(actor.userId,id);
   if(!file.retained&&file.expiresAt&&file.expiresAt.getTime()<Date.now())throw new AppError(422,'upload_expired','Select this file again; its upload expired.');
-  if(file.purpose==='profile_photo'&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile photos are chosen by the person in the app.');
+  if(['profile_photo','profile_voice'].includes(file.purpose)&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile media is chosen by the person in the app.');
   if(!Buffer.isBuffer(body)||body.length!==file.expectedBytes||body.length>MAX_UPLOAD_BYTES||digest(body)!==file.sourceHash)throw new AppError(422,'file_mismatch','The uploaded bytes do not match the selected file.');
   if(file.ready)return ownedUploadRef(file);
   let bytes=body,mime='application/octet-stream';
   const image=body[0]===0xff&&body[1]===0xd8||body.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))||body.toString('ascii',0,4)==='RIFF'&&body.toString('ascii',8,12)==='WEBP';
   if(image){
+    if(file.purpose==='profile_voice')throw new AppError(422,'profile_voice','Record an audio note for your profile.');
     const metadata=await sharp(body,{limitInputPixels:40_000_000}).metadata();
     if(metadata.pages&&metadata.pages>1)throw new AppError(422,'animated_image','Choose a still photo. Animated uploads are not supported yet.');
     bytes=await sharp(body,{limitInputPixels:40_000_000}).rotate().resize(512,512,{fit:'outside',withoutEnlargement:true}).webp({quality:80}).toBuffer();
     mime='image/webp';
   }else if(file.purpose==='profile_photo')throw new AppError(422,'image_required','Choose a JPEG, PNG or WebP photo.');
-  else if(file.purpose==='log_media'){
+  else if(file.purpose==='log_media'||file.purpose==='profile_voice'){
     const extension=file.name.toLowerCase().split('.').at(-1);
     if(body.toString('ascii',0,3)==='ID3'||body[0]===0xff&&(body[1]&0xe0)===0xe0)mime='audio/mpeg';
     else if(body.toString('ascii',0,4)==='RIFF'&&body.toString('ascii',8,12)==='WAVE')mime='audio/wav';
@@ -133,14 +135,14 @@ export async function retainPostPhotos(userId: string, ids: string[], session?: 
 export async function discardUpload(actor:Actor,id:string,session?:ClientSession){
   const userId=actor.userId;
   const file=await ownUpload(userId,id,session);
-  if(file.purpose==='profile_photo'&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile photos are chosen by the person in the app.');
+  if(['profile_photo','profile_voice'].includes(file.purpose)&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile media is chosen by the person in the app.');
   if(file.retained)throw new AppError(409,'file_in_use','This file is already attached.');
   await uploads().updateOne({_id:id,userId,retained:{$ne:true}},{$set:{expiresAt:new Date(Date.now()+30000)}},{session});
   return {discarded:true,id};
 }
 export async function deleteUpload(actor:Actor,id:string,session?:ClientSession){
   const file=await ownUpload(actor.userId,id,session);
-  if(file.purpose==='profile_photo'&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile photos are managed by the person in Settings.');
+  if(['profile_photo','profile_voice'].includes(file.purpose)&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile media is managed by the person in Settings.');
   const site=await rows<import('./websites').WebsiteDoc>('websites').findOne({_id:actor.userId,$or:[{'assets.fileId':id},{'published.assets.fileId':id}]},{session});
   if(site){const published=site.published?{...site.published,assets:(site.published.assets||[]).filter(asset=>asset.fileId!==id)}:null;
     const updated=await rows<import('./websites').WebsiteDoc>('websites').updateOne({_id:actor.userId,revision:site.revision},{$set:{assets:(site.assets||[]).filter(asset=>asset.fileId!==id),published,updatedAt:new Date().toISOString()},$inc:{revision:1}},{session});
@@ -148,7 +150,9 @@ export async function deleteUpload(actor:Actor,id:string,session?:ClientSession)
   await rows('attachmentReferences').deleteMany({ownerId:actor.userId,fileId:id},{session});
   await uploads().updateOne({_id:id,userId:actor.userId},{$set:{deletedAt:new Date().toISOString(),ready:false,retained:false,bytes:0,posterBytes:0,expiresAt:new Date()}},{session});
   await users().updateOne({_id:actor.userId},{$inc:{storageBytes:-file.bytes-(file.posterBytes||0)},$pull:{photos:id}},{session});
+  await users().updateOne({_id:actor.userId,voiceFileId:id},{$set:{voiceFileId:null}},{session});
   await rows('uploadPosters').deleteOne({_id:id},{session});
+  await (await import('./search/logPhotos')).forgetLogPhotoDescription(id,session);
   const affectedLogs=await rows('logEntries').find({'contributions.fileIds':id},{session,projection:{date:1,members:1,invited:1}}).toArray();
   // Remove public references in the same transaction, also emitting post refreshes.
   await rows<{ _id: string; fileIds: string[] }>('posts').updateMany({ userId: actor.userId, fileIds: id }, { $pull: { fileIds: id } }, { session });

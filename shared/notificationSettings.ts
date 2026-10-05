@@ -2,17 +2,17 @@ import {z} from 'zod';
 
 export const notificationType=z.enum([
  'invitation','connection_accepted','message','call','post_like','post_reply',
- 'log_added','log_update','review','agent_update','automation_status',
+ 'log_added','log_update','iou','review','agent_update','automation_status',
  'talk_first_live',
 ]);
 export type NotificationType=z.infer<typeof notificationType>;
 export const notificationPreference=z.object({type:notificationType,enabled:z.boolean()});
 export const notificationPreferences=z.object({items:z.array(notificationPreference)});
-export const existingNotificationTypes:NotificationType[]=['invitation','connection_accepted','message','call','post_like','post_reply','log_added','log_update','review','agent_update','automation_status'];
+export const existingNotificationTypes:NotificationType[]=['invitation','connection_accepted','message','call','post_like','post_reply','log_added','log_update','iou','review','agent_update','automation_status'];
 export const notificationTypeLabels:Record<NotificationType,string>={
  invitation:'Friend invitations',connection_accepted:'Accepted invitations',message:'Messages',call:'Video calls',
  post_like:'Likes on your posts',post_reply:'Replies to your posts',log_added:'Added to a hangout',
- log_update:'First contribution from another attendee',review:'Agent reviews',
+ log_update:'First contribution from another attendee',iou:'IOUs',review:'Agent reviews',
  agent_update:'Agent inbox',automation_status:'Automation status',talk_first_live:'First live Talk',
 };
 

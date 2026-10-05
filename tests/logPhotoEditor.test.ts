@@ -34,6 +34,17 @@ it('uploads only the approved square and returns to the same draft',async()=>{
  await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-crop-actions .solid')!.click());
  expect(draw).toHaveBeenCalledWith(expect.anything(),500,0,3000,3000,0,0,512,512);expect(mocks.upload).toHaveBeenCalledOnce();const uploaded=mocks.upload.mock.calls[0][0] as File;expect(uploaded.name).toBe('Camera.webp');expect(uploaded.type).toBe('image/webp');expect(uploaded).not.toBe(file);expect(dom.container.querySelector('[aria-label="Crop photo"]')).toBeNull();
 });
+it('encodes the cropped photo as JPEG first on iPhone',async()=>{
+ const phone=vi.spyOn(navigator,'userAgent','get').mockReturnValue('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15');
+ const encode=vi.spyOn(HTMLCanvasElement.prototype,'toBlob').mockImplementation((callback,type)=>callback(new Blob(['jpeg'],{type:type||'image/png'})));
+ try{const photo=await croppedPhoto({} as HTMLImageElement,{x:0,y:0,size:512},'Camera.heic');expect(encode).toHaveBeenCalledTimes(1);expect(encode).toHaveBeenCalledWith(expect.any(Function),'image/jpeg',.85);expect(photo.name).toBe('Camera.jpg');expect(photo.type).toBe('image/jpeg');}
+ finally{phone.mockRestore();}
+});
+it('retries as JPEG if a WebP request returns PNG',async()=>{
+ const encode=vi.spyOn(HTMLCanvasElement.prototype,'toBlob').mockImplementation((callback,type)=>callback(new Blob(['photo'],{type:type==='image/webp'?'image/png':'image/jpeg'})));
+ const photo=await croppedPhoto({} as HTMLImageElement,{x:0,y:0,size:512},'Camera.png');
+ expect(encode.mock.calls.map(call=>call[1])).toEqual(['image/webp','image/jpeg']);expect(photo.name).toBe('Camera.jpg');expect(photo.type).toBe('image/jpeg');
+});
 it('zooms and resets without letting Escape close the surrounding Log modal',async()=>{
  const cancel=vi.fn(),outer=vi.fn();await act(async()=>dom.root.render(createElement('div',{onKeyDown:outer},createElement(LogPhotoEditor,{file,cancel,save:vi.fn()}))));await loaded();
  const range=dom.container.querySelector<HTMLInputElement>('[aria-label="Photo zoom"]')!;await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(range,'2');range.dispatchEvent(new Event('input',{bubbles:true}));});expect(dom.container.querySelector('output')?.textContent).toBe('2.0×');

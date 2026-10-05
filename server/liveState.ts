@@ -14,7 +14,7 @@ import type {LiveChange,LiveTopic,RecordInvalidation} from '../shared/liveState'
 import {notificationState} from './notifications';
 import {acquireLiveLease,liveInstance,liveLeases,recordKeys,type LiveLease} from './liveSubscriptions';
 const topics:LiveTopic[]=['preferences','user','wallet','messages','run','notifications'];
-type Subscriber={userId:string;sessionId:string;lease:LiveLease;keys:Set<string>|null;state(value:LiveChange,requested:LiveTopic[]):void;records(change:RecordInvalidation):void;close(auth?:boolean):void};
+type Subscriber={userId:string;sessionId:string;lease:LiveLease;keys:Set<string>|null;topics:Set<LiveTopic>;state(value:LiveChange,requested:LiveTopic[]):void;records(change:RecordInvalidation):void;close(auth?:boolean):void};
 type Group={listeners:Set<Subscriber>;dirty:Set<LiveTopic>;timer?:ReturnType<typeof setTimeout>;pending?:Promise<void>};
 const projections=workGate(8,2048);
 const metrics={projectionReads:0,recordFrames:0,stateFrames:0};
@@ -22,7 +22,7 @@ export const liveStateMetrics=()=>({...metrics,connections:subscribers.size,acco
 const subscribers=new Set<Subscriber>(),groups=new Map<string,Group>(),sessions=new Map<string,Set<Subscriber>>(),leases=new Map<string,Subscriber>();
 let watcher:ChangeStream|undefined,starting:Promise<void>|undefined,leaseTimer:ReturnType<typeof setInterval>|undefined;
 function dirty(userId:string,keys:LiveTopic[]){
- const group=groups.get(userId);if(!group)return;keys.forEach(key=>group.dirty.add(key));
+ const group=groups.get(userId);if(!group)return;keys.forEach(key=>{if([...group.listeners].some(listener=>listener.topics.has(key)))group.dirty.add(key);});
  if(!group.dirty.size||group.timer||group.pending)return;
  group.timer=setTimeout(()=>{group.timer=undefined;void flush(userId,group);},20);
 }
@@ -107,6 +107,7 @@ export async function readLiveState(userId: string, requested: LiveTopic[] = top
     const result: LiveChange = {};
     if (requested.includes('preferences')) result.preferences={...defaultPreferences,...owner.preferences};
     if (requested.includes('user')) result.user = profile(owner);
+    if (requested.includes('user') || requested.includes('messages')) result.conversationGeneration=owner.chatGeneration||0;
     if (requested.includes('wallet')) result.wallet = await wallet(userId, session, owner);
     if (requested.includes('messages')) { const page = await conversationPage(userId, 60, undefined, session); result.messages = page.items; result.conversationCursor = page.nextCursor; result.conversationGeneration = owner.chatGeneration || 0; }
     if (requested.includes('notifications')) result.notifications = await notificationState(userId, session);
@@ -117,6 +118,7 @@ export async function readLiveState(userId: string, requested: LiveTopic[] = top
 
 export async function streamLiveState(req:Request,res:Response){
  const actor=browserActor(req),userId=actor.userId;
+ const requestedTopics=req.query.chat==='1'?topics:topics.filter(topic=>topic!=='messages');
  if(subscribers.size>=config.LIVE_MAX_CONNECTIONS)throw new AppError(429,'live_limit','Live connections are busy. Reconnecting shortly.');
  const sessionId=hash(req.cookies[config.SESSION_COOKIE]),credential=requireValue(await rows('sessions').findOne({_id:sessionId,userId,expiresAt:{$gt:new Date()}}));
  const channel=typeof req.query?.channel==='string'&&/^[a-zA-Z0-9-]{1,100}$/.test(req.query.channel)?req.query.channel:randomUUID();
@@ -126,15 +128,15 @@ export async function streamLiveState(req:Request,res:Response){
  let heartbeat:ReturnType<typeof setInterval>|undefined,expiration:ReturnType<typeof setTimeout>|undefined;
  const write=(value:string)=>{if(closed)return;if(res.writableLength>1_000_000){close();return;}if(value.startsWith('event: records'))metrics.recordFrames++;else if(value.startsWith('event: state'))metrics.stateFrames++;res.write(value);};
  const close=(auth=false)=>{if(closed)return;if(auth)write('event: auth-changed\ndata: {}\n\n');closed=true;clearTimeout(recordTimer);clearTimeout(expiration);clearInterval(heartbeat);subscribers.delete(listener);leases.delete(lease._id);const group=groups.get(userId);group?.listeners.delete(listener);if(group&&!group.listeners.size){clearTimeout(group.timer);groups.delete(userId);}const sameSession=sessions.get(sessionId);sameSession?.delete(listener);if(!sameSession?.size)sessions.delete(sessionId);void liveLeases().deleteOne({_id:lease._id,connectionId:lease.connectionId,instance:liveInstance}).catch(()=>{});if(!res.writableEnded)res.end();};
- const listener:Subscriber={userId,sessionId,lease,keys:lease.keys?new Set(lease.keys):null,close,
-  state(current,requested){const change:LiveChange={};for(const topic of requested){const serialized=JSON.stringify(topic==='messages'?[current.messages,current.conversationGeneration]:current[topic]);const fingerprint=hash(serialized);if(sent.get(topic)!==fingerprint){Object.assign(change,{[topic]:current[topic]});sent.set(topic,fingerprint);}}if(change.messages){change.conversationCursor=current.conversationCursor;change.conversationGeneration=current.conversationGeneration;}if(Object.keys(change).length)write(`event: state\ndata: ${JSON.stringify({userId,epoch,sequence:++sequence,change})}\n\n`);},
+ const listener:Subscriber={userId,sessionId,lease,keys:lease.keys?new Set(lease.keys):null,topics:new Set(requestedTopics),close,
+  state(current,requested){const change:LiveChange={};for(const topic of requested){if(!listener.topics.has(topic))continue;const serialized=JSON.stringify(topic==='messages'?[current.messages,current.conversationGeneration]:current[topic]);const fingerprint=hash(serialized);if(sent.get(topic)!==fingerprint){Object.assign(change,{[topic]:current[topic]});sent.set(topic,fingerprint);}}if(change.messages){change.conversationCursor=current.conversationCursor;change.conversationGeneration=current.conversationGeneration;}else if(change.user)change.conversationGeneration=current.conversationGeneration;if(Object.keys(change).length)write(`event: state\ndata: ${JSON.stringify({userId,epoch,sequence:++sequence,change})}\n\n`);},
   records(change){change.keys.forEach(key=>pendingKeys.add(key));if(change.keys.includes('log'))pendingLog=change.log&&pendingLog&&pendingLog.length+change.log.length<=128?[...pendingLog,...change.log]:undefined;if(recordTimer)return;recordTimer=setTimeout(()=>{recordTimer=undefined;write(`event: records\ndata: ${JSON.stringify({keys:[...pendingKeys],...(pendingLog?.length?{log:pendingLog}:{})})}\n\n`);pendingKeys.clear();pendingLog=[];},50);}
  };
  res.status(200).set({'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no',Connection:'keep-alive'});res.flushHeaders();res.write('retry: 1000\n\n');res.on('close',()=>close());
  const previous=leases.get(lease._id);previous?.close();subscribers.add(listener);leases.set(lease._id,listener);
  const group=groups.get(userId)||{listeners:new Set<Subscriber>(),dirty:new Set<LiveTopic>()};groups.set(userId,group);group.listeners.add(listener);
  const sameSession=sessions.get(sessionId)||new Set<Subscriber>();sameSession.add(listener);sessions.set(sessionId,sameSession);
- try{await startWatch();if(!closed){topics.forEach(topic=>group.dirty.add(topic));await flush(userId,group);}}catch{close();return;}
+ try{await startWatch();if(!closed){requestedTopics.forEach(topic=>group.dirty.add(topic));await flush(userId,group);}}catch{close();return;}
  if(closed)return;
  heartbeat=setInterval(()=>write(': heartbeat\n\n'),15000);
  expiration=setTimeout(()=>close(true),Math.max(1,Math.min(2147483647,new Date(credential.expiresAt as Date).getTime()-Date.now())));

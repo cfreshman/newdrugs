@@ -1,10 +1,11 @@
+import {avatarImageUrl} from './logImageCache';
 import {useEffect,useLayoutEffect,useRef,useState,type MouseEvent,type RefObject} from 'react';
 import {CaretDown,CaretUp,Hand,Info,Microphone,MicrophoneSlash,PhoneDisconnect,ShareNetwork,Waveform} from '@phosphor-icons/react';
 import {useTalk} from './TalkSession';
 import {NavLink,plainLinkClick} from './NavLink';
 import './spaces.css';
 
-const avatar=(name:string,photoId?:string)=><span className="space-avatar">{photoId?<img src={`/api/files/${encodeURIComponent(photoId)}`} alt=""/>:name.replace(/^@/,'').slice(0,1).toUpperCase()}</span>;
+const avatar=(name:string,photoId?:string)=><span className="space-avatar">{photoId?<img src={avatarImageUrl(photoId)} alt=""/>:name.replace(/^@/,'').slice(0,1).toUpperCase()}</span>;
 const photo=(metadata?:string)=>{try{const value=JSON.parse(metadata||'{}');return typeof value.photoId==='string'?value.photoId:undefined;}catch{return undefined;}};
 function TalkElapsedTime({startedAt}:{startedAt:string}){
  const [now,setNow]=useState(Date.now());

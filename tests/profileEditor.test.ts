@@ -16,9 +16,9 @@ it('lets the person upload, preview, return to edit, and save the chosen photo t
   Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['image'], 'photo.jpg', { type: 'image/jpeg' })] });
   await act(async () => picker.dispatchEvent(new Event('change', { bubbles: true })));
   expect(calls.upload).toHaveBeenCalledWith(expect.any(File), 'profile_photo', expect.any(AbortSignal));
-  expect(dom.container.querySelector('.photo-editor-item img')?.getAttribute('src')).toBe('/api/files/photo');
+  expect(dom.container.querySelector('.photo-editor-item img')?.getAttribute('src')).toBe('/api/files/photo?avatar=1');
   act(() => dom.container.querySelector<HTMLButtonElement>('.profile-editor-actions button')!.click());
-  expect(dom.container.querySelector('.profile-card .profile-photo')?.getAttribute('src')).toBe('/api/files/photo');
+  expect(dom.container.querySelector('.profile-card .profile-photo')?.getAttribute('src')).toBe('/api/files/photo?avatar=1');
   expect(dom.container.querySelector('.profile-card')?.textContent).toContain('My own words.');
   act(() => dom.container.querySelector<HTMLButtonElement>('.profile-editor-actions button')!.click());
   await act(async () => dom.container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));

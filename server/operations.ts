@@ -24,6 +24,8 @@ import {normalizedPostLinks} from '../shared/postLinks';
 import {postAncestors} from './postAncestors';
 import { setCollection, collectionPage, postAudience } from './socialCollections';
 import { profileVisibleTo } from './profileVisibility';
+import {profileMediaUrl} from '../shared/profileMedia';
+import {getIou,listIous,recordIou} from './ious';
 import legacyOperationRevisions from '../shared/legacyOperationRevisions.json';
 import { automationOperation, ownAutomation,validateAutomationConfiguration } from './automations';
 import { wakeRun } from './sleep';
@@ -122,7 +124,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   const userId = actor.userId;
   const options = { session };
   const user = requireValue(await users().findOne({ _id: userId }, options));
-  if (/^(people\.|posts\.|connections\.|messages\.|notifications\.|storage\.|search\.|links\.)/.test(name)) registered(user);
+  if (/^(people\.|posts\.|connections\.|messages\.|notifications\.|storage\.|search\.|links\.|ious\.)/.test(name)) registered(user);
   if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){registered(user);return memoryOperation(name,d,actor,session);}
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
   if (name.startsWith('website.')) { registered(user); return websiteOperation(name,d,actor,session); }
@@ -190,6 +192,9 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'storage.list': return listStorage(user,{type:d.type as StorageType|undefined,attachedTo:d.attachedTo as StorageLocation|undefined,before:d.before as string|undefined,limit},session);
     case 'account.preferences':return {...defaultPreferences,...user.preferences};
     case 'account.preferences_update':{if(!d.font&&!d.appearance&&!d.landingPage)throw new AppError(422,'preferences','Choose a preference to change.');const prior={...defaultPreferences,...user.preferences};const updated=requireValue(await users().findOneAndUpdate({_id:userId},{$set:{'preferences.font':d.font||prior.font,'preferences.appearance':d.appearance||prior.appearance,'preferences.landingPage':d.landingPage||prior.landingPage},$inc:{'preferences.revision':1}},{...options,returnDocument:'after'}));return {...defaultPreferences,...updated.preferences};}
+    case 'ious.list':return listIous(userId,d.before as string|undefined,session);
+    case 'ious.get':return getIou(userId,String(d.personId),d.before?Number(d.before):undefined,session);
+    case 'ious.record':return recordIou(actor,d as unknown as Parameters<typeof recordIou>[1],session!);
     case 'identity.get': return profile(user);
     case 'agent.actions.list': {
       const visibleReceipts = { userId, ...(actor.background ? { operation: { $in: ['posts.create','posts.reply','posts.like','posts.delete','connections.request','connections.respond','connections.withdraw','messages.send'] } } : {}) };
@@ -231,11 +236,15 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         const removed=(user.photos||[]).filter(id=>!(d.photos as string[]).includes(id));
         for(const fileId of removed)if(await uploads().findOne({_id:fileId,userId,deletedAt:{$exists:false},moderatedAt:{$exists:false}},options))await deleteUpload(actor,fileId,session);
       }
-      const {locationCell,...fields}=d;
+      if(d.voiceFileId!==undefined&&d.voiceFileId!==user.voiceFileId){
+        if(d.voiceFileId){const voice=await ownUpload(userId,String(d.voiceFileId),session);if(!voice.ready||voice.purpose!=='profile_voice'||!voice.mime.startsWith('audio/'))throw new AppError(422,'profile_voice','Record a voice note before saving it to your profile.');await retainUploads(userId,[voice._id],'profile_voice',session);}
+        if(user.voiceFileId)await deleteUpload(actor,user.voiceFileId,session);
+      }
+      const {locationCell,mediaUrl,...fields}=d;
       let area: CoarseArea|null|undefined;
       if (locationCell===null) area=null;
       else if (typeof locationCell==='string') { const record=requireValue(await rows('locationAreas').findOne({_id:locationCell},options)); area={cell:locationCell,label:String(record.label),point:coarsePoint(locationCell)}; }
-      const values = { ...fields, ...(d.name!==undefined?{logNameGrams:logPersonGrams(String(d.name))}:{}),...(area!==undefined ? {area,city:area?.label||''} : {}),
+      const values = { ...fields, ...(mediaUrl!==undefined?{mediaUrl:mediaUrl===null?null:profileMediaUrl(String(mediaUrl))}:{}),...(d.name!==undefined?{logNameGrams:logPersonGrams(String(d.name))}:{}),...(area!==undefined ? {area,city:area?.label||''} : {}),
         ...(d.interests ? { interests: [...new Set((d.interests as string[]).map(s => s.toLowerCase()))] } : {}) };
       const saved = requireValue(await users().findOneAndUpdate({ _id: userId }, { $set: values }, { ...options, returnDocument: 'after' }));
       await enqueueSearch('profiles', userId, session!);
@@ -455,7 +464,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       for (const row of visible) row.unread = unread.some(notification => notification.connectionId === row._id);
       const ids = visible.flatMap(c => c.members as string[]);
       const people = await users().find({ _id: { $in: ids } }, options).limit(62).toArray();
-      return { ...paginate(visible), people: await Promise.all(people.map(async person=>await profileVisibleTo(userId,person,session)?profile(person):{...profile(person),bio:'',interests:[],city:'',area:null,photos:[]})) };
+      return { ...paginate(visible), people: await Promise.all(people.map(async person=>await profileVisibleTo(userId,person,session)?profile(person):{...profile(person),bio:'',interests:[],city:'',area:null,photos:[],mediaUrl:undefined})) };
     }
     case 'connections.status': {
       await notBlocked(userId, String(d.personId), session);
@@ -466,7 +475,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       const connection = requireValue(await rows('connections').findOne({ _id: String(d.connectionId), members: userId }, options));
       await notBlocked(userId, (connection.members as string[]).find(id => id !== userId)!, session);
       const people = await users().find({ _id: { $in: connection.members as string[] } }, options).toArray();
-      return { connection: publicRow(connection), people: await Promise.all(people.map(async person=>await profileVisibleTo(userId,person,session)?profile(person):{...profile(person),bio:'',interests:[],city:'',area:null,photos:[]})) };
+      return { connection: publicRow(connection), people: await Promise.all(people.map(async person=>await profileVisibleTo(userId,person,session)?profile(person):{...profile(person),bio:'',interests:[],city:'',area:null,photos:[],mediaUrl:undefined})) };
     }
     case 'connections.request': {
       registered(user);

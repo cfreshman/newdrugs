@@ -11,8 +11,10 @@ import {queryRetrieval,retrievalEnabled} from './backend';
 import {queueRetrieval} from './replication';
 import type {LogRelatedResult,LogSearchInput,LogSearchResult} from '../../shared/logSearch';
 import {matchingLogPeople,logMemberPair} from '../logUsername';
-export const LOG_INDEX_VERSION=`private-log-v1:${EMBEDDING_MODEL}:${DIMENSIONS}`;
-export interface LogSearchChunk {_id:string;entryId:string;date:string;ownerId:string;viewerIds:string[];memberCount:number;invitedCount:number;indexVersion:string;sourceHash:string;sourceRevision:string;text:string;snippet:string;vector:number[]}
+import {uploads} from '../uploads';
+import {describeLogPhoto,queueLogPhotoDescription,type LogPhotoDescription} from './logPhotos';
+export const LOG_INDEX_VERSION=`private-log-v2-photos:${EMBEDDING_MODEL}:${DIMENSIONS}`;
+export interface LogSearchChunk {_id:string;entryId:string;date:string;ownerId:string;viewerIds:string[];memberCount:number;invitedCount:number;indexVersion:string;sourceHash:string;sourceRevision:string;text:string;snippet:string;vector:number[];kind:'text'|'image'}
 interface Job {_id:string;viewerIds?:string[];revision:string;availableAt:number;attempts:number;lease?:string}
 const jobs=()=>rows<Job>('logSearchJobs'),chunks=()=>rows<LogSearchChunk>('logSearchChunks');
 export async function queueLogSearch(entryId:string,session?:ClientSession,viewers?:string[]){
@@ -39,8 +41,23 @@ export async function indexLogEntry(embedding=embed){
    const id=hashText(`${job._id}:${part.key}`),sourceHash=hashText(`${LOG_INDEX_VERSION}:${part.text}`),old=previous.find(chunk=>chunk._id===id&&chunk.sourceHash===sourceHash&&chunk.indexVersion===LOG_INDEX_VERSION);
    const vector=old?.vector||await embedding(part.text,'document',`log:${String(source.ownerId)}`);
    if(vector.length!==DIMENSIONS||!vector.every(Number.isFinite))throw Error('embedding_invalid');
-   next.push({_id:id,entryId:job._id,ownerId:String(source.ownerId),viewerIds:source.members as string[],memberCount:(source.members as string[]).length,invitedCount:(source.invited as string[]||[]).length,date:String(source.date),sourceHash,sourceRevision:revision,indexVersion:LOG_INDEX_VERSION,text:part.text,snippet:part.snippet,vector});
+   next.push({_id:id,entryId:job._id,ownerId:String(source.ownerId),viewerIds:source.members as string[],memberCount:(source.members as string[]).length,invitedCount:(source.invited as string[]||[]).length,date:String(source.date),sourceHash,sourceRevision:revision,indexVersion:LOG_INDEX_VERSION,text:part.text,snippet:part.snippet,vector,kind:'text'});
    if(!(await jobs().updateOne({_id:job._id,revision:job.revision,lease},{$set:{availableAt:Date.now()+120000}})).matchedCount)return true;
+  }
+  if(source){
+   const members=new Set(source.members as string[]),references=(source.contributions as {userId:string;fileIds:string[]}[]||[]).filter(person=>members.has(person.userId)).flatMap(person=>person.fileIds);
+   const photos=references.length?await uploads().find({_id:{$in:references},ready:true,deletedAt:{$exists:false},moderatedAt:{$exists:false},mime:{$regex:'^image/'}}).limit(20).toArray():[];
+   const saved=photos.length?await rows<LogPhotoDescription>('logPhotoDescriptions').find({_id:{$in:photos.map(photo=>photo._id)}}).toArray():[];
+   for(const photo of photos){
+    const part=saved.find(value=>value._id===photo._id&&value.entryId===job._id&&value.sourceHash===photo.sha256);
+    if(!part){await queueLogPhotoDescription(photo,job._id);continue;}
+    const id=hashText(`${job._id}:photo:${photo._id}`),sourceHash=hashText(`${LOG_INDEX_VERSION}:${part.description}`),old=previous.find(chunk=>chunk._id===id&&chunk.sourceHash===sourceHash&&chunk.indexVersion===LOG_INDEX_VERSION);
+    const vector=old?.vector||await embedding(part.description,'document',`log:${String(source.ownerId)}`);
+    if(vector.length!==DIMENSIONS||!vector.every(Number.isFinite))throw Error('embedding_invalid');
+    // Empty lexical text keeps AI descriptions out of exact/partial text matching.
+    next.push({_id:id,entryId:job._id,ownerId:String(source.ownerId),viewerIds:source.members as string[],memberCount:(source.members as string[]).length,invitedCount:(source.invited as string[]||[]).length,date:String(source.date),sourceHash,sourceRevision:revision,indexVersion:LOG_INDEX_VERSION,text:'',snippet:part.description,vector,kind:'image'});
+    if(!(await jobs().updateOne({_id:job._id,revision:job.revision,lease},{$set:{availableAt:Date.now()+120000}})).matchedCount)return true;
+   }
   }
   await transaction(async session=>{
    if(!(await jobs().deleteOne({_id:job._id,revision:job.revision,lease},{session})).deletedCount)return;
@@ -58,7 +75,7 @@ async function backfillLogSearch(){
  const page=await rows('logEntries').find(state?.cursor?{_id:{$gt:String(state.cursor)}}:{}).sort({_id:1}).limit(30).project({_id:1,revision:1}).toArray();
  await transaction(async session=>{for(const row of page){if(!await rows('logSearchSources').findOne({_id:row._id,revision:String(row.revision||0),indexVersion:LOG_INDEX_VERSION},{session})&&!await jobs().findOne({_id:row._id},{session}))await queueLogSearch(row._id,session);}await rows('logSearchMeta').updateOne({_id:LOG_INDEX_VERSION},{$set:{cursor:page.at(-1)?._id||state?.cursor||'',done:page.length<30}},{session,upsert:true});});
 }
-export function startLogSearchWorker(){let stopped=false,pending:Promise<void>|undefined,cycles=0;const tick=()=>{if(stopped||pending||!retrievalEnabled()||!config.aiEnabled)return;pending=(async()=>{if(cycles++%10===0)await backfillLogSearch();for(let i=0;i<4&&!stopped&&await indexLogEntry();i++);})().catch(error=>console.error('Log indexing',{name:error.name})).finally(()=>{pending=undefined;});};const timer=setInterval(tick,2000);tick();return async()=>{stopped=true;clearInterval(timer);await pending;};}
+export function startLogSearchWorker(){let stopped=false,pending:Promise<void>|undefined,cycles=0;const tick=()=>{if(stopped||pending||!retrievalEnabled()||!config.aiEnabled)return;pending=(async()=>{if(cycles++%10===0)await backfillLogSearch();for(let i=0;i<4&&!stopped&&await indexLogEntry();i++);if(!stopped)await describeLogPhoto();})().catch(error=>console.error('Log indexing',{name:error.name})).finally(()=>{pending=undefined;});};const timer=setInterval(tick,2000);tick();return async()=>{stopped=true;clearInterval(timer);await pending;};}
 interface Rank {id:string;sourceHash:string;sourceRevision:string;entryId:string;score:number;match:'text'|'semantic';personId?:string}
 interface Snapshot {_id:string;userId:string;identity:string;ranked:Rank[];input:LogSearchInput;mode:'hybrid'|'keyword';notices:string[];expiresAt:Date}
 export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed):Promise<LogSearchResult>{
@@ -106,17 +123,15 @@ export async function searchLog(input:LogSearchInput,actor:Actor,embedding=embed
  return {items,nextCursor:offset<snapshot.ranked.length?`${snapshot._id}.${offset}`:null,mode:snapshot.mode,indexing,notices:[...snapshot.notices,...(indexing?['Recent or older Log entries are still being indexed.']:[])]};
 }
 
-/** Read-only similarity from already indexed Log text. Both source and results are reauthorized. */
+/** Read-only similarity from already indexed Log text and photo vectors. Both source and results are reauthorized. */
 export async function relatedLog(entryId:string,limit:number,actor:Actor):Promise<LogRelatedResult>{
  if(!retrievalEnabled())throw new AppError(503,'search_unavailable','Log search is not configured yet.');
  const {logEntryFor}=await import('../log'),source=await logEntryFor(actor.userId,entryId);
  if(!source.members.includes(actor.userId))throw new AppError(403,'log_member','Join the hangout before finding related memories.');
- const parts=logPassages(source as unknown as Row,8,true);
- if(!parts.length)return {sourceEntryId:entryId,items:[],indexing:false,notices:['This entry has no searchable text yet.']};
- const sourceIds=parts.map(part=>hashText(`${entryId}:${part.key}`));
- const stored=await chunks().find({_id:{$in:sourceIds},entryId,viewerIds:actor.userId,indexVersion:LOG_INDEX_VERSION,sourceRevision:String(source.revision)}).limit(8).toArray();
- const sourceParts=parts.flatMap(part=>{const chunk=stored.find(item=>item._id===hashText(`${entryId}:${part.key}`)&&item.sourceHash===hashText(`${LOG_INDEX_VERSION}:${part.text}`));return chunk?[chunk]:[];});
- const indexing=sourceParts.length<parts.length||Boolean(await jobs().findOne({_id:entryId},{projection:{_id:1}}))||Boolean(await rows('retrievalJobs').findOne({kind:'log',sourceKey:entryId},{projection:{_id:1}}));
+ const stored=await chunks().find({entryId,viewerIds:actor.userId,indexVersion:LOG_INDEX_VERSION,sourceRevision:String(source.revision)}).limit(160).toArray();
+ const sourceParts=[...stored.filter(part=>part.kind==='image').slice(0,4),...stored.filter(part=>part.kind==='text').slice(0,8)].slice(0,8);
+ const indexing=Boolean(await jobs().findOne({_id:entryId},{projection:{_id:1}}))||Boolean(await rows('retrievalJobs').findOne({kind:'log',sourceKey:entryId},{projection:{_id:1}}));
+ if(!sourceParts.length&&!indexing)return {sourceEntryId:entryId,items:[],indexing:false,notices:['This entry has no searchable text or photo description yet.']};
  if(!sourceParts.length)return {sourceEntryId:entryId,items:[],indexing:true,notices:['This entry is still being indexed. Try again shortly.']};
  const vector=Array<number>(DIMENSIONS).fill(0);let weightTotal=0;
  for(const chunk of sourceParts){const weight=chunk._id===hashText(`${entryId}:details`)?2:1;weightTotal+=weight;for(let i=0;i<DIMENSIONS;i++)vector[i]+=chunk.vector[i]*weight;}

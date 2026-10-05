@@ -1,7 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import type {ClientSession} from 'mongodb';
-import {emptySquare,parseSquareProject,MAX_SQUARE_BYTES,type SquareProject} from '../src/squareModel';
+import {emptySquare,parseSquareProject,checkRaster,MAX_SQUARE_BYTES,type SquareProject} from '../src/squareModel';
 import {renderSquareNode} from '../src/squareNodeRenderer';
 import type {LogEntry} from '../shared/log';
 import {MAX_UPLOAD_BYTES} from '../shared/uploads';
@@ -11,6 +11,8 @@ import {AppError,requireValue} from './errors';
 import {logOperation} from './log';
 import {acceptUpload,deleteUpload,ownUpload,prepareUpload,readUpload} from './uploads';
 import {workGate} from './workGate';
+import {fetchPublic,publicUrl} from './publicFetch';
+import {config} from './config';
 
 interface MakeDraft {_id:string;userId:string;project:SquareProject;revision:number;createdAt:string;updatedAt:string;expiresAt:Date}
 const drafts=()=>rows<MakeDraft>('makeDrafts');
@@ -35,6 +37,15 @@ export async function normalizeMakeProject(input:unknown,actor:Actor):Promise<Sq
    const id=layer.src.slice(5);if(!/^[0-9a-f-]{36}$/i.test(id))throw new AppError(422,'make_image','Choose an owned image upload.');
    const file=await ownUpload(actor.userId,id);if(!file.ready||!file.mime.startsWith('image/'))throw new AppError(422,'make_image','Choose an owned image upload.');
    const {bytes}=await readUpload(actor,id);layer.src=`data:${file.mime};base64,${bytes.toString('base64')}`;
+  }
+  else if(typeof layer.src==='string'&&(layer.src.startsWith('https://')||layer.src.startsWith('/api/files/'))){
+   if(!['image','draw'].includes(String(layer.type)))throw new AppError(422,'make_image','Only image and drawing layers can use linked pixels.');
+   let url:URL;try{url=publicUrl(layer.src.startsWith('/api/files/')?new URL(layer.src,config.APP_ORIGIN).href:layer.src);if(url.protocol!=='https:')throw Error();}catch{throw new AppError(422,'make_image_url','Choose a public HTTPS image URL.');}
+   let image:Awaited<ReturnType<typeof fetchPublic>>;try{image=await fetchPublic(url.href,'image',AbortSignal.timeout(12000),0,true);}catch{throw new AppError(422,'make_image_url','This public image could not be fetched.');}
+   const bytes=image.bytes,mime=bytes.subarray(0,3).equals(Buffer.from([255,216,255]))?'image/jpeg':bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'image/png':bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP'?'image/webp':'';
+   if(!mime||image.mime!==mime)throw new AppError(422,'make_image','Choose a PNG, JPEG or WebP image.');
+   try{checkRaster(bytes);}catch{throw new AppError(422,'make_image','This image is too large or invalid.');}
+   layer.src=`data:${mime};base64,${bytes.toString('base64')}`;
   }
   layers.push(layer);
  }

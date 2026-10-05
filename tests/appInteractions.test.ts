@@ -7,8 +7,9 @@ import { rect, setupDOM } from './dom';
 import { surfaceViews, surfaceTitles } from '../shared/navigation';
 import release from '../release.json';
 
-const transport = vi.hoisted(() => ({ api: vi.fn(), post: vi.fn(), operation: vi.fn() }));
+const transport = vi.hoisted(() => ({ api: vi.fn(), post: vi.fn(), operation: vi.fn(),upload:vi.fn() }));
 vi.mock('../src/api', async original => ({ ...await original<typeof import('../src/api')>(), ...transport }));
+vi.mock('../src/uploads',()=>({uploadFile:transport.upload}));
 const initial: Bootstrap = { user: { id: 'user', handle: 'test', name: 'Me', city: '', bio: '', interests: [], discoverable: false }, wallet: { balanceNanos: 1e9, reservedNanos: 0, availableNanos: 1e9, entries: [] }, messages: [], config: { aiEnabled: true, paymentsEnabled: false, development: true, model: 'test', version: '0.3.1' } };
 const active: RunView = { id: 'run', status: 'running', draft: '', preamble: '', progress: [], approvals: [], clientId: 'browser', revision: 1 };
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
@@ -18,8 +19,8 @@ describe('chat interaction integration', () => {
   beforeEach(() => {
     dom = setupDOM(); history.replaceState(null,'','/'); vi.stubGlobal('innerWidth', 390); vi.stubGlobal('innerHeight', 844); bootstrap = deferred(); chat = deferred(); localStorage.clear(); sessionStorage.clear();
     document.documentElement.style.cssText = '--chat-width:480;--chat-gutter:12;--orb-radius:36';
-    transport.api.mockReset(); transport.post.mockReset(); transport.operation.mockReset();
-    transport.api.mockImplementation((path: string) => path.startsWith('/log-invites/')?Promise.resolve({entryId:'resource',title:'Invited hangout',contributors:[{userId:'friend',name:'Friend',note:'A **shared** note',files:[{id:'voice',name:'Voice note',mime:'audio/webm',bytes:10,url:'/invite-voice'}]}],date:'2026-09-27',place:'Park',joined:false,people:[{id:'friend',name:'Friend'}],photos:[{id:'photo',name:'Hangout photo',url:'/api/log-invites/'+ 'a'.repeat(32)+'/photos/photo'}]}):path === '/tokens' ? Promise.resolve({ tokens: [] }) : path === '/checkout/quotes' ? Promise.resolve({ quotes: [] }) : bootstrap.promise);
+    transport.api.mockReset(); transport.post.mockReset(); transport.operation.mockReset();transport.upload.mockReset().mockResolvedValue({id:'receipt',name:'receipt.jpg',originalName:'receipt.jpg',mime:'image/webp',bytes:100,ready:true,url:'/api/files/receipt'});
+    transport.api.mockImplementation((path: string) => path.startsWith('/log-invites/')?Promise.resolve({entryId:'resource',title:'Invited hangout',contributors:[{userId:'friend',name:'Friend',note:'A **shared** note',files:[{id:'voice',name:'Voice note',mime:'audio/webm',bytes:10,url:'/invite-voice'}]}],date:'2026-09-27',place:'Park',joined:false,people:[{id:'friend',name:'Friend'}],photos:[{id:'photo',name:'Hangout photo',url:'/api/log-invites/'+ 'a'.repeat(32)+'/photos/photo'}]}):path === '/account/passkeys'?Promise.resolve({items:[]}):path === '/tokens' ? Promise.resolve({ tokens: [] }) : path === '/checkout/quotes' ? Promise.resolve({ quotes: [] }) : bootstrap.promise);
     transport.operation.mockImplementation((name: string) => Promise.resolve(name==='log.birthday_get'?{birthday:null}:name==='log.join_preview'?{entryId:'resource',title:'Hangout',date:'2026-09-27',place:'',joined:false,people:[],photos:[],contributors:[],links:[]}:name==='log.code'?{entryId:'resource',code:'a'.repeat(32),url:'https://druggie.org/log/join/'+ 'a'.repeat(32)}:name==='log.preferences'?{arrangement:'calendar',views:[]}:name==='log.get'?{id:'resource',ownerId:'user',date:'2026-09-26',title:'Test memory',place:'',links:[],recurrence:'none',coverFileId:null,revision:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),membership:'member',contributors:[],invitations:[]}:name === 'inbox.get' ? { id: 'resource', title: 'An update', body: 'Useful info', links: [], producer: { kind: 'external', name: 'Test agent' }, createdAt: new Date().toISOString(), read: false, archived: false, unavailable: false } : name === 'automations.get' ? { id: 'resource', name: 'Morning update', instruction: 'Find something useful', schedule: { kind: 'weekly', timeZone: 'UTC', hour: 7, minute: 0, weekdays: [1] }, maxRunNanos: 50000000, dailyBudgetNanos: 200000000, privateAccess: true, writeAccess: true, status: 'paused', revision: 1, nextRunAt: null, createdAt: new Date().toISOString() } : name === 'people.get' ? { ...initial.user, id: 'friend', handle: 'friend', name: 'Friend', discoverable: true } : name === 'posts.get' ? { id: 'post', userId: 'friend', text: 'A real post', createdAt: new Date().toISOString(), city: '' } : { items: [], nextCursor: null, people: [] }));
     transport.post.mockImplementation((path: string) => path === '/chat' ? chat.promise : Promise.resolve({ ok: true }));
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) { return this.classList.contains('composer') ? rect(12, 550, 366, 76) : rect(150, 350, 228, 80); });
@@ -36,6 +37,19 @@ describe('chat interaction integration', () => {
     const input = dom.container.querySelector('textarea')!;
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, text);
     input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  it('attaches a receipt beside the launcher without sending until the message is submitted',async()=>{
+    await mount();await load();
+    const picker=dom.container.querySelector<HTMLInputElement>('.launcher-controls input[type="file"]')!;
+    Object.defineProperty(picker,'files',{configurable:true,value:[new File(['photo'],'receipt.jpg',{type:'image/jpeg'})]});
+    await act(async()=>picker.dispatchEvent(new Event('change',{bubbles:true})));
+    expect(transport.upload).toHaveBeenCalledWith(expect.any(File),'agent_input');
+    expect(dom.container.querySelector('.composer-files')?.textContent).toContain('receipt.jpg');
+    expect(transport.post.mock.calls.some(([path])=>path==='/chat')).toBe(false);
+    type('I had the noodles and Laura had the salad.');
+    await act(async()=>dom.container.querySelector<HTMLButtonElement>('.composer .send')!.click());
+    expect(transport.post).toHaveBeenCalledWith('/chat',expect.objectContaining({text:'I had the noodles and Laura had the salad.',fileIds:['receipt']}));
   });
 
   it('keeps the device approval destination through guest sign-in and a reload', async () => {

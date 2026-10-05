@@ -22,13 +22,14 @@ it('reconciles detached images and entry/file deletion without clearing unrelate
 it('respects available origin storage and excludes non-images',async()=>{
  const cache=factory()({factory:new IDBFactory(),estimate:async()=>({quota:100,usage:96})});await cache.bind('one');expect(await cache.put('one','a',new Blob(['1234']),'image/webp',cache.ticket())).toBe(false);expect(await cache.put('one','audio',new Blob(['a']),'audio/mp4',cache.ticket())).toBe(false);
 });
-it('intercepts only marked Log images and serves a repeat from IndexedDB without a second request',async()=>{
+it('intercepts marked Log photos and avatars and serves repeats from IndexedDB',async()=>{
  const events:any={},fetch=vi.fn(async()=>new Response(new Blob(['photo']),{headers:{'Content-Type':'image/webp'}}));const scope:any={location:{origin:'https://druggie.org'},addEventListener:(name:string,callback:any)=>{events[name]=callback;}};
  runInNewContext(code,{self:scope,indexedDB:new IDBFactory(),navigator:{storage:{estimate:async()=>({})}},setTimeout,clearTimeout,Date,Map,Set,Promise,URL,Response,fetch});
  let work:Promise<any>;events.message({data:{type:'log-images:account',account:'one'},source:{url:'https://druggie.org/log'},waitUntil:(p:Promise<any>)=>{work=p;}});await work!;
  const read=async(url:string)=>{let response:Promise<Response>|undefined;events.fetch({request:new Request(url),respondWith:(p:Promise<Response>)=>{response=p;},waitUntil:()=>{}});return response;};
  expect(await read('https://druggie.org/api/bootstrap')).toBeUndefined();expect(await read('https://druggie.org/api/files/a')).toBeUndefined();
- const first=await read('https://druggie.org/api/files/a?log-image=1');expect(await first?.text()).toBe('photo');const second=await read('https://druggie.org/api/files/a?log-image=1');expect(second?.headers.get('X-NewDrugs-Image-Cache')).toBe('hit');expect(await second?.text()).toBe('photo');expect(fetch).toHaveBeenCalledTimes(1);
+ const first=await read('https://druggie.org/api/files/a?log-image=1');expect(await first?.text()).toBe('photo');const second=await read('https://druggie.org/api/files/a?log-image=1');expect(second?.headers.get('X-NewDrugs-Image-Cache')).toBe('hit');expect(await second?.text()).toBe('photo');
+ const avatar=await read('https://druggie.org/api/files/b?avatar=1');expect(await avatar?.text()).toBe('photo');const repeat=await read('https://druggie.org/api/files/b?avatar=1');expect(repeat?.headers.get('X-NewDrugs-Image-Cache')).toBe('hit');expect(fetch).toHaveBeenCalledTimes(2);
 });
 it('falls back to the network if browser storage is denied',async()=>{
  const events:any={},fetch=vi.fn(async()=>new Response('photo',{headers:{'Content-Type':'image/webp'}})),scope:any={location:{origin:'https://druggie.org'},addEventListener:(name:string,fn:any)=>{events[name]=fn;}};

@@ -68,6 +68,14 @@ it('validates full access defaults and public read-only choices without creating
  await expect(executeOperation('automations.validate',{...definition,schedule:{kind:'once',at:'2020-01-01T00:00:00.000Z'}},me)).rejects.toMatchObject({code:'schedule'});
  await expect(executeOperation('automations.validate',{...definition,maxRunNanos:200000000,dailyBudgetNanos:100000000},me)).rejects.toMatchObject({code:'budget'});
 });
+it('preserves active and paused states when saving edits',async()=>{
+ const me=await actor(),created=await saved(me);
+ const active=await executeOperation('automations.update',{automationId:created.id,revision:created.revision,configuration:{...definition,instruction:'Check current posts.'}},me,randomUUID()) as Automation;
+ expect(active.status).toBe('active');expect(active.nextRunAt).not.toBeNull();
+ const paused=await executeOperation('automations.pause',{automationId:active.id,revision:active.revision},me,randomUUID()) as Automation;
+ const edited=await executeOperation('automations.update',{automationId:paused.id,revision:paused.revision,configuration:{...definition,instruction:'Check current friends.'}},me,randomUUID()) as Automation;
+ expect(edited.status).toBe('paused');expect(edited.nextRunAt).toBeNull();
+});
 it('gives a private automation current memory and permits run-bound writes',async()=>{
  const me=await actor();
  const save=(key:string,content:string,core:boolean)=>executeOperation('agent.memory.save',{key,title:key,content,core,revision:0},me,randomUUID());

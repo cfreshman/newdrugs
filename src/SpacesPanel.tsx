@@ -1,3 +1,4 @@
+import {avatarImageUrl} from './logImageCache';
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {Waveform,X} from '@phosphor-icons/react';
 import type {Space} from '../shared/spaces';
@@ -13,7 +14,7 @@ import './spaces.css';
 
 type Navigate=(destination:Destination)=>void;
 interface SpacePage {items:Space[];nextCursor:string|null}
-const avatar=(name:string,photoId?:string)=><span className="space-avatar">{photoId?<img src={`/api/files/${encodeURIComponent(photoId)}`} alt=""/>:name.replace(/^@/,'').slice(0,1).toUpperCase()}</span>;
+const avatar=(name:string,photoId?:string)=><span className="space-avatar">{photoId?<img src={avatarImageUrl(photoId)} alt=""/>:name.replace(/^@/,'').slice(0,1).toUpperCase()}</span>;
 const livePhoto=(metadata?:string)=>{try{const value=JSON.parse(metadata||'{}');return typeof value.photoId==='string'?value.photoId:undefined;}catch{return undefined;}};
 export function SpacesPanel({spaceId,navigate}:{spaceId?:string;navigate:Navigate}){
  const talk=useTalk(),compose=useTalkCompose(),composing=Boolean(compose?.composing),visible=usePanelVisible(),[list,setList]=useState<SpacePage|null>(null),[space,setSpace]=useState<Space|null>(null),[title,setTitle]=useState(''),[description,setDescription]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');

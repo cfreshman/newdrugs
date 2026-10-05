@@ -8,6 +8,8 @@ export interface Profile {
   area?: import('./geo').CoarseArea | null;
   photos?:string[];
   websiteUrl?:string;
+  mediaUrl?:string;
+  voiceFileId?:string;
 }
 export interface Message { pageContext?:import('./pageContext').PageContextCandidate; inputContext?:import('./chatInputContext').ChatInputContext; records?:import('./recordContext').RecordAttachment[];
   id: string; role: 'user' | 'assistant'; text: string; createdAt: string;
