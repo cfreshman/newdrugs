@@ -67,7 +67,18 @@ export function replayOfflineLogs(){
    try{
     const ids:string[]=[];
     for(const file of row.files){
-     if(!file.uploadedId){const uploaded=await uploadFile(new File([file.blob],file.name,{type:file.mime}),'log_media',undefined,undefined,file.prepareKey);if(account!==owner)return;file.uploadedId=uploaded.id;await updatePending(row);}
+     if(account!==owner)return;
+     if(!file.uploadedId){
+      const selected=new File([file.blob],file.name,{type:file.mime});let uploaded;
+      try{uploaded=await uploadFile(selected,'log_media',undefined,undefined,file.prepareKey);}
+      catch(error){
+       if(!['not_found','upload_expired'].includes((error as {code?:string}).code||''))throw error;
+       if(account!==owner)return;
+       file.prepareKey=crypto.randomUUID();await updatePending(row);
+       uploaded=await uploadFile(selected,'log_media',undefined,undefined,file.prepareKey);
+      }
+      if(account!==owner)return;file.uploadedId=uploaded.id;await updatePending(row);
+     }
      ids.push(file.uploadedId);
     }
     const {operation}=await import('./api');
@@ -78,19 +89,22 @@ export function replayOfflineLogs(){
      catch(error){
       const code=(error as {code?:string}).code;
       if(!row.files.length||!['not_found','file_not_ready','log_media','upload_expired'].includes(code||''))throw error;
+      if(account!==owner)return;
       ids.length=0;
-      for(const file of row.files){file.uploadedId=undefined;file.prepareKey=crypto.randomUUID();await updatePending(row);const uploaded=await uploadFile(new File([file.blob],file.name,{type:file.mime}),'log_media',undefined,undefined,file.prepareKey);file.uploadedId=uploaded.id;ids.push(uploaded.id);await updatePending(row);}
-      row.saved=await create();
+      for(const file of row.files){if(account!==owner)return;file.uploadedId=undefined;file.prepareKey=crypto.randomUUID();await updatePending(row);const uploaded=await uploadFile(new File([file.blob],file.name,{type:file.mime}),'log_media',undefined,undefined,file.prepareKey);if(account!==owner)return;file.uploadedId=uploaded.id;ids.push(uploaded.id);await updatePending(row);}
+      if(account!==owner)return;row.saved=await create();
      }
      if(account!==owner)return;await updatePending(row);
     }
     for(const person of row.people){
+     if(account!==owner)return;
      if(row.skippedIds?.includes(person.id))continue;
      if(row.saved.contributors.some(contributor=>contributor.userId===person.id))continue;
      try{row.saved=await operation<LogEntry>('log.add_person',{entryId:row.saved.id,revision:row.saved.revision,personId:person.id},{key:person.key,confirmed:true});await updatePending(row);}
-     catch(error){if((error as {code?:string}).code==='log_changed'){row.saved=await operation<LogEntry>('log.get',{entryId:row.saved.id});await updatePending(row);row.saved=await operation<LogEntry>('log.add_person',{entryId:row.saved.id,revision:row.saved.revision,personId:person.id},{key:person.key,confirmed:true});await updatePending(row);continue;}
+     catch(error){if(account!==owner)return;if((error as {code?:string}).code==='log_changed'){row.saved=await operation<LogEntry>('log.get',{entryId:row.saved.id});if(account!==owner)return;await updatePending(row);if(account!==owner)return;row.saved=await operation<LogEntry>('log.add_person',{entryId:row.saved.id,revision:row.saved.revision,personId:person.id},{key:person.key,confirmed:true});await updatePending(row);continue;}
       if(!offlineNetworkError(error)&&(error as {status?:number}).status&&Number((error as {status?:number}).status)<500){row.skipped=[...(row.skipped||[]),person.name];row.skippedIds=[...(row.skippedIds||[]),person.id];await updatePending(row);continue;}throw error;}
     }
+    if(account!==owner)return;
     await write(['pending'],tx=>tx.objectStore('pending').delete(row.id));notify();
     window.dispatchEvent(new CustomEvent('newdrugs:records',{detail:['log','storage']}));
     if(row.skipped?.length)window.dispatchEvent(new CustomEvent('newdrugs:offline-log-warning',{detail:`Saved ${row.entry.title||'your Log entry'}, but could not add ${row.skipped.join(', ')}.`}));
