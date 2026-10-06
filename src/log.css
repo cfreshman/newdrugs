@@ -268,8 +268,6 @@
 .log-crop-zoom input::-moz-range-track{height:var(--crop-track-height);border-radius:4px;background:var(--surface-soft);}.log-crop-zoom input::-moz-range-progress{height:var(--crop-track-height);background:var(--primary);}.log-crop-zoom input::-moz-range-thumb{width:var(--crop-thumb-width);height:var(--crop-track-height);border:0;border-radius:4px;background:var(--primary);}
 .log-crop-actions{display:flex;gap:8px;}.log-crop-actions button{flex:1;}
 
-.log-join-label-short{display:none;}
-@media(max-width:760px),(pointer:coarse){.log-join-label-full{display:none;}.log-join-label-short{display:inline;}}
 .log-day-choice>span:last-child{min-width:0;flex:1;}
 .log-day-people{display:block;min-height:1.4em;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .log-retained-calendar[hidden]{display:none;}
