@@ -19,6 +19,15 @@ it('preserves the latest three charges across credits and rolls older periods wi
  expect(items[3]).toMatchObject({id:'usage:004',label:'Automation: Friends',chargeCount:1});expect(items[4]).toMatchObject({label:'Agent usage rollup',amountNanos:-300,chargeCount:3,startedAt:date(1),endedAt:date(3)});
  expect((await users().findOne({_id:'me'}))?.balanceNanos).toBe(5000);expect(await rows('ledger').countDocuments()).toBe(8);
 });
+it('shows each individual charge\'s recorded model, including existing indexed receipts',async()=>{
+ await rows('ledger').insertMany([charge(1),{...charge(2),details:{model:'anthropic/claude-haiku-5.5'}},{...charge(3),details:{model:'gpt-6-luna'}},{...charge(4),details:{model:'gpt-6-luna'}}]);
+ await ready();await rows('agentModelSettings').insertOne({_id:'chat',model:'a/different-current-model'});
+ const result=await executeOperation('wallet.activity',{}, {userId:'me',source:'external',scope:'read'}) as any;
+ expect(result.items.slice(0,3).map((item:any)=>item.model)).toEqual(['gpt-6-luna','gpt-6-luna','anthropic/claude-haiku-5.5']);expect(result.items[3]).not.toHaveProperty('model');
+ await rows('ledger').updateOne({_id:'usage:004'},{$set:{'details.model':'anthropic/claude-haiku-5.5'}});
+ expect((await walletActivity('me')).items[0].model).toBe('anthropic/claude-haiku-5.5');
+ await rows('ledger').updateOne({_id:'usage:003'},{$unset:{details:''}});expect((await walletActivity('me')).items[1]).not.toHaveProperty('model');
+});
 it('completes a period before limiting output and never truncates it to the latest thirty receipts',async()=>{
  await rows('ledger').insertMany([...Array.from({length:43},(_,i)=>charge(i+1)),{_id:'credit',userId:'me',amountNanos:10000,label:'Credit added',createdAt:date(0)}]);
  await ready();const result=await executeOperation('wallet.activity',{limit:4},{userId:'me',source:'external',scope:'read'}) as any;

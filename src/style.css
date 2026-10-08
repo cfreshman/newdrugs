@@ -281,8 +281,9 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .details summary { cursor: pointer; font-size: var(--text-label); font-weight: 600; }
 .ledger, .token-list { list-style: none; padding: 0; margin: 14px 0 0; font-size: var(--text-sm); }
 .ledger li, .token-list li { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: var(--space-3) 0; border-bottom: 1px solid var(--divider-soft); font-variant-numeric: tabular-nums; }
-.ledger li div { display: flex; flex-direction: column; gap: 3px; }
-.ledger time, .ledger-date, .token-list small { font-size: var(--text-xs); color: var(--muted-light); display: block; }
+.ledger li div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ledger time, .ledger-date, .ledger-model, .token-list small { font-size: var(--text-xs); color: var(--muted-light); display: block; }
+.ledger-model { overflow-wrap: anywhere; }
 .local-note { font-size: var(--text-xs); color: var(--muted-light); }
 .fields { display: flex; flex-direction: column; gap: 17px; }
 .fields label { display: flex; flex-direction: column; gap: 7px; font-size: var(--text-label); font-weight: 600; }

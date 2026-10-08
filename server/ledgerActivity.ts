@@ -74,9 +74,13 @@ export async function readLedgerActivity(userId:string,limit:number){
  const indexing=!build.done||Boolean(await jobs().findOne({userId},{projection:{_id:1}}))||Boolean(await rows('ledgerActivityMoves').findOne({userId},{projection:{_id:1}}));
  if(!build.done)return {items:[],indexing:true};
  const latest=await receipts().find({userId,kind:'charge'}).sort({orderKey:-1}).limit(3).toArray(),periods=await ledgerPeriods().find({userId,$or:[{chargeCount:{$gt:0}},{boundary:{$ne:null}}]}).sort({orderKey:-1}).limit(limit+3).toArray();
+ // Read the recorded model from at most three canonical receipts. Existing
+ // projections need no history rebuild, and rollups never imply one model.
+ const raw=latest.length?await rows('ledger').find({userId,_id:{$in:latest.map(row=>row._id)}},{projection:{'details.model':1}}).limit(3).toArray():[];
+ const models=new Map(raw.flatMap(row=>{const model=(row.details as {model?:unknown}|undefined)?.model;return typeof model==='string'&&model.trim()&&model.length<=160?[[row._id,model] as const]:[];}));
  const items:import('../shared/billingActivity').BillingActivityItem[]=[];
  for(const period of periods){
-  const recent=latest.filter(row=>row.periodId===period._id);for(const row of recent)items.push({id:row._id,kind:'charge',label:row.label,amountNanos:row.amountNanos,startedAt:row.createdAt,endedAt:row.createdAt,chargeCount:1});
+  const recent=latest.filter(row=>row.periodId===period._id);for(const row of recent)items.push({id:row._id,kind:'charge',label:row.label,...(models.has(row._id)?{model:models.get(row._id)}:{}),amountNanos:row.amountNanos,startedAt:row.createdAt,endedAt:row.createdAt,chargeCount:1});
   const count=period.chargeCount-recent.length;
   if(count>0){const last=await receipts().findOne({periodId:period._id,kind:'charge',_id:{$nin:recent.map(row=>row._id)}},{sort:{orderKey:-1}});if(last)items.push({id:`usage-group:${period.firstReceiptId}`,kind:'usage',label:'Agent usage rollup',amountNanos:period.amountNanos-recent.reduce((sum,row)=>sum+row.amountNanos,0),chargeCount:count,startedAt:period.startedAt!,endedAt:last.createdAt});}
   if(period.boundary){const row=period.boundary;items.push({id:row._id,kind:row.amountNanos>0?'credit':'adjustment',label:row.label,amountNanos:row.amountNanos,startedAt:row.createdAt,endedAt:row.createdAt,chargeCount:0});}
