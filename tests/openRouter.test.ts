@@ -36,7 +36,7 @@ it('reports refusal and truncated responses rather than treating them as success
 });
 it('puts review corrections in user messages and images outside tool text',()=>{
  const correction=routerToolReply(JSON.stringify({ok:false,status:'not_executed',userReply:{text:'Do this instead',files:[]}}));
- expect(JSON.parse(correction.content)).not.toHaveProperty('userReply');expect(correction.followUp).toEqual([{role:'user',content:JSON.stringify({text:'Do this instead',files:[]})}]);
+ expect(JSON.parse(correction.content)).not.toHaveProperty('userReply');expect(correction.followUp[0]).toMatchObject({role:'user',content:[{type:'text',text:'Do this instead'},{type:'text',text:expect.stringContaining('files')}]});
  const image=routerToolReply([{type:'input_text',text:'Owned image'},{type:'input_image',image_url:'data:image/png;base64,AA'}]);expect(image.content).not.toContain('base64');expect(image.followUp[0].content[0].type).toBe('image_url');
  expect(inputMessages([{role:'user',content:[{type:'input_image',image_url:'https://example.org/p.png'}]}])[0].content).toEqual([{type:'image_url',image_url:{url:'https://example.org/p.png',detail:'auto'}}]);
 });

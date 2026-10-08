@@ -45,6 +45,8 @@ export async function clearAgentChat(userId: string) {
     await rows('agentCredentials').updateMany({ userId, $or: [{ runId: { $in: affected.map(run => run._id) } }, { runId: { $exists: false } }] }, { $set: { revokedAt: now } }, { session });
     await rows('agentSessions').deleteMany({ _id: { $in: keys } }, { session });
     await rows('routerStates').deleteMany({userId,purpose:{$ne:'public_automation'}},{session});
+    await rows('routerThreads').deleteOne({_id:userId},{session});
+    await rows('responseCleanup').updateMany({userId},{$set:{availableAt:Date.now(),clearedAt:Date.now()}},{session});
     await rows('receipts').updateMany({ userId, operation: 'conversation.append' }, { $set: { 'result.text': '' } }, { session });
     await rows('messages').deleteMany({ userId }, { session });
     const {clearChatAttachmentReferences}=await import('./attachmentReferences');await clearChatAttachmentReferences(userId,session);

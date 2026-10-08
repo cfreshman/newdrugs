@@ -17,6 +17,7 @@ import type { ClientSession } from 'mongodb';
 import type { User } from './auth';
 import type { TokenUsage } from 'openai/resources/beta/agents/agents';
 import { retainUploads } from './uploads';
+import {commitRouterThread} from './routerContext';
 
 // USD nanodollars, exact integer arithmetic. Standard tier, short context, US endpoint.
 // https://developers.openai.com/api/docs/pricing (verified 2026-09-24).
@@ -175,6 +176,7 @@ export async function finishRun(runId: string, lease: string, text: string, stat
     const rate=run.billingRate||RATE;
     if (cost) {await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: 'Agent usage',
       details: { model: rate.model, responseIds: run.responseIds, rateVersion: rate.version, status: 'reported' } }, $setOnInsert: { createdAt: now } }, { session, upsert: true });await queueLedgerActivity(run.userId,`usage:${runId}`,session);}
+    if(status==='completed'&&message)await commitRouterThread(run,session);
     await rows('routerStates').deleteOne({_id:runId},{session});
     if (message) await rows('messages').insertOne({ _id: `${runId}:assistant`, userId: run.userId, role: 'assistant', text: message,
       source: 'app', status: status === 'completed' ? 'complete' : 'interrupted', createdAt: now }, { session });

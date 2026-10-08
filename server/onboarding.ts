@@ -5,9 +5,11 @@ export async function ensureIntroduction(userId: string) {
   // Count saved accounts only, never anonymous visits or test fixtures. Exclude the viewer.
   const others = await users().countDocuments({ handle: { $type: 'string' }, suspendedAt:null, internalTestAccount: { $ne: true }, _id: { $ne: userId } });
   const join = others ? `Join ${others.toLocaleString('en-US')} ${others === 1 ? 'other person' : 'others'} on New Drugs.` : 'Be the first to join New Drugs.';
-  const text = `New Drugs, made in New England, is a social experiment that aims to make your life better. Its like Twitter X Bumble BFF X ChatGPT. Share what you’re up to and make plans. Use responsibly.
+  const text = `New Drugs. There is an opportunity for this because other social media companies suck so fucking bad. I'm just some guy.
 
-New Drugs takes no profit. Credits pay for AI at cost. Or use your own [Codex, Claude Code, or other agent](/agents) for **free**. Or skip the AI entirely.
+New Drugs, made in New England, is a social experiment that aims to make your life better instead of aiming to make money.
+
+Its like Twitter X Bumble BFF X ChatGPT. Share what you’re up to and make plans. Use responsibly. New Drugs has AI without markup. Or use your own [Codex, Claude Code, or other agent](/agents) for **free**. Or never use the AI.
 
 ${join}`;
   if (introduction) {

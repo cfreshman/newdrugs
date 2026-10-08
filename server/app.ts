@@ -226,7 +226,7 @@ export function createApp() {
   });
   app.post('/api/admin/logout', async (req, res) => { await signOutAdmin(req, res); res.json({ ok: true }); });
   app.get('/api/admin/users', async (req,res)=>{await requireAdmin(req);res.json(await listAdminUsers(req.query));});
-  app.get('/api/admin/agent-model',async(req,res)=>{await requireAdmin(req);const selection=await agentModelSetting();res.json({model:selection.model,revision:selection.revision,keyConfigured:Boolean(config.OPENROUTER_API_KEY)});});
+  app.get('/api/admin/agent-model',async(req,res)=>{await requireAdmin(req);const selection=await agentModelSetting();res.json({model:selection.model,revision:selection.revision,keyConfigured:Boolean(selection.model.startsWith('openai/')?config.OPENAI_API_KEY:config.OPENROUTER_API_KEY)});});
   app.post('/api/admin/agent-model',async(req,res)=>{const owner=await requireAdmin(req),input=agentModelSelection.parse(req.body);res.json(await setAgentModel(input.model,input.revision,owner.id));});
   app.get('/api/admin/starter-pool', async (req, res) => {
     await requireAdmin(req);

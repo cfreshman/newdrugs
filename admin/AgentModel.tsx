@@ -12,11 +12,11 @@ export function AgentModel(){
  };
  return <section>
   <h1>Agent model</h1>
-  <p>Set an OpenRouter model for new chats and automation runs. Tasks already in progress keep their model.</p>
+  <p>Set a model for new chats and automation runs. OpenAI models use the direct connection. Other providers use OpenRouter. Tasks already in progress keep their model.</p>
   {settings?<form onSubmit={save}>
    <label>Model<input required maxLength={150} autoCapitalize="none" autoCorrect="off" spellCheck={false} value={model} onChange={event=>{setModel(event.target.value);setSaved(false);}} disabled={busy}/></label>
    <button className="primary" disabled={busy||!settings.keyConfigured||!model.trim()||model.trim()===settings.model}>{busy?'Validating…':'Save'}</button>
-   {!settings.keyConfigured&&<p className="note">The OpenRouter key is not configured for this environment.</p>}
+   {!settings.keyConfigured&&<p className="note">The provider key is not configured for this environment.</p>}
    {saved&&<p role="status">Saved.</p>}
   </form>:!error&&<p role="status">Loading…</p>}
   {error&&<p className="error" role="alert">{error}</p>}

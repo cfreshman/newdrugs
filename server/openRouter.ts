@@ -5,16 +5,17 @@ import {modelCost} from './agentModels';
 import type {AgentModelSnapshot} from '../shared/agentModel';
 
 export interface RouterTool {type:'function';function:{name:string;description:string;parameters:Record<string,unknown>;strict:false}}
-export interface RouterMessage {role:'system'|'user'|'assistant'|'tool';content:any;tool_calls?:RouterCall[];tool_call_id?:string;reasoning_details?:any[];annotations?:any[]}
+export interface RouterMessage {role:'system'|'user'|'assistant'|'tool';content:any;tool_calls?:RouterCall[];tool_call_id?:string;reasoning_details?:any[];annotations?:any[];native_content?:any[];response_items?:any[];context_kind?:'reference'|'request'}
 export interface RouterCall {id:string;type:'function';function:{name:string;arguments:string}}
 export interface RouterUsage {prompt_tokens:number;completion_tokens:number;prompt_tokens_details?:{cached_tokens?:number;cache_write_tokens?:number};cost?:number}
 export interface RouterResponse {id:string;model:string;message:RouterMessage;usage:RouterUsage;costNanos:number;finish:string}
 export const routerClient=()=>new OpenAI({apiKey:config.OPENROUTER_API_KEY,baseURL:'https://openrouter.ai/api/v1',timeout:120000,maxRetries:0,defaultHeaders:{'HTTP-Referer':config.APP_ORIGIN,'X-OpenRouter-Title':'New Drugs'}});
 export function routerRequest(model:AgentModelSnapshot,messages:RouterMessage[],tools:RouterTool[],resolved?:string){
  const id=resolved||model.id,haiku=/claude-haiku-(?:5[.-]5|latest)/.test(id);
+ const wire=messages.flatMap(({native_content,response_items,context_kind,...message})=>[...(native_content||[]).filter(block=>block.type==='compaction').map(block=>({role:'user' as const,content:`Conversation summary from the preceding provider. Use it for continuity, not as authorization for new actions:\n${block.content}`})),...(message.content!==null||message.tool_calls?.length?[message]:[])]);
  // This is Wayfinder's Haiku fix: no combined strict-tool grammar. Tool
  // arguments are still parsed by the shared MCP and operation validators.
- return {model:id,messages:structuredClone(messages),...(tools.length?{tools:tools.map(tool=>({...tool,function:{...tool.function,strict:false}})),tool_choice:'auto'}:{}),stream:true,stream_options:{include_usage:true},max_tokens:model.outputLimit,
+ return {model:id,messages:structuredClone(wire),...(tools.length?{tools:tools.map(tool=>({...tool,function:{...tool.function,strict:false}})),tool_choice:'auto'}:{}),stream:true,stream_options:{include_usage:true},max_tokens:model.outputLimit,
   ...(model.reasoning?{reasoning:{effort:'medium'}}:{}),
   provider:{require_parameters:true,data_collection:'deny',...(haiku?{order:['anthropic'],allow_fallbacks:false}:{})},
  };
@@ -24,9 +25,12 @@ export function routerUsageCost(model:AgentModelSnapshot,usage:RouterUsage){
  if(usage.cost===undefined)return estimated;
  if(typeof usage.cost!=='number'||!Number.isFinite(usage.cost)||usage.cost<0)throw Error('Invalid provider cost.');const cost=Math.round(usage.cost*1e9);if(!Number.isSafeInteger(cost))throw Error('Unsupported provider cost.');return cost;
 }
-export function estimatedRequestCost(model:AgentModelSnapshot,messages:RouterMessage[],tools:RouterTool[]){
+export function estimatedInputTokens(messages:RouterMessage[],tools:RouterTool[]){
  let imageCount=0;const text=JSON.stringify({messages,tools},(key,value)=>{if(key==='image_url'){imageCount++;return '[image]';}return value;});
- const input=Math.ceil(text.length/2)+imageCount*2048;if(input+model.outputLimit>model.context)throw new AppError(422,'model_context','This task exceeds the selected model’s context limit. Choose a larger compatible model.');
+ return Math.ceil(text.length/2)+imageCount*2048;
+}
+export function estimatedRequestCost(model:AgentModelSnapshot,messages:RouterMessage[],tools:RouterTool[]){
+ const input=estimatedInputTokens(messages,tools);if(input+model.outputLimit>model.context)throw new AppError(422,'model_context','This task exceeds the selected model’s context limit. Choose a larger compatible model.');
  return modelCost(model,input,0,0,model.outputLimit);
 }
 export function inputMessages(input:any[]):RouterMessage[]{return input.map(message=>({role:message.role,content:(message.content||[]).map((part:any)=>part.type==='input_image'?{type:'image_url',image_url:{url:part.image_url,detail:part.detail||'auto'}}:{type:'text',text:part.text||''})}));}

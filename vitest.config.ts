@@ -11,5 +11,6 @@ process.env.DEV_ACCESS_KEY = 'isolated-test-setup';
 process.env.STRIPE_SECRET_KEY = '';
 process.env.STRIPE_WEBHOOK_SECRET = '';
 process.env.OPENROUTER_API_KEY='';
+process.env.OPENAI_API_KEY='';
 process.env.DATA_DIR = '.data/test-files';
 export default defineConfig({ test: { include: ['tests/**/*.test.ts'], testTimeout: 20000, hookTimeout: 30000, fileParallelism: false } });

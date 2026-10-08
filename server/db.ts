@@ -20,6 +20,8 @@ export async function connectDatabase(name?: string,options:{indexes?:boolean}={
   await Promise.all([
     rows('routerStates').createIndex({userId:1,purpose:1}),
     rows('routerUsageJobs').createIndex({availableAt:1}),
+    rows('responseCleanup').createIndex({availableAt:1}),
+    rows('responseCleanup').createIndex({userId:1}),
     rows('deviceLogins').createIndex({userCodeHash:1},{unique:true}),
     rows('deviceLogins').createIndex({expiresAt:1},{expireAfterSeconds:0}),
     rows('tokens').createIndex({userId:1,revokedAt:1}),

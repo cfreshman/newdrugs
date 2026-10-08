@@ -40,9 +40,9 @@ export async function setAgentModel(model:string,revision:number,ownerId:string)
  return next;
 }
 export async function selectedAgentModel():Promise<AgentModelSnapshot|null>{
- if(!config.OPENROUTER_API_KEY)return null;const selection=await agentModelSetting(),model=(await agentModelCatalog()).find(value=>value.id===selection.model);
+ const selection=await agentModelSetting(),direct=selection.model.startsWith('openai/')&&Boolean(config.OPENAI_API_KEY);if(!direct&&!config.OPENROUTER_API_KEY)return null;const model=(await agentModelCatalog()).find(value=>value.id===selection.model);
  if(!model)throw new AppError(503,'incompatible_model','The selected agent model is no longer compatible. Change it in admin.');
- return {...model,provider:'openrouter',revision:selection.revision,selectedAt:new Date().toISOString()};
+ return {...model,provider:direct?'openai':'openrouter',revision:selection.revision,selectedAt:new Date().toISOString()};
 }
 export function modelCost(model:AgentModel,input:number,cached:number,writes:number,output:number){
  if([input,cached,writes,output].some(value=>!Number.isSafeInteger(value)||value<0)||cached+writes>input)throw Error('Invalid model usage.');
