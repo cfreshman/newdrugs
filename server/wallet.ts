@@ -33,9 +33,9 @@ export function usageCost(usage: ResponseUsage) {
 }
 
 /** Cumulative provider reports are replacements, not additional charges. */
-export async function recordTurnUsage(runId: string, turnId: string, usage: TokenUsage | null, searches = 0, lease?: string) {
+export async function recordTurnUsage(runId: string, turnId: string, usage: TokenUsage | null, searches = 0, lease?: string,providerCostNanos?:number) {
   await transaction(async session => {
-    const run = requireValue(await runs().findOne({ _id: runId, providerTurnId: turnId }, { session }));
+    const run = requireValue(await runs().findOne({ _id: runId, $or:[{providerTurnId:turnId},{responseIds:turnId}] }, { session }));
     if (lease && (run.lease !== lease || run.status !== 'running' || (run.leaseUntil || 0) <= Date.now())) throw new AppError(409, 'stale_run', 'This worker no longer owns the task.');
     const prior = await rows('usage').findOne({ _id: turnId }, { session });
     const recorded = usage || prior?.usage as TokenUsage | null || null;
@@ -50,7 +50,9 @@ export async function recordTurnUsage(runId: string, turnId: string, usage: Toke
       if ([fresh, cached, recorded.output_tokens].some(value => !Number.isSafeInteger(value) || value < 0)) throw new Error('Invalid reported usage.');
       modelCost = fresh * rate.input + cached * rate.cached + recorded.output_tokens * rate.output;
     }
-    const costNanos = modelCost + searchCount * 10_000_000;
+    if(providerCostNanos!==undefined&&(!Number.isSafeInteger(providerCostNanos)||providerCostNanos<0))throw Error('Invalid provider cost.');
+    const actualProviderCost=providerCostNanos??(prior?.providerCostNanos as number|undefined);
+    const costNanos = (actualProviderCost??modelCost) + searchCount * 10_000_000;
     if (!Number.isSafeInteger(costNanos)) throw new Error('Usage charge exceeds supported precision.');
     const nextCost = Math.max(0, run.costNanos + costNanos - Number(prior?.costNanos || 0));
     const ledger = await rows('ledger').findOne({ _id: `usage:${runId}` }, { session });
@@ -65,7 +67,7 @@ export async function recordTurnUsage(runId: string, turnId: string, usage: Toke
     const reserveDelta = active ? remainingReserve - run.reservedNanos : 0;
     const now = new Date().toISOString();
     if (delta || reserveDelta) await users().updateOne({ _id: run.userId }, { $inc: { balanceNanos: -delta, reservedNanos: reserveDelta } }, { session });
-    await rows('usage').updateOne({ _id: turnId }, { $set: { userId: run.userId, runId, usage: recorded, searches: searchCount, costNanos, rate, status: recorded ? 'reported' : 'pending', updatedAt: now } }, { session, upsert: true });
+    await rows('usage').updateOne({ _id: turnId }, { $set: { userId: run.userId, runId, usage: recorded, searches: searchCount, costNanos, rate, ...(actualProviderCost!==undefined?{providerCostNanos:actualProviderCost}:{}), status: recorded ? 'reported' : 'pending', updatedAt: now } }, { session, upsert: true });
     await runs().updateOne({ _id: runId }, { $set: { costNanos: nextCost, chargedNanos, reservedNanos: remainingReserve, billingRate: rate, usagePending: !recorded, ...(run.purpose === 'automation' && nextCost >= (run.budgetNanos || Infinity) ? { cancelRequested: true } : {}) }, $addToSet: { responseIds: turnId } }, { session });
     if (chargedNanos || ledger) {await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: run.purpose === 'automation' ? `Automation: ${run.automationName}` : 'Agent usage', details: { model: rate.model, rateVersion: rate.version, status: recorded ? 'reported' : 'pending', providerTurnId: turnId }, updatedAt: now }, $setOnInsert: { createdAt: now } }, { session, upsert: true });await queueLedgerActivity(run.userId,`usage:${runId}`,session);}
   });
@@ -120,7 +122,8 @@ export async function reserveRun(userId: string, runId: string, text: string, op
 export async function guardSpend(runId: string, lease: string, maximumCost: number) {
   await transaction(async session => {
     const run = requireValue(await runs().findOne({ _id: runId, lease, status: 'running', cancelRequested: { $ne: true }, leaseUntil: { $gt: Date.now() } }, { session }), 'The task has stopped.');
-    const extra = Math.max(0, run.costNanos + maximumCost - run.reservedNanos);
+    if(run.purpose==='automation'&&run.costNanos+maximumCost>(run.budgetNanos||0))throw new AppError(402,'automation_budget','This request exceeds the automation’s remaining budget.');
+    const extra = Math.max(0, maximumCost - run.reservedNanos);
     if (!extra) return;
     const updated = await users().updateOne({ _id: run.userId, activeRun: runId, $expr: { $gte: [{ $subtract: ['$balanceNanos', '$reservedNanos'] }, extra] } }, { $inc: { reservedNanos: extra } }, { session });
     if (!updated.modifiedCount) throw new AppError(402, 'credit_required', 'Add credit to continue this task.');
@@ -169,8 +172,10 @@ export async function finishRun(runId: string, lease: string, text: string, stat
       if (run.superseded) message = '';
     }
     await runs().updateOne({ _id: runId }, { $set: { status, draft: text, error, chargedNanos, reservedNanos: 0, usageCheckAt: Date.now() + 1000, updatedAt: now }, $unset: { lease: '', leaseUntil: '' }, $inc: { revision: 1 } }, { session });
+    const rate=run.billingRate||RATE;
     if (cost) {await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: 'Agent usage',
-      details: { model: RATE.model, responseIds: run.responseIds, rateVersion: RATE.version, status: 'reported' } }, $setOnInsert: { createdAt: now } }, { session, upsert: true });await queueLedgerActivity(run.userId,`usage:${runId}`,session);}
+      details: { model: rate.model, responseIds: run.responseIds, rateVersion: rate.version, status: 'reported' } }, $setOnInsert: { createdAt: now } }, { session, upsert: true });await queueLedgerActivity(run.userId,`usage:${runId}`,session);}
+    await rows('routerStates').deleteOne({_id:runId},{session});
     if (message) await rows('messages').insertOne({ _id: `${runId}:assistant`, userId: run.userId, role: 'assistant', text: message,
       source: 'app', status: status === 'completed' ? 'complete' : 'interrupted', createdAt: now }, { session });
     if (message) await enqueueChatSearch(run.userId, `${runId}:assistant`, session);

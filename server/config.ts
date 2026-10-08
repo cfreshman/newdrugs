@@ -41,6 +41,7 @@ const env = z.object({
   VAPID_SUBJECT: z.string().default('https://druggie.org'),
   STARTER_POOL_DB: z.string().default('newdrugs_shared'),
   OPENAI_API_KEY: z.string().default(''),
+  OPENROUTER_API_KEY:z.string().default(''),
   OPENAI_MODEL: z.enum(['gpt-6-luna']).default('gpt-6-luna'),
   STRIPE_SECRET_KEY: z.string().default(''),
   STRIPE_WEBHOOK_SECRET: z.string().default(''),
@@ -53,7 +54,7 @@ export const config = {
   uiOrigin: env.UI_ORIGIN || (env.APP_ENV === 'staging' ? 'http://localhost:7330' : env.APP_ORIGIN),
   production: env.NODE_ENV === 'production',
   paymentsEnabled: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET),
-  aiEnabled: Boolean(env.OPENAI_API_KEY),
+  aiEnabled: Boolean(env.OPENAI_API_KEY||env.OPENROUTER_API_KEY),
 };
 if (config.production && !config.APP_ORIGIN.startsWith('https://')) {
   throw new Error('APP_ORIGIN must use HTTPS in production.');

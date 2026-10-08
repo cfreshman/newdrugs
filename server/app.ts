@@ -1,4 +1,6 @@
 import {uploadAdmission} from './uploadAdmission';
+import {agentModelSetting,setAgentModel} from './agentModels';
+import {agentModelSelection} from '../shared/agentModel';
 import {agentAccessSchema,deviceStartSchema} from '../shared/agentAccess';
 import {insertAgentToken} from './agentTokens';
 import {startDeviceLogin,pollDeviceLogin,readDeviceLogin,decideDeviceLogin} from './deviceLogin';
@@ -178,7 +180,7 @@ export function createApp() {
     const actor = requireActor(req);
     const topics:LiveTopic[]=['preferences','user','wallet','run','notifications',...(req.query.chat==='1'?['messages' as const]:[])];
     res.json({ ...await readLiveState(actor.userId,topics),
-      config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
+      config: { aiEnabled: config.aiEnabled, paymentsEnabled: config.paymentsEnabled, development: config.APP_ENV !== 'production', model: config.OPENROUTER_API_KEY?(await agentModelSetting()).model:config.OPENAI_MODEL, stage: config.APP_ENV, version: release.version } });
   });
   app.get('/api/calls/incoming',async(req,res)=>{res.json({call:await incomingCall(browserActor(req).userId)});});
   app.get('/api/calls/active',async(req,res)=>{res.json(await activeCall(browserActor(req).userId));});
@@ -224,6 +226,8 @@ export function createApp() {
   });
   app.post('/api/admin/logout', async (req, res) => { await signOutAdmin(req, res); res.json({ ok: true }); });
   app.get('/api/admin/users', async (req,res)=>{await requireAdmin(req);res.json(await listAdminUsers(req.query));});
+  app.get('/api/admin/agent-model',async(req,res)=>{await requireAdmin(req);const selection=await agentModelSetting();res.json({model:selection.model,revision:selection.revision,keyConfigured:Boolean(config.OPENROUTER_API_KEY)});});
+  app.post('/api/admin/agent-model',async(req,res)=>{const owner=await requireAdmin(req),input=agentModelSelection.parse(req.body);res.json(await setAgentModel(input.model,input.revision,owner.id));});
   app.get('/api/admin/starter-pool', async (req, res) => {
     await requireAdmin(req);
     res.json(await starterPoolStatus());

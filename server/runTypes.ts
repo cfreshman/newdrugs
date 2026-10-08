@@ -1,5 +1,6 @@
 import type { RunView, Approval } from '../shared/types';
 export interface RunRecord extends Omit<RunView, 'id'> {
+  agentModel?:import('../shared/agentModel').AgentModelSnapshot;
   memorySnapshot?:import('../shared/agentMemory').MemoryContext&{availableNotes?:{key:string;title:string}[]};
   pageContext?:import('../shared/pageContext').AgentPageContext; inputContext?:import('../shared/chatInputContext').ChatInputContext; creationRecoveries?: number; awakeMs?: number; backgroundReadCount?: number; credentialId?: string; completedSleeps?: Record<string, string>;
   purpose?: 'automation'; priority?: number; automationId?: string; automationGeneration?: number; automationName?: string; privateAccess?: boolean; writeAccess?: boolean; budgetNanos?: number;
