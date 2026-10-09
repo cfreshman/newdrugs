@@ -1,3 +1,4 @@
+import {DinderPanel} from './DinderPanel';
 import {TransientError} from './TransientError';
 import {agentDockAvailable,useAgentDockAvailability} from './agentDockLayout';
 import {ConversationHeaderProvider,ConversationHeaderHost} from './ConversationHeader';
@@ -79,9 +80,9 @@ import release from '../release.json';
 
 const settingsViews = new Set(['agent_instructions','agent_memory','preferences','appearance','account_menu','settings', 'account', 'account_settings', 'payment_handles', 'credits', 'agents', 'blocked', 'hidden_people', 'storage', 'notifications', 'notification_settings', 'location']);
 const mobileNotificationLink=()=>window.innerWidth<=760||window.matchMedia('(pointer: coarse)').matches;
-const inlineViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'quizzes', 'location', 'uploads']);
-const accountViews = new Set(['agent_instructions','agent_memory','log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'payment_handles', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'quizzes', 'location', 'uploads', 'storage', 'blocked', 'hidden_people', 'notifications', 'notification_settings', 'agents']);
-const requiresSavedAccount = (view: string, context: Omit<Destination, 'view'>) => accountViews.has(view) && !(view === 'agents' && context.resourceId === 'device');
+const inlineViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'dinder', 'quizzes', 'location', 'uploads']);
+const accountViews = new Set(['agent_instructions','agent_memory','log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'payment_handles', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'dinder', 'quizzes', 'location', 'uploads', 'storage', 'blocked', 'hidden_people', 'notifications', 'notification_settings', 'agents']);
+const requiresSavedAccount = (view: string, context: Omit<Destination, 'view'>) => accountViews.has(view) && !(view === 'agents' && context.resourceId === 'device') && !(view === 'dinder' && context.resourceId === 'catalog');
 interface ComposerScreen { panel: Panel; context: Omit<Destination, 'view'>; history: { panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]; title: string; content: ReactNode; open: boolean; reset: number }
 function mergeRun(previous: RunView | null, next: RunView | null) {
   if (!next || !previous || next.id !== previous.id) return next;
@@ -338,7 +339,7 @@ export function App() {
     if(panel&&panelSpace==='modal'&&settingsViews.has(panel)&&!settingsViews.has(destination.view==='profile'?'account':destination.view))resumeSettings.current=true;
     if(mode==='agent'&&['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
     if(mode==='agent'&&destination.view==='spaces'){pendingRoute.current={destination:{...destination,mode:'posts'}};changeMode('posts');return;}
-    if(mode==='agent'&&destination.view==='quizzes'){pendingRoute.current={destination:{...destination,mode:'friends'}};changeMode('friends');return;}
+    if(mode==='agent'&&(destination.view==='quizzes'||destination.view==='dinder'&&!destination.mode)){pendingRoute.current={destination:{...destination,mode:'friends'}};changeMode('friends');return;}
     if(destination.mode&&destination.mode!==mode){pendingRoute.current={destination};changeMode(destination.mode);return;}
     const {mode:_mode,...local}=destination;destination=local;
     if(destination.view==='chat_history'&&destination.resourceId)destination={...destination,view:'chat'};
@@ -591,6 +592,7 @@ export function App() {
           : panel === 'person' ? <PersonPanel personId={panelContext.resourceId || ''} user={data.user} navigate={navigate} />
             : panel === 'location' ? <LocationPanel user={data.user} areaCell={panelContext.areaCell} saved={async () => { await refresh(); if (surface) await closePanel(true); else if (panelHistory.length) backPanel(); else await closePanel(); }} />
               : panel === 'people' ? <PeoplePanel user={data.user} {...panelContext} initialQuery={panelContext.query} initialScope={panelContext.scope} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} navigate={navigate} />
+                : panel === 'dinder' ? <DinderPanel user={data.user} resourceId={panelContext.resourceId} dinderTab={panelContext.dinderTab} navigate={navigate} />
                 : panel === 'feed' ? <FeedPanel user={data.user} {...panelContext} initialQuery={panelContext.query} initialScope={panelContext.scope} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} navigate={navigate} />
                   : panel === 'compose' ? <PostComposer user={data.user} navigate={navigate} submitted={post=>navigate({view:'post',resourceId:post.id})}/>
                   : panel === 'post_list' ? <SelectedPostsPanel user={data.user} postIds={panelContext.postIds||[]} navigate={navigate}/>

@@ -27,6 +27,8 @@ import { profileVisibleTo } from './profileVisibility';
 import {profileMediaUrl} from '../shared/profileMedia';
 import {getIou,listIous,recordIou} from './ious';
 import {quizOperation} from './quizzes';
+import {dinderOperation} from './dinder';
+import {isDinderPage} from '../shared/dinderPages';
 import {clearBffPair,isBff,listBffs,setBff} from './bffs';
 import legacyOperationRevisions from '../shared/legacyOperationRevisions.json';
 import { automationOperation, ownAutomation,validateAutomationConfiguration } from './automations';
@@ -134,6 +136,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
   if (name.startsWith('website.')) { registered(user); return websiteOperation(name,d,actor,session); }
   if (name.startsWith('quizzes.')) { registered(user); return quizOperation(name,d,actor,session); }
+  if (name.startsWith('dinder.')) { if(!['dinder.catalog','dinder.recipe'].includes(name))registered(user); return dinderOperation(name,d,actor,session); }
   if (name.startsWith('make.')) { registered(user); return makeOperation(name,d,actor,session); }
   if (name.startsWith('spaces.')) { registered(user); return spaceOperation(name,d,actor,session); }
   if(name==='automations.validate'){
@@ -213,6 +216,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'links.preview': return linkPreview(String(d.url), userId);
     case 'locations.resolve': return resolveArea(String(d.cell));
     case 'app.open': {
+      if(d.dinderTab&&(d.view!=='dinder'||!d.resourceId||isDinderPage(d.resourceId)))throw new AppError(422,'meal_required','Choose a meal match for its chat.');
       if(['log','log_code'].includes(String(d.view))&&d.resourceId)await logEntryFor(userId,String(d.resourceId),session);
       if(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_join','log_scan'].includes(String(d.view)))registered(user);
       if(d.view==='log_code'&&!d.resourceId)throw new AppError(422,'log_entry','Choose a hangout.');
@@ -225,6 +229,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if (d.view === 'chat_history' && d.resourceId) requireValue(await rows('messages').findOne({ _id: String(d.resourceId), userId }, options));
       if(d.view==='post_list'){if(!Array.isArray(d.postIds)||!d.postIds.length)throw new AppError(422,'posts_required','Choose posts for this list.');const selected=await run('posts.list',{scope:'selected',postIds:d.postIds},actor,session) as {items:{id:string}[]};d.postIds=selected.items.map(post=>post.id);if(!(d.postIds as string[]).length)throw new AppError(404,'unavailable','These posts are no longer available.');}
       if(d.view==='quizzes'&&d.resourceId)await quizOperation('quizzes.get',{personId:String(d.resourceId)},actor,session);
+      if(d.view==='dinder'){if(d.resourceId!=='catalog')registered(user);if(d.resourceId&&!isDinderPage(d.resourceId))await dinderOperation('dinder.get',{matchId:String(d.resourceId)},actor,session);}
       if (['person','post'].includes(String(d.view)) && !d.resourceId) throw new AppError(422,'resource_required','Choose the specific person or post.');
       if (d.view==='person') await run('people.get',{personId:d.resourceId},actor,session);
       if (d.view==='post') await run('posts.get',{postId:d.resourceId},actor,session);
@@ -233,7 +238,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         await notBlocked(userId, (connection.members as string[]).find(id => id !== userId)!, session);
       }
       if(d.messageId){if(d.view!=='messages'||!d.resourceId)throw new AppError(422,'message_destination','Choose a conversation for this message.');requireValue(await rows('directMessages').findOne({_id:String(d.messageId),connectionId:String(d.resourceId)},options),'This message is unavailable.');}
-      return { open:d.view,date:d.date,logMonth:d.logMonth,logScope:d.logScope,personId:d.personId, resourceId:d.resourceId, messageId:d.messageId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
+      return { open:d.view,dinderTab:d.dinderTab,date:d.date,logMonth:d.logMonth,logScope:d.logScope,personId:d.personId, resourceId:d.resourceId, messageId:d.messageId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
     }
     case 'profile.update': {
       if (actor.source !== 'browser') throw new AppError(403, 'human_authored', 'Profiles are written by the person, not by their agent. Open the profile editor instead.');
@@ -310,11 +315,12 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if(d.scope==='nearby'&&actor.background&&actor.privateAccess===false&&!d.near)throw new AppError(422,'location_required','Provide a public area for nearby search.');
       if (d.query && d.scope === 'nearby' && !d.near && !user.area?.cell) throw new AppError(422,'location_required','Choose an approximate area to find nearby people.');
       if(d.scope==='hidden'){
+        const blocked=new Set(await blockedIds(userId,session));
         let cursor=d.before as string|undefined,scanned=0;const found:Profile[]=[];
         while(scanned<150&&found.length<limit){
           const page=await hiddenPeoplePage(userId,Math.min(30,limit-found.length),cursor,session);cursor=page.nextCursor||undefined;scanned+=page.items.length;
           const people=await users().find({_id:{$in:page.items.map(row=>row.personId)}},{session}).limit(page.items.length).toArray(),byId=new Map(people.map(person=>[person._id,person]));
-          for(const item of page.items){const person=byId.get(item.personId),visible=person?.discoverable&&!person.suspendedAt;
+          for(const item of page.items){const person=byId.get(item.personId),visible=person?.discoverable&&!person.suspendedAt&&!blocked.has(item.personId);
             const view:Profile=visible?profile(person):{id:item.personId,name:'Unavailable person',city:'',bio:'',interests:[],discoverable:false,photos:[]};
             if(d.query&&visible&&!`${view.name} ${view.handle||''} ${view.bio} ${view.interests.join(' ')}`.toLowerCase().includes(String(d.query).toLowerCase()))continue;
             if(d.query&&!visible)continue;
@@ -322,7 +328,8 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
           }
           if(!cursor||!page.items.length)break;
         }
-        return {items:await withMutualCounts(userId,found,session,actor),nextCursor:cursor||null};
+        const enriched=await withMutualCounts(userId,found.filter(person=>!blocked.has(person.id)),session,actor),byId=new Map(enriched.map(person=>[person.id,person]));
+        return {items:found.map(person=>byId.get(person.id)||person),nextCursor:cursor||null};
       }
       const hiddenIds=d.includeHidden||d.query?[]:await hiddenPersonIds(userId,session);
       if (d.query) {
@@ -709,8 +716,8 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if (name === 'inbox.publish') await validateInboxLinks(actor.userId, parsed.links as import('../shared/inbox').InboxItem['links'], String(parsed.body));
   if (op.kind === 'read') {
     const result=op.outputSchema.parse(await run(name, parsed, actor));
-    // Private bookmark metadata is account activity, even on public record reads.
-    return actor.background&&actor.privateAccess===false?JSON.parse(JSON.stringify(result,(key,value)=>['saved','liked','hidden','friendAction','connectionId'].includes(key)?undefined:value)):result;
+    // Owner activity, including their poll selection, stays private on public-only reads.
+    return actor.background&&actor.privateAccess===false?JSON.parse(JSON.stringify(result,(key,value)=>key==='userVoteIndex'?null:['saved','liked','hidden','friendAction','connectionId'].includes(key)?undefined:value)):result;
   }
   if (actor.scope !== 'write') throw new AppError(403, 'scope', 'This token only has read access.');
   if (!idempotencyKey || !/^[\w:.-]{8,150}$/.test(idempotencyKey)) throw new AppError(422, 'idempotency_required', 'Writes need an idempotency key of 8–150 characters. Reuse it only when retrying the same action.');

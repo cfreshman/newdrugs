@@ -253,7 +253,8 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .notification-list > a > .notification-person {display:flex;align-items:center;gap:var(--space-2);color:var(--ink);}.notification-person img{width:32px;height:32px;flex:none;border-radius:50%;object-fit:cover;}.notification-person strong{min-width:0;overflow-wrap:anywhere;}
 .notification-meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--muted); font-size: var(--text-xs); width: 100%; }
 .sheet { width: min(440px, calc(100vw - 24px)); padding: var(--panel-inset); max-height: calc(100dvh - 24px); color: var(--ink); border: var(--border-width) solid var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--panel-shadow); font-size: var(--text-body); line-height: 1.6; overscroll-behavior: contain; }
-.settings-sheet { --settings-heading-gap:var(--space-6); display:flex; flex-direction:column; height:max-content; overflow:hidden; }
+.settings-sheet { --settings-heading-gap:var(--space-6); flex-direction:column; height:max-content; overflow:hidden; }
+.settings-sheet[open] { display:flex; }
 .settings-sheet>.sheet-heading { flex:none; margin-bottom:calc(var(--settings-heading-gap) / 2); }
 .settings-sheet>.sheet-body { flex:0 1 auto; min-height:0; min-width:0; padding-top:calc(var(--settings-heading-gap) / 2); overflow-y:auto; overscroll-behavior:contain; }
 .sheet::backdrop { background: var(--backdrop); backdrop-filter: blur(6px); }
@@ -292,6 +293,11 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .fields .check-label { flex-direction: row; align-items: center; gap: 10px; }
 .check-label input { accent-color: var(--primary); width: 18px; height: 18px; }
 .fields p { margin: 0; }
+.person-photo { display:grid; place-items:center; flex:none; width:100%; aspect-ratio:1; overflow:hidden; background:var(--surface); color:var(--muted); }
+.person-photo img { display:block; width:100%; height:100%; object-fit:cover; }
+.person-photo-placeholder { font-size:calc(var(--text-input) * 3); font-weight:600; }
+.person-photo.message-avatar { width:48px; height:48px; }
+.person-photo.message-avatar .person-photo-placeholder { font-size:var(--text-input); }
 .profile-editor-actions, .location-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
 .profile-editor-actions button, .location-actions button { display: inline-flex; align-items: center; gap: var(--space-1); }
 .profile-photos { border: 0; margin: 0; padding: 0; min-width: 0; }
@@ -356,8 +362,8 @@ p > :is(button,a[data-nav-link]).text-link { display: inline; min-height: 0; pad
 .storage-file { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .storage-delete { flex: 0 0 40px; width: 40px; height: 40px; display: grid; place-items: center; background: none; }
 .view-tabs { display: flex; gap: var(--space-1); padding: var(--space-1); margin: 0 0 var(--space-3); background: var(--surface-soft); border-radius: 999px; }
-.view-tabs button { flex: 1; background: none; color: var(--muted); padding: var(--space-2) var(--space-3); min-height: 36px; border-radius: 999px; }
-.view-tabs button[aria-pressed='true'] { color: var(--ink); font-weight: 700; background: var(--surface); text-decoration: none; }
+.view-tabs :is(button,a) { flex: 1; background: none; color: var(--muted); padding: var(--space-2) var(--space-3); min-height: 36px; border-radius: 999px; }
+.view-tabs :is(button[aria-pressed='true'],a[aria-current='page']) { color: var(--ink); font-weight: 700; background: var(--surface); text-decoration: none; }
 .post-composer + .view-tabs { margin-top: var(--space-4); }
 .people-list > a, .posts-list > div, .inbox-list > article { padding: var(--space-3); border: 0; border-radius: var(--radius-input); background: var(--surface-soft); }
 .posts-list > div:not(:last-child), .inbox-list article:not(:last-child) { border: 0; }
@@ -834,3 +840,5 @@ button, [role="button"], summary, input[type="button"], input[type="submit"], in
 .message-header-host .message-person { gap:var(--panel-inset); }
 
 .settings-version {flex:none;font:400 var(--text-xs)/1 var(--font-mono);}
+
+.view-tabs a { display:flex; align-items:center; justify-content:center; text-align:center; text-decoration:none; }

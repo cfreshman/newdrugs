@@ -2,6 +2,13 @@ import { expect, it } from 'vitest';
 import { destinationPath, parseDestination, surfaceViews } from '../shared/navigation';
 import { buildResourceLinks } from '../server/resourceLinks';
 const actor = { userId: 'me', source: 'external' as const, scope: 'read' as const };
+it('returns an exact original-recipe link for cooking through CLI and MCP',()=>{
+ const sourceUrl='https://based.cooking/apple-pie/',meal={id:'based:apple-pie',name:'Apple Pie',sourceUrl};
+ expect(buildResourceLinks('dinder.recipe',{mealId:meal.id},meal,actor)).toContainEqual(expect.objectContaining({targetKind:'exact',resourceType:'recipe',resourceId:meal.id,url:sourceUrl}));
+ expect(buildResourceLinks('dinder.get',{}, {id:'match',meal},actor)).toContainEqual(expect.objectContaining({resourceType:'recipe',url:sourceUrl}));
+ expect(parseDestination('/dinder/catalog','https://druggie.org')).toEqual({view:'dinder',resourceId:'catalog'});
+ expect(parseDestination('/dinder/catalog?tab=chat','https://druggie.org')).toBeNull();
+});
 it.each(surfaceViews)('round-trips the canonical %s route', view => {
   const destination = { view, ...(view==='post_list'?{postIds:['post:one','post:two']}:{}), ...(['person', 'post', 'messages', 'log_join', 'log_code'].includes(view) ? { resourceId: 'record:123' } : {}), areaCell: '852a3067fffffff', radiusMiles: 25 };
   expect(parseDestination(destinationPath(destination), 'https://dev.druggie.org')).toEqual(destination);

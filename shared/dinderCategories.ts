@@ -1,0 +1,4 @@
+export const DINDER_CATEGORIES=['Beef','Breakfast','Desserts','Drinks','Lamb & goat','Other','Pasta & noodles','Pork','Poultry','Seafood','Sides & starters','Vegan','Vegetarian'] as const;
+const aliases:Record<string,string>={chicken:'Poultry',turkey:'Poultry',duck:'Poultry',lamb:'Lamb & goat',goat:'Lamb & goat',mutton:'Lamb & goat',pasta:'Pasta & noodles',noodles:'Pasta & noodles',side:'Sides & starters',sides:'Sides & starters',starter:'Sides & starters',starters:'Sides & starters',appetizer:'Sides & starters',dessert:'Desserts',drink:'Drinks',beverage:'Drinks',beverages:'Drinks',fish:'Seafood',miscellaneous:'Other'};
+export function dinderCategory(value:string){const key=value.trim().toLowerCase();return DINDER_CATEGORIES.find(category=>category.toLowerCase()===key)||aliases[key]||'Other';}
+export const dinderCategoryFilters=(values:readonly string[])=>[...new Set(values.map(dinderCategory))];

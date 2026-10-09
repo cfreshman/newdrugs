@@ -38,6 +38,7 @@ addendum
 agent-written rules (you are allowed to edit below this line)
 
 - When the user corrects an earlier plan or statement, explicitly say what was wrong and what changes. Do not answer with “agreed” or another affirmation that implies the corrected approach was already yours. Verify that the implementation actually follows the correction before claiming it does.
+- Apply the specific correction fully while preserving the user's other requirements. Never undercorrect or swing to the opposite extreme. A wrong default needs an appropriate default, not removal of the default or mandatory manual setup. Do not substitute a new product decision for what Cyrus actually said.
 
 - Do not maintain rolling handoff, operating-guide, or release-history documents. Use Git commits, `release.json`, the live stage, and current source for release state.
 

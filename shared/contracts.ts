@@ -9,6 +9,7 @@ import {notificationPreferences,notificationPreference,notificationRuleOutput,no
 import {makeDraftOutput,makeDraftSummary,makeRenderOutput,makePublishOutput} from './make';
 import {iouList,iouLedger,iouRecorded} from './ious';
 import {quizOutput,quizPage,quizPerson} from './quizzes';
+import {dinderOutputs} from './dinder';
 import {spaceSchema,spacePageSchema,speakerRequestSchema,speakerRequestsSchema} from './spaces';
 import {timeResolveOutput,timeConvertOutput,timeOverlapOutput} from './utilitySchemas';
 import {customDocumentSchema} from './customMedia';
@@ -36,6 +37,7 @@ const searchMatch = z.object({ id, dataset:z.enum(['profiles','posts','replies',
 const searchRetrieval = z.object({id,mode:z.enum(['hybrid','semantic','keyword','exact']),model:z.string(),dimensions:z.number(),indexVersion:z.string(),constraints:z.object({includeHidden:z.boolean().optional(),scope:z.enum(['public','friends','saved']).optional(),near:z.string().optional(),radiusMiles:z.number().optional(),authorId:z.string().optional(),after:z.string().optional(),beforeDate:z.string().optional()}),candidates:z.number(),incomplete:z.boolean(),notices:z.array(z.string()),indexedAt:z.string().optional(),approximate:z.boolean()});
 const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetrieval,nextCursor:z.string().nullable()});
 export const outputs: Record<string, z.ZodType> = {
+  ...dinderOutputs,
   ...logOutputs,
   'make.create':makeDraftSummary,'make.get':makeDraftOutput,'make.edit':makeDraftSummary,'make.render':makeRenderOutput,'make.publish':makePublishOutput,'make.discard':z.object({discarded:z.literal(true),draftId:z.uuid()}),
   'spaces.list':spacePageSchema,'spaces.get':spaceSchema,'spaces.create':spaceSchema,'spaces.end':spaceSchema,'spaces.edit':spaceSchema,'spaces.offer_host':spaceSchema,'spaces.cancel_host_offer':spaceSchema,'spaces.accept_host':spaceSchema,'spaces.decline_host':spaceSchema,'spaces.requests':speakerRequestsSchema,'spaces.request_speak':speakerRequestSchema,'spaces.cancel_request':z.object({cancelled:z.literal(true)}),'spaces.invite_speaker':spaceSchema,'spaces.cancel_speaker_invite':spaceSchema,'spaces.respond_speaker_invite':spaceSchema,'spaces.pin_post':spaceSchema,'spaces.pin_link':spaceSchema,'spaces.unpin':spaceSchema,'spaces.respond_speaker':z.object({space:spaceSchema,personId:z.string(),approved:z.boolean()}),'spaces.revoke_speaker':z.object({space:spaceSchema,personId:z.string()}),'spaces.remove_person':z.object({space:spaceSchema,personId:z.string(),removed:z.literal(true)}),
@@ -90,7 +92,7 @@ export const outputs: Record<string, z.ZodType> = {
   'people.bff_set':z.object({personId:id,bff:z.boolean()}),
   'people.mutuals':page(z.object({id,name:z.string(),photoId:z.string().optional()})),
   'people.hide':z.object({personId:id,hidden:z.boolean()}),
-  'app.open': z.object({ open: z.string(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), messageId:z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
+  'app.open': z.object({ open: z.string(),dinderTab:z.literal('chat').optional(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), messageId:z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
   'search.query':searchResult, 'posts.search':searchResult, 'search.similar':searchResult, 'search.refine':searchResult,
   'search.global':z.object({items:z.array(z.object({source:z.enum(['public','log','chat','messages']),kind:z.enum(['person','post','talk','log','chat','message']),id,title:z.string(),snippet:z.string(),url:z.url(),score:z.number()})),notices:z.array(z.object({source:z.enum(['public','log','chat','messages']),text:z.string()})),errors:z.array(z.object({source:z.enum(['public','log','chat','messages']),message:z.string()}))}),
   'search.explain':z.object({match:searchMatch,retrieval:searchRetrieval}),
@@ -104,7 +106,7 @@ export const outputs: Record<string, z.ZodType> = {
   'connections.get': z.object({ connection, people: z.array(profileOutput) }),
   'connections.request': connection, 'connections.respond': connection, 'connections.withdraw': connection, 'connections.disconnect': connection, 'messages.get': message, 'messages.window':z.object({items:z.array(message),targetId:id,connection,people:z.array(profileOutput),olderCursor:id.nullable(),newerCursor:id.nullable()}), 'messages.search':z.object({items:z.array(z.object({id,connectionId:id,fromId:id,text:z.string(),createdAt:z.string(),score:z.number(),person:z.object({id,name:z.string(),handle:z.string().optional(),photoId:z.string().optional()})})),nextCursor:id.nullable(),mode:z.enum(['hybrid','keyword']),indexing:z.boolean(),notices:z.array(z.string())}), 'messages.list': page(message), 'messages.send': message,
   'messages.mark_read': z.object({ read: z.literal(true), throughMessageId: z.string().optional() }),
-  'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'call', 'connection_accepted', 'review', 'post_like', 'post_reply', 'post_mention', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added', 'iou', 'quiz', 'alert']), title: z.string(), text: z.string(), createdAt: z.string(), photoId:z.string().optional(), connectionId: z.string().optional(), callId:z.string().optional(),callActive:z.boolean().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
+  'notifications.list': z.object({ unread: z.number(), unreadCapped:z.boolean().optional(),nextCursor:z.string().nullable().optional(), items: z.array(z.object({ id, kind: z.enum(['invitation', 'message', 'call', 'connection_accepted', 'review', 'post_like', 'post_reply', 'post_mention', 'agent_update', 'automation_status', 'log_invitation', 'log_update', 'log_added', 'iou', 'quiz', 'dinder_match', 'dinder_message', 'alert']), title: z.string(), text: z.string(), createdAt: z.string(), photoId:z.string().optional(), connectionId: z.string().optional(), callId:z.string().optional(),callActive:z.boolean().optional(), read: z.boolean(), link: resourceLinkOutput })) }),
   'notifications.read': z.object({ read: z.literal(true) }),
   'notifications.read_all':z.object({read:z.literal(true),readAt:z.string()}),
   'notifications.preferences':notificationPreferences,'notifications.preference_set':notificationPreference,
@@ -119,6 +121,11 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'dinder.preferences_update':'Save these dinner preferences. When carrySwipes is enabled, unused likes automatically re-enter future dinner windows and may create a meal match without another swipe.',
+  'dinder.swipe':'Save this meal choice for the displayed dinner window. A like can create a private cooking match and notify both people; it does not add a friend.',
+  'dinder.cancel':'End this meal match for both people. Its recipe and messages are kept.',
+  'dinder.postpone':'Record this vote to move the meal to the next day. The day changes only when both people agree and their new dinner slots are available.',
+  'dinder.again':'Record this vote to cook the recipe together again next week. A separate meal match is created only when both people agree.',
   'quizzes.create':'Send this quiz and your answers to the selected friend, who will be notified.',
   'quizzes.answer':'Publish these replacement answers in the shared quiz. Your friend can read them.',
   'ious.record':'Add this exact amount and reason to the shared IOU history and notify the other person. It records an amount or an outside settlement.',

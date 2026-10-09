@@ -47,7 +47,7 @@ it('replaces a hidden card with Undo and retains it through a same-filter refres
  api.operation.mockImplementation(async(name:string,input:{hidden?:boolean})=>{if(name==='people.hide'){hidden=Boolean(input.hidden);return {personId:'person',hidden};}return {items:hidden?[]:[{id:'person',handle:'person',name:'Person',city:'',bio:'',interests:[],discoverable:true,friendAction:'invite'}],nextCursor:null};});
  const user={id:'viewer',handle:'viewer',name:'Viewer',city:'',bio:'',interests:[],discoverable:true};
  await act(async()=>dom.root.render(createElement(PeoplePanel,{user,initialScope:'all',navigate:vi.fn()})));
- await act(async()=>dom.container.querySelector<HTMLButtonElement>('.person-card-actions .text-link')!.click());
+ await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('.person-card-actions button')].find(button=>button.textContent==='Hide')!.click());
  expect(dom.container.querySelector('.person-hide-undo')?.textContent).toBe('HiddenUndo');
  await act(async()=>{dom.container.querySelector<HTMLFormElement>('.discovery-search')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));});
  expect(dom.container.querySelector('.person-hide-undo')?.textContent).toBe('HiddenUndo');

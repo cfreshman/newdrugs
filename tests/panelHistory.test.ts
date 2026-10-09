@@ -20,3 +20,7 @@ it('preserves distinct collection filters', () => {
   const other: PanelLocation = { panel: 'feed', context: { scope: 'all', query: 'hiking' } };
   expect(navigatePanelHistory([feed], reply, other)).toEqual({ current: other, history: [feed, reply] });
 });
+it('opens a meal chat in the existing Dinder page without adding a tab to Back history',()=>{
+ const meal:PanelLocation={panel:'dinder',context:{resourceId:'meal'}},chat:PanelLocation={panel:'dinder',context:{resourceId:'meal',dinderTab:'chat'}};
+ expect(navigatePanelHistory([feed],meal,chat)).toEqual({current:chat,history:[feed]});
+});

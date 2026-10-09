@@ -28,6 +28,8 @@ export async function notificationState(userId: string, session?: ClientSession,
     {$lookup:{from:'connections',localField:'pairId',foreignField:'_id',pipeline:[{$match:{status:'accepted'}},{$project:{_id:1}}],as:'alertConnection'}},
     {$lookup:{from:'circlePairs',localField:'pairId',foreignField:'_id',pipeline:[{$match:{mutualCount:{$gt:0}}},{$project:{_id:1}}],as:'alertCircle'}},
     {$lookup:{from:'quizzes',localField:'quizId',foreignField:'_id',pipeline:[{$match:{members:userId}},{$project:{_id:1}}],as:'quiz'}},
+    {$lookup:{from:'dinderMatches',localField:'matchId',foreignField:'_id',pipeline:[{$match:{members:userId}},{$project:{_id:1}}],as:'dinderMatch'}},
+    {$match:{$or:[{kind:{$nin:['dinder_match','dinder_message']}},{'dinderMatch.0':{$exists:true}}]}},
     {$match:{$and:[{$or:[{kind:{$nin:logKinds}},{'logEntry.0':{$exists:true}}]},{$or:[{kind:{$ne:'quiz'}},{'quiz.0':{$exists:true}}]},{$or:[{kind:{$ne:'alert'}},{resourceType:{$nin:['log','post','space','person']}},{resourceType:'log','alertLogEntry.0':{$exists:true}},{resourceType:'post','alertPost.0':{$exists:true}},{resourceType:'space','alertSpace.0':{$exists:true}},{resourceType:'person',alertType:'birthday','alertConnection.0':{$exists:true}},{resourceType:'person',alertType:{$ne:'birthday'},'alertCircle.0':{$exists:true}}]}]}},
   ];
   const lanes=await notificationLanes(userId,blocked,eligibleRecords,session,before);
@@ -41,6 +43,10 @@ export async function notificationState(userId: string, session?: ClientSession,
   const link = (connectionId: string,messageId?:string): ResourceLink => ({ rel: 'open_in_newdrugs', targetKind: 'exact', title: messageId?'Open message':'Open conversation', url: new URL(destinationPath({ view: 'messages', resourceId: connectionId,...(messageId?{messageId}:{}) }), config.uiOrigin).href, resourceType: messageId?'message':'conversation', resourceId: messageId||connectionId });
   const items: Notification[] = invitations.map(row => ({ id: `invite:${row._id}`, kind: 'invitation', title: `Invitation from ${label(String(row.fromId))}`, text: String(row.note), createdAt: String(row.createdAt), read: row.status !== 'pending' || Boolean(row.notificationReadAt), connectionId: row._id, link: link(row._id) }));
   for (const row of stored) {
+    if(row.kind==='dinder_match'||row.kind==='dinder_message'){
+      const actor=label(String(row.actorId)),matchId=String(row.matchId);
+      items.push({id:row._id,kind:row.kind,title:row.kind==='dinder_match'?`Cook ${String(row.text)} with ${actor}`:`Dinder message from ${actor}`,text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open meal match',url:new URL(destinationPath({view:'dinder',resourceId:matchId,...(row.kind==='dinder_message'?{dinderTab:'chat' as const}:{})}),config.uiOrigin).href,resourceType:'dinder_match',resourceId:matchId}});continue;
+    }
     if(row.kind==='call'){
       const call=byCall.get(String(row.callId)),actor=label(String(row.actorId)),active=Boolean(call&&call.status!=='ended');
       items.push({id:row._id,kind:'call',title:active?`Video call from ${actor}`:call?.joinedAt?`Video call with ${actor}`:`Missed call from ${actor}`,text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),connectionId:String(row.connectionId),callId:String(row.callId),callActive:active,link:link(String(row.connectionId))});continue;

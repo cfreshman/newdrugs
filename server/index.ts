@@ -25,6 +25,8 @@ import {startNotificationSchedule} from './notificationSchedule';
 import {startPostVideoLinkWorker} from './postVideoLinks';
 import {migrateAutomationAuthority} from './automations';
 import {reconcileQuizViews} from './quizzes';
+import {startDinderCatalogWorker} from './dinderCatalog';
+import {startDinderRolloverWorker} from './dinder';
 
 await connectDatabase();
 if(config.PROCESS_ROLE!=='web')await migrateAutomationAuthority();
@@ -50,6 +52,8 @@ const stopNotifications = background ? startNotificationWorker() : async () => {
 const stopNotificationRules = background ? startNotificationRuleIndex() : async () => {};
 const stopNotificationSchedule = background ? startNotificationSchedule() : async () => {};
 const stopPostVideoLinks = background ? startPostVideoLinkWorker() : async () => {};
+const stopDinderCatalog = background ? startDinderCatalogWorker() : async () => {};
+const stopDinderRollover = background ? startDinderRolloverWorker() : async () => {};
 let cleaning = false;
 const uploadCleanup = background ? setInterval(() => { if (cleaning) return; cleaning = true; void expireUploads().catch(error => console.error('Upload cleanup:', error.name)).finally(() => { cleaning = false; }); }, 10000) : undefined;
 const server = config.PROCESS_ROLE !== 'worker' ? createApp().listen(config.PORT, '127.0.0.1', () => {
@@ -64,7 +68,7 @@ const shutdown = async () => {
   setTimeout(() => process.exit(1), 20000).unref(); clearInterval(uploadCleanup);
   await Promise.all([stopWorker(),stopWorkerHealth(),stopSearch(),stopPush(),stopChatSearch(),stopDMSearch(),stopLedgerActivity(),stopRetrieval(),stopLogSearch(),stopCalendar(),stopContacts(),stopAttachmentReferences(),stopLiveMediaEffects(),stopSpacePresence(),stopCircle(),stopNotifications(),stopNotificationRules(),stopNotificationSchedule(),stopPostVideoLinks(),stopLiveState()]);
   if (server) await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
-  await mongo.close(); process.exit(0);
+  await Promise.all([stopDinderCatalog(),stopDinderRollover()]);await mongo.close(); process.exit(0);
 };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

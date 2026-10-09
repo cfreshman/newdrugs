@@ -43,8 +43,8 @@
 .mode-page .post-action {min-height:30px;gap:6px;font-size:12px;}
 .mode-page .post-area {font-size:11px;}
 .mode-page .view-tabs {margin:0 calc(-1 * var(--panel-inset));padding:6px var(--panel-inset);background:transparent;border-radius:0;gap:4px;}
-.mode-page .view-tabs button {padding:9px 12px;}
-.mode-page .view-tabs button[aria-pressed=true] {background:var(--surface-soft);}
+.mode-page .view-tabs :is(button,a) {padding:9px 12px;}
+.mode-page .view-tabs :is(button[aria-pressed=true],a[aria-current=page]) {background:var(--surface-soft);}
 .mode-page .search-field {margin-bottom:10px;}
 .mode-page-compose {padding:var(--panel-inset);}
 .mode-page-compose .post-composer {background:var(--surface-soft);padding:var(--card-inset);border-radius:var(--radius-panel);}
@@ -127,8 +127,8 @@
   .mode-switch {background:var(--floating-control-surface);backdrop-filter:blur(var(--floating-control-blur));-webkit-backdrop-filter:blur(var(--floating-control-blur));box-shadow:none;}
   .mode-mobile-nav {padding-bottom:var(--mode-section-gap);gap:var(--space-1);}
   .mode-page .view-tabs {padding-block:0;}
-  .mode-mobile-nav a, .mode-page .view-tabs button {min-height:32px;padding:6px 11px;font-size:var(--text-sm);line-height:20px;font-weight:500;color:var(--muted);background:transparent;border-radius:999px;}
-  .mode-mobile-nav a[aria-current=page], .mode-page .view-tabs button[aria-pressed=true] {font-weight:700;color:var(--ink);background:var(--surface-soft);}
+  .mode-mobile-nav a, .mode-page .view-tabs :is(button,a) {min-height:32px;padding:6px 11px;font-size:var(--text-sm);line-height:20px;font-weight:500;color:var(--muted);background:transparent;border-radius:999px;}
+  .mode-mobile-nav a[aria-current=page], .mode-page .view-tabs :is(button[aria-pressed=true],a[aria-current=page]) {font-weight:700;color:var(--ink);background:var(--surface-soft);}
   .mode-page .discovery-search {margin-bottom:var(--mode-section-gap);}
   .mode-page .search-area-controls {margin:var(--mode-section-gap) 0 0;}
   .mode-page .view-tabs + *, .mode-page .posts-list, .mode-page .people-list {margin-top:var(--mode-section-gap);}
@@ -171,3 +171,5 @@
   justify-content:stretch;
  }
 }
+
+@media(max-width:760px){.social-experience .mode-main,.social-experience .mode-primary-panel,.social-experience .mode-mobile-nav{min-width:0;}.social-experience .mode-main{width:100%;}}

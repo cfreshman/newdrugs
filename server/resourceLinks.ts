@@ -10,10 +10,22 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   const add = (destination: Destination, title: string, targetKind: ResourceLink['targetKind'], resourceType: string, resourceId?: string) => {
     links.push({ rel: 'open_in_newdrugs', targetKind, title: title.slice(0, 160), url: new URL(destinationPath(destination), config.uiOrigin).href, resourceType, ...(resourceId ? { resourceId } : {}) });
   };
+  const recipeLink=(meal:Record<string,any>)=>{
+    try{const url=new URL(meal.sourceUrl);if(!['https:','http:'].includes(url.protocol)||url.username||url.password)return;links.push({rel:'open_in_newdrugs',targetKind:'exact',title:`See ${meal.name||'recipe'}`.slice(0,160),url:url.href,resourceType:'recipe',resourceId:meal.id});}catch{}
+  };
   if(name.startsWith('agent.instructions.')){add({view:'agent_instructions'},'Guidance','surface','agent_instructions');return links;}
   if(name.startsWith('agent.memory.')){add({view:'agent_memory'},'Agent memory','surface','agent_memory');return links;}
   if(name==='access.get'){add({view:'agents'},'Connected agents','surface','agents');return links;}
   if(name==='account.preferences'||name==='account.preferences_update'){add({view:'preferences'},'Preferences','surface','preferences');return links;}
+  if(name.startsWith('dinder.')){
+   if(name==='dinder.recipe'){recipeLink(data);add({view:'dinder',resourceId:'catalog'},'Dinder catalog','surface','dinder');return links;}
+   if(name==='dinder.catalog'){add({view:'dinder',resourceId:'catalog'},'Dinder catalog','surface','dinder');return links;}
+   const matches=name==='dinder.matches'?rows:data.match?[object(data.match)]:['dinder.get','dinder.cancel','dinder.postpone','dinder.again'].includes(name)?[data]:[];
+   for(const match of matches)if(match.id){add({view:'dinder',resourceId:match.id},`Cook ${match.meal?.name||'together'}`,'exact','dinder_match',match.id);if(match.meal)recipeLink(match.meal);}
+   if(name==='dinder.calendar')for(const day of rows)if(day.matchId)add({view:'dinder',resourceId:day.matchId},day.mealName,'exact','dinder_match',day.matchId);
+   if(typeof data.matchId==='string')add({view:'dinder',resourceId:data.matchId,dinderTab:'chat'},'Open meal chat','exact','dinder_match',data.matchId);
+   if(!links.length)add({view:'dinder',...(name==='dinder.matches'||name==='dinder.calendar'?{resourceId:'calendar'}:name.startsWith('dinder.preferences')?{resourceId:'settings'}:{})},'Dinder','surface','dinder');return links;
+  }
   if(name.startsWith('quizzes.')){for(const row of name==='quizzes.list'?rows:[object(data.quiz||data)]){const personId=row.personId||row.person?.id||row.people?.find((person:{id:string})=>person.id!==actor.userId)?.id||data.person?.id;if(personId)add({view:'quizzes',resourceId:personId},'Open quiz','exact','quiz',personId);}if(!links.length)add({view:'quizzes'},'Quizzes','surface','quizzes');return links;}
   if(name==='people.bff_set'){add({view:'person',resourceId:String(input.personId)},'Open profile','exact','person',String(input.personId));return links;}
   if(name==='people.bffs'){for(const row of rows)if(row.id)add({view:'person',resourceId:row.id},'Open BFF profile','exact','person',row.id);add({view:'messages'},'Messages','surface','bffs');return links;}
@@ -84,7 +96,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   }
   else if (name === 'app.open' && data.open === 'chat_history' && data.resourceId) add({ view: 'chat', resourceId: data.resourceId }, 'Open chat message', 'exact', 'chat_message', data.resourceId);
   else if (name.startsWith('conversation.')) add({ view: 'chat' }, 'Open your agent chat', 'surface', 'chat');
-  else if (name === 'app.open') add({ view: data.open,date:data.date,logMonth:data.logMonth,logScope:data.logScope,personId:data.personId, resourceId: data.resourceId, messageId:data.messageId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.messageId||data.resourceId);
+  else if (name === 'app.open') add({ view: data.open,dinderTab:data.dinderTab,date:data.date,logMonth:data.logMonth,logScope:data.logScope,personId:data.personId, resourceId: data.resourceId, messageId:data.messageId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.messageId||data.resourceId);
   else if (name === 'files.get' || name === 'files.list') for (const row of rows) if (row.ready && typeof row.id === 'string') links.push({ rel: 'download', targetKind: 'exact', title: String(row.name), url: new URL(`/api/files/${encodeURIComponent(row.id)}`, config.APP_ORIGIN).href, resourceType: 'file', resourceId: row.id });
   // Deleted/blocked/reported records have no promised inspectable destination.
   return links.filter((link, index) => links.findIndex(other => other.url === link.url) === index).slice(0, 40);

@@ -80,7 +80,7 @@ export async function dispatchLiveChange(event:ChangeStreamDocument<Document>){
   let members=document?.members as string[]|undefined;
   if(collection==='directMessages'&&document?.connectionId)members=(await rows('connections').findOne({_id:String(document.connectionId)},{projection:{members:1}}))?.members as string[]|undefined;
   if(collection==='blocks'&&!members)members=key.split(':');
-  for(const id of members||[])dirty(id,['notifications']);records(members||[],{keys:['connections','messages','people','posts','log']});return;
+  for(const id of members||[])dirty(id,['notifications']);records(members||[],{keys:['connections','messages','people','posts','log','dinder']});return;
  }
  const owner=document?.userId;if(!owner)return;
  if(collection==='agentInbox'||collection==='automations'){records([owner],{keys:[collection==='agentInbox'?'inbox':'automations']});dirty(owner,['notifications']);return;}

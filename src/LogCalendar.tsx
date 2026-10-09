@@ -19,17 +19,10 @@ import {useVirtualizer,defaultRangeExtractor,type Range,type Virtualizer} from '
 import {retainCalendarWeeks} from './logCalendarRetention';
 import {LOG_WEEK_BATCH,logWeekStart,logCalendarWeeks,logWeekMonth,logCover} from './logCalendarModel';
 import {NavLink} from './NavLink';
+import {observeVisibleElementRect} from './virtualScroll';
 
 type Scope='all'|'private'|'shared';
 const EMPTY_ENTRIES:LogEntry[]=[];
-// Preserved panels may become display:none. Ignore zero-sized observations so
-// hiding an overlay does not discard the visible rows or their scroll anchor.
-function observeCalendarRect(instance:Virtualizer<HTMLElement,Element>,callback:(rect:{width:number;height:number})=>void){
- const node=instance.scrollElement;if(!node)return;
- const measure=()=>{if(node.clientWidth&&node.clientHeight)callback({width:node.clientWidth,height:node.clientHeight});};
- measure();const observer=new ResizeObserver(measure);observer.observe(node);return()=>observer.disconnect();
-}
-
 export function LogCalendar({month,scope,query,personId,date:initialDay,onDayChange,jump,create,open,openPerson,onPreviews,seedEntries=EMPTY_ENTRIES}:{date?:string;onDayChange?(date:string|undefined):void;month?:string;scope:Scope;query:string;personId?:string;jump(month?:string):void;create(date:string):void;open(entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null):void;openPerson?(personId:string):void;onPreviews?(entries:LogCalendarTile[]):void;seedEntries?:LogEntry[]}){
  const actions=useRef({open,create,openPerson,onPreviews,onDayChange});actions.current={open,create,openPerson,onPreviews,onDayChange};
  const openEntry=useCallback((entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null)=>{if("contributors" in entry)primeLogEntry(entry);actions.current.open(entry,list,query,cursor);},[]);
@@ -97,7 +90,7 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
   });
   return [...retainedWeeks.current.keys()].flatMap(week=>{const index=weekIndices.get(week);return index===undefined?[]:[index];}).sort((a,b)=>a-b);
  },[starts,weekIndices,onDay,thumbnailCounts]);
- const virtual=useVirtualizer({count:starts.length,getScrollElement,getItemKey,estimateSize,measureElement,rangeExtractor,overscan:10,gap:1,initialRect:{width:600,height:800},observeElementRect:observeCalendarRect});
+ const virtual=useVirtualizer({count:starts.length,getScrollElement,getItemKey,estimateSize,measureElement,rangeExtractor,overscan:10,gap:1,initialRect:{width:600,height:800},observeElementRect:observeVisibleElementRect});
  const virtualRows=virtual.getVirtualItems();
  // Retained rows are presentation only. Prefetch follows the actual viewport.
  const viewportRows=virtual.range?defaultRangeExtractor({...virtual.range,overscan:10,count:starts.length}):[];

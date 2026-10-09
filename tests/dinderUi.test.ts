@@ -1,0 +1,81 @@
+// @vitest-environment jsdom
+import {act,createElement} from 'react';
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {DinderPanel} from '../src/DinderPanel';
+import {nextDinnerPlan,dinnerSchedule} from '../shared/dinder';
+import {setupDOM} from './dom';
+const api=vi.hoisted(()=>({operation:vi.fn()}));
+vi.mock('../src/api',async original=>({...await original<typeof import('../src/api')>(),operation:api.operation}));
+vi.mock('../src/useRecordRefresh',()=>({useRecordRefresh:()=>{}}));
+vi.mock('../src/LinkPreview',()=>({LinkPreviews:()=>null}));
+const user={id:'me',handle:'me',name:'Me',city:'',bio:'',interests:[],discoverable:true};
+const preferences={startTime:'19:00',timeZone:'America/New_York',mode:'virtual' as const,carrySwipes:false,excludedCategories:[],revision:1};
+const meal={id:'52771',name:'Spicy Arrabiata',category:'Vegetarian',area:'Italian',imageUrl:'https://www.themealdb.com/images/media/meals/ustsqw1468250014.jpg',sourceUrl:'https://www.themealdb.com/meal/52771',instructions:'Cook the pasta.',ingredients:[{name:'Pasta',measure:'200 g'}]};
+const plan=nextDinnerPlan(user.id,preferences),otherPlan={...plan,userId:'other'},match={id:'31ce42e7-24f7-4a7d-b6d5-10bb4b9bcc34',meal,members:['me','other'],people:[{id:'me',name:'Me',handle:'me',profileAvailable:true},{id:'other',name:'Other',handle:'other',profileAvailable:true}],date:plan.date,...dinnerSchedule(plan,otherPlan),plans:[plan,otherPlan],mode:'virtual' as const,status:'matched' as const,revision:1,postponeVotes:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+let dom:ReturnType<typeof setupDOM>;
+beforeEach(()=>{dom=setupDOM();api.operation.mockReset().mockImplementation(async(name:string,input:any)=>name==='dinder.preferences'?{preferences}:name==='dinder.deck'?{items:[meal],categories:['Vegetarian'],nextCursor:null,catalogReady:true,preferences,plan,match:null}:name==='dinder.swipe'?{mealId:meal.id,liked:input.liked,preferences,match}:name==='dinder.get'?match:name==='dinder.messages'?{items:[],nextCursor:null,match}:name==='dinder.message_send'?{id:'message',matchId:match.id,fromId:'me',text:input.text,createdAt:new Date().toISOString()}:name==='dinder.preferences_update'?{...input,revision:2}:{read:true});});
+afterEach(()=>dom.cleanup());
+it('uses a real meal, binds a swipe to the displayed cutoff, and opens scoped chat without requesting a friendship',async()=>{
+ const navigate=vi.fn();await act(async()=>dom.root.render(createElement(DinderPanel,{user,navigate})));
+ expect(dom.container.textContent).toContain('Spicy Arrabiata');expect(dom.container.querySelector('.dinder-recipe-photo img')?.getAttribute('src')).toBe(`${meal.imageUrl}/medium`);
+ await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='YES')!.click());
+ expect(api.operation).toHaveBeenCalledWith('dinder.swipe',{mealId:meal.id,liked:true,desiredAt:plan.desiredAt,preferencesRevision:1,timeZone:preferences.timeZone},expect.objectContaining({confirmed:true}));
+ expect(dom.container.textContent).toContain('Preparing with');expect(dom.container.querySelector('.dinder-match .dinder-card')).not.toBeNull();expect(api.operation.mock.calls.some(([name])=>name.startsWith('connections.'))).toBe(false);
+ expect(dom.container.querySelectorAll('.dinder-nav')).toHaveLength(1);expect([...dom.container.querySelectorAll('.dinder-nav a')].map(link=>link.textContent)).toEqual(['Preparing','Chat','Calendar','Settings','About']);
+ expect(dom.container.querySelector('.dinder-nav a[aria-current=page]')?.textContent).toBe('Preparing');expect(dom.container.querySelector('.dinder-nav a:nth-child(2)')?.getAttribute('href')).toBe(`/dinder/${match.id}?tab=chat`);
+ await act(async()=>dom.root.render(createElement(DinderPanel,{user,resourceId:'about',navigate})));
+ expect([...dom.container.querySelectorAll('.dinder-nav a')].map(link=>link.textContent)).toEqual(['Preparing','Chat','Calendar','Settings','About']);
+});
+it('saves carry-over as an explicit dinner preference and keeps direct links available',async()=>{
+ const navigate=vi.fn();await act(async()=>dom.root.render(createElement(DinderPanel,{user:{...user,id:'settings-check'},resourceId:'settings',navigate})));
+ expect([...dom.container.querySelectorAll('.dinder-nav a')].map(link=>link.getAttribute('href'))).toEqual(['/dinder','/dinder/calendar','/dinder/settings','/dinder/about']);
+ await act(async()=>dom.container.querySelector<HTMLInputElement>('input[type=checkbox]')!.click());
+ await act(async()=>dom.container.querySelector<HTMLFormElement>('.dinder-settings')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ expect(api.operation).toHaveBeenCalledWith('dinder.preferences_update',expect.objectContaining({carrySwipes:true,startTime:'19:00',timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}),expect.objectContaining({confirmed:true}));
+});
+it('switches tabs within one page without navigation or history writes, preserving drafts and calendar position',async()=>{
+ const navigate=vi.fn(),original=api.operation.getMockImplementation()!;api.operation.mockImplementation((name:string,...args:unknown[])=>name==='dinder.calendar'?Promise.resolve({items:[]}):original(name,...args));
+ await act(async()=>dom.root.render(createElement(DinderPanel,{user,resourceId:match.id,navigate})));
+ const push=vi.spyOn(history,'pushState'),replace=vi.spyOn(history,'replaceState'),pick=(label:string)=>act(async()=>[...dom.container.querySelectorAll<HTMLAnchorElement>('.dinder-nav a')].find(link=>link.textContent===label)!.click());
+ await pick('Chat');const textarea=dom.container.querySelector<HTMLTextAreaElement>('.dinder-chat-screen textarea')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(textarea,'Keep my meal draft');textarea.dispatchEvent(new Event('input',{bubbles:true}));});
+ await pick('Calendar');const calendar=dom.container.querySelector<HTMLElement>('.dinder-calendar-scroll')!;calendar.scrollTop=240;
+ await pick('Settings');const time=dom.container.querySelector<HTMLInputElement>('input[type=time]')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(time,'18:15');time.dispatchEvent(new Event('input',{bubbles:true}));});
+ await pick('About');expect(dom.container.querySelector('.dinder-about')?.textContent).toContain('make it that same evening');expect(dom.container.querySelector('.dinder-about')?.textContent).toContain('Dinder is not (intentionally) for dating');
+ await pick('Settings');expect(time.value).toBe('18:15');
+ await pick('Calendar');expect(dom.container.querySelector('.dinder-calendar-scroll')).toBe(calendar);expect(calendar.scrollTop).toBe(240);
+ await pick('Preparing');await pick('Chat');expect(dom.container.querySelector('.dinder-chat-screen textarea')).toBe(textarea);expect(textarea.value).toBe('Keep my meal draft');
+ expect(navigate).not.toHaveBeenCalled();expect(push).not.toHaveBeenCalled();expect(replace).not.toHaveBeenCalled();expect(dom.container.querySelectorAll('.dinder-nav')).toHaveLength(1);
+});
+it('paints newest weeks before matches load and retains a bounded calendar without reloading unchanged tabs',async()=>{
+ const original=api.operation.getMockImplementation()!;let finish:(value:unknown)=>void=()=>{};
+ api.operation.mockImplementation((name:string,...args:unknown[])=>name==='dinder.calendar'?new Promise(resolve=>{finish=resolve;}):original(name,...args));
+ await act(async()=>dom.root.render(createElement(DinderPanel,{user:{...user,id:'calendar-speed'},resourceId:'calendar',navigate:vi.fn()})));
+ const calendar=dom.container.querySelector<HTMLElement>('.dinder-calendar-scroll')!,weeks=[...calendar.querySelectorAll('.dinder-calendar-week')],dates=(week:Element)=>[...week.querySelectorAll('time')].map(time=>time.dateTime);
+ expect(weeks.length).toBeGreaterThan(1);expect(calendar.querySelectorAll('.dinder-calendar-day').length).toBeLessThan(140);expect(dates(weeks[0])[0]>dates(weeks[1])[0]).toBe(true);expect(dates(weeks[0])).toEqual([...dates(weeks[0])].sort());expect(calendar.scrollTop).toBe(0);expect(calendar.getAttribute('aria-busy')).toBe('true');
+ await act(async()=>finish({items:[]}));expect(calendar.getAttribute('aria-busy')).toBe('false');
+ const pick=(label:string)=>act(async()=>[...dom.container.querySelectorAll<HTMLAnchorElement>('.dinder-nav a')].find(link=>link.textContent===label)!.click());
+ calendar.scrollTop=320;await pick('About');await pick('Calendar');
+ expect(dom.container.querySelector('.dinder-calendar-scroll')).toBe(calendar);expect(calendar.scrollTop).toBe(320);expect(api.operation.mock.calls.filter(([name])=>name==='dinder.calendar')).toHaveLength(1);
+});
+it('sends messages only through the meal scope and keeps a failed draft for retry',async()=>{
+ await act(async()=>dom.root.render(createElement(DinderPanel,{user,resourceId:match.id,dinderTab:'chat',navigate:vi.fn()})));
+ expect(dom.container.querySelectorAll('.dinder-nav')).toHaveLength(1);expect(dom.container.querySelector('.dinder-nav a[aria-current=page]')?.textContent).toBe('Chat');expect(dom.container.querySelector('.dinder-chat-recipe')?.getAttribute('href')).toBe(meal.sourceUrl);
+ const textarea=dom.container.querySelector<HTMLTextAreaElement>('.message-compose textarea')!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(textarea,'I have the pasta.');textarea.dispatchEvent(new Event('input',{bubbles:true}));});
+ api.operation.mockImplementationOnce(async()=>{throw Error('Connection lost');});
+ await act(async()=>dom.container.querySelector<HTMLFormElement>('.message-compose')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ expect(textarea.value).toBe('I have the pasta.');
+ await act(async()=>dom.container.querySelector<HTMLFormElement>('.message-compose')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ expect(textarea.value).toBe('');expect(dom.container.querySelector('.direct-message-content')?.textContent).toContain('I have the pasta.');
+ const sends=api.operation.mock.calls.filter(([name])=>name==='dinder.message_send');expect(sends).toHaveLength(2);expect(sends[0][2].key).toBe(sends[1][2].key);expect(sends[0][1].matchId).toBe(match.id);
+});
+it('advances the recipe immediately while the saved swipe is still pending',async()=>{
+ let complete:(value:unknown)=>void=()=>{};
+ api.operation.mockImplementation(async(name:string)=>name==='dinder.deck'?{items:[meal,{...meal,id:'second',name:'Next recipe'}],categories:['Vegetarian'],nextCursor:null,catalogReady:true,preferences,plan,match:null}:name==='dinder.swipe'?new Promise(resolve=>{complete=resolve;}):{read:true});
+ await act(async()=>dom.root.render(createElement(DinderPanel,{user:{...user,id:'speed-check'},navigate:vi.fn()})));
+ await act(async()=>[...dom.container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='YES')!.click());
+ expect(dom.container.querySelector('.dinder-live-card .dinder-recipe-name')?.textContent).toContain('Next recipe');
+ await act(async()=>complete({preferences,match:null}));
+});

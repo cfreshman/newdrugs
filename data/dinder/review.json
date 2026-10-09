@@ -1,0 +1,5745 @@
+{
+  "reviewedBy": "Codex",
+  "reviewDate": "2026-10-09",
+  "basis": "Finished mains, sides, desserts, drinks, and substantive meal components for a familiar base such as pasta, plausibly usable in roughly four hours. Exclude pizza-sauce/dressing/condiment-only tasks, raw dough alone, and all-day/overnight/multi-day preparation. Optional overnight improvements and storage directions are not exclusions.",
+  "items": [
+    {
+      "id": "53483",
+      "name": "Acaraje black-eyed pea fritters with shrimp filling",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53527",
+      "name": "Achiote Oil (Aceite Achiotado) Recipe",
+      "category": "Other",
+      "approved": false,
+      "reason": "Cooking-oil preparation rather than a substantial meal item."
+    },
+    {
+      "id": "53262",
+      "name": "Adana kebab",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53373",
+      "name": "Air Fryer Egg Rolls",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53158",
+      "name": "Air fryer patatas bravas",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53169",
+      "name": "Ajo blanco",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53525",
+      "name": "Ají de Aguacate Recipe (Colombian Spicy Avocado Sauce)",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Small avocado condiment/dressing rather than a substantial meal item."
+    },
+    {
+      "id": "53138",
+      "name": "Alfajores",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53284",
+      "name": "Algerian Bouzgene Berber Bread with Roasted Pepper Sauce",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53282",
+      "name": "Algerian Carrots",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53288",
+      "name": "Algerian Flafla (Bell Pepper Salad)",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53281",
+      "name": "Algerian Kefta (Meatballs)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53529",
+      "name": "Almojábanas (Colombian Cheese Bread)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53495",
+      "name": "Amok Trey – Cambodian Fish Curry",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53430",
+      "name": "Antiguan Breakfast (Chop Up and ‘Saltfish’)",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "53111",
+      "name": "Anzac biscuits",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53049",
+      "name": "Apam balik",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52893",
+      "name": "Apple & Blackberry Crumble",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:apple-chicken",
+      "name": "Apple Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52768",
+      "name": "Apple Frangipan Tart",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53575",
+      "name": "Apple Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:apple-pie",
+      "name": "Apple Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53389",
+      "name": "Apple Potato Mash (Hete bliksem)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53380",
+      "name": "Apple cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53568",
+      "name": "Apple pie pops",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:apple-strudel",
+      "name": "Apple strudel",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53276",
+      "name": "Apricot & Turkish delight mess",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:ardei-umpluti",
+      "name": "Ardei umpluti with meat",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53439",
+      "name": "Arepa",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53334",
+      "name": "Arepa Pabellón",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53329",
+      "name": "Arepa pelua",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53392",
+      "name": "Arnhemse meisjes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53406",
+      "name": "Arra të Mbushura me Fik Walnut Stuffed Figs (with Fig Syrup)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:arroz-chaufa",
+      "name": "Arroz Chaufa",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53156",
+      "name": "Arroz al horno (baked rice)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53522",
+      "name": "Arroz con Leche Recipe",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53147",
+      "name": "Arroz con gambas y calamar",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53133",
+      "name": "Asado",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:asian-style-chicken-sticky-sauce",
+      "name": "Asian Style Chicken with Sticky Sauce",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "based:assam-tea",
+      "name": "Assam Tea",
+      "category": "Drinks",
+      "approved": true
+    },
+    {
+      "id": "53278",
+      "name": "Aubergine & hummus grills",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53267",
+      "name": "Aubergine couscous salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53099",
+      "name": "Aussie Burgers",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53425",
+      "name": "Authentic Laos Tapioca Pudding with Bananas",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53127",
+      "name": "Authentic Norwegian Kransekake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53107",
+      "name": "Avocado dip with new potatoes",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53050",
+      "name": "Ayam Percik",
+      "category": "Poultry",
+      "approved": false,
+      "reason": "The method requires overnight-to-two-day marination."
+    },
+    {
+      "id": "52995",
+      "name": "BBQ Pork Sloppy Joes",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53421",
+      "name": "BEEF LOK LAK (Lok Lak Sach Ko)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53094",
+      "name": "Baba Ghanoush",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53396",
+      "name": "Baghlaw-e-Khanagi",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53481",
+      "name": "Bahia-style Moqueca prawn stew",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53496",
+      "name": "Bai Sach Chrouk – Grilled Pork with Rice",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52807",
+      "name": "Baingan Bharta",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53456",
+      "name": "Bajan Salt Bread Recipe",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53460",
+      "name": "Bajan Sweet Bread",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:baked-mostaccioli",
+      "name": "Baked Mostaccioli",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53548",
+      "name": "Baked Yuca Fries",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53559",
+      "name": "Baked brie with sorrel jam",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:baked-pasta-with-broccoli",
+      "name": "Baked pasta with broccoli, boiled eggs and scamorza cheese",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52959",
+      "name": "Baked salmon with fennel & tomatoes",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52767",
+      "name": "Bakewell tart",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53279",
+      "name": "Baklava with spiced nuts, ricotta & chocolate",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53440",
+      "name": "Balchi di Pisca",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:banana-muffins-with-chocolate",
+      "name": "Banana Muffins with Chocolate",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52855",
+      "name": "Banana Pancakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:banana-oatmeal-cookies",
+      "name": "Banana and oatmeal cookies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53441",
+      "name": "Banana den Forno",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53239",
+      "name": "Bang bang prawn salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53451",
+      "name": "Bangladeshi fish curry with daikon",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53457",
+      "name": "Barbados Pepperpot",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53242",
+      "name": "Barbecue pork buns",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53103",
+      "name": "Barramundi with Moroccan spices",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:sweet-potato-fries",
+      "name": "Basic Sweet Potato Fries Recipe",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:basic-waffles",
+      "name": "Basic Waffles",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52894",
+      "name": "Battenberg Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52848",
+      "name": "Bean & Sausage Hotpot",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52928",
+      "name": "BeaverTails",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53071",
+      "name": "Beef Asado",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52997",
+      "name": "Beef Banh Mi Bowls with Sriracha Mayo, Carrot & Pickled Cucumber",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52904",
+      "name": "Beef Bourguignon",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52812",
+      "name": "Beef Brisket Pot Roast",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53070",
+      "name": "Beef Caldereta",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52873",
+      "name": "Beef Dumpling Stew",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53317",
+      "name": "Beef Empanadas",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:beef-goulash",
+      "name": "Beef Goulash",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:beef-kidney",
+      "name": "Beef Kidney",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52952",
+      "name": "Beef Lo Mein",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53359",
+      "name": "Beef Mandi",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53068",
+      "name": "Beef Mechado",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53053",
+      "name": "Beef Rendang",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52824",
+      "name": "Beef Sunday Roast",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52803",
+      "name": "Beef Wellington",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53366",
+      "name": "Beef and Broccoli Stir-Fry",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52874",
+      "name": "Beef and Mustard Pie",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52878",
+      "name": "Beef and Oyster pie",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53238",
+      "name": "Beef pho",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53469",
+      "name": "Beef pumpkin Stew",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52834",
+      "name": "Beef stroganoff",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53307",
+      "name": "Beetroot & red cabbage sauerkraut",
+      "category": "Vegetarian",
+      "approved": false,
+      "reason": "Requires at least five days of fermentation."
+    },
+    {
+      "id": "53078",
+      "name": "Beetroot Soup (Borscht)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53313",
+      "name": "Beetroot latkes",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53316",
+      "name": "Beetroot pancakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:beijinho",
+      "name": "Beijinho",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53463",
+      "name": "Belgian Meatballs in Liège Syrup Sauce",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53468",
+      "name": "Belgian Stoemp",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53466",
+      "name": "Belgian Waterzooi Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53453",
+      "name": "Bengali Chicken Curry with Potatoes",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53013",
+      "name": "Big Mac",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53018",
+      "name": "Bigos (Hunters Stew)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53300",
+      "name": "Bigos (Polish hunter's stew)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53580",
+      "name": "Biss Jaggery Modak",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53069",
+      "name": "Bistek",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52979",
+      "name": "Bitterballen (Dutch meatballs)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53546",
+      "name": "Black Bean soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53536",
+      "name": "Black Beans Hotpot",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53482",
+      "name": "Black bean & meat stew - feijoada",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52891",
+      "name": "Blackberry Fool",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53080",
+      "name": "Blini Pancakes",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53100",
+      "name": "Blueberry & lemon friands",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:blueberry-smoothie",
+      "name": "Blueberry Smoothie",
+      "category": "Drinks",
+      "approved": true
+    },
+    {
+      "id": "53401",
+      "name": "Bolani with Potato Filling",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53438",
+      "name": "Bolita di Keshi",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:bolognese-sauce",
+      "name": "Bolognese Sauce",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53311",
+      "name": "Borsch",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53385",
+      "name": "Boterkoek (Dutch Butter Cake)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52914",
+      "name": "Boulangère Potatoes",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53036",
+      "name": "Boxty Breakfast",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52826",
+      "name": "Braised Beef Chilli",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53305",
+      "name": "Braised stuffed cabbage",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53485",
+      "name": "Brazilian carrot cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53476",
+      "name": "Brazilian cheese bread (pão de queijo)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53475",
+      "name": "Brazilian chocolate truffles - brigadeiro",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:bread",
+      "name": "Bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52792",
+      "name": "Bread and Butter Pudding",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53076",
+      "name": "Bread omelette",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "53533",
+      "name": "Breaded Steak Recipe (Lomo de Res Apanado)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53562",
+      "name": "Breadfruit Tacos",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53458",
+      "name": "Breadfruit in Butter Sauce",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53454",
+      "name": "Breadfruit in Butter Sauce Recipe",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52965",
+      "name": "Breakfast Potatoes",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "52913",
+      "name": "Brie wrapped in prosciutto & brioche",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires at least six hours of dough chilling before assembly and baking."
+    },
+    {
+      "id": "based:brigadeiro",
+      "name": "Brigadeiro",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52842",
+      "name": "Broccoli & Stilton soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52940",
+      "name": "Brown Stew Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53126",
+      "name": "Brun Lapskaus (Norwegian Beef Vegetable Stew)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53190",
+      "name": "Bryndzové Halušky",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52961",
+      "name": "Budino Di Ricotta",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53492",
+      "name": "Bulgarian Green Salad",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53493",
+      "name": "Bulgarian Honey Cookies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53060",
+      "name": "Burek",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:butter-chicken-masala",
+      "name": "Butter Chicken Masala Curry",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53544",
+      "name": "CAFE LA LLAVE ESPRESSO ICE CREAM",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53077",
+      "name": "Cabbage Soup (Shchi)",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53488",
+      "name": "Cabbage with Ground Beef",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53256",
+      "name": "Cacik",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:cacio-e-pepe",
+      "name": "Cacio e Pepe",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "based:caesar-salad",
+      "name": "Caesar Salad",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52819",
+      "name": "Cajun spiced fish tacos",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52939",
+      "name": "Callaloo Jamaican Style",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53361",
+      "name": "Callaloo and SaltFish",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "The method requires overnight desalting of the fish."
+    },
+    {
+      "id": "53428",
+      "name": "Camaro Grelhado Com Molho Cru (Grilled Prawns with Green Onion Sauce)",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53418",
+      "name": "Cambodian Stir-fried Morning Glory with Pork, Fermented Soybeans, and Garlic",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53420",
+      "name": "Cambodian Waffles (Num Poum)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52923",
+      "name": "Canadian Butter Tarts",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53141",
+      "name": "Carbonada Criolla",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:carbonara",
+      "name": "Carbonara",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53360",
+      "name": "Caribbean Tamarind balls",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52897",
+      "name": "Carrot Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53576",
+      "name": "Carrot and Bean Fritters",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52976",
+      "name": "Cashew Ghoriba Biscuits",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:casio-in-pastelletto",
+      "name": "Casio in pastelletto",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53508",
+      "name": "Cassava Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53564",
+      "name": "Cassava bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53330",
+      "name": "Cassava pizza",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:castagnole",
+      "name": "Castagnole",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53507",
+      "name": "Cayman Style Potato Salad",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53510",
+      "name": "Cayman-Style Lobster",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53055",
+      "name": "Cevapi Sausages",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:ceviche",
+      "name": "Ceviche",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52969",
+      "name": "Chakchouka",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53310",
+      "name": "Challah",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53290",
+      "name": "Cheese Borek",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53442",
+      "name": "Cheese Sticks",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:cheesy-ham-and-potato-bake",
+      "name": "Cheesy Ham and Potato Bake",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:cheesy-meatballs",
+      "name": "Cheesy Meatballs with Tomato Sauce",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52898",
+      "name": "Chelsea Buns",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53016",
+      "name": "Chick-Fil-A Sandwich",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53161",
+      "name": "Chicken & chorizo rice pot",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52846",
+      "name": "Chicken & mushroom Hotpot",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52796",
+      "name": "Chicken Alfredo Primavera",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52934",
+      "name": "Chicken Basquaise",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52956",
+      "name": "Chicken Congee",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52850",
+      "name": "Chicken Couscous",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52765",
+      "name": "Chicken Enchilada Casserole",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52818",
+      "name": "Chicken Fajita Mac and Cheese",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53367",
+      "name": "Chicken Fried Rice",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52875",
+      "name": "Chicken Ham and Leek Pie",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52795",
+      "name": "Chicken Handi",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52831",
+      "name": "Chicken Karaage",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53455",
+      "name": "Chicken Liver Pate Recipe",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53565",
+      "name": "Chicken Lollipop",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53358",
+      "name": "Chicken Mandi",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52920",
+      "name": "Chicken Marengo",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52879",
+      "name": "Chicken Parmentier",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "based:chicken-pasta-casserole",
+      "name": "Chicken Pasta Casserole",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53011",
+      "name": "Chicken Quinoa Greek Salad",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53549",
+      "name": "Chicken Salad With Mushrooms and Bacon",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53218",
+      "name": "Chicken Shawarma with homemade garlic herb yoghurt sauce",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53459",
+      "name": "Chicken and Potato Roti",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53531",
+      "name": "Chicken in Orange Sauce Recipe (Pollo a la Naranja)",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53261",
+      "name": "Chicken wings with cumin, lemon & garlic",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53186",
+      "name": "Chicken with saffron, raisins & pine nuts",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52870",
+      "name": "Chickpea Fajitas",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53166",
+      "name": "Chickpea, chorizo & spinach stew",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53516",
+      "name": "Chilean Dobladitas",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53514",
+      "name": "Chilean Empanada",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53513",
+      "name": "Chilean-Style Sopaipillas",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53265",
+      "name": "Chilli ginger lamb chops",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52839",
+      "name": "Chilli prawn linguine",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53365",
+      "name": "Chinese Orange Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53372",
+      "name": "Chinese Tomato Egg Stir Fry",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52910",
+      "name": "Chinon Apple Tarts",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53319",
+      "name": "Chivito sandwich",
+      "category": "Beef",
+      "approved": false,
+      "reason": "The included sandwich-bread method requires overnight dough preparation."
+    },
+    {
+      "id": "53063",
+      "name": "Chivito uruguayo",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52856",
+      "name": "Choc Chip Pecan Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52853",
+      "name": "Chocolate Avocado Mousse",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:chocolate_cake",
+      "name": "Chocolate Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52966",
+      "name": "Chocolate Caramel Crispy",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:chocolate-chip-cookies",
+      "name": "Chocolate Chip Cookies ",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53101",
+      "name": "Chocolate Coconut Squares",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52776",
+      "name": "Chocolate Gateau",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52860",
+      "name": "Chocolate Raspberry Brownies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52905",
+      "name": "Chocolate Souffle",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53320",
+      "name": "Chocolate alfajores",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53170",
+      "name": "Chocolate churros with chocolate & salted caramel sauce",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53324",
+      "name": "Chocolate empanadas",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53289",
+      "name": "Chorba Hamra bel Frik (Algerian Lamb, Tomato, and Freekeh Soup)",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53136",
+      "name": "Choripán",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53168",
+      "name": "Chorizo & chickpea soup",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53157",
+      "name": "Chorizo & soft-boiled egg salad",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53185",
+      "name": "Chorizo & tomato salad",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53159",
+      "name": "Chorizo, potato & cheese omelette",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53542",
+      "name": "Chorreadas",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52788",
+      "name": "Christmas Pudding Flapjack",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52989",
+      "name": "Christmas Pudding Trifle",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52990",
+      "name": "Christmas cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53283",
+      "name": "Chtitha Batata (Algerian Potato Stew)",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53528",
+      "name": "Chuletas de Cerdo a la Criolla (Pork Chops in Creole Sauce)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53153",
+      "name": "Churros",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53462",
+      "name": "Cinnamon Roll Cookies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:cinnaroll",
+      "name": "Cinnamon Rolls",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53116",
+      "name": "Cinnamon buns",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:cinque-pi",
+      "name": "Cinque Pi",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52840",
+      "name": "Clam chowder",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53154",
+      "name": "Clam, chorizo & white bean stew",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52988",
+      "name": "Classic Christmas pudding",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires eight hours of steaming, overnight cooling, and later reheating."
+    },
+    {
+      "id": "53555",
+      "name": "Classic Potato Salad",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53343",
+      "name": "Classic Tourtière",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53446",
+      "name": "Clear Soup with Semolina Dumplings",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53524",
+      "name": "Coconut Natilla Recipe",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53477",
+      "name": "Coconut quindim",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53037",
+      "name": "Coddled pork with cider",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53561",
+      "name": "Codfish deviled eggs",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53523",
+      "name": "Colombian Buñuelos Recipe",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53526",
+      "name": "Colombian Style Stuffed Potatoes",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53505",
+      "name": "Conch Fritters",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53512",
+      "name": "Conch Stew",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52832",
+      "name": "Coq au vin",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52977",
+      "name": "Corba",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53431",
+      "name": "Corn on the cob with lime, green chilli and coconut butter",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53096",
+      "name": "Corned Beef Hash",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52998",
+      "name": "Corned Beef and Cabbage",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53350",
+      "name": "Corned Beef and Cabbage – Jamaican Style",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53291",
+      "name": "Cornes de Gazelle (Gazelle Horns)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53490",
+      "name": "Cottage Cheese And Feta Stuffed Peppers",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:country-skillet",
+      "name": "Country Breakfast Skillet",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:country-crisp-cereals",
+      "name": "Country Crisp Cereals",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:crab-salad",
+      "name": "Crab salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52779",
+      "name": "Cream Cheese Tart",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53480",
+      "name": "Creamy Aji green sauce",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Herb dressing/condiment rather than a substantial meal item."
+    },
+    {
+      "id": "53532",
+      "name": "Creamy Corn Soup Recipe",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:creamy-mashed-potatoes",
+      "name": "Creamy Mashed Potatoes",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53530",
+      "name": "Creamy Mustard Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52841",
+      "name": "Creamy Tomato Soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53569",
+      "name": "Creamy mango smoothie",
+      "category": "Drinks",
+      "approved": true
+    },
+    {
+      "id": "53148",
+      "name": "Crema Catalana",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "The method requires chilling overnight."
+    },
+    {
+      "id": "53072",
+      "name": "Crispy Eggplant",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52999",
+      "name": "Crispy Sausages and Greens",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53419",
+      "name": "Crispy fried fish with ginger and fermented soybeans (trey chien chuon)",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53058",
+      "name": "Croatian Bean Stew",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53056",
+      "name": "Croatian lamb peka",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52830",
+      "name": "Crock Pot Chicken Baked Tacos",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "based:croque-monsieur",
+      "name": "Croque-monsieur bites",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:crostata",
+      "name": "Crostata",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:croutons",
+      "name": "Croutons",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53547",
+      "name": "Cuban Sandwich",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53309",
+      "name": "Cucumber & fennel salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53098",
+      "name": "Cumberland Pie",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53473",
+      "name": "Curried Spinach from Botswana",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52785",
+      "name": "Dal fry",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:danish-pancake",
+      "name": "Danish Pancake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53556",
+      "name": "Danish Rye Bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53338",
+      "name": "Date squares",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:diannes-southwest-salad",
+      "name": "Dianne's Southwestern Cornbread Salad",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53411",
+      "name": "Dolma Japrak Stuffed Vine Leaves",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53563",
+      "name": "Dominica mastiff bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53567",
+      "name": "Dominican Bakes",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53571",
+      "name": "Dominica’s coconut rough cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53193",
+      "name": "Drunken noodles (pad kee mao)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52907",
+      "name": "Duck Confit",
+      "category": "Poultry",
+      "approved": false,
+      "reason": "The method requires curing/marinating the duck overnight."
+    },
+    {
+      "id": "53137",
+      "name": "Dulce de Leche",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53543",
+      "name": "Dulce de Leche Cheesecake with a Maria Cookie Crust.",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52899",
+      "name": "Dundee cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53386",
+      "name": "Dutch Apple Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53387",
+      "name": "Dutch Spiced Breakfast Cake (Ontbijtkoek)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53393",
+      "name": "Dutch doughnuts",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53379",
+      "name": "Dutch poffertjes (mini pancakes)",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "53382",
+      "name": "Dutch stroopwafel",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53285",
+      "name": "Dziriat (Algerian Almond Tarts)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:easy-pizza-sauce",
+      "name": "Easy Pizza Sauce",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Pizza sauce still requires separately making a pizza, not a familiar ready base."
+    },
+    {
+      "id": "53143",
+      "name": "Easy Spanish chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53486",
+      "name": "Easy White Bean Soup",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52888",
+      "name": "Eccles Cakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52955",
+      "name": "Egg Drop Soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53370",
+      "name": "Egg Foo Young",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53073",
+      "name": "Eggplant Adobo",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:eggs-benedict",
+      "name": "Eggs Benedict",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53031",
+      "name": "Egyptian Fatteh",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53134",
+      "name": "Empanadas",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53518",
+      "name": "Empanadas Fritas de Queso",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52895",
+      "name": "English Breakfast",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "53149",
+      "name": "Ensaimada",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires at least twelve hours of dough rising."
+    },
+    {
+      "id": "52944",
+      "name": "Escovitch Fish",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52791",
+      "name": "Eton Mess",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53557",
+      "name": "Extra crispy chicken wings",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53254",
+      "name": "Ezme",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53139",
+      "name": "Fainá",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53266",
+      "name": "Falafel",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53091",
+      "name": "Falafel Pita Sandwich with Tahini Sauce",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:fall-vegetable-and-chickpea-curry",
+      "name": "Fall Vegetable and Chickpea Curry",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:farci-tomatoes",
+      "name": "Farci tomatoes",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53092",
+      "name": "Fasoliyyeh Bi Z-Zayt (Syrian Green Beans with Olive Oil)",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "53188",
+      "name": "Fašírky",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52919",
+      "name": "Fennel Dauphinoise",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:fennel-beans-and-kale-soup",
+      "name": "Fennel White Bean and Kale Soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53030",
+      "name": "Feteer Meshaltet",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53064",
+      "name": "Fettuccine Alfredo",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52835",
+      "name": "Fettucine alfredo",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53342",
+      "name": "Figgy Duff",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53399",
+      "name": "Firni",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53079",
+      "name": "Fish Soup (Ukha)",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52918",
+      "name": "Fish Stew with Rouille",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53043",
+      "name": "Fish fofos",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52802",
+      "name": "Fish pie",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53122",
+      "name": "Fiskesuppe (Creamy Norwegian Fish Soup)",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52906",
+      "name": "Flamiche",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53322",
+      "name": "Flan",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "The method requires chilling overnight and unmoulding the next day."
+    },
+    {
+      "id": "53341",
+      "name": "Flapper Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53464",
+      "name": "Flemish Hutsepot",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53413",
+      "name": "Flija Layered Pancake / Crepe",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "52815",
+      "name": "French Lentils With Garlic and Thyme",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "52915",
+      "name": "French Omelette",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52996",
+      "name": "French Onion Chicken with Roasted Carrots & Mashed Potatoes",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52903",
+      "name": "French Onion Soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:french-toast",
+      "name": "French Toast",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:guacamole",
+      "name": "Fresh Guacamole",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53061",
+      "name": "Fresh sardines",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:fried-anglerfish-fillet",
+      "name": "Fried Anglerfish fillet",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53509",
+      "name": "Fried Crab",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53178",
+      "name": "Fried calamari",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53572",
+      "name": "Fried cocoy banana",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53553",
+      "name": "Frikadeller - Danish Meatballs",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:fritatem-pomeranciis",
+      "name": "Fritatem pomeranciis",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53465",
+      "name": "Frog Legs Recipe in Garlic Butter",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "52957",
+      "name": "Fruit and Cream Cheese Breakfast Pastries",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53025",
+      "name": "Ful Medames",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52896",
+      "name": "Full English Breakfast",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:fume-sauce",
+      "name": "Fumé sauce",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53131",
+      "name": "Fyrstekake – Norwegian Prince Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53123",
+      "name": "Fårikål (Norwegian National Dish)",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53541",
+      "name": "Gallo pinto",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53144",
+      "name": "Gambas al ajillo",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52764",
+      "name": "Garides Saganaki",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53180",
+      "name": "Garlicky prawns with sherry",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52951",
+      "name": "General Tsos Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53381",
+      "name": "Gevulde speculaas",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "The method requires refrigerating the filled-cookie dough overnight."
+    },
+    {
+      "id": "53012",
+      "name": "Gigantes Plaki",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53578",
+      "name": "Gingerbread Waffles",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53021",
+      "name": "Golabki (cabbage roll)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:grands-peres",
+      "name": "Grands-pères au sirop d'érable (Maple Dumplings)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:granita",
+      "name": "Granita",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "The provided freezing/stirring method can take about twenty hours."
+    },
+    {
+      "id": "53346",
+      "name": "Grape Nut Ice Cream",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires at least six hours of freezing."
+    },
+    {
+      "id": "53274",
+      "name": "Griddled aubergines with sesame dressing",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53272",
+      "name": "Griddled flatbreads",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52829",
+      "name": "Grilled Mac and Cheese Sandwich",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53041",
+      "name": "Grilled Portuguese sardines",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53255",
+      "name": "Grilled aubergines with spicy chickpeas & walnut sauce",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53478",
+      "name": "Grilled corn with garlic mayo & grated cheese",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53074",
+      "name": "Grilled eggplant with coconut milk",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53450",
+      "name": "Grits",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "53397",
+      "name": "Haft Mewa Recipe",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires two days of soaking/resting before serving."
+    },
+    {
+      "id": "53179",
+      "name": "Ham croquetas",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53035",
+      "name": "Ham hock colcannon",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:burger-dressing",
+      "name": "Hamburger dressing",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Dressing/condiment rather than a substantial meal item."
+    },
+    {
+      "id": "53452",
+      "name": "Handesh – Bangladeshi rice flour and date molasses cakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:hearty-breakfast-oatmeal",
+      "name": "Hearty Breakfast Oatmeal ",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:herbs-pizza",
+      "name": "Herbs pizza",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53340",
+      "name": "Hodge Podge",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:hoisin-pork-belly",
+      "name": "Hoisin Pork Belly",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52967",
+      "name": "Home-made Mandazi",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "52993",
+      "name": "Honey Balsamic Chicken with Crispy Broccoli & Potatoes",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53579",
+      "name": "Honey Cookies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:honey-sriracha-chicken-thighs",
+      "name": "Honey Sriracha Chicken Thighs",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52773",
+      "name": "Honey Teriyaki Salmon",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53007",
+      "name": "Honey Yogurt Cheesecake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52787",
+      "name": "Hot Chocolate Fudge",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52954",
+      "name": "Hot and Sour Soup",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53258",
+      "name": "Hot cumin lamb wrap with crunchy slaw & spicy mayo",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53269",
+      "name": "Hummus",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:hummus",
+      "name": "Hummus",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53552",
+      "name": "Hveder - Danish Wheat Buns",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53253",
+      "name": "Imam bayildi with BBQ lamb & tzatziki",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52781",
+      "name": "Irish stew",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "based:italian-mulled-wine",
+      "name": "Italian Mulled Wine",
+      "category": "Drinks",
+      "approved": true
+    },
+    {
+      "id": "53436",
+      "name": "Jajek",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:jam",
+      "name": "Jam",
+      "category": "Vegan",
+      "approved": false,
+      "reason": "Pantry-preserving recipe with an incorrect boiling/canning safety claim."
+    },
+    {
+      "id": "52890",
+      "name": "Jam Roly-Poly",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53339",
+      "name": "Jam jam cookies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53351",
+      "name": "Jamaican Banana Fritters",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52938",
+      "name": "Jamaican Beef Patties",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53353",
+      "name": "Jamaican Boiled Dumplings",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53363",
+      "name": "Jamaican Cornmeal Porridge",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "53345",
+      "name": "Jamaican Curry Chicken Recipe",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53354",
+      "name": "Jamaican Curry Goat",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53362",
+      "name": "Jamaican Curry Shrimp Recipe",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53355",
+      "name": "Jamaican Festival (Sweet Dumpling)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53356",
+      "name": "Jamaican Fried Dumplings",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53352",
+      "name": "Jamaican Instant Pot Rice and Beans",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53349",
+      "name": "Jamaican Pepper Shrimp",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53357",
+      "name": "Jamaican Rice and Peas",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53348",
+      "name": "Jamaican Spice Bun Recipe",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53364",
+      "name": "Jamaican Steamed Cabbage",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53344",
+      "name": "Jamaican Sweet Potato Pudding",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53145",
+      "name": "Jamon & wild garlic croquetas",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53034",
+      "name": "Japanese Katsudon",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:japanese-noodle-soup",
+      "name": "Japanese Noodle Soup",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53033",
+      "name": "Japanese gohan rice",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52937",
+      "name": "Jerk chicken with rice & peas",
+      "category": "Poultry",
+      "approved": false,
+      "reason": "The method requires marinating the chicken overnight."
+    },
+    {
+      "id": "53335",
+      "name": "Jiggs Dinner",
+      "category": "Beef",
+      "approved": false,
+      "reason": "Requires overnight desalting and soaking before the dinner is cooked."
+    },
+    {
+      "id": "53398",
+      "name": "Kadu Borani",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52971",
+      "name": "Kafteji",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52769",
+      "name": "Kapsalon",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53125",
+      "name": "Karbonader (Lean Beef Patties) with Caramelized Onions",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53445",
+      "name": "Kaspressknödel - Cheese Dumplings",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52820",
+      "name": "Katsu Chicken curry",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52887",
+      "name": "Kedgeree",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53449",
+      "name": "Kelem dolmasi",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52974",
+      "name": "Keleya Zaara",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52813",
+      "name": "Kentucky Fried Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53112",
+      "name": "Kenyan Beef Curry",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53494",
+      "name": "Keto Banitsa",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:coconut-flour-bread",
+      "name": "Keto Coconut Bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:kettlecorn",
+      "name": "Kettle Corn",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52859",
+      "name": "Key Lime Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53502",
+      "name": "Khmer Banh Xeo – Cambodian Savory Pancake",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53286",
+      "name": "Khobz el Dar (Algerian Semolina Bread)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52868",
+      "name": "Kidney Bean Curry",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53216",
+      "name": "Knafeh",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:korv-stroganoff",
+      "name": "Korv Stroganoff",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53027",
+      "name": "Koshari",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53434",
+      "name": "Koulenje",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53015",
+      "name": "Krispy Kreme Donut",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:kropsua",
+      "name": "Kropsua (Finnish Baked Pancake)",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "53408",
+      "name": "Kulaç Soda Bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52978",
+      "name": "Kumpir",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52945",
+      "name": "Kung Pao Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52946",
+      "name": "Kung Po Prawns",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53414",
+      "name": "Kurabie Butter Cookies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53128",
+      "name": "Kvæfjord Cake “Verdens Beste” (World’s Best Cake)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53412",
+      "name": "Lakra me Mish Cabbage and Meat Stew",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53407",
+      "name": "Lakror me Kungull Summer Squash Pie",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52821",
+      "name": "Laksa King Prawn Noodles",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53277",
+      "name": "Lamb & apricot meatballs",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "based:lamb-biriyani",
+      "name": "Lamb Biriyani",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52805",
+      "name": "Lamb Biryani",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53083",
+      "name": "Lamb Pilaf (Plov)",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52808",
+      "name": "Lamb Rogan josh",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52843",
+      "name": "Lamb Tagine",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53010",
+      "name": "Lamb Tzatziki Burgers",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53009",
+      "name": "Lamb and Lemon Souvlaki",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52877",
+      "name": "Lamb and Potato pie",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52782",
+      "name": "Lamb tomato and sweet spices",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53104",
+      "name": "Lamingtons",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52884",
+      "name": "Lancashire hotpot",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53427",
+      "name": "Lao Naem Khao",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53426",
+      "name": "Lao Som Pak Pickled Cabbage",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53424",
+      "name": "Laos Plantain Coconut Bake (Flourless Muffin)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:lasagna",
+      "name": "Lasagna",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52987",
+      "name": "Lasagna Sandwiches",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52844",
+      "name": "Lasagne",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "based:lavacake",
+      "name": "Lavacake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53570",
+      "name": "Layered mango custard",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52973",
+      "name": "Leblebi Soup",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53519",
+      "name": "Leche Asada",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53437",
+      "name": "Leg of Lamb Armenian-Style",
+      "category": "Lamb & goat",
+      "approved": false,
+      "reason": "The method requires at least two days of marination."
+    },
+    {
+      "id": "based:lemon-and-oregano-chicken-traybake",
+      "name": "Lemon and oregano chicken traybake",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53211",
+      "name": "Lemongrass beef stew with noodles",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:lenten-chili",
+      "name": "Lenten Chili",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "based:lenten-lentil-curry",
+      "name": "Lenten Lentil Curry",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "53467",
+      "name": "Liegeoise Salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:limoncello",
+      "name": "Limoncello",
+      "category": "Drinks",
+      "approved": false,
+      "reason": "Requires twenty days of alcohol infusion."
+    },
+    {
+      "id": "based:limoncini",
+      "name": "Limoncini",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:lithuanian-cold-borscht",
+      "name": "Lithuanian Cold Borscht",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53146",
+      "name": "Locro",
+      "category": "Other",
+      "approved": false,
+      "reason": "Requires overnight soaking of the dried corn and beans."
+    },
+    {
+      "id": "52947",
+      "name": "Ma Po Tofu",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53461",
+      "name": "Macaroni Pie",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53504",
+      "name": "Macaroni Pudding",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52900",
+      "name": "Madeira Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53472",
+      "name": "Madombi: Dumplings from Botswana",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53474",
+      "name": "Magwinya: Doughnut Bites from Botswana",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53221",
+      "name": "Mamoul (Eid biscuits)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53538",
+      "name": "Mango Tropical Salsa",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53433",
+      "name": "Mango chow",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53515",
+      "name": "Manjar (Dulce de Leche)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53402",
+      "name": "Mantu Afghan Dumpling",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:mapo-tofu",
+      "name": "Mapo Tofu (麻婆豆腐)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52827",
+      "name": "Massaman Beef curry",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53400",
+      "name": "Mastawa Lamb and Rice",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53140",
+      "name": "Matambre a la Pizza",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52865",
+      "name": "Matar Paneer",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:mayonnaise-or-aioli",
+      "name": "Mayonnaise or aioli",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Mayonnaise/aioli preparation rather than a substantial meal item."
+    },
+    {
+      "id": "53132",
+      "name": "Mazariner – Scandinavian Almond Tartlets",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52968",
+      "name": "Mbuzi Choma (Roasted Goat)",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52880",
+      "name": "McSinghs Scotch pie",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53423",
+      "name": "Meang Nem",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:meatloaf",
+      "name": "Meatloaf",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:medieval-beef-soup",
+      "name": "Medieval Beef Soup",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52777",
+      "name": "Mediterranean Pasta Salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53048",
+      "name": "Mee goreng mamak",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:menemen",
+      "name": "Menemen",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:merchants-buckwheat",
+      "name": "Merchant's Buckwheat",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53086",
+      "name": "Migas",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53135",
+      "name": "Milanesa",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52991",
+      "name": "Mince Pies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52876",
+      "name": "Minced Beef Pie",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53304",
+      "name": "Mini bundt cakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53560",
+      "name": "Mini butter buns",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53109",
+      "name": "Mini chilli beef pies",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53336",
+      "name": "Molasses Baked Beans",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires overnight soaking plus several hours of baking."
+    },
+    {
+      "id": "52927",
+      "name": "Montreal Smoked Meat",
+      "category": "Beef",
+      "approved": false,
+      "reason": "Requires four days of curing before smoking."
+    },
+    {
+      "id": "53047",
+      "name": "Moroccan Carrot Soup",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53006",
+      "name": "Moussaka",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53029",
+      "name": "Mulukhiyah",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53403",
+      "name": "Muraba-E-Kadu (Pumpkin Jam)",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires a ten-hour or overnight marinating stage."
+    },
+    {
+      "id": "52864",
+      "name": "Mushroom & Chestnut Rotolo",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53059",
+      "name": "Mushroom soup with buckwheat",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53038",
+      "name": "Mustard champ",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53223",
+      "name": "Mutabbaq",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "based:naan-bread",
+      "name": "Naan Bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52924",
+      "name": "Nanaimo Bars",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53377",
+      "name": "Napa Cabbage with Dried Shrimp",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53051",
+      "name": "Nasi lemak",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52858",
+      "name": "New York cheesecake",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires at least eight hours of chilling after baking and cooling."
+    },
+    {
+      "id": "53347",
+      "name": "No-Churn Rum Raisin Ice Cream",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires at least six hours of freezing."
+    },
+    {
+      "id": "based:no-knead-bread",
+      "name": "No-knead Bread",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires twelve hours of dough fermentation before baking."
+    },
+    {
+      "id": "53497",
+      "name": "Nom Banh Chok – Cambodian Noodle Soup",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53245",
+      "name": "Noodle bowl salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53117",
+      "name": "Nordic smørrebrød with asparagus and horseradish cream",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53129",
+      "name": "Norwegian Krumkake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53121",
+      "name": "Norwegian Potato Lefse",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53500",
+      "name": "Num Ansom – Sticky Rice Cake",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53422",
+      "name": "Num E (Sticky Rice Balls in Sugar Syrup and Coconut Cream)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53501",
+      "name": "Num Pang – Cambodian Baguette Sandwich",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52851",
+      "name": "Nutty Chicken Curry",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "based:oatmeal-pancakes",
+      "name": "Oatmeal Pancakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53331",
+      "name": "Oatmeal pancakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53551",
+      "name": "Old-fashioned Danish Apple Trifle",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53554",
+      "name": "Open-faced Sandwich With Potato",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52810",
+      "name": "Osso Buco alla Milanese",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:overnight-oats",
+      "name": "Overnight Oats",
+      "category": "Breakfast",
+      "approved": false,
+      "reason": "Requires at least twelve hours of soaking."
+    },
+    {
+      "id": "52943",
+      "name": "Oxtail with broad beans",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53487",
+      "name": "Oyster Mushroom Soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53417",
+      "name": "Pa Amb Tomaquet (Bread with Tomato)",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52774",
+      "name": "Pad See Ew",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53191",
+      "name": "Pad Thai",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53150",
+      "name": "Padron peppers",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "53151",
+      "name": "Paella",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53537",
+      "name": "Pan De Yucca",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:pan-pizza",
+      "name": "Pan pizza",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "53152",
+      "name": "Pan-fried hake, white bean & chorizo broth",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:pan-seared-chicken",
+      "name": "Pan-seared Chicken Fillet",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53192",
+      "name": "Panang chicken curry (kaeng panang gai)",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "based:pancake",
+      "name": "Pancake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52854",
+      "name": "Pancakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:paneer-tikka-masala",
+      "name": "Paneer Tikka Masala",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53534",
+      "name": "Papas Chorreadas Recipe (Potatoes with Cream and Cheese Sauce)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53573",
+      "name": "Papaya salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53429",
+      "name": "Paracuca (Roasted Peanuts)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52902",
+      "name": "Parkin Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:parmesan-potatoes",
+      "name": "Parmesan potatoes",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53333",
+      "name": "Passion fruit mousse",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:pasta-arrabbiata",
+      "name": "Pasta Arrabbiata",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "based:pasta-navy-style",
+      "name": "Pasta Navy Style",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53520",
+      "name": "Pastel de Choclo",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53517",
+      "name": "Pastel de Papas (Chilean Potato Pie)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53017",
+      "name": "Paszteciki (Polish Pasties)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53172",
+      "name": "Patatas bravas",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52930",
+      "name": "Pate Chinois",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:pavlova",
+      "name": "Pavlova",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52862",
+      "name": "Peach & Blueberry Grunt",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52861",
+      "name": "Peanut Butter Cheesecake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52958",
+      "name": "Peanut Butter Cookies",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52916",
+      "name": "Pear Tarte Tatin",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53471",
+      "name": "Phaphatha Flatbreads",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:pho-soup",
+      "name": "Pho Soup",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53539",
+      "name": "Picadillo de Vainicas (Green Beans Picadillo)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:pickled-onions",
+      "name": "Pickled Red Onions",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53292",
+      "name": "Piernik (Polish gingerbread)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53019",
+      "name": "Pierogi (Polish Dumplings)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52837",
+      "name": "Pilchard puttanesca",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "based:pineapple-lentil-curry",
+      "name": "Pineapple Lentil Curry",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "53039",
+      "name": "Piri-piri chicken and slaw",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53224",
+      "name": "Pistachio Kunafa Chocolate Cake and Cupcakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53293",
+      "name": "Pistachio cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53160",
+      "name": "Pisto con huevos",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53014",
+      "name": "Pizza Express Margherita",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "53295",
+      "name": "Polish chocolate & walnut cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53298",
+      "name": "Polish doughnuts (Pączki)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53299",
+      "name": "Polish patties (kotlety)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53540",
+      "name": "Pollo en Salsa",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53162",
+      "name": "Pollo en pepitoria",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53022",
+      "name": "Polskie Nalesniki (Polish Pancakes)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53297",
+      "name": "Pomegranate salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53301",
+      "name": "Pork & sauerkraut goulash",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52847",
+      "name": "Pork Cassoulet",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53306",
+      "name": "Pork rib bortsch",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53521",
+      "name": "Porotos Granados (Chilean Bean Stew)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:portuguese-creamy-cod",
+      "name": "Portuguese Creamy Cod",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53044",
+      "name": "Portuguese barbecued pork (Febras assadas)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53046",
+      "name": "Portuguese custard tarts",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53045",
+      "name": "Portuguese fish stew (Caldeirada de peixe)",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53042",
+      "name": "Portuguese prego with green piri-piri",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53323",
+      "name": "Postre Chajá",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52780",
+      "name": "Potato Gratin with Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "based:potato-leek-soup",
+      "name": "Potato Leek Soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53489",
+      "name": "Potato Moussaka Recipe",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53081",
+      "name": "Potato Salad (Olivier Salad)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:potato-pure",
+      "name": "Potato purée",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:sourdough-potato-bread",
+      "name": "Potato sourdough bread",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires five hours of fermentation before shaping and baking."
+    },
+    {
+      "id": "52932",
+      "name": "Pouding chomeur",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53280",
+      "name": "Poulet Roti a l'Algerienne (Algerian Roast Chicken)",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52804",
+      "name": "Poutine",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53499",
+      "name": "Prahok Ktis – Pork and Coconut Dip",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52922",
+      "name": "Prawn & Fennel Bisque",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53244",
+      "name": "Prawn & noodle salad with crispy shallots",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53200",
+      "name": "Prawn stir-fry",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53174",
+      "name": "Prawns with Romesco sauce",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53410",
+      "name": "Presh me Oriz Leek and Rice Bake",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52921",
+      "name": "Provençal Omelette Cake",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:pulpo-gallega",
+      "name": "Pulpo a la gallega",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52857",
+      "name": "Pumpkin Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53230",
+      "name": "Purple sprouting broccoli tempura with nuoc cham",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:pate-chinois",
+      "name": "Pâté Chinois (Quebec Style Shepherd’s Pie)",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53574",
+      "name": "Quark and Rhubarb Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:quarkbaellchen",
+      "name": "Quarkbällchen – Fried curd balls",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:quesadilla",
+      "name": "Quesadilla",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53173",
+      "name": "Quick gazpacho",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53108",
+      "name": "Quick salt & pepper squid",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:ragu-napoletano",
+      "name": "Ragu Napoletano",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53383",
+      "name": "Ramen Noodles with Boiled Egg",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52933",
+      "name": "Rappie Pie",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53303",
+      "name": "Raspberry mousse",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires at least six hours of chilling."
+    },
+    {
+      "id": "53124",
+      "name": "Raspeballer (Norwegian Potato Dumplings)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52908",
+      "name": "Ratatouille",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:ravioli",
+      "name": "Ravioli",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52809",
+      "name": "Recheado Masala Fish",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:dou-sha-bao",
+      "name": "Red Bean Buns (豆沙包)",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "52941",
+      "name": "Red Peas Soup",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53204",
+      "name": "Red curry chicken kebabs",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53115",
+      "name": "Red onion pickle",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "based:refried-beans",
+      "name": "Refried Beans",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52811",
+      "name": "Ribollita",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53506",
+      "name": "Rice and Beans",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53227",
+      "name": "Rice paper dumplings",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52783",
+      "name": "Rigatoni with fennel sausage sauce",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "based:risengroed",
+      "name": "Risengrød",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53273",
+      "name": "Roast aubergine with goat's cheese & toasted flatbread",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52942",
+      "name": "Roast fennel and aubergine paella",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "52816",
+      "name": "Roasted Eggplant With Tahini, Pine Nuts, and Lentils",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53268",
+      "name": "Roasted chicken with creamy walnut sauce",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52901",
+      "name": "Rock Cakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52786",
+      "name": "Rocky Road Fudge",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53024",
+      "name": "Rogaliki (Polish Croissant Cookies)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53545",
+      "name": "Ropa Veija",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53315",
+      "name": "Rosemary braised red cabbage with kabanos",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53020",
+      "name": "Rosol (Polish Chicken Soup)",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53052",
+      "name": "Roti john",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53388",
+      "name": "Runner Bean Mash (Snijbonen Stamppot)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53308",
+      "name": "Rye bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:roesti",
+      "name": "Rösti",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53118",
+      "name": "Rømmegrøt – Norwegian Sour Cream Porridge",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "52960",
+      "name": "Salmon Avocado Salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52962",
+      "name": "Salmon Eggs Eggs Benedict",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "52823",
+      "name": "Salmon Prawn Risotto",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53234",
+      "name": "Salmon noodle soup",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53248",
+      "name": "Salmon noodle wraps",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53233",
+      "name": "Salt & pepper squid",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53511",
+      "name": "Salt Beef and Beans",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53171",
+      "name": "Salt cod tortilla",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52833",
+      "name": "Salted Caramel Cheescake",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "The method requires setting the cheesecake overnight."
+    },
+    {
+      "id": "52936",
+      "name": "Saltfish and Ackee",
+      "category": "Seafood",
+      "approved": false,
+      "reason": "The method requires soaking/desalting the fish overnight."
+    },
+    {
+      "id": "53498",
+      "name": "Samlar Kari – Khmer Red Curry",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53503",
+      "name": "Samlar Machu Kreung – Cambodian Sour Stew",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53337",
+      "name": "Saskatoon Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53443",
+      "name": "Satee",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:sauerkraut",
+      "name": "Sauerkraut",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires at least two weeks of fermentation."
+    },
+    {
+      "id": "53577",
+      "name": "Sauerkraut and Fish Salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53296",
+      "name": "Sauerkraut pierogi",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53314",
+      "name": "Sauerkraut pierogii",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:schnitzel",
+      "name": "Schnitzel",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53247",
+      "name": "Sea bass with sizzled ginger, chilli & spring onions",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52836",
+      "name": "Seafood fideuà",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53167",
+      "name": "Seafood rice",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53054",
+      "name": "Seri muka kuih",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53378",
+      "name": "Sesame Cucumber Salad",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53470",
+      "name": "Seswaa",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53215",
+      "name": "Shakshouka",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:shakshouka",
+      "name": "Shakshouka",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52963",
+      "name": "Shakshuka",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53219",
+      "name": "Shakshuka Feta Cheese",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53028",
+      "name": "Shawarma",
+      "category": "Poultry",
+      "approved": false,
+      "reason": "The method requires overnight marination."
+    },
+    {
+      "id": "53226",
+      "name": "Shawarma bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53217",
+      "name": "Shawarma chuck roast wrap",
+      "category": "Beef",
+      "approved": false,
+      "reason": "The method requires eight to ten hours of slow cooking."
+    },
+    {
+      "id": "53409",
+      "name": "Shendetlie Honey and Nut Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53491",
+      "name": "Shopska Salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:shortcrust-pastry-biscuits",
+      "name": "Shortcrust pastry biscuits",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52953",
+      "name": "Shrimp Chow Fun",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:shrimp-creole",
+      "name": "Shrimp Creole",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53375",
+      "name": "Shrimp With Snow Peas",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53374",
+      "name": "Sichuan Eggplant",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53371",
+      "name": "Sichuan Style Stir-Fried Chinese Long Beans",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53369",
+      "name": "Silken Tofu with Sesame Soy Sauce",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:tuna-salad",
+      "name": "Simple Tuna Salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53484",
+      "name": "Simple heart of palm & tomato salad",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53368",
+      "name": "Singapore Noodles with Shrimp",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52994",
+      "name": "Skillet Apple Pork Chops with Roasted Sweet Potatoes & Zucchini",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53395",
+      "name": "Slagroomtaart",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53023",
+      "name": "Sledz w Oleju (Polish Herrings)",
+      "category": "Seafood",
+      "approved": false,
+      "reason": "Requires two to three days of pickling before eating."
+    },
+    {
+      "id": "based:slow-cooked-lamb-with-lemon",
+      "name": "Slow-cooked Lamb with Lemon",
+      "category": "Lamb & goat",
+      "approved": false,
+      "reason": "The method requires overnight marination and next-day roasting."
+    },
+    {
+      "id": "53432",
+      "name": "Slow-cooked, Wadadli-spiced Cubano pork belly",
+      "category": "Pork",
+      "approved": false,
+      "reason": "The method requires overnight preparation and next-day cooking."
+    },
+    {
+      "id": "53260",
+      "name": "Slow-roast lamb with cinnamon, fennel & citrus",
+      "category": "Lamb & goat",
+      "approved": false,
+      "reason": "The method requires overnight marination and next-day roasting."
+    },
+    {
+      "id": "53302",
+      "name": "Slow-roasted ham with lemon, garlic & sage",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:slowcooked-green-bean-beef-soup-supreme",
+      "name": "Slowcooked Green Bean Beef Soup Supreme",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52964",
+      "name": "Smoked Haddock Kedgeree",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:smoked-turkey",
+      "name": "Smoked Turkey",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53259",
+      "name": "Smoked aubergine purée",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52784",
+      "name": "Smoky Lentil Chili with Squash",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53264",
+      "name": "Smoky chicken skewers",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53479",
+      "name": "Smoky tomato pepper salsa",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52981",
+      "name": "Snert (Dutch Split Pea Soup)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:soleier",
+      "name": "Soleier (pickled eggs)",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires at least three days of pickling."
+    },
+    {
+      "id": "based:lentejas",
+      "name": "Sopa de Lentejas",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:sourdough-loaf",
+      "name": "Sourdough Table Loaf",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires twelve to twenty-four hours of cold fermentation before baking."
+    },
+    {
+      "id": "based:sourdough-bread-with-seeds-and-grains",
+      "name": "Sourdough bread with seeds and grains",
+      "category": "Sides & starters",
+      "approved": false,
+      "reason": "Requires starter/seed preparation and an overnight thirteen-to-sixteen-hour stage."
+    },
+    {
+      "id": "52992",
+      "name": "Soy-Glazed Meatloaves with Wasabi Mashed Potatoes & Roasted Carrots",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52770",
+      "name": "Spaghetti Bolognese",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "based:spaghetti-all-amatriciana",
+      "name": "Spaghetti all'amatriciana",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52982",
+      "name": "Spaghetti alla Carbonara",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53177",
+      "name": "Spaghetti with Spanish flavours",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53164",
+      "name": "Spanish Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52872",
+      "name": "Spanish Tortilla",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:spanish-tortilla",
+      "name": "Spanish Tortilla",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53181",
+      "name": "Spanish beans with chicken & chorizo",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53155",
+      "name": "Spanish chicken pie",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53163",
+      "name": "Spanish fig & almond balls",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53183",
+      "name": "Spanish meatballs with clams, chorizo & squid",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "53184",
+      "name": "Spanish rice & prawn one-pot",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53182",
+      "name": "Spanish seafood rice",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53176",
+      "name": "Spanish tomato bread with jamón Serrano",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53175",
+      "name": "Spanish-style slow-cooked lamb shoulder & beans",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53105",
+      "name": "Spiced smoky barbecued chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53142",
+      "name": "Spiced tortilla",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52771",
+      "name": "Spicy Arrabiata Penne",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52797",
+      "name": "Spicy North African Potato Salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:spicy-sausage-pasta",
+      "name": "Spicy Sausage Pasta",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53209",
+      "name": "Spicy Thai prawn noodles",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52849",
+      "name": "Spinach & Ricotta Cannelloni",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52925",
+      "name": "Split Pea Soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52886",
+      "name": "Spotted Dick",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53040",
+      "name": "Spring onion and prawn empanadas",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52866",
+      "name": "Squash linguine",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53102",
+      "name": "Squid, chickpea & chorizo salad",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52980",
+      "name": "Stamppot",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53229",
+      "name": "Steak & Vietnamese noodle salad",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52935",
+      "name": "Steak Diane",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52881",
+      "name": "Steak and Kidney Pie",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53110",
+      "name": "Sticky Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52883",
+      "name": "Sticky Toffee Pudding",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52793",
+      "name": "Sticky Toffee Pudding Ultimate",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53201",
+      "name": "Stir-fried chicken with chillies & basil",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52817",
+      "name": "Stovetop Eggplant With Harissa, Chickpeas, and Cumin Yogurt",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:stracciatella-soup",
+      "name": "Stracciatella soup",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53082",
+      "name": "Strawberries Romanoff",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:strawberry-compote",
+      "name": "Strawberry Compote",
+      "category": "Drinks",
+      "approved": true
+    },
+    {
+      "id": "53005",
+      "name": "Strawberry Rhubarb Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53550",
+      "name": "Strawberry tart",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53067",
+      "name": "Stuffed Bell Peppers with Quinoa and Black Beans",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53435",
+      "name": "Stuffed Grape Leaves",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53008",
+      "name": "Stuffed Lamb Tomatoes",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "based:stuffed-round-squash",
+      "name": "Stuffed Round Squash",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53558",
+      "name": "Stuffed plantain cups",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:stuffed-vegetables",
+      "name": "Stuffed vegetables",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52931",
+      "name": "Sugar Pie",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53130",
+      "name": "Suksessterte (Norwegian almond “success cake”)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53113",
+      "name": "Sukuma Wiki",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52911",
+      "name": "Summer Pistou",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52889",
+      "name": "Summer Pudding",
+      "category": "Desserts",
+      "approved": false,
+      "reason": "Requires at least six hours of chilling."
+    },
+    {
+      "id": "based:sunday-milkshake",
+      "name": "Sunday Morning Milkshake",
+      "category": "Drinks",
+      "approved": true
+    },
+    {
+      "id": "53065",
+      "name": "Sushi",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:swedish-pancakes",
+      "name": "Swedish Pancakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53376",
+      "name": "Sweet and Sour Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52949",
+      "name": "Sweet and Sour Pork",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53275",
+      "name": "Sweet potato salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53089",
+      "name": "Syrian Bread",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53095",
+      "name": "Syrian Rice with Meat",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53093",
+      "name": "Syrian Spaghetti",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "52950",
+      "name": "Szechuan Beef",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53447",
+      "name": "Tafelspitz",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52869",
+      "name": "Tahini Lentils",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:tahini-short-bread",
+      "name": "Tahini short bread",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:tajine",
+      "name": "Tajine Maadnous",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53287",
+      "name": "Tajine de Poulet aux Carottes et Patates Douces (Chicken and Sweet Potato Tagine)",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53119",
+      "name": "Tall Skoleboller",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53535",
+      "name": "Tamal De Maicena",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53026",
+      "name": "Tamiya",
+      "category": "Vegetarian",
+      "approved": false,
+      "reason": "The method requires soaking dried beans overnight."
+    },
+    {
+      "id": "52806",
+      "name": "Tandoori chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53312",
+      "name": "Tangy cabbage slaw",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53246",
+      "name": "Tangy carrot, cabbage & onion salad",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "based:tanzania-tea-with-milk",
+      "name": "Tanzania Tea with Milk",
+      "category": "Drinks",
+      "approved": true
+    },
+    {
+      "id": "based:tarta-de-santiago",
+      "name": "Tarta de Santiago",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:tarte-merengada",
+      "name": "Tarte Merengada de Limão",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52909",
+      "name": "Tarte Tatin",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53404",
+      "name": "Tavë Kosi Baked Lamb and Yogurt",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53405",
+      "name": "Tavë me Presh ska Mish Meatless Leek Bake",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53448",
+      "name": "Tendir Choreyi (Tandoori Bread)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:teriyaki-beef",
+      "name": "Teriyaki Beef Wok",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "52772",
+      "name": "Teriyaki Chicken Casserole",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52814",
+      "name": "Thai Green Curry",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53199",
+      "name": "Thai beef stir-fry",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53206",
+      "name": "Thai chicken cakes with sweet chilli sauce",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53208",
+      "name": "Thai coconut & veg broth",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53195",
+      "name": "Thai curry noodle soup",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53212",
+      "name": "Thai drumsticks",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53198",
+      "name": "Thai fried rice with prawns & peas",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53214",
+      "name": "Thai green chicken soup",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53197",
+      "name": "Thai pork & peanut curry",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53205",
+      "name": "Thai prawn curry",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53210",
+      "name": "Thai pumpkin soup",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53203",
+      "name": "Thai rice noodle salad",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53213",
+      "name": "Thai-style fish broth with greens",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53202",
+      "name": "Thai-style steamed fish",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52882",
+      "name": "Three Fish Pie",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52912",
+      "name": "Three-cheese souffles",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52929",
+      "name": "Timbits",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:tiramisu",
+      "name": "Tiramisù",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53444",
+      "name": "Tirolean Dumplings",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52822",
+      "name": "Toad In The Hole",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53240",
+      "name": "Tofu, greens & cashew stir-fry",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53207",
+      "name": "Tom kha gai",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53196",
+      "name": "Tom yum (hot & sour) soup with prawns",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53194",
+      "name": "Tom yum soup with prawns",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:tomato-flavored-hamburger-macaroni",
+      "name": "Tomato Flavored Hamburger and Macaroni",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53032",
+      "name": "Tonkatsu pork",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53415",
+      "name": "Torrijas",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:torrijas",
+      "name": "Torrijas",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53165",
+      "name": "Torrijas with sherry",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53318",
+      "name": "Torta de fiambre",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53075",
+      "name": "Tortang Talong",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52926",
+      "name": "Tourtiere",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53057",
+      "name": "Traditional Croatian Goulash",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53391",
+      "name": "Traditional Dutch rice tart (rijstevlaai)",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52892",
+      "name": "Treacle Tart",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53416",
+      "name": "Trinxat (Potato, Cabbage and Bacon Hash)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52852",
+      "name": "Tuna Nicoise",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "52975",
+      "name": "Tuna and Egg Briks",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:couscous",
+      "name": "Tunisian Couscous",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52972",
+      "name": "Tunisian Lamb Soup",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "52970",
+      "name": "Tunisian Orange Cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:tunisian-tajine",
+      "name": "Tunisian Tajine (laidback version)",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "53249",
+      "name": "Turkey Bánh mì",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "52845",
+      "name": "Turkey Meatloaf",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53251",
+      "name": "Turkish lahmacun",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53263",
+      "name": "Turkish lamb pilau",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53252",
+      "name": "Turkish rice (vermicelli rice)",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53270",
+      "name": "Turkish-style lamb",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "based:tuscan-style-pork-roast",
+      "name": "Tuscan Style Pork Roast",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:two-ingredient-pancakes",
+      "name": "Two Ingredient Pancakes",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53114",
+      "name": "Ugali – Kenyan cornmeal",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:ukrainian-borscht",
+      "name": "Ukrainian Borscht",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:baked-rice",
+      "name": "Valencian Baked Rice (Arroz al Horno)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "based:paella",
+      "name": "Valencian Paella",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "53321",
+      "name": "Vanilla alfajores",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "52794",
+      "name": "Vegan Chocolate Cake",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "52775",
+      "name": "Vegan Lasagna",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "53250",
+      "name": "Vegan banh mi",
+      "category": "Vegan",
+      "approved": true
+    },
+    {
+      "id": "53000",
+      "name": "Vegetable Shepherds Pie",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52863",
+      "name": "Vegetarian Casserole",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52867",
+      "name": "Vegetarian Chilli",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53222",
+      "name": "Vegetarian Shakshuka",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "52838",
+      "name": "Venetian Duck Ragu",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53325",
+      "name": "Venezuelan Arepas",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53327",
+      "name": "Venezuelan Coconut Chicken",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53326",
+      "name": "Venezuelan Sancocho",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53328",
+      "name": "Venezuelan Shredded Beef",
+      "category": "Beef",
+      "approved": true
+    },
+    {
+      "id": "53332",
+      "name": "Venezuelan turnovers",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "52828",
+      "name": "Vietnamese Grilled Pork (bun-thit-nuong)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53228",
+      "name": "Vietnamese caramel trout",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53232",
+      "name": "Vietnamese chicken salad",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53231",
+      "name": "Vietnamese lamb shanks with sweet potatoes",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53237",
+      "name": "Vietnamese pork salad",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53243",
+      "name": "Vietnamese prawn spiralized rolls",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "53241",
+      "name": "Vietnamese veg parcels",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53235",
+      "name": "Vietnamese-style caramel pork",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53236",
+      "name": "Vietnamese-style veggie hotpot",
+      "category": "Vegetarian",
+      "approved": true
+    },
+    {
+      "id": "53062",
+      "name": "Walnut Roll Gužvara",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53271",
+      "name": "Walnut, date & honey cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53106",
+      "name": "Warm roast asparagus salad",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52917",
+      "name": "White chocolate creme brulee",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "based:wholemeal-pizza",
+      "name": "Wholemeal Pizza",
+      "category": "Other",
+      "approved": true
+    },
+    {
+      "id": "based:wholemeal-wheat-flour-pizza-dough",
+      "name": "Wholemeal Wheat Flour Pizza Dough",
+      "category": "Other",
+      "approved": false,
+      "reason": "Standalone raw pizza-dough preparation without a cooked meal."
+    },
+    {
+      "id": "52948",
+      "name": "Wontons",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "52871",
+      "name": "Yaki Udon",
+      "category": "Pasta & noodles",
+      "approved": true
+    },
+    {
+      "id": "53225",
+      "name": "Yemeni Lahsa (Elite Shakshuka)",
+      "category": "Breakfast",
+      "approved": true
+    },
+    {
+      "id": "based:yogurt-cake",
+      "name": "Yogurt cake",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53097",
+      "name": "Yorkshire Puddings",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "based:yorkshire-puddings",
+      "name": "Yorkshire Puddings",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53294",
+      "name": "Zapiekanki",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53394",
+      "name": "Zeeuwse bolussen",
+      "category": "Desserts",
+      "approved": true
+    },
+    {
+      "id": "53189",
+      "name": "Zemiakové Placky",
+      "category": "Sides & starters",
+      "approved": true
+    },
+    {
+      "id": "53220",
+      "name": "kabse",
+      "category": "Poultry",
+      "approved": true
+    },
+    {
+      "id": "53257",
+      "name": "kofta burgers",
+      "category": "Lamb & goat",
+      "approved": true
+    },
+    {
+      "id": "53566",
+      "name": "plantain rolls",
+      "category": "Seafood",
+      "approved": true
+    },
+    {
+      "id": "based:aelplermagronen",
+      "name": "Älplermagronen (Alpine macaroni)",
+      "category": "Pork",
+      "approved": true
+    },
+    {
+      "id": "53187",
+      "name": "Šúĺlance s Makom",
+      "category": "Desserts",
+      "approved": true
+    }
+  ],
+  "revision": "2026-10-09.1",
+  "reviewedCount": 945,
+  "approvedCount": 895,
+  "categories": [
+    "Beef",
+    "Breakfast",
+    "Desserts",
+    "Drinks",
+    "Lamb & goat",
+    "Other",
+    "Pasta & noodles",
+    "Pork",
+    "Poultry",
+    "Seafood",
+    "Sides & starters",
+    "Vegan",
+    "Vegetarian"
+  ]
+}

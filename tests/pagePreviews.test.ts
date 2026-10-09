@@ -43,14 +43,14 @@ it('exposes only public projections without login in production while keeping de
  expect((await fetch(origin+route)).status).toBe(404);expect((await fetch(origin+route,{headers:{Authorization:'Bearer fake'}})).status).toBe(401);
  const dev=await fetch(origin+route,{headers:{'X-NewDrugs-Dev-Key':config.DEV_ACCESS_KEY}});expect(dev.status).toBe(200);expect((await dev.json()).description).toBe('Public bio');
  config.APP_ENV='production';const response=await fetch(origin+route);expect(response.status).toBe(200);expect(response.headers.get('cache-control')).toBe('no-store');
- const photo=await fetch(`${origin}/api/share-images/person/${userId}`);expect(photo.status).toBe(200);expect(photo.headers.get('cache-control')).toBe('no-store');expect(Buffer.from(await photo.arrayBuffer())).toEqual(bytes);
+ const photo=await fetch(`${origin}/api/share-images/person/${userId}`);expect(photo.status).toBe(200);expect(photo.headers.get('cache-control')).toBe('no-store');expect(photo.headers.get('cross-origin-resource-policy')).toBe('cross-origin');expect(Buffer.from(await photo.arrayBuffer())).toEqual(bytes);
  expect((await fetch(`${origin}/api/share-images/person/${otherId}`)).status).toBe(404);
 });
 it('shows invite notes, facts and photos before sign-in, and scopes every photo to that code',async()=>{
  await rows('logEntries').insertOne({_id:'invite',title:'A shared walk',date:'2026-09-27',place:'Park',joinKey:code,members:[otherId],coverFileId:privateImageId,contributions:[{userId:otherId,note:'SECRET DIARY NOTE',fileIds:[privateImageId]}]});
  config.APP_ENV='production';const response=await fetch(`${origin}/api/log-invites/${code}`);expect(response.status).toBe(200);const preview=await response.json();
  expect(preview).toMatchObject({title:'A shared walk',date:'2026-09-27',place:'Park',joined:false,photos:[{id:privateImageId,url:`/api/log-invites/${code}/photos/${privateImageId}`}],people:[{id:otherId}]});expect(preview.contributors).toEqual([expect.objectContaining({userId:otherId,note:'SECRET DIARY NOTE'})]);expect(JSON.stringify(preview)).not.toContain('PRIVATE BIO');
- const photo=await fetch(origin+preview.photos[0].url);expect(photo.status).toBe(200);expect(Buffer.from(await photo.arrayBuffer())).toEqual(bytes);
+ const photo=await fetch(origin+preview.photos[0].url);expect(photo.status).toBe(200);expect(photo.headers.get('cross-origin-resource-policy')).toBe('cross-origin');expect(Buffer.from(await photo.arrayBuffer())).toEqual(bytes);
  expect((await fetch(`${origin}/api/log-invites/${code}/photos/${imageId}`)).status).toBe(404);
  await rows('logEntries').updateOne({_id:'invite'},{$set:{joinKey:'c'.repeat(32)}});expect((await fetch(origin+preview.photos[0].url)).status).toBe(404);expect((await fetch(`${origin}/api/log-invites/${code}`)).status).toBe(404);expect(await users().countDocuments()).toBe(2);
 });

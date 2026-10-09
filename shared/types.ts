@@ -43,6 +43,6 @@ export interface RunView {
   phase?: import('./agentUi').AgentPhase; preamble?: string; cancelRequested?: boolean;
   outputComplete?: boolean; sleep?: { until: number; reason: string };
   approvals: Approval[]; clientId: string; error?: string; revision: number;
-  surface?: { id: string; view: string; date?:string; logMonth?:string;logScope?:import('./navigation').Destination['logScope'];personId?:string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
+  surface?: { id: string; view: string; dinderTab?:'chat'; date?:string; logMonth?:string;logScope?:import('./navigation').Destination['logScope'];personId?:string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
   sources?: { url: string; title: string }[];
 }

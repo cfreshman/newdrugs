@@ -81,7 +81,7 @@ export function createApp() {
   app.use(helmet({ contentSecurityPolicy: config.production ? {
     directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], fontSrc: ["'self'"],
       connectSrc: ["'self'"], workerSrc:["'self'",'blob:'], frameSrc:EMBED_ORIGINS, imgSrc: ["'self'", 'data:','blob:','https:'], mediaSrc:["'self'",'https:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
-  } : false, crossOriginEmbedderPolicy: false }));
+  } : false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.get('/api/health', async (_req, res) => { await db().command({ ping: 1 }); res.json({ ok: true }); });
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '128kb' }), async (req, res) => {
     await stripeWebhook(req.body, req.get('stripe-signature') || ''); res.json({ received: true });
