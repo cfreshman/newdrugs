@@ -558,13 +558,12 @@ blockquote { font-family: var(--font-ui); }
   display: none;
 }
 .app[data-keyboard-open] .sheet {
-  --settings-heading-gap: 0px;
   position: fixed;
   top: calc(var(--keyboard-top) + var(--panel-top-gap));
   bottom: auto;
   margin-block: 0;
   max-height: max(0px, calc(var(--app-viewport-height) - var(--panel-top-gap) - var(--space-3)));
-  padding-top: var(--panel-inset);
+  padding-top: var(--space-4);
 }
 .history-loader { display: flex; align-items: center; justify-content: center; flex: 0 0 32px; min-height: 32px; color: var(--muted); }
 .history-loader [role='status'] { display: grid; place-items: center; }
