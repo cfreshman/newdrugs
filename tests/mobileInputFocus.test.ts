@@ -9,17 +9,18 @@ function touch(type: string, points: { clientX: number; clientY: number }[], tar
 }
 beforeEach(() => { dom = setupDOM(); input = document.createElement('textarea'); dom.container.append(input); cleanup = bindMobileInputFocus(dom.container); });
 afterEach(() => { cleanup(); dom.cleanup(); });
-it('focuses the first mobile tap without allowing the native page scroll', () => {
+it('leaves the first tap to native focus and caret placement', () => {
   const focus = vi.spyOn(input, 'focus');
   touch('touchstart', [{ clientX: 10, clientY: 20 }]);
-  expect(touch('touchend', []).defaultPrevented).toBe(true);
-  expect(focus).toHaveBeenCalledWith({ preventScroll: true }); expect(document.activeElement).toBe(input);
+  expect(touch('touchend', []).defaultPrevented).toBe(false);
+  expect(focus).not.toHaveBeenCalled();
 });
-it('handles an autofocused field whose keyboard has not opened yet', () => {
+it('does not blur or refocus an autofocused field when tapping to open its keyboard', () => {
   input.focus(); const focus = vi.spyOn(input, 'focus'), blur = vi.spyOn(input, 'blur');
+  input.value='Keep this draft';input.setSelectionRange(7,7);
   touch('touchstart', [{ clientX: 10, clientY: 20 }]);
-  expect(touch('touchend', []).defaultPrevented).toBe(true);
-  expect(blur).toHaveBeenCalledOnce(); expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+  expect(touch('touchend', []).defaultPrevented).toBe(false);
+  expect(blur).not.toHaveBeenCalled();expect(focus).not.toHaveBeenCalled();expect(input.selectionStart).toBe(7);
 });
 it('leaves editing taps, scrolling, pinch zoom and long-press alone', () => {
   input.focus(); dom.container.setAttribute('data-keyboard-open', 'true'); input.value = 'keep selection'; input.setSelectionRange(1, 4);
