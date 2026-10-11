@@ -7,7 +7,7 @@ export function observeLogLayerGeometry(dialog:HTMLElement,panel:HTMLElement,fit
  const place=()=>{const bounds=panel.getBoundingClientRect(),standalone=panel.closest<HTMLElement>('.app')?.dataset.standalone==='true'&&window.matchMedia('(max-width:760px), (pointer:coarse)').matches,vertical=fitPanel||standalone?bounds:outer.getBoundingClientRect();if(!bounds.width||!bounds.height)return;Object.assign(dialog.style,{left:`${bounds.left}px`,top:`${vertical.top}px`,width:`${bounds.width}px`,height:`${vertical.height}px`,transform:'none',borderRadius:getComputedStyle(panel).borderRadius});dialog.style.setProperty('--log-layer-height',`${vertical.height}px`);};
  place();const observer=new ResizeObserver(place);observer.observe(panel);if(outer!==panel)observer.observe(outer);
  const layout=new MutationObserver(place),app=panel.closest('.app');
- if(app)layout.observe(app,{attributes:true,attributeFilter:['data-agent-dock','data-mode','data-standalone']});
+ if(app)layout.observe(app,{attributes:true,attributeFilter:['data-agent-dock','data-mode','data-standalone','data-keyboard-open','style']});
  layout.observe(panel,{attributes:true,attributeFilter:['style']});
  window.addEventListener('resize',place);
  return()=>{observer.disconnect();layout.disconnect();window.removeEventListener('resize',place);};

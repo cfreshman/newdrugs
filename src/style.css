@@ -116,7 +116,7 @@ a:focus-visible, summary:focus-visible { text-decoration: underline; }
 input:focus-visible, select:focus-visible, .fields textarea:focus-visible { border-color: var(--primary); }
 a { color: inherit; }
 ::selection { background: var(--selection); }
-.app { height: 100dvh; position: relative; isolation: isolate; overflow: clip; }
+.app { --keyboard-top:0px; --app-viewport-height:100dvh; --app-viewport-bottom:calc(var(--keyboard-top) + var(--app-viewport-height)); height: 100dvh; position: relative; isolation: isolate; overflow: clip; }
 /* Keep the decorative background out of Safari’s fixed-edge tint sampling. */
 .atmosphere { width:100%;height:100%;position: absolute; z-index: -2; inset: 0; pointer-events: none; background:
   radial-gradient(ellipse 58% 39% at 45% 74%, var(--gradient-yellow) 0%, transparent 100%),
@@ -127,7 +127,7 @@ a { color: inherit; }
   radial-gradient(ellipse 64% 42% at 10% 96%, var(--gradient-indigo) 0%, transparent 100%),
   radial-gradient(ellipse 58% 44% at 14% 7%, var(--gradient-violet) 0%, transparent 100%), var(--canvas); }
 .grain { position: absolute; z-index: -1; inset: 0; pointer-events: none; opacity: .12; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23000' filter='url(%23n)' opacity='.38' d='M0 0h180v180H0z'/%3E%3C/svg%3E"); mix-blend-mode: multiply; }
-.workspace { position: fixed; left: var(--chat-x, 50%); top: calc(var(--chat-y, 70dvh) + var(--orb-radius)); transform: translate(-50%, -100%); width: min(var(--chat-width), calc(100vw - var(--chat-gutter) * 2)); max-height: max(0px, calc(var(--chat-y, 70dvh) + var(--orb-radius))); display: flex; flex-direction: column; }
+.workspace { position: fixed; left: var(--chat-x, 50%); top: calc(var(--chat-y, 70dvh) + var(--orb-radius)); transform: translate(-50%, -100%); width: min(var(--chat-width), calc(100vw - var(--chat-gutter) * 2)); max-height: max(0px, calc(var(--chat-y, 70dvh) + var(--orb-radius) - var(--keyboard-top))); display: flex; flex-direction: column; }
 .conversation { --top-fade: 0px; flex: 0 1 auto; min-height: 0; position: relative; margin-bottom: calc(-1 * var(--chat-underlap)); overflow-y: auto; overflow-x: hidden; overflow-anchor: none; overscroll-behavior: contain; mask-image: linear-gradient(to bottom, transparent, #000 var(--top-fade), #000 calc(100% - var(--chat-underlap)), transparent); -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--top-fade), #000 calc(100% - var(--chat-underlap)), transparent); }
 .conversation[data-fade-top='true'] { --top-fade: var(--chat-fade); }
 .conversation-content { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: calc(var(--space-3) + var(--chat-underlap)); }
@@ -182,7 +182,7 @@ a { color: inherit; }
 .composer-switcher { position: relative; min-height: 76px; border-radius: var(--radius-input); overflow: hidden; background: var(--surface); }
 .composer-input-layer, .composer-menu-layer { width: 100%; transition: opacity 110ms ease; }
 .composer-menu-layer { position: absolute; inset: 0 0 auto; opacity: 0; visibility: hidden; pointer-events: none; padding: var(--panel-inset); }
-.composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) - var(--orb-spacing) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); max-height: var(--panel-available-height); overflow-y: auto; overscroll-behavior: contain; }
+.composer-menu-layer { --panel-available-height: max(76px, calc(var(--chat-y) - var(--orb-radius) - var(--orb-spacing) - var(--keyboard-top) - max(var(--panel-top-gap),var(--panel-control-gap,0px)) - var(--talk-dock-reserved,0px))); max-height: var(--panel-available-height); overflow-y: auto; overscroll-behavior: contain; }
 .composer-menu-layer { height: 100%; }
 .composer-menu-layer:has(.composer-view:not([hidden]) .composer-surface) { padding: 0; overflow: hidden; }
 .composer-surface { height: 100%; display: flex; flex-direction: column; max-height: var(--panel-available-height); overflow: hidden; font-size: var(--text-body); line-height: 1.6; }
@@ -559,10 +559,10 @@ blockquote { font-family: var(--font-ui); }
 }
 .app[data-keyboard-open] .sheet {
   position: fixed;
-  top: var(--panel-top-gap);
+  top: calc(var(--keyboard-top) + var(--panel-top-gap));
   bottom: auto;
   margin-block: 0;
-  max-height: max(0px, calc(100dvh - var(--panel-top-gap) - var(--space-3)));
+  max-height: max(0px, calc(var(--app-viewport-height) - var(--panel-top-gap) - var(--space-3)));
   padding-top: var(--space-4);
 }
 .history-loader { display: flex; align-items: center; justify-content: center; flex: 0 0 32px; min-height: 32px; color: var(--muted); }

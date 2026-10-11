@@ -61,10 +61,14 @@ export function bindMobileInputFocus(root: HTMLElement, preventNativeFocus = tru
   }
   root.addEventListener('focusin', reveal);
   window.addEventListener('resize', reveal);
+  const visual=window.visualViewport;
+  const revealKeyboard=()=>{if(!visual||Math.abs(visual.scale-1)<.01)reveal();};
+  visual?.addEventListener('resize',revealKeyboard);
   return () => {
     cancelAnimationFrame(frame);
     root.removeEventListener('touchstart', start, true); root.removeEventListener('touchmove', move, true); root.removeEventListener('touchend', end, true); root.removeEventListener('touchcancel', cancel, true);
     root.removeEventListener('focusin', reveal); window.removeEventListener('resize', reveal);
+    visual?.removeEventListener('resize',revealKeyboard);
   };
 }
 

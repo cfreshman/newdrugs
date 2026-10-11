@@ -26,8 +26,9 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
   const preferred = useRef(readPreference());
   const dimensions = useRef(readDimensions());
   const [viewport, setViewport] = useState(readViewport);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const keyboard = useRef({ width: innerWidth, height: Math.max(innerHeight, document.documentElement.clientHeight), open: false });
+  const [keyboardView, setKeyboardView] = useState<{height:number;top:number}|null>(null);
+  const keyboardOpen=keyboardView!==null;
+  const keyboard = useRef({ width: innerWidth, height: innerHeight });
   const [composerHeight, setComposerHeight] = useState(156);
   const [revision, setRevision] = useState(0);
   // Keep only the horizontal preference. Every layout anchors to the visible bottom.
@@ -52,16 +53,23 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
   }, []);
   useLayoutEffect(() => {
     if (!ready) return;
+    const visual=window.visualViewport;
     const editing = () => document.activeElement instanceof HTMLElement && document.activeElement.matches('textarea, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]), [contenteditable="true"]');
     const fit = () => {
       const next = readViewport();
       const baseline = keyboard.current;
-      if (baseline.width !== innerWidth) { baseline.width = innerWidth; baseline.height = next.height; }
+      if (baseline.width !== next.width) {baseline.width=next.width;baseline.height=next.height;}
+      baseline.height=Math.max(baseline.height,next.height);
       const active = editing();
-      if (!active && !baseline.open) baseline.height = Math.max(baseline.height, next.height);
-      baseline.open = mobileChatLayout() && active && baseline.height - next.height > 100;
-      dimensions.current = readDimensions(baseline.open);
-      setKeyboardOpen(baseline.open); setViewport(next);
+      const height=visual?.height||next.height,scale=visual?.scale||1;
+      // Pinch zoom keeps the existing layout. A full-height zoomed viewport
+      // can still tell us the keyboard was dismissed.
+      if(active&&Math.abs(scale-1)>.01&&baseline.height-height*scale>100)return;
+      const open=mobileChatLayout()&&active&&Math.abs(scale-1)<.01&&baseline.height-height>100;
+      const top=open?Math.max(0,visual?.offsetTop||0):0;
+      dimensions.current = readDimensions(open);
+      setKeyboardView(previous=>open?previous?.height===height&&previous.top===top?previous:{height,top}:null);
+      setViewport(previous=>previous.width===next.width&&previous.height===next.height?previous:next);
     };
     fit();
     const fitViewport = () => flushSync(fit);
@@ -70,9 +78,12 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
     window.addEventListener('resize', fitViewport);
     document.addEventListener('focusin', fitViewport);
     document.addEventListener('focusout', fitViewport);
+    visual?.addEventListener('resize',fitViewport);
+    visual?.addEventListener('scroll',fitViewport);
     return () => {
       observer.disconnect(); window.removeEventListener('resize', fitViewport);
       document.removeEventListener('focusin', fitViewport); document.removeEventListener('focusout', fitViewport);
+      visual?.removeEventListener('resize',fitViewport);visual?.removeEventListener('scroll',fitViewport);
     };
   }, [composer, ready]);
   void revision;
@@ -80,7 +91,7 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
     sideBySide,
     keyboardOpen,
     draggable: !mobile,
-    style: { '--chat-x': mobile ? '50vw' : `${position.x}px`, '--chat-y': mobile ? 'calc(100dvh - var(--chat-gutter) - var(--safe-area-bottom) - var(--orb-radius))' : `${position.y}px`, '--chat-gutter': `${dimensions.current.gutter}px`, '--safe-area-bottom': keyboardOpen ? '0px' : undefined,
+    style: { '--chat-x': mobile ? '50vw' : `${position.x}px`, '--chat-y': mobile ? 'calc(var(--app-viewport-bottom, 100dvh) - var(--chat-gutter) - var(--safe-area-bottom) - var(--orb-radius))' : `${position.y}px`, '--chat-gutter': `${dimensions.current.gutter}px`, '--app-viewport-height':keyboardView?`${keyboardView.height}px`:undefined,'--keyboard-top':keyboardView?`${keyboardView.top}px`:undefined,'--safe-area-bottom': keyboardOpen ? '0px' : undefined,
       '--orb-size': keyboardOpen ? 'var(--launcher-size)' : undefined, '--orb-radius': keyboardOpen ? 'calc(var(--launcher-size) / 2)' : undefined } as CSSProperties,
     onDragStart: () => { dragOrigin.current = positionRef.current; },
     onDrag: (dx: number, dy: number) => move({ x: dragOrigin.current.x + dx, y: dragOrigin.current.y + dy }),
