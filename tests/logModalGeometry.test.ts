@@ -41,3 +41,16 @@ it('fits the day scrim to the main panel below the mode controls',()=>{
   stop();
  }finally{dom.cleanup();}
 });
+it('keeps the top layer aligned when native keyboard focus scrolls the document',()=>{
+ const dom=setupDOM();let y=271;
+ try{
+  vi.stubGlobal('scrollY',y);vi.stubGlobal('scrollX',0);
+  dom.container.innerHTML='<div class="app"><section class="social-experience"><div class="mode-main"></div></section><div></div></div>';
+  const panel=dom.container.querySelector<HTMLElement>('.mode-main')!,dialog=dom.container.querySelector<HTMLElement>('.app > div')!;
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(()=>rect(6,277-y,381,376));
+  const stop=observeLogLayerGeometry(dialog,panel);
+  expect(dialog.style.position).toBe('absolute');expect(parseFloat(dialog.style.top)-scrollY).toBe(panel.getBoundingClientRect().top);
+  y=141;vi.stubGlobal('scrollY',y);window.dispatchEvent(new Event('scroll'));
+  expect(parseFloat(dialog.style.top)-scrollY).toBe(panel.getBoundingClientRect().top);expect(dialog.style.height).toBe('376px');stop();
+ }finally{dom.cleanup();}
+});
