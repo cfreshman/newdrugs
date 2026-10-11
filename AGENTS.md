@@ -146,7 +146,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 
 - Notifications retain recent read history with exact reopenable links and an explicit read state. Read items do not contribute to the badge. Opening an invitation marks it read without accepting it; keep resolved invitations in history and continue respecting blocks. Pending agent reviews remain actionable.
 
-- On mobile keyboard opening, hide generic panel headers, Settings, and the DM user/video-call row; expand panels to a 12px/safe-area top gap. Restore headers after dismissal, but never show the mobile footer. Settings modals use 6px horizontal margins on narrow screens, preserving vertical margins. Use the same focus handling in mobile browser tabs and installed PWAs.
+- On mobile keyboard opening, hide generic panel headers, Settings, and the DM user/video-call row; align panels with the visible top edge without leaving the hidden header's gap above them. Restore headers and normal top spacing after dismissal, but never show the mobile footer. Settings modals use 6px horizontal margins on narrow screens, preserving vertical margins. Use the same focus handling in mobile browser tabs and installed PWAs.
 - AI chat and DMs load older messages at the top edge with a small spinner. Preserve the visible message when prepending, retain fetched history through live updates, and stop at the true beginning. Do not prefetch far ahead of the user.
 
 - Navigating to a record already in the launcher stack, including a reply’s parent, pops back to the original entry instead of pushing a duplicate. Preserve its mounted state, scroll and draft. Keyboard/viewport resizes apply before paint and never run the launcher height animation.

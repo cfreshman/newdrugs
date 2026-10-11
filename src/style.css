@@ -552,8 +552,9 @@ blockquote { font-family: var(--font-ui); }
 
 /* Mobile typing uses the space normally reserved for navigation and Settings. */
 .app[data-keyboard-open] {
-  --panel-top-gap: max(var(--space-3), env(safe-area-inset-top, 0px));
+  --panel-top-gap: 0px;
 }
+.app[data-keyboard-open] .composer-menu-layer { --panel-control-gap: 0px!important; }
 .app[data-keyboard-open] :is(.settings-controls, .composer-surface-header, .composer-surface-footer, .message-view-actions, .sheet-heading) {
   display: none;
 }
