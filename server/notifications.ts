@@ -3,12 +3,21 @@ import {unsuspendedActors} from './scopedModeration';
 import { enqueuePush,enqueueStoredPush } from './push';
 import type { ClientSession,Document } from 'mongodb';
 import { rows,type Row } from './db';
-import { hash, users } from './auth';
+import { hash, users, type User } from './auth';
 import { config } from './config';
 import { destinationPath, type ResourceLink } from '../shared/navigation';
 import type { Notification, NotificationState } from '../shared/notifications';
 import { logNotificationText, notificationActor } from './notificationText';
 import {notificationEnabled} from './notificationSettings';
+
+export async function notifySignup(person: Pick<User, '_id' | 'handle' | 'internalTestAccount'>, session: ClientSession) {
+  if (!person.handle || person.internalTestAccount) return;
+  const recipient = await users().findOne({ handle: 'cyrus', suspendedAt: null }, { session, projection: { _id: 1 } });
+  if (!recipient || recipient._id === person._id) return;
+  const id = hash(`signup:${person._id}:${recipient._id}`);
+  const inserted = await rows('notifications').updateOne({ _id: id }, { $setOnInsert: { userId: recipient._id, actorId: person._id, kind: 'signup', title: `@${person.handle} signed up`, text: '', readAt: null, createdAt: new Date().toISOString() } }, { session, upsert: true });
+  if (inserted.upsertedCount) await enqueueStoredPush(recipient._id, person._id, person._id, 'signup', id, session);
+}
 
 export async function notifyConnection(userId: string, actorId: string, connectionId: string, kind: 'message' | 'connection_accepted', text: string, messageId: string | undefined, session?: ClientSession) {
   if(!await notificationEnabled(userId,kind,session))return;
@@ -38,11 +47,16 @@ export async function notificationState(userId: string, session?: ClientSession,
   const callRows=callIds.length?await rows('calls').find({_id:{$in:callIds}},{session,projection:{_id:1,status:1,joinedAt:1}}).toArray():[];
   const byCall=new Map(callRows.map(row=>[row._id,row]));
   const count=lanes[0].eligible.length+lanes[2].eligible.length;
-  const people = await users().find({ _id: { $in: [...invitations.map(row => String(row.fromId)), ...stored.map(row => String(row.actorId))] } }, { session, projection: { name: 1, handle: 1 } }).toArray();
+  const people = await users().find({ _id: { $in: [...invitations.map(row => String(row.fromId)), ...stored.map(row => String(row.actorId))] } }, { session, projection: { name: 1, handle: 1, discoverable: 1 } }).toArray();
   const label = (id: string) => notificationActor(people.find(person => person._id === id));
   const link = (connectionId: string,messageId?:string): ResourceLink => ({ rel: 'open_in_newdrugs', targetKind: 'exact', title: messageId?'Open message':'Open conversation', url: new URL(destinationPath({ view: 'messages', resourceId: connectionId,...(messageId?{messageId}:{}) }), config.uiOrigin).href, resourceType: messageId?'message':'conversation', resourceId: messageId||connectionId });
   const items: Notification[] = invitations.map(row => ({ id: `invite:${row._id}`, kind: 'invitation', title: `Invitation from ${label(String(row.fromId))}`, text: String(row.note), createdAt: String(row.createdAt), read: row.status !== 'pending' || Boolean(row.notificationReadAt), connectionId: row._id, link: link(row._id) }));
   for (const row of stored) {
+    if (row.kind === 'signup') {
+      const person = people.find(person => person._id === row.actorId), visible = person?.discoverable === true;
+      items.push({ id: row._id, kind: 'signup', title: String(row.title), text: '', createdAt: String(row.createdAt), read: Boolean(row.readAt), link: { rel: 'open_in_newdrugs', targetKind: visible ? 'exact' : 'surface', title: visible ? 'Open profile' : 'Open notifications', url: new URL(destinationPath(visible ? { view: 'person', resourceId: String(row.actorId) } : { view: 'notifications' }), config.uiOrigin).href, resourceType: visible ? 'person' : 'notifications', ...(visible ? { resourceId: String(row.actorId) } : {}) } });
+      continue;
+    }
     if(row.kind==='dinder_match'||row.kind==='dinder_message'){
       const actor=label(String(row.actorId)),matchId=String(row.matchId);
       items.push({id:row._id,kind:row.kind,title:row.kind==='dinder_match'?`Cook ${String(row.text)} with ${actor}`:`Dinder message from ${actor}`,text:'',createdAt:String(row.createdAt),read:Boolean(row.readAt),link:{rel:'open_in_newdrugs',targetKind:'exact',title:'Open meal match',url:new URL(destinationPath({view:'dinder',resourceId:matchId,...(row.kind==='dinder_message'?{dinderTab:'chat' as const}:{})}),config.uiOrigin).href,resourceType:'dinder_match',resourceId:matchId}});continue;

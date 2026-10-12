@@ -66,7 +66,10 @@ export async function registerAccount(userId: string, handle: string, encodedPas
     requireValue(await users().findOneAndUpdate({ _id: userId, handle: { $exists: false } },
       { $set: { handle, logHandleGrams:logPersonGrams(handle),logNameGrams:logPersonGrams(user.name),passwordHash: encodedPassword, starterClaimKey: starterClaimKey(address) } }, { session }));
     await grantStarter(userId, session);
-    return requireValue(await users().findOne({ _id: userId }, { session }));
+    const saved = requireValue(await users().findOne({ _id: userId }, { session }));
+    const { notifySignup } = await import('./notifications');
+    await notifySignup(saved, session);
+    return saved;
   });
 }
 const cookieName = config.SESSION_COOKIE;

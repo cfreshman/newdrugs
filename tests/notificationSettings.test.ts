@@ -137,7 +137,7 @@ it('sends the same enabled post notification to a device without post text',asyn
   await rows('pushOutbox').updateMany({userId:'me'},{$set:{availableAt:0}});
   const packets:string[]=[];await deliverPush((async(_subscription:any,payload:any)=>{packets.push(String(payload));return {statusCode:201};}) as any);
   expect(packets).toHaveLength(1);
-  const packet=JSON.parse(packets[0]);expect(packet).toMatchObject({kind:'post_like',url:`/posts/${post.id}`,body:'@other liked your post'});
+  const packet=JSON.parse(packets[0]);expect(packet).toMatchObject({kind:'post_like',url:`/posts/${post.id}`,title:'@other liked your post',body:''});
   expect(packets[0]).not.toContain('A private-to-the-author caption');
  }finally{config.VAPID_PUBLIC_KEY=saved.publicKey;config.VAPID_PRIVATE_KEY=saved.privateKey;}
 });
