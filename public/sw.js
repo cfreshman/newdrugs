@@ -33,7 +33,7 @@ self.addEventListener('fetch',event=>{
 });
 function messagePath(value) {
   try { const url = new URL(typeof value === 'string' ? value : '/messages', self.location.origin);
-    if (url.origin === self.location.origin && (url.pathname==='/' || /^\/(?:messages|inbox|automations|log|posts|spaces|people|billing|storage|agents|account|ious)(?:\/[^/?#]+)?$/.test(url.pathname))) return url.pathname;
+    if (url.origin === self.location.origin && (url.pathname==='/' || /^\/(?:messages|notifications|inbox|automations|log|posts|spaces|people|billing|storage|agents|account|ious)(?:\/[^/?#]+)?$/.test(url.pathname))) return url.pathname;
   } catch { /* Fall back to the inbox. */ }
   return '/messages';
 }

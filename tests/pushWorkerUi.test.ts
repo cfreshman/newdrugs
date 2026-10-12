@@ -41,3 +41,14 @@ it('signals an existing window without navigating away from its mounted state',a
  runInNewContext(code,{URL,setTimeout,clearTimeout,MessageChannel:Channel,self:{location:{origin:'https://druggie.org'},addEventListener:(name:string,fn:(event:any)=>void)=>{events[name]=fn;},clients:{matchAll:async()=>[{url:'https://druggie.org/feed',focus,postMessage:sent,navigate}]}}});let work:Promise<void>|undefined;
  events.notificationclick({notification:{close:vi.fn(),data:{path:'/messages/friend'}},waitUntil:(p:Promise<void>)=>{work=p;}});await work;expect(sent).toHaveBeenCalledWith({type:'newdrugs-open',path:'/messages/friend',notification:true},expect.anything());expect(navigate).not.toHaveBeenCalled();
 });
+it('preserves the signup notification title and opens its authorized destination',async()=>{
+ const events:Record<string,(event:any)=>void>={},showNotification=vi.fn().mockResolvedValue(undefined),openWindow=vi.fn().mockResolvedValue(undefined);
+ runInNewContext(code,{URL,self:{location:{origin:'https://druggie.org'},addEventListener:(name:string,callback:(event:any)=>void)=>{events[name]=callback;},registration:{showNotification},clients:{matchAll:async()=>[],openWindow}}});
+ for(const path of ['/notifications','/people/new-account']){
+  let work:Promise<void>|undefined;
+  events.push({data:{json:()=>({kind:'signup',title:'@new_member signed up',body:'',url:path})},waitUntil:(promise:Promise<void>)=>{work=promise;}});await work;
+  expect(showNotification).toHaveBeenLastCalledWith('@new_member signed up',expect.objectContaining({body:'',data:{path}}));
+  events.notificationclick({notification:{close:vi.fn(),data:{path}},waitUntil:(promise:Promise<void>)=>{work=promise;}});await work;
+  expect(openWindow).toHaveBeenLastCalledWith(`https://druggie.org${path}?notification=1`);
+ }
+});
