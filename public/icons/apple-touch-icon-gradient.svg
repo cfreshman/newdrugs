@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<!-- Static dark app gradient for the Apple Home Screen icon. -->
+<defs><radialGradient id="yellow" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(230.4 378.88) scale(296.96 199.68)"><stop stop-color="#544535"/><stop offset="1" stop-color="#544535" stop-opacity="0"/></radialGradient>
+<radialGradient id="red" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(450.56 261.12) scale(317.44 245.76)"><stop stop-color="#5d3343"/><stop offset="1" stop-color="#5d3343" stop-opacity="0"/></radialGradient>
+<radialGradient id="orange" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(225.28 235.52) scale(307.2 204.8)"><stop stop-color="#654238"/><stop offset="1" stop-color="#654238" stop-opacity="0"/></radialGradient>
+<radialGradient id="green" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(5.12 215.04) scale(286.72 266.24)"><stop stop-color="#23463d"/><stop offset="1" stop-color="#23463d" stop-opacity="0"/></radialGradient>
+<radialGradient id="blue" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(440.32 25.6) scale(358.4 225.28)"><stop stop-color="#213c62"/><stop offset="1" stop-color="#213c62" stop-opacity="0"/></radialGradient>
+<radialGradient id="indigo" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(51.2 491.52) scale(327.68 215.04)"><stop stop-color="#343151"/><stop offset="1" stop-color="#343151" stop-opacity="0"/></radialGradient>
+<radialGradient id="violet" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(71.68 35.84) scale(296.96 225.28)"><stop stop-color="#4e335f"/><stop offset="1" stop-color="#4e335f" stop-opacity="0"/></radialGradient></defs>
+<rect width="512" height="512" fill="#1e2230"/>
+<rect width="512" height="512" fill="url(#violet)"/>
+<rect width="512" height="512" fill="url(#indigo)"/>
+<rect width="512" height="512" fill="url(#blue)"/>
+<rect width="512" height="512" fill="url(#green)"/>
+<rect width="512" height="512" fill="url(#orange)"/>
+<rect width="512" height="512" fill="url(#red)"/>
+<rect width="512" height="512" fill="url(#yellow)"/>
+</svg>
