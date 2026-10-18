@@ -1,4 +1,5 @@
 import {TransientError} from './TransientError';
+import {useLogClock} from './useLogClock';
 import {avatarImageUrl} from './logImageCache';
 import {useLogContacts} from './useLogContacts';
 import {LogMedia} from './LogMedia';
@@ -190,6 +191,7 @@ export function LogDetail({entryId,user,navigate,onSaved,onCancel,onClose,onAdja
 }
 
 export function LogPanel({user,navigate,initialQuery='',date:dayDate,logMonth,logScope,personId:initialPerson,onStateChange}:{date?:string;user:Profile;navigate:Navigate;initialQuery?:string;logMonth?:string;logScope?:Destination['logScope'];personId?:string;onStateChange?(context:Partial<Destination>):void}){
+ const clock=useLogClock(),todayRequest=useRef(0);
  const openList=useOpenLogList(navigate);
  const openSearch=useOpenLogSearch(navigate);
  const [optionsOpen,setOptionsOpen]=useState(false),[previews,setPreviews]=useState<LogCalendarTile[]>([]),[listLoaded,setListLoaded]=useState(false);
@@ -231,10 +233,10 @@ export function LogPanel({user,navigate,initialQuery='',date:dayDate,logMonth,lo
  useEffect(()=>{void loadPreferences();},[]);
  useEffect(()=>{sequence.current++;listPending.current=false;setItems([]);setPreviews([]);setCursor(null);setListLoaded(false);},[scope,applied,personId]);
  useEffect(()=>{if(preferencesLoaded&&!calendar&&!listLoaded)void load();},[preferencesLoaded,calendar,listLoaded,scope,applied,personId]);
- useEffect(()=>()=>{sequence.current++;},[]);
+ useEffect(()=>()=>{sequence.current++;todayRequest.current++;},[]);
  useLayoutEffect(()=>{const scroller=browserRoot.current?.closest<HTMLElement>('.composer-view');if(!scroller)return;const view=preferences.arrangement;scroller.scrollTop=positions.current[view]||0;},[preferences.arrangement]);
- const loadToday=async()=>{try{const entries:LogEntry[]=[];let before:string|undefined;do{const page=await operation<LogPage>('log.list',{from:new Date().getHours()<8?Temporal.Now.plainDateISO().subtract({days:1}).toString():today(),through:today(),scope:'all',limit:30,...(before?{before}:{})});entries.push(...page.items);before=page.nextCursor||undefined;}while(before);setTodayEntries(entries.reverse());}catch{/* Calendar errors are shown in their own view. */}};
- useEffect(()=>{void loadToday();},[]);
+ const loadToday=async()=>{const ticket=++todayRequest.current;try{const entries:LogEntry[]=[];let before:string|undefined;do{const page=await operation<LogPage>('log.list',{from:clock.from,through:clock.day,scope:'all',limit:30,...(before?{before}:{})});if(ticket!==todayRequest.current)return;entries.push(...page.items);before=page.nextCursor||undefined;}while(before);setTodayEntries(entries.reverse());}catch{/* Calendar errors are shown in their own view. */}};
+ useEffect(()=>{if(visible)void loadToday();},[clock.day,clock.from,visible]);
  useRecordRefreshDetails(['log'],change=>{const ids=new Set(change?.log?.map(item=>item.id));setPreviews(previous=>ids.size?previous.filter(item=>!ids.has(item.id)):[]);void loadToday();void load();if(searchQuery)setSearchRevision(value=>value+1);});
  useEffect(()=>{const target=listEdge.current,scroller=target?.closest<HTMLElement>('.composer-view');if(calendar||!visible||busy||error||!cursor||!target||!scroller||typeof IntersectionObserver==='undefined')return;const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting))void load(true);},{root:scroller,rootMargin:'0px 0px 150px 0px'});observer.observe(target);return()=>observer.disconnect();},[calendar,visible,busy,error,cursor]);
  useRecordRefresh(['log_preferences'],()=>loadPreferences());

@@ -626,6 +626,7 @@ blockquote { font-family: var(--font-ui); }
 .launcher-divider { width: 100%; margin: var(--space-2) 0; border: 0; border-top: var(--border-width) solid var(--divider); }
 
 .profile-posts { margin-block-start: var(--space-4); }
+.profile-tab-content { min-height: var(--app-viewport-height,100dvh); }
 
 .content-report { margin-block: 12px; }
 .direct-message-content .message.peer { position: relative; }

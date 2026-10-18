@@ -20,6 +20,7 @@ import {retainCalendarWeeks} from './logCalendarRetention';
 import {LOG_WEEK_BATCH,logWeekStart,logCalendarWeeks,logWeekMonth,logCover} from './logCalendarModel';
 import {NavLink} from './NavLink';
 import {observeVisibleElementRect} from './virtualScroll';
+import {useLogClock} from './useLogClock';
 
 type Scope='all'|'private'|'shared';
 const EMPTY_ENTRIES:LogEntry[]=[];
@@ -28,9 +29,10 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
  const openEntry=useCallback((entry:LogEntry|LogCalendarTile,list?:(LogEntry|LogCalendarTile)[],query?:Partial<LogList>,cursor?:string|null)=>{if("contributors" in entry)primeLogEntry(entry);actions.current.open(entry,list,query,cursor);},[]);
  const createEntry=useCallback((date:string)=>actions.current.create(date),[]),showPerson=useCallback((id:string)=>actions.current.openPerson?.(id),[]);
  const visible=usePanelVisible(),root=useRef<HTMLDivElement>(null),sentinel=useRef<HTMLDivElement>(null);
- const knownUpcoming=useRef(false);
- const [today]=useState(()=>Temporal.Now.plainDateISO());
- const [anchor]=useState(()=>logWeekStart(month?Temporal.PlainDate.from(`${month}-01`).add({months:1}).subtract({days:1}):today));
+ const knownUpcoming=useRef({week:'',visible:false});
+ const clock=useLogClock(),today=useMemo(()=>Temporal.PlainDate.from(clock.day),[clock.day]);
+ const anchor=useMemo(()=>logWeekStart(month?Temporal.PlainDate.from(`${month}-01`).add({months:1}).subtract({days:1}):today),[month,today]);
+ const initialAnchor=useRef(anchor),elapsedWeeks=Math.max(0,initialAnchor.current.until(anchor).days/7);
  const [birthdays,setBirthdays]=useState<BirthdayPerson[]>([]),[ownBirthday,setOwnBirthday]=useState<OwnBirthday|null>(null);
  const [weeks,setWeeks]=useState(LOG_WEEK_BATCH),[selectedDay,setSelectedDay]=useState<string|null>(initialDay||null),[wanted,setWanted]=useState([0,1]);
  const pendingDayIntent=useRef<'previous'|'next'|null>(null);
@@ -65,11 +67,12 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
  const seeded=new Map<string,LogCalendarTile[]>();for(const entry of seedEntries){const tile={id:entry.id,date:entry.date,title:entry.title,createdAt:entry.createdAt,cover:logCover(entry)||null};seeded.set(entry.date,[...(seeded.get(entry.date)||[]),tile]);}
  const ordered=new Map<string,LogCalendarTile[]>();const onDay=(date:string)=>{const cached=ordered.get(date);if(cached)return cached;const server=calendarDays.get(date)?.items||seeded.get(date)?.filter(entry=>!entry.id.startsWith('offline:'))||[],local=seeded.get(date)?.filter(entry=>entry.id.startsWith('offline:'))||[],entries=[...server,...local.filter(entry=>!server.some(item=>item.id===entry.id))],value=entries.length>1?entries.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id)):entries;ordered.set(date,value);return value;};
  const nextWeek=anchor.add({weeks:1}),nextDays=Array.from({length:7},(_,index)=>nextWeek.add({days:index}));
- if(calendarDays.has(nextWeek.toString()))knownUpcoming.current=nextDays.some(date=>onDay(date.toString()).length||birthdaysOn(date.toString()).length);
- const upcoming=knownUpcoming.current||nextDays.some(date=>birthdaysOn(date.toString()).length);
- const starts=[...(upcoming?[nextWeek]:[]),...logCalendarWeeks(anchor,weeks)];
+ if(knownUpcoming.current.week!==nextWeek.toString())knownUpcoming.current={week:nextWeek.toString(),visible:false};
+ if(calendarDays.has(nextWeek.toString()))knownUpcoming.current.visible=nextDays.some(date=>onDay(date.toString()).length||birthdaysOn(date.toString()).length);
+ const upcoming=knownUpcoming.current.visible||nextDays.some(date=>birthdaysOn(date.toString()).length);
+ const starts=[...(upcoming?[nextWeek]:[]),...logCalendarWeeks(anchor,weeks+elapsedWeeks)];
  return {starts,onDay,birthdaysOn};
- },[anchor,weeks,calendarDays,birthdays,today,seedEntries]);
+ },[anchor,weeks,elapsedWeeks,calendarDays,birthdays,today,seedEntries]);
  const {starts,onDay,birthdaysOn}=calendar;
  const getScrollElement=useCallback(()=>root.current?.closest<HTMLElement>('.composer-view')||null,[]);
  const [rowWidth,setRowWidth]=useState(600);
@@ -91,6 +94,14 @@ export function LogCalendar({month,scope,query,personId,date:initialDay,onDayCha
   return [...retainedWeeks.current.keys()].flatMap(week=>{const index=weekIndices.get(week);return index===undefined?[]:[index];}).sort((a,b)=>a-b);
  },[starts,weekIndices,onDay,thumbnailCounts]);
  const virtual=useVirtualizer({count:starts.length,getScrollElement,getItemKey,estimateSize,measureElement,rangeExtractor,overscan:10,gap:1,initialRect:{width:600,height:800},observeElementRect:observeVisibleElementRect});
+ const previousCalendar=useRef({anchor:anchor.toString(),first:starts[0].toString()});
+ useLayoutEffect(()=>{
+  const previous=previousCalendar.current;previousCalendar.current={anchor:anchor.toString(),first:starts[0].toString()};
+  const scroller=getScrollElement(),offset=virtual.scrollOffset??scroller?.scrollTop??0;
+  if(previous.anchor===anchor.toString()||!scroller||offset<=0)return;
+  const index=starts.findIndex(start=>start.toString()===previous.first),shift=index>0?virtual.getOffsetForIndex(index,'start')?.[0]:0;
+  if(shift)virtual.scrollToOffset(offset+shift);
+ },[anchor,starts,virtual,getScrollElement]);
  const virtualRows=virtual.getVirtualItems();
  // Retained rows are presentation only. Prefetch follows the actual viewport.
  const viewportRows=virtual.range?defaultRangeExtractor({...virtual.range,overscan:10,count:starts.length}):[];

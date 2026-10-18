@@ -62,4 +62,5 @@ async function performOperation<T>(name:string,input:unknown,options:OperationOp
 }
 export const money = (nanos: number, detail = false) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: detail ? 4 : 2, maximumFractionDigits: detail ? 6 : 2 }).format(nanos / 1e9);
 export const balanceLabel = (nanos: number) => money((Math.ceil(nanos / 10_000_000) || 0) * 10_000_000);
+export const balanceDigits = (nanos: number) => balanceLabel(nanos).replace('$', '').replace(/^(-?)(\d)(?=\.)/, (_match, sign, digit) => `${sign}0${digit}`);
 export const errorText = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
