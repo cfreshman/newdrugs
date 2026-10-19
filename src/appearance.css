@@ -61,6 +61,7 @@
 }
 :root[data-theme=dark] :is(.mode-primary-panel,.mode-content-header){background:var(--panel-surface);}
 :root[data-theme=dark] .mode-content-header :is(.talk-header-action,.iou-header-action,.quiz-header-action){background:var(--surface-soft);color:var(--ink);}
+:root[data-theme=dark] .mode-switch>a[aria-current=page]{color:var(--control-black);}
 .appearance-options{margin:0;}.appearance-options button{display:flex;flex:1;align-items:center;justify-content:center;gap:7px;min-height:44px;}
 
 .preferences-panel{display:flex;flex-direction:column;gap:20px;}.preferences-panel h3{font-size:14px;margin:0 0 8px;}.landing-options button{gap:5px;padding-inline:7px;font-size:12px;}.settings-utilities{display:flex;gap:8px;}.settings-utilities>a,.settings-utilities>button{display:flex;flex:1;align-items:center;justify-content:center;gap:8px;min-width:0;padding:10px;border-radius:var(--radius-control);background:var(--surface-soft);text-decoration:none;font-size:14px;}.agent-preference-actions button{min-height:48px;}
