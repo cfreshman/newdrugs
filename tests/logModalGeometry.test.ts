@@ -56,18 +56,19 @@ it('keeps the top layer aligned when native keyboard focus scrolls the document'
 });
 
 it.each([
- {name:'desktop below the top controls',mobile:false,standalone:false,top:66,height:668},
- {name:'mobile browser',mobile:true,standalone:false,top:6,height:728},
- {name:'installed mobile',mobile:true,standalone:true,top:6,height:728},
-])('uses the intended entry bounds on $name',({mobile,standalone,top,height})=>{
+ {name:'desktop below the top controls',mobile:false,standalone:false,keyboard:false,top:66,height:668},
+ {name:'mobile browser',mobile:true,standalone:false,keyboard:false,top:0,height:734},
+ {name:'installed mobile',mobile:true,standalone:true,keyboard:false,top:0,height:734},
+ {name:'mobile keyboard',mobile:true,standalone:false,keyboard:true,top:106,height:628},
+])('uses the intended entry bounds on $name',({mobile,standalone,keyboard,top,height})=>{
  const dom=setupDOM();
  try{
   dom.desktop(mobile);
-  dom.container.innerHTML=`<div class="app" data-standalone="${standalone}"><section class="social-experience"><div class="mode-main"></div></section><div class="entry"></div></div>`;
+  dom.container.innerHTML=`<div class="app" data-standalone="${standalone}" ${keyboard?'data-keyboard-open="true"':''}><section class="social-experience"><div class="mode-main"></div></section><div class="entry"></div></div>`;
   const panel=dom.container.querySelector<HTMLElement>('.mode-main')!,dialog=dom.container.querySelector<HTMLElement>('.entry')!;
-  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){return this===panel?rect(190,66,540,668):rect(6,6,918,728);});
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){return this===panel?rect(mobile?6:190,keyboard?106:66,mobile?381:540,keyboard?628:668):rect(6,keyboard?106:6,mobile?381:918,keyboard?628:728);});
   const stop=observeLogLayerGeometry(dialog,panel);
-  expect(dialog.style.left).toBe('190px');expect(dialog.style.width).toBe('540px');expect(dialog.style.top).toBe(`${top}px`);expect(dialog.style.height).toBe(`${height}px`);
+  expect(dialog.style.left).toBe(mobile?'6px':'190px');expect(dialog.style.width).toBe(mobile?'381px':'540px');expect(dialog.style.top).toBe(`${top}px`);expect(dialog.style.height).toBe(`${height}px`);
   stop();
  }finally{dom.cleanup();}
 });

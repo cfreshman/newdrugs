@@ -3,12 +3,18 @@ import {PanelReadinessContext,useReadinessBoundary} from './PanelReadiness';
 export function isEditableLogTarget(target:EventTarget|null){return target instanceof HTMLElement&&Boolean(target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])'));}
 /** Share the same anchor tracking with detail layers above the retained Log panel. */
 export function observeLogLayerGeometry(dialog:HTMLElement,panel:HTMLElement,fitPanel=false){
- const outer=panel.matches('.log-modal,.composer-menu-layer')?panel:panel.closest<HTMLElement>('.social-experience')||panel;
+ const outer=panel.matches('.log-modal,.composer-menu-layer')?panel:panel.closest<HTMLElement>('.social-experience')||panel,app=panel.closest('.app');
  // Top-layer absolute positioning uses document coordinates. Safari pans the
  // document for native focus, so viewport-relative rects need its scroll offset.
- const place=()=>{const bounds=panel.getBoundingClientRect(),mobile=window.matchMedia('(max-width:760px)').matches,vertical=fitPanel||!mobile?bounds:outer.getBoundingClientRect();if(!bounds.width||!bounds.height)return;Object.assign(dialog.style,{position:'absolute',left:`${bounds.left+window.scrollX}px`,top:`${vertical.top+window.scrollY}px`,width:`${bounds.width}px`,height:`${vertical.height}px`,transform:'none',borderRadius:getComputedStyle(panel).borderRadius});dialog.style.setProperty('--log-layer-height',`${vertical.height}px`);};
+ const place=()=>{
+  const bounds=panel.getBoundingClientRect(),mobile=window.matchMedia('(max-width:760px)').matches,vertical=fitPanel||!mobile?bounds:outer.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
+  // Full-height mobile entries cover the exterior top gutter too. The keyboard
+  // already places the outer panel at the visible top, so retain that offset.
+  const top=mobile&&!fitPanel&&outer!==panel&&!app?.hasAttribute('data-keyboard-open')?0:vertical.top,height=vertical.bottom-top;
+  Object.assign(dialog.style,{position:'absolute',left:`${bounds.left+window.scrollX}px`,top:`${top+window.scrollY}px`,width:`${bounds.width}px`,height:`${height}px`,transform:'none',borderRadius:getComputedStyle(panel).borderRadius});dialog.style.setProperty('--log-layer-height',`${height}px`);
+ };
  place();const observer=new ResizeObserver(place);observer.observe(panel);if(outer!==panel)observer.observe(outer);
- const layout=new MutationObserver(place),app=panel.closest('.app'),frame=panel.closest('.mode-main');
+ const layout=new MutationObserver(place),frame=panel.closest('.mode-main');
  if(app)layout.observe(app,{attributes:true,attributeFilter:['data-agent-dock','data-mode','data-standalone','data-keyboard-open','data-panel-below-controls','style']});
  layout.observe(panel,{attributes:true,attributeFilter:['style']});
  if(frame&&frame!==panel)layout.observe(frame,{attributes:true,attributeFilter:['style']});
