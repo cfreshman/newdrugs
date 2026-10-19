@@ -39,6 +39,18 @@ describe('chat interaction integration', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
+  it.each([true,false])('keeps only the permanent introduction expanded when present=%s',async hasIntroduction=>{
+    vi.spyOn(HTMLElement.prototype,'scrollHeight','get').mockReturnValue(1200);
+    const introduction={id:'intro:user',role:'assistant' as const,text:'A long introduction',createdAt:'2026-10-01T00:00:00Z',source:'app' as const};
+    const ordinary={...introduction,id:'ordinary',text:'A later long response',createdAt:'2026-10-02T00:00:00Z'};
+    await mount();await act(async()=>bootstrap.resolve({...initial,messages:[...(hasIntroduction?[introduction]:[]),ordinary]}));
+    const intro=dom.container.querySelector('[data-message-id="intro:user"]');
+    if(hasIntroduction){expect(intro).not.toBeNull();expect(intro!.querySelector('button[aria-controls]')).toBeNull();expect(intro!.querySelector<HTMLElement>('.message-preview')!.style.maxHeight).toBe('');}
+    const later=dom.container.querySelector('[data-message-id="ordinary"]')!;
+    expect(later.querySelector('button[aria-controls]')?.textContent).toContain('Show more');
+    expect(later.querySelector<HTMLElement>('.message-preview')!.style.maxHeight).toBe('256px');
+  });
+
   it('attaches a receipt beside the launcher without sending until the message is submitted',async()=>{
     await mount();await load();
     const picker=dom.container.querySelector<HTMLInputElement>('.launcher-controls input[type="file"]')!;

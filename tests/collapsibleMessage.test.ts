@@ -12,7 +12,7 @@ describe('long messages', () => {
     vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.classList.contains('message-text') ? height : 3000; });
   });
   afterEach(() => dom.cleanup());
-  const render = (assistant = false, text = 'Start\n\n[Open profile](/profile)\n\nEnd') => act(() => dom.root.render(createElement(CollapsibleMessage, { text, assistant, scrollRef: { current: scroller } })));
+  const render = (assistant = false, text = 'Start\n\n[Open profile](/profile)\n\nEnd', collapsible = true) => act(() => dom.root.render(createElement(CollapsibleMessage, { text, assistant, scrollRef: { current: scroller }, collapsible })));
   const button = () => dom.container.querySelector<HTMLButtonElement>('button[aria-controls]');
   const preview = () => dom.container.querySelector<HTMLElement>('.message-preview')!;
   it('uses Wayfinder mobile/user thresholds and doubles desktop assistant previews', () => {
@@ -26,6 +26,14 @@ describe('long messages', () => {
     expect(preview().style.maxHeight).toBe('256px');
     height = 280; dom.resize();
     expect(button()).toBeNull();
+  });
+  it('keeps the introduction fully visible without a toggle across resizes', () => {
+    height = 1200; render(true, 'The full introduction', false);
+    expect(preview().style.maxHeight).toBe(''); expect(button()).toBeNull();
+    dom.desktop(true); height = 1800; dom.resize();
+    expect(preview().style.maxHeight).toBe(''); expect(button()).toBeNull();
+    dom.desktop(false);
+    expect(preview().style.maxHeight).toBe(''); expect(button()).toBeNull();
   });
   it('expands without following the toggle down, keeping full text and links mounted', () => {
     render(true); scroller.scrollTop = 150;

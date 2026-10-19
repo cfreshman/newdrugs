@@ -121,7 +121,7 @@ Treat the existing New Drugs UI as one design system. Before adding a control or
 
 - use `npm run icons -- <search terms>` or `docs/phosphor-icons.json` to choose actual installed Phosphor exports. The catalog comes from official `@phosphor-icons/core` metadata and is verified against the React package. Do not guess icon names from other libraries.
 - keep only the background visible until initial chat/settings data has loaded. Chat stays pinned to the visible bottom; desktop restores only its horizontal position.
-- carry over Wayfinder's Show more / Show less behavior for long messages, including scroll anchoring and stable pointer/keyboard interactions. The send handoff uses a single moving object with inert copies of input and bubble crossfading inside it, retaining the bubble's corner shape.
+- carry over Wayfinder's Show more / Show less behavior for long messages, including scroll anchoring and stable pointer/keyboard interactions. The initial introduction (message #1) stays fully expanded without a collapse toggle, including when retrieved through chat history. Identify it by its permanent introduction ID, not its position in a loaded page. The send handoff uses a single moving object with inert copies of input and bubble crossfading inside it, retaining the bubble's corner shape.
 - text should appear smoothly while a run is active, without restarting or disappearing between snapshots; completed messages show immediately. Prefer correct provider-to-browser event delivery over animation hiding stale state.
 - scrolling the base page scrolls chat; native chat scrolling, modals, focused controls, pinch zoom and orb dragging retain their own interactions.
 
