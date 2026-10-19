@@ -216,6 +216,10 @@
 .log-editor-preview{position:relative;border-radius:var(--radius-control);}.log-media-loading{position:absolute;inset:0;display:grid;place-items:center;border-radius:inherit;background:color-mix(in srgb,var(--surface) 75%,transparent);pointer-events:none;color:var(--primary);}
 
 .log-header-host{flex:none;}.log-fixed-weekdays{padding:0 var(--panel-inset);background:var(--panel-surface-top);}
+:root[data-theme=dark] .composer-surface-content:has(>.composer-surface-body>.log-browser),
+:root[data-theme=dark] .log-fixed-weekdays,
+:root[data-theme=dark] .log-weekday-row{background:var(--panel-surface);}
+
 .mode-main:has(.log-fixed-weekdays) .mode-page-log:has(>.log-browser){padding-top:0;}
 
 .log-browser::after{content:"";display:block;flex:0 0 var(--log-bottom-clearance,84px);min-height:var(--log-bottom-clearance,84px);}

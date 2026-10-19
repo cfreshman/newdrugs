@@ -15,36 +15,37 @@
 }
 :root[data-theme=dark] {
   color-scheme:dark;
-  --ink:#fff1eb;
-  --muted:#cbb8ae;
-  --muted-light:#b39b90;
+  --ink:#f5f3f3;
+  --muted:#bdbbba;
+  --muted-light:#a29f9e;
   --primary:#93baff;
   --primary-hover:#82acf4;
   --primary-soft:#263656;
   --on-primary:var(--inverse-ink);
-  --surface:#1d1b1a;
-  --surface-glass:#1d1b1af0;
-  --floating-control-surface:#302927db;
-  --surface-soft:#332c29;
+  --surface:#1c1b1b;
+  --surface-glass:#1c1b1bf0;
+  --floating-control-surface:#2b2a2adb;
+  --surface-soft:#2e2d2d;
   --surface-blue:#273750;
-  --panel-surface-top:#1a1919;
-  --panel-surface-bottom:#29221f;
-  --panel-header-surface:#1d1b1ac0;
-  --launcher-surface:#302927d9;
-  --inverse-ink:#1d1a18;
+  --panel-surface-top:#191919;
+  --panel-surface-bottom:#242323;
+  --panel-surface:#000;
+  --panel-header-surface:#1c1b1bc0;
+  --launcher-surface:#2b2a2ad9;
+  --inverse-ink:#1b1a1a;
   --user-bubble:#0005;
   --on-user:#fff;
-  --border:#846a5e;
-  --border-strong:#a58a7a;
-  --divider:#413630;
-  --divider-soft:#302825;
+  --border:#726f6e;
+  --border-strong:#928f8d;
+  --divider:#393837;
+  --divider-soft:#2a2929;
   --danger:#ff9b91;
   --success:#70cb94;
   --on-danger:#301412;
   --mic-on:#70cb94;
   --on-mic-on:#182b1d;
   --selection:#6599f54a;
-  --backdrop:#0d0806bf;
+  --backdrop:#090909bf;
   --panel-shadow:0 18px 65px #0007;
   --canvas:#1e2230;
   --gradient-red:#5d3343;
@@ -54,10 +55,12 @@
   --gradient-blue:#213c62;
   --gradient-indigo:#343151;
   --gradient-violet:#4e335f;
-  --audio-player-surface:#3e2d26;
-  --audio-track:#735648;
-  --audio-track-fill:#dfc4b6;
+  --audio-player-surface:#323030;
+  --audio-track:#5f5c5a;
+  --audio-track-fill:#ccc9c7;
 }
+:root[data-theme=dark] :is(.mode-primary-panel,.mode-content-header){background:var(--panel-surface);}
+:root[data-theme=dark] .mode-content-header :is(.talk-header-action,.iou-header-action,.quiz-header-action){background:var(--surface-soft);color:var(--ink);}
 .appearance-options{margin:0;}.appearance-options button{display:flex;flex:1;align-items:center;justify-content:center;gap:7px;min-height:44px;}
 
 .preferences-panel{display:flex;flex-direction:column;gap:20px;}.preferences-panel h3{font-size:14px;margin:0 0 8px;}.landing-options button{gap:5px;padding-inline:7px;font-size:12px;}.settings-utilities{display:flex;gap:8px;}.settings-utilities>a,.settings-utilities>button{display:flex;flex:1;align-items:center;justify-content:center;gap:8px;min-width:0;padding:10px;border-radius:var(--radius-control);background:var(--surface-soft);text-decoration:none;font-size:14px;}.agent-preference-actions button{min-height:48px;}

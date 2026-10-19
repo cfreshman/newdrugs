@@ -54,3 +54,32 @@ it('keeps the top layer aligned when native keyboard focus scrolls the document'
   expect(parseFloat(dialog.style.top)-scrollY).toBe(panel.getBoundingClientRect().top);expect(dialog.style.height).toBe('376px');stop();
  }finally{dom.cleanup();}
 });
+
+it.each([
+ {name:'desktop below the top controls',mobile:false,standalone:false,top:66,height:668},
+ {name:'mobile browser',mobile:true,standalone:false,top:6,height:728},
+ {name:'installed mobile',mobile:true,standalone:true,top:6,height:728},
+])('uses the intended entry bounds on $name',({mobile,standalone,top,height})=>{
+ const dom=setupDOM();
+ try{
+  dom.desktop(mobile);
+  dom.container.innerHTML=`<div class="app" data-standalone="${standalone}"><section class="social-experience"><div class="mode-main"></div></section><div class="entry"></div></div>`;
+  const panel=dom.container.querySelector<HTMLElement>('.mode-main')!,dialog=dom.container.querySelector<HTMLElement>('.entry')!;
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){return this===panel?rect(190,66,540,668):rect(6,6,918,728);});
+  const stop=observeLogLayerGeometry(dialog,panel);
+  expect(dialog.style.left).toBe('190px');expect(dialog.style.width).toBe('540px');expect(dialog.style.top).toBe(`${top}px`);expect(dialog.style.height).toBe(`${height}px`);
+  stop();
+ }finally{dom.cleanup();}
+});
+
+it('follows the desktop frame when its top moves without a resize',async()=>{
+ const dom=setupDOM();
+ try{
+  dom.container.innerHTML='<div class="app"><section class="social-experience"><div class="mode-main"><div class="mode-primary-panel"></div></div></section><div class="entry"></div></div>';
+  const frame=dom.container.querySelector<HTMLElement>('.mode-main')!,panel=frame.querySelector<HTMLElement>('.mode-primary-panel')!,dialog=dom.container.querySelector<HTMLElement>('.entry')!;
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(this:HTMLElement){return this===panel?rect(204,frame.style.marginTop?70:64,684,762):rect(6,6,888,832);});
+  const stop=observeLogLayerGeometry(dialog,panel);expect(dialog.style.top).toBe('64px');
+  await act(async()=>{frame.style.marginTop='58px';});
+  expect(dialog.style.top).toBe('70px');expect(dialog.style.height).toBe('762px');stop();
+ }finally{dom.cleanup();}
+});
