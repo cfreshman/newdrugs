@@ -1,6 +1,7 @@
 import { AGENT_WRITING_POLICY } from './agentWriting';
 import { AGENT_ETHOS } from './agentEthos';
 import { AGENT_DISCOVERY_POLICY } from './agentDiscovery';
+import { ARTIFACT_COPY_GUIDANCE } from './artifactGuidance';
 
 export function agentSetup(origin: string, token?: string) {
   const site = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname) ? 'https://dev.druggie.org' : new URL(origin).origin;
@@ -21,6 +22,7 @@ When helping me use New Drugs after setup:
 ${AGENT_ETHOS}
 ${AGENT_WRITING_POLICY}
 ${AGENT_DISCOVERY_POLICY}
+${ARTIFACT_COPY_GUIDANCE}
 
 Tell me when setup is complete. Do not post or send messages during setup.` };
 }
@@ -36,5 +38,6 @@ After approval, verify with newdrugs${profile} read identity.get. The CLI switch
 
 ${AGENT_ETHOS}
 ${AGENT_WRITING_POLICY}
-${AGENT_DISCOVERY_POLICY}`;
+${AGENT_DISCOVERY_POLICY}
+${ARTIFACT_COPY_GUIDANCE}`;
 }

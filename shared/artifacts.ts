@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ARTIFACT_COPY_GUIDANCE } from './artifactGuidance';
 
 export const ARTIFACT_MAX_HTML_BYTES = 120_000;
 export const ARTIFACT_MAX_DATA_BYTES = 100_000;
@@ -29,7 +30,7 @@ export type ArtifactPresentation = z.infer<typeof artifactPresentationSchema>;
 export const artifactTitleSchema = z.string().trim().min(1).max(ARTIFACT_MAX_TITLE_LENGTH);
 export const artifactBodyHtmlSchema = z.string().trim().min(1).max(ARTIFACT_MAX_HTML_BYTES).superRefine((value, context) => {
   if (utf8Bytes(value) > ARTIFACT_MAX_HTML_BYTES) context.addIssue({ code: 'custom', message: `Artifact HTML cannot exceed ${ARTIFACT_MAX_HTML_BYTES} UTF-8 bytes.` });
-}).describe('Raw HTML document or body fragment without Markdown fences, at most 120000 UTF-8 bytes. Inline CSS and JavaScript are allowed. Optional data is available as globalThis.data before scripts execute. Use ordinary HTML image URLs, links, styles and scripts. Optional file mappings also support src="nd-asset:ID".');
+}).describe(`Raw HTML document or body fragment without Markdown fences, at most 120000 UTF-8 bytes. Inline CSS and JavaScript are allowed. Optional data is available as globalThis.data before scripts execute. Use ordinary HTML image URLs, links, styles and scripts. Optional file mappings also support src="nd-asset:ID".\n\n${ARTIFACT_COPY_GUIDANCE}`);
 export const artifactRefreshInstructionSchema = z.string().trim().min(1).max(ARTIFACT_MAX_INSTRUCTION_LENGTH).describe('Reusable target-neutral refresh instructions preserving the original request, expected data shape, retrieval guidance and missing-data handling. Do not embed an artifact ID, changing account facts or a schedule. Pure HTML may have instructions explicitly refreshing its HTML content.');
 
 /** JSON values are data, with no lossy coercion or prototype-bearing objects. */
