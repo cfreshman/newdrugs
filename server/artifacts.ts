@@ -98,22 +98,20 @@ async function artifactByCapability(artifactId: string, projection: Record<strin
   }
   return record;
 }
-type PublicImageMetadata = Pick<Upload, '_id' | 'ready' | 'deletedAt' | 'purpose' | 'logEntryId' | 'mime' | 'bytes' | 'sha256' | 'retained' | 'expiresAt'> & { moderatedAt?: string };
-const publicImageProjection = { ready: 1, deletedAt: 1, moderatedAt: 1, purpose: 1, logEntryId: 1, mime: 1, bytes: 1, sha256: 1, retained: 1, expiresAt: 1 } as const;
+type PublicImageMetadata = Pick<Upload, '_id' | 'userId' | 'ready' | 'deletedAt' | 'mime' | 'bytes' | 'sha256' | 'retained' | 'expiresAt'> & { moderatedAt?: string };
+const publicImageProjection = { userId: 1, ready: 1, deletedAt: 1, moderatedAt: 1, mime: 1, bytes: 1, sha256: 1, retained: 1, expiresAt: 1 } as const;
 function eligiblePublicImage(file: PublicImageMetadata | null): file is PublicImageMetadata {
-  return Boolean(file && file.ready && !file.deletedAt && !file.moderatedAt && file.purpose !== 'log_media' && !file.logEntryId &&
+  return Boolean(file && file.ready && !file.deletedAt && !file.moderatedAt &&
     ['image/png', 'image/jpeg', 'image/webp'].includes(file.mime) && Number.isSafeInteger(file.bytes) && file.bytes > 0 && file.bytes <= ARTIFACT_MAX_IMAGE_BYTES &&
     /^[0-9a-f]{64}$/.test(file.sha256) &&
     (file.retained || !file.expiresAt || file.expiresAt > new Date()));
 }
-async function notHangoutOwned(userId: string, fileId: string, session?: ClientSession) {
-  return !await rows('attachmentReferences').findOne({ ownerId: userId, fileId, kind: 'hangouts' }, { projection: { _id: 1 }, session });
-}
 async function publicImageFiles(record: Pick<ArtifactDoc, 'userId' | 'assets'>, session?: ClientSession) {
   const ids = [...new Set(record.assets.map(asset => asset.fileId))];
-  const files = ids.length ? await uploads().find({ _id: { $in: ids }, userId: record.userId, ready: true, deletedAt: { $exists: false }, moderatedAt: { $exists: false } }, { projection: publicImageProjection, session }).limit(ids.length).toArray() : [];
+  const files = ids.length ? await uploads().find({ _id: { $in: ids }, ready: true, deletedAt: { $exists: false }, moderatedAt: { $exists: false } }, { projection: publicImageProjection, session }).limit(ids.length).toArray() : [];
+  const owners=await users().find({_id:{$in:[...new Set(files.map(file=>file.userId))]},suspendedAt:null},{session,projection:{_id:1}}).limit(ids.length||1).toArray(),active=new Set(owners.map(owner=>owner._id));
   const eligible = new Set<string>();
-  for (const file of files) if (eligiblePublicImage(file) && await notHangoutOwned(record.userId, file._id, session)) eligible.add(file._id);
+  for (const file of files) if (eligiblePublicImage(file) && active.has(file.userId)) eligible.add(file._id);
   return { files, eligible, ids };
 }
 /** Anonymous render-only access by the existing high-entropy artifact ID. */
@@ -136,12 +134,12 @@ export async function publicArtifactState(artifactId: string, contentRevision?: 
   const projection = { userId: 1, assets: 1, revision: 1, contentRevision: 1, updatedAt: 1 } as const;
   let record = await artifactByCapability(artifactId, projection, undefined, contentRevision);
   let images = await publicImageFiles(record);
-  if (contentRevision === undefined && images.ids.some(id => !images.eligible.has(id))) {
+  if (contentRevision === undefined && images.ids.some(id => !eligiblePublicImage(images.files.find(file=>file._id===id)||null))) {
     // Anonymous viewers have no owner event stream. Polling must also revoke
     // stale refs when no subscriber was present to observe file moderation.
     const current = await transaction(async session => {
       const current = await artifactByCapability(artifactId, projection, session), files = await publicImageFiles(current, session);
-      for (const id of files.ids) if (!files.eligible.has(id)) await revokeArtifactUploadReferences(current.userId, id, session);
+      for (const id of files.ids) if (!eligiblePublicImage(files.files.find(file=>file._id===id)||null)) await revokeArtifactUploadReferences(current.userId, id, session);
       return { record: await artifactByCapability(artifactId, projection, session), images: files };
     });
     record = current.record; images = current.images;
@@ -154,8 +152,8 @@ export async function publicArtifactImage(artifactId: string, assetId: string, c
   const record = await artifactByCapability(artifactId, { userId: 1, assets: 1 }, undefined, contentRevision), asset = record.assets.find(asset => asset.id === assetId);
   if (!asset) throw new AppError(404, 'not_found', 'This artifact image is unavailable.');
   const fileId = asset.fileId;
-  const file = await uploads().findOne({ _id: fileId, userId: record.userId, ready: true, deletedAt: { $exists: false }, moderatedAt: { $exists: false } });
-  if (!eligiblePublicImage(file) || !await notHangoutOwned(record.userId, fileId)) throw new AppError(404, 'not_found', 'This artifact image is unavailable.');
+  const file = await uploads().findOne({ _id: fileId, ready: true, deletedAt: { $exists: false }, moderatedAt: { $exists: false } });
+  if (!eligiblePublicImage(file) || !await users().findOne({_id:file.userId,suspendedAt:null},{projection:{_id:1}})) throw new AppError(404, 'not_found', 'This artifact image is unavailable.');
   return file;
 }
 /** Bind only a still-viewable exact capability. Source-owner/root writes fence
@@ -224,15 +222,15 @@ async function adjustUsage(userId: string, countDelta: number, byteDelta: number
 async function retainAssets(userId: string, assets: ArtifactAsset[], session: ClientSession) {
   if (!assets.length) return;
   const ids = [...new Set(assets.map(asset => asset.fileId))];
-  const files = await uploads().find({ _id: { $in: ids }, userId, ready: true, deletedAt: { $exists: false }, moderatedAt: { $exists: false } }, { session }).limit(ids.length).toArray();
-  if (files.length !== ids.length) throw new AppError(422, 'artifact_asset', 'Choose ready images uploaded by this account.');
-  if (files.some(file => file.purpose === 'log_media' || file.logEntryId) || await rows('attachmentReferences').findOne({ ownerId: userId, fileId: { $in: ids }, kind: 'hangouts' }, { session, projection: { _id: 1 } })) throw new AppError(422, 'log_file_owned', 'These photos belong to a hangout. Upload separate photos for the artifact.');
+  const files = await uploads().find({ _id: { $in: ids }, ready: true, deletedAt: { $exists: false }, moderatedAt: { $exists: false } }, { session }).limit(ids.length).toArray();
+  const {eligible}=await publicImageFiles({userId,assets},session);
+  if (files.length !== ids.length || eligible.size!==ids.length) throw new AppError(422, 'artifact_asset', 'Choose existing readable image URLs or ready image file IDs.');
   const byId = new Map(files.map(file => [file._id, file]));
   if (files.some(file => !['image/png', 'image/jpeg', 'image/webp'].includes(file.mime) || !Number.isSafeInteger(file.bytes) || file.bytes < 1 || !file.retained && file.expiresAt && file.expiresAt <= new Date()) || assets.reduce((total, asset) => total + byId.get(asset.fileId)!.bytes, 0) > ARTIFACT_MAX_IMAGE_BYTES) throw new AppError(422, 'artifact_asset', 'Artifact images must be ready PNG, JPEG or WebP files totaling at most 4 MB.');
-  // Retention serializes with upload deletion, retaining the original file
-  // without copying its bytes or charging its storage allowance a second time.
+  // Existing file IDs are bearer reads, just like their /api/files URLs.
+  // Reusing another person's URL does not change their file's ownership or lifetime.
   const groups = new Map<Upload['purpose'], string[]>();
-  for (const file of files) groups.set(file.purpose, [...(groups.get(file.purpose) || []), file._id]);
+  for (const file of files) if(file.userId===userId)groups.set(file.purpose, [...(groups.get(file.purpose) || []), file._id]);
   for (const [purpose, fileIds] of groups) await retainUploads(userId, fileIds, purpose, session);
 }
 

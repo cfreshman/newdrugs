@@ -18,16 +18,11 @@
 .artifact-caption a{display:inline-flex;align-items:center;justify-content:flex-end;gap:var(--space-1);color:inherit;min-height:32px;text-decoration:none;margin-left:auto;}
 .artifact-caption .message-toggle{margin:0;flex:none;}
 .artifact-caption a:hover,.artifact-caption a:focus-visible{text-decoration:underline;}
-.artifact-update{font-size:var(--text-xs);line-height:1.5;margin-top:var(--space-1);opacity:.7;}
-.artifact-version-bar{display:flex;align-items:center;justify-content:space-between;flex:none;gap:var(--space-2);padding-bottom:var(--space-2);font-size:var(--text-sm);}
+.artifact-version-bar{display:flex;align-items:center;justify-content:flex-end;flex:none;gap:var(--space-2);padding-bottom:var(--space-2);font-size:var(--text-sm);}
 .artifact-version-bar a{color:inherit;min-height:32px;display:inline-flex;align-items:center;}
 .artifact-inline:has(>.artifact-surface[data-expanded]){min-height:calc(var(--artifact-inline-height,256px) + 36px);}
-.artifact-action-error,.artifact-edit-body,.artifact-link-prompt{flex:none;min-width:0;max-width:100%;}
+.artifact-action-error,.artifact-edit-body{flex:none;min-width:0;max-width:100%;}
 .artifact-edit-body{overflow:auto;overscroll-behavior:contain;}
 .artifact-action-error{font-size:var(--text-sm);margin:0 0 var(--space-2);}
-.artifact-link-prompt{display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);padding-top:var(--space-2);}
-.artifact-link-prompt a{color:inherit;overflow-wrap:anywhere;}
-.artifact-link-prompt button{display:grid;place-items:center;background:var(--surface-soft);color:var(--ink);width:32px;height:32px;border-radius:50%;}
-.artifact-surface:not([data-expanded]) .artifact-link-prompt{position:absolute;bottom:0;left:0;right:0;padding:var(--space-2);background:var(--assistant-bubble);color:var(--on-assistant);}
 .app[data-keyboard-open] .artifact-surface[data-expanded]{padding-top:var(--panel-inset);padding-bottom:var(--panel-inset);}
 @media(max-width:760px){.artifact-surface[data-expanded]{padding-inline:max(6px,env(safe-area-inset-left)) max(6px,env(safe-area-inset-right));}.artifact-header{gap:var(--space-1);}.artifact-header h2{font-size:var(--text-sm);}}

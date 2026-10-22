@@ -39,7 +39,7 @@ describe('artifact contracts', () => {
     const bodyHtml = '<p>' + 'x'.repeat(ARTIFACT_MAX_HTML_BYTES - 7) + '</p>';
     expect(artifactCreateInput.safeParse({ title: 'At the limit', bodyHtml }).success).toBe(true);
     expect(artifactCreateInput.safeParse({ title: 'Too many bytes', bodyHtml: '<p>' + '😀'.repeat(30_000) + '</p>' }).success).toBe(false);
-    for (const wrapper of ['<!doctype html><p>x</p>', '<html><body>x</body></html>', '<base href="https://example.org">', '<meta http-equiv="Content-Security-Policy" content="default-src *">']) expect(artifactCreateInput.safeParse({ title: 'Invalid wrapper', bodyHtml: wrapper }).success).toBe(false);
+    for (const wrapper of ['<!doctype html><p>x</p>', '<html><body>x</body></html>', '<base href="https://example.org">', '<meta http-equiv="Content-Security-Policy" content="default-src *">']) expect(artifactCreateInput.safeParse({ title: 'HTML document', bodyHtml: wrapper }).success).toBe(true);
     expect(artifactCreateInput.safeParse({ title: 'Data limit', bodyHtml: '<p>x</p>', data: { text: 'x'.repeat(100_000) } }).success).toBe(false);
   });
 

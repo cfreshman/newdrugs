@@ -35,8 +35,12 @@ it('keeps one outer frame and document across metadata, theme, font and display 
  await act(async()=>{document.documentElement.dataset.theme='dark';document.documentElement.dataset.font='serif';await Promise.resolve();});
  expect(dom.container.querySelector('iframe')).toBe(original);expect(original.title).toBe('Renamed');expect(view.render()).toHaveLength(1);
  expect(view.post.mock.calls.at(-1)?.[0]).toMatchObject({type:'context',context:{appearance:'dark',font:'serif',display:'expanded'}});
- expect(original.getAttribute('sandbox')).toBe('allow-scripts');expect(original.getAttribute('referrerpolicy')).toBe('no-referrer');expect(original.getAttribute('src')).toBe('/api/artifacts/frame');
+ expect(original.getAttribute('sandbox')).toBe('allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads');expect(original.getAttribute('referrerpolicy')).toBe('no-referrer');expect(original.getAttribute('src')).toBe('/api/artifacts/frame');
  expect(fetcher.mock.calls.every(([url])=>String(url).includes('.woff2'))).toBe(true);
+});
+it('passes ordinary image URLs straight to HTML without importing or fetching them through the host',async()=>{
+ const value={...artifact(),bodyHtml:'<img src="https://photos.invalid/photo.jpg"><img src="/api/files/log-photo">'},view=await mount(value);
+ expect(view.render().at(-1)?.html).toContain(value.bodyHtml);expect(fetcher.mock.calls.every(([url])=>String(url).includes('.woff2'))).toBe(true);
 });
 it('verifies alias bytes once per image digest and rejects foreign URLs, digest drift and oversized decoding',async()=>{
  const value=artifact(true);value.assets.push({...value.assets[0],id:'same',url:`/api/artifacts/${value.id}/assets/same`});
@@ -65,11 +69,11 @@ it('preserves the running document when only the equivalent live or pinned image
  expect(fetcher.mock.calls.filter(([url])=>String(url).includes('/api/artifacts/'))).toHaveLength(1);
 });
 it('accepts focus only from the active real outer frame and clears it on teardown',async()=>{
- const focus=vi.fn(),escape=vi.fn(),link=vi.fn(),resize=vi.fn(),view=await mount(artifact(),{onEditableFocus:focus,onEscape:escape,onLink:link,onResize:resize});view.relay('ready');
+ const focus=vi.fn(),escape=vi.fn(),resize=vi.fn(),view=await mount(artifact(),{onEditableFocus:focus,onEscape:escape,onResize:resize});view.relay('ready');
  view.relay('editable-focus',{active:true});expect(artifactEditableFocused()).toBe(false);
  act(()=>view.frame.focus());view.relay('editable-focus',{active:true},'wrong-channel');expect(artifactEditableFocused()).toBe(false);
  view.relay('editable-focus',{active:true});expect(artifactEditableFocused()).toBe(true);expect(focus).toHaveBeenLastCalledWith(true);
- view.relay('link',{href:'javascript:alert(1)'});expect(link).not.toHaveBeenCalled();view.relay('link',{href:'https://example.com/read'});expect(link).toHaveBeenCalledWith('https://example.com/read');
+ view.relay('link',{href:'https://example.com/read'});expect(escape).not.toHaveBeenCalled();
  view.relay('resize',{height:Infinity});expect(resize).not.toHaveBeenCalled();view.relay('resize',{height:123.4});expect(resize).toHaveBeenCalledWith(124);view.relay('escape');expect(escape).toHaveBeenCalledOnce();
  await act(async()=>dom.root.render(null));expect(artifactEditableFocused()).toBe(false);expect(focus).toHaveBeenLastCalledWith(false);
 });

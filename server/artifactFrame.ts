@@ -1,20 +1,15 @@
 import type {Request,Response} from 'express';
 
 export const ARTIFACT_FRAME_MAX_BYTES=8*1024*1024;
+export const ARTIFACT_FRAME_SANDBOX='allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads';
 export const ARTIFACT_FRAME_CSP=[
-  'sandbox allow-scripts',
-  "default-src 'none'",
-  "script-src 'unsafe-inline'",
-  "style-src 'unsafe-inline'",
-  'img-src data: blob:',
-  'font-src data: blob:',
-  'media-src data: blob:',
-  "connect-src 'none'",
-  "worker-src 'none'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  'frame-src blob:',
+  `sandbox ${ARTIFACT_FRAME_SANDBOX}`,
+  'default-src http: https: data: blob:',
+  "script-src http: https: data: blob: 'unsafe-inline' 'unsafe-eval'",
+  "style-src http: https: data: blob: 'unsafe-inline'",
+  'connect-src http: https: ws: wss: data: blob:',
+  'base-uri http: https:',
+  'form-action http: https: data: blob:',
   "frame-ancestors 'self'",
 ].join('; ');
 
@@ -49,10 +44,6 @@ export function buildArtifactFrameDocument(){
     if(frame){frame.remove();frame=null;}
     renderedHtml=null;ready=false;
   };
-  const link=value=>{
-    if(typeof value!=='string'||!value||value.length>2048||/[\\u0000-\\u001f\\u007f]/.test(value))return null;
-    try{const url=new URL(value,location.href);return url.protocol==='http:'||url.protocol==='https:'?value:null;}catch{return null;}
-  };
   window.addEventListener('message',event=>{
     const message=event.data;
     if(!message||typeof message!=='object'||Array.isArray(message))return;
@@ -74,11 +65,11 @@ export function buildArtifactFrameDocument(){
       remove();channel=message.channel;context=next||null;applyContext();
       try{
         frame=document.createElement('iframe');
-        frame.title='Artifact content';frame.setAttribute('sandbox','allow-scripts');frame.referrerPolicy='no-referrer';
+        frame.title='Artifact content';frame.setAttribute('sandbox',${JSON.stringify(ARTIFACT_FRAME_SANDBOX)});frame.referrerPolicy='no-referrer';
         const child=frame;let loads=0;
-        child.addEventListener('load',()=>{if(frame===child&&++loads>1){send('editable-focus',{active:false});send('error',{message:'The artifact tried to leave its isolated document.'});}});
+        child.addEventListener('load',()=>{if(frame===child&&++loads>1)send('editable-focus',{active:false});});
         // WebKit applies inherited frame-ancestors to blob:null and rejects it.
-        // srcdoc inherits this shell's CSP while its parent still blocks HTTP navigation.
+        // srcdoc inherits this shell's resource policy and remains an opaque origin.
         frame.srcdoc=message.html;renderedHtml=message.html;document.body.appendChild(frame);
       }catch{remove();send('error',{message:'The artifact document could not be opened.'});}
       return;
@@ -89,7 +80,6 @@ export function buildArtifactFrameDocument(){
     if(message.type==='editable-focus'&&typeof message.active==='boolean'){send('editable-focus',{active:message.active});return;}
     if(message.type==='escape'){send('escape');return;}
     if(message.type==='resize'&&typeof message.height==='number'&&Number.isFinite(message.height)&&message.height>=1&&message.height<=20000){send('resize',{height:Math.ceil(message.height)});return;}
-    if(message.type==='link'){const href=link(message.href);if(href!==null)send('link',{href});}
   });
   window.addEventListener('pagehide',remove);
 })();
@@ -106,7 +96,6 @@ export function sendArtifactFrame(_req:Request,res:Response){
     'X-Frame-Options':'SAMEORIGIN',
     'X-Robots-Tag':'noindex, nofollow',
     'Cross-Origin-Resource-Policy':'same-origin',
-    'Permissions-Policy':'camera=(), microphone=(), geolocation=(), display-capture=(), payment=(), clipboard-read=(), clipboard-write=()',
   });
   return res.send(buildArtifactFrameDocument());
 }

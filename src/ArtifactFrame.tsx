@@ -17,7 +17,7 @@ import './artifactFrame.css';
 export interface ArtifactFrameProps {
  artifact:PublicArtifactDetail;display:ArtifactDisplay;className?:string;
  onReady?():void;onError?(message:string):void;onEditableFocus?(active:boolean):void;
- onEscape?():void;onLink?(href:string):void;onResize?(height:number):void;
+ onEscape?():void;onResize?(height:number):void;
 }
 export const ARTIFACT_MAX_DECODED_IMAGE_BYTES=64*1024*1024;
 class UnavailableArtifactImage extends Error {}
@@ -152,14 +152,13 @@ export function ArtifactFrame(props:ArtifactFrameProps){
    if(message.type==='editable-focus'&&typeof message.active==='boolean'){if(iframe.current)setArtifactEditableFocus(iframe.current,message.active);callbacks.current.onEditableFocus?.(message.active&&visible&&document.activeElement===iframe.current&&artifactEditableFocused());return;}
    if(message.type==='escape'){callbacks.current.onEscape?.();return;}
    if(message.type==='resize'&&typeof message.height==='number'&&Number.isFinite(message.height)&&message.height>=1&&message.height<=20000){callbacks.current.onResize?.(Math.ceil(message.height));return;}
-   if(message.type==='link'&&typeof message.href==='string'&&message.href.length<=2048){try{const url=new URL(message.href,location.href);if(url.protocol==='http:'||url.protocol==='https:')callbacks.current.onLink?.(message.href);}catch{/* Invalid presentation links do not navigate. */}}
   };
   window.addEventListener('message',receive);return()=>window.removeEventListener('message',receive);
  },[visible]);
  useEffect(()=>{const frame=iframe.current;return()=>{stopWaiting();if(frame)clearArtifactEditableFocus(frame);callbacks.current.onEditableFocus?.(false);current.current=null;fallback.current=null;};},[]);
  return <div className={`artifact-frame${className?` ${className}`:''}`} data-loading={loading||undefined} data-display={display} data-rendered-content-revision={shownRevision??undefined} aria-busy={loading}>
   {error&&<p className="artifact-frame-error" role="alert">{error}</p>}
-  <iframe ref={iframe} title={artifact.title} src="/api/artifacts/frame" sandbox="allow-scripts" referrerPolicy="no-referrer" className="artifact-frame-document" onLoad={()=>{clearFocus();shellLoaded.current=true;const active=current.current;if(active)postDocument(active);}} onError={()=>{stopWaiting();const message='The artifact viewer could not connect. Try opening it again.';setLoading(false);setError(message);callbacks.current.onError?.(message);}}/>
+  <iframe ref={iframe} title={artifact.title} src="/api/artifacts/frame" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads" referrerPolicy="no-referrer" className="artifact-frame-document" onLoad={()=>{clearFocus();shellLoaded.current=true;const active=current.current;if(active)postDocument(active);}} onError={()=>{stopWaiting();const message='The artifact viewer could not connect. Try opening it again.';setLoading(false);setError(message);callbacks.current.onError?.(message);}}/>
   {loading&&shownRevision===null&&!error&&<span className="artifact-frame-loading" role="status" aria-label="Loading artifact"><CircleNotch size={22} className="spin" aria-hidden="true"/></span>}
  </div>;
 }

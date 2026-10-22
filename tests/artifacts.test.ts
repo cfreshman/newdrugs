@@ -102,13 +102,13 @@ describe('private artifact domain', () => {
     await expect(call(me, 'artifacts.list', { cursor: page.nextCursor, includeEphemeral: true })).rejects.toMatchObject({ code: 'artifact_cursor' });
   });
 
-  it('validates owned raster assets, permits replacements and releases no upload bytes on deletion', async () => {
-    const me = await owner(), other = await owner(), first = await image(me), replacement = await image(me, { purpose: 'profile_photo' }), foreign = await image(other);
+  it('validates readable raster assets, permits replacements and releases no upload bytes on deletion', async () => {
+    const me = await owner(), other = await owner(), first = await image(me), replacement = await image(me, { purpose: 'profile_photo' });
     const saved = await create(me, { bodyHtml: '<img src="nd-asset:photo">', assets: [{ id: 'photo', fileId: first._id }] });
     expect(await uploads().findOne({ _id: first._id })).toMatchObject({ retained: true });
     const updated = await call(me, 'artifacts.update', { artifactId: saved.id, revision: 1, assets: [{ id: 'photo', fileId: replacement._id }] });
     expect(updated).toMatchObject({ contentRevision: 2, revision: 2 });
-    const invalid = [foreign, await image(me, { ready: false }), await image(me, { mime: 'image/svg+xml' }), await image(me, { purpose: 'log_media' }), await image(me, { logEntryId: randomUUID() }), await image(me, { bytes: 4 * 1024 * 1024 + 1 })];
+    const invalid = [await image(me, { ready: false }), await image(me, { mime: 'image/svg+xml' }), await image(me, { bytes: 4 * 1024 * 1024 + 1 })];
     for (const file of invalid) await expect(create(me, { assets: [{ id: 'invalid', fileId: file._id }] })).rejects.toMatchObject({ status: 422 });
     const expired = await image(me, { retained: false, expiresAt: new Date(Date.now() - 1000) });
     await expect(create(me, { assets: [{ id: 'expired', fileId: expired._id }] })).rejects.toMatchObject({ code: 'artifact_asset' });
@@ -118,6 +118,29 @@ describe('private artifact domain', () => {
     expect(await uploads().findOne({ _id: replacement._id })).toMatchObject({ retained: true, bytes: 8, ready: true });
     expect(await artifactUsage().findOne({ _id: me.userId })).toMatchObject({ count: 0, textBytes: 0 });
     await expect(call(me, 'artifacts.get', { artifactId: saved.id })).rejects.toMatchObject({ status: 404 });
+  });
+
+
+  it('reuses Log photos and bearer image IDs without copying bytes or taking ownership', async () => {
+    const me=await owner(),other=await owner(),entryId=randomUUID();
+    const ownLog=await image(me,{purpose:'log_media',logEntryId:entryId,retained:true});
+    const sharedLog=await image(other,{purpose:'log_media',logEntryId:entryId,retained:true,expiresAt:new Date(Date.now()+60000)});
+    await rows('attachmentReferences').insertOne({_id:randomUUID(),ownerId:me.userId,fileId:ownLog._id,kind:'hangouts',sourceId:entryId});
+    const before=await uploads().findOne({_id:sharedLog._id});
+    const saved=await create(me,{bodyHtml:'<img src="nd-asset:mine"><img src="nd-asset:shared">',assets:[{id:'mine',fileId:ownLog._id},{id:'shared',fileId:sharedLog._id}]});
+    expect((await publicArtifact(saved.id)).assets.map(asset=>asset.id)).toEqual(['mine','shared']);
+    expect(await uploads().findOne({_id:sharedLog._id})).toEqual(before);
+    expect(await uploads().countDocuments({userId:{$in:[me.userId,other.userId]}})).toBe(2);
+    expect((await publicArtifactImage(saved.id,'shared',1))._id).toBe(sharedLog._id);
+    await users().updateOne({_id:other.userId},{$set:{suspendedAt:new Date().toISOString()}});
+    expect((await publicArtifactState(saved.id,1)).assets.map(asset=>asset.id)).toEqual(['mine']);
+    expect((await publicArtifactState(saved.id)).assets.map(asset=>asset.id)).toEqual(['mine']);
+    await expect(publicArtifactImage(saved.id,'shared',1)).rejects.toMatchObject({status:404});
+    await users().updateOne({_id:other.userId},{$unset:{suspendedAt:''}});
+    expect((await publicArtifactState(saved.id)).assets.map(asset=>asset.id)).toEqual(['mine','shared']);
+    await uploads().updateOne({_id:ownLog._id},{$set:{deletedAt:new Date().toISOString(),ready:false}});
+    expect((await publicArtifact(saved.id,1)).assets.map(asset=>asset.id)).toEqual(['shared']);
+    await expect(publicArtifactImage(saved.id,'mine',1)).rejects.toMatchObject({status:404});
   });
 
   it('charges both visibility values to one count limit and serializes the final available slot', async () => {
@@ -212,7 +235,7 @@ describe('private artifact domain', () => {
     await expect(call(holder, 'artifacts.present', { artifactId: saved.id, contentRevision: 1 })).rejects.toMatchObject({ status: 404 });
   });
 
-  it('exposes only currently owned, ready, unmoderated raster images attached to that capability', async () => {
+  it('exposes readable ready image references including Log photos and other upload owners', async () => {
     const me = await owner(), other = await owner(), allowed = await image(me), profile = await image(me, { purpose: 'profile_photo' });
     const saved = await create(me, { assets: [{ id: 'photo', fileId: allowed._id }, { id: 'profile', fileId: profile._id }] });
     const candidates = [await image(other), await image(me, { ready: false }), await image(me, { mime: 'image/svg+xml' }), await image(me, { purpose: 'log_media' }), await image(me, { logEntryId: randomUUID() }), await image(me, { deletedAt: new Date().toISOString() }), await image(me), await image(me)];
@@ -222,14 +245,16 @@ describe('private artifact domain', () => {
     const allAssets = [{ id: 'photo', fileId: allowed._id }, { id: 'profile', fileId: profile._id }, ...candidates.map((file, index) => ({ id: `stale-${index}`, fileId: file._id }))];
     await artifacts().updateOne({ _id: saved.id }, { $set: { assets: allAssets } });
     const expected = [{ id: 'photo', url: `/api/artifacts/${saved.id}/assets/photo`, mime: allowed.mime, bytes: allowed.bytes, sha256: allowed.sha256 }, { id: 'profile', url: `/api/artifacts/${saved.id}/assets/profile`, mime: profile.mime, bytes: profile.bytes, sha256: profile.sha256 }];
+    const allowedIndices=[0,3,4,7];
+    expected.push(...allowedIndices.map(index=>({id:`stale-${index}`,url:`/api/artifacts/${saved.id}/assets/stale-${index}`,mime:candidates[index].mime,bytes:candidates[index].bytes,sha256:candidates[index].sha256})));
     expect((await publicArtifact(saved.id)).assets).toEqual(expected);
     expect((await publicArtifactImage(saved.id, 'photo'))._id).toBe(allowed._id);
     expect((await publicArtifactImage(saved.id, 'profile'))._id).toBe(profile._id);
-    for (let index = 0; index < candidates.length; index++) await expect(publicArtifactImage(saved.id, `stale-${index}`)).rejects.toMatchObject({ status: 404 });
+    for (let index = 0; index < candidates.length; index++) {if(allowedIndices.includes(index))expect((await publicArtifactImage(saved.id,`stale-${index}`))._id).toBe(candidates[index]._id);else await expect(publicArtifactImage(saved.id, `stale-${index}`)).rejects.toMatchObject({ status: 404 });}
     const unrelated = await image(me);
     await expect(publicArtifactImage(saved.id, unrelated._id)).rejects.toMatchObject({ status: 404 });
     await uploads().updateOne({ _id: allowed._id }, { $set: { deletedAt: new Date().toISOString() } });
-    expect((await publicArtifact(saved.id)).assets).toEqual([expected[1]]);
+    expect((await publicArtifact(saved.id)).assets).toEqual(expected.slice(1));
     await expect(publicArtifactImage(saved.id, 'photo')).rejects.toMatchObject({ status: 404 });
   });
 

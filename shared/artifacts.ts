@@ -29,8 +29,7 @@ export type ArtifactPresentation = z.infer<typeof artifactPresentationSchema>;
 export const artifactTitleSchema = z.string().trim().min(1).max(ARTIFACT_MAX_TITLE_LENGTH);
 export const artifactBodyHtmlSchema = z.string().trim().min(1).max(ARTIFACT_MAX_HTML_BYTES).superRefine((value, context) => {
   if (utf8Bytes(value) > ARTIFACT_MAX_HTML_BYTES) context.addIssue({ code: 'custom', message: `Artifact HTML cannot exceed ${ARTIFACT_MAX_HTML_BYTES} UTF-8 bytes.` });
-  if (/<!doctype\b|<\s*\/?\s*(?:html|head|body)\b|<\s*base\b|<\s*meta\b[^>]*http-equiv/i.test(value)) context.addIssue({ code: 'custom', message: 'Use an HTML body fragment without document wrappers, base or CSP meta tags.' });
-}).describe('Raw HTML body fragment without Markdown fences or document wrappers, at most 120000 UTF-8 bytes. Inline CSS and JavaScript are allowed. Optional data is available as globalThis.data before scripts execute. Use src="nd-asset:ID" for attached images. Do not fetch external assets or call app APIs.');
+}).describe('Raw HTML document or body fragment without Markdown fences, at most 120000 UTF-8 bytes. Inline CSS and JavaScript are allowed. Optional data is available as globalThis.data before scripts execute. Use ordinary HTML image URLs, links, styles and scripts. Optional file mappings also support src="nd-asset:ID".');
 export const artifactRefreshInstructionSchema = z.string().trim().min(1).max(ARTIFACT_MAX_INSTRUCTION_LENGTH).describe('Reusable target-neutral refresh instructions preserving the original request, expected data shape, retrieval guidance and missing-data handling. Do not embed an artifact ID, changing account facts or a schedule. Pure HTML may have instructions explicitly refreshing its HTML content.');
 
 /** JSON values are data, with no lossy coercion or prototype-bearing objects. */
@@ -73,7 +72,7 @@ export const artifactDataPatchSchema = z.discriminatedUnion('op', [
   z.strictObject({ op: z.literal('remove'), path }),
 ]);
 export type ArtifactDataPatch = z.infer<typeof artifactDataPatchSchema>;
-export const artifactAssetSchema = z.strictObject({ id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).describe('Image placeholder ID used in HTML as src="nd-asset:ID".'), fileId: z.uuid().describe('Owned ready PNG, JPEG or WebP upload ID. Hangout-owned uploads cannot be reused.') });
+export const artifactAssetSchema = z.strictObject({ id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).describe('Image placeholder ID used in HTML as src="nd-asset:ID".'), fileId: z.uuid().describe('Existing readable PNG, JPEG or WebP file ID, including Log photos. This optional mapping is not required for ordinary image URLs.') });
 export type ArtifactAsset = z.infer<typeof artifactAssetSchema>;
 const assets = z.array(artifactAssetSchema).max(ARTIFACT_MAX_ASSETS).refine(value => new Set(value.map(asset => asset.id)).size === value.length, 'Artifact image IDs must be unique.');
 export const artifactProducerSchema = z.strictObject({ kind: z.enum(['hosted', 'automation', 'external', 'browser']), name: z.string().max(160), id: z.string().max(200).optional() });
