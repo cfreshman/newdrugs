@@ -8,12 +8,12 @@ describe('conversation position and top fade', () => {
   let dom: ReturnType<typeof setupDOM>, viewportHeight: number, top: number;
   let scroll: ReturnType<typeof useConversationScroll>;
   type Signals = Parameters<typeof useConversationScroll>[0];
-  function Chat({ height, signals, ready }: { height: number; signals: Signals; ready: boolean }) {
+  function Chat({ height, signals, ready,anchor=false }: { height: number; signals: Signals; ready: boolean;anchor?:boolean }) {
     scroll = useConversationScroll(signals);
     return ready ? createElement('div', { className: 'conversation', ref: scroll.transcript, onScroll: scroll.onScroll, 'data-fade-top': scroll.fadedTop },
-      createElement('div', { ref: scroll.content, 'data-height': height }, 'Messages')) : null;
+      createElement('div', { ref: scroll.content, 'data-height': height }, anchor?createElement('div',{'data-message-id':'anchor'},'Message'):'Messages')) : null;
   }
-  const render = (height = 1000, signals: Signals = { viewId: 'one' }, ready = true) => act(() => dom.root.render(createElement(Chat, { height, signals, ready })));
+  const render = (height = 1000, signals: Signals = { viewId: 'one' }, ready = true,anchor=false) => act(() => dom.root.render(createElement(Chat, { height, signals, ready,anchor })));
   const readAt = (offset: number) => act(() => { const el = scroll.transcript.current!; el.scrollTop = offset; el.dispatchEvent(new Event('scroll')); });
   beforeEach(() => {
     dom = setupDOM(); viewportHeight = 200; top = 80;
@@ -81,5 +81,35 @@ describe('conversation position and top fade', () => {
     top = 50; render(200); dom.frame(); expect(scroll.fadedTop).toBe(false);
     render(500); dom.frame(); expect(scroll.fadedTop).toBe(true);
     viewportHeight = 0; readAt(0); expect(shouldFadeConversationTop(scroll.transcript.current!)).toBe(false);
+  });
+  it('freezes a message anchor through new output, prepend and viewport changes until the overlay closes',()=>{
+    render(1000,{viewId:'one'},true,true);dom.frame();readAt(300);
+    const message=scroll.content.current!.querySelector<HTMLElement>('[data-message-id]')!;
+    let messageTop=350;
+    Object.defineProperty(message,'getBoundingClientRect',{configurable:true,value:()=>rect(0,top+messageTop-scroll.transcript.current!.scrollTop,360,40)});
+    act(()=>scroll.suspend(true));
+    render(1600,{viewId:'one',completedId:'new-answer',submittedId:'new-question',approvalIds:'review'},true,true);
+    viewportHeight=100;act(()=>scroll.follow());dom.resize();dom.frame();
+    expect(scroll.transcript.current?.scrollTop).toBe(300);
+    messageTop+=600;render(2200,{viewId:'one',completedId:'new-answer',submittedId:'new-question',approvalIds:'review'},true,true);dom.resize();dom.frame();
+    act(()=>scroll.suspend(true));
+    act(()=>scroll.suspend(false));
+    expect(scroll.transcript.current?.scrollTop).toBe(900);
+    expect(message.getBoundingClientRect().top-scroll.transcript.current!.getBoundingClientRect().top).toBe(50);
+    expect(scroll.awayFromBottom).toBe(true);
+    dom.resize();dom.frame();expect(scroll.transcript.current?.scrollTop).toBe(900);
+  });
+  it('returns to the old bottom position rather than newer messages that arrived while expanded',()=>{
+    render();dom.frame();expect(scroll.transcript.current?.scrollTop).toBe(800);
+    act(()=>scroll.suspend(true));
+    render(1600,{viewId:'one',completedId:'answer'});dom.resize();dom.frame();expect(scroll.transcript.current?.scrollTop).toBe(800);
+    act(()=>scroll.suspend(false));expect(scroll.transcript.current?.scrollTop).toBe(800);expect(scroll.awayFromBottom).toBe(true);
+    render(1600,{viewId:'one',completedId:'answer'});dom.frame();expect(scroll.transcript.current?.scrollTop).toBe(800);
+  });
+  it('captures immediately before an already queued completion frame can follow',()=>{
+    render();dom.frame();readAt(250);
+    render(1400,{viewId:'one',completedId:'answer'});
+    act(()=>scroll.suspend(true));dom.frame();dom.resize();expect(scroll.transcript.current?.scrollTop).toBe(250);
+    act(()=>scroll.suspend(false));dom.frame();expect(scroll.transcript.current?.scrollTop).toBe(250);
   });
 });

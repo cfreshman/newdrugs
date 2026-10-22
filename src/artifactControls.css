@@ -1,0 +1,7 @@
+.artifacts-panel, .artifact-editor { min-width: 0; }
+.artifact-list-row { overflow-wrap: anywhere; }
+.artifact-list-row time { display: block; }
+.artifact-menu.profile-menu.conversation-menu { flex: none; align-self: center; margin: 0; }
+.artifact-menu.profile-menu.conversation-menu > summary { width: var(--settings-control-size); height: var(--settings-control-size); min-height: var(--settings-control-size); padding: 0; border-radius: var(--radius-sm); color: var(--border-strong); }
+.artifact-editor { width: 100%; }
+.artifact-editor :is(input,textarea) { width: 100%; max-width: 100%; }

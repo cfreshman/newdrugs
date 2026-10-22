@@ -110,7 +110,7 @@ export async function reserveRun(userId: string, runId: string, text: string, op
       { $inc: { reservedNanos: RUN_RESERVE }, $set: { activeRun: runId } }, { session });
     if (!updated.modifiedCount) throw new AppError(402, 'credit_required', 'Add credit to continue. A reply needs $0.06 available; you only pay its actual cost.');
     const now = new Date().toISOString();
-    const run: RunRecord = { _id: runId, userId, text, ...options, pageContext, fingerprint, status: 'queued', reservedNanos: RUN_RESERVE, costNanos: 0, chargedNanos: 0, billingRate: RATE, usagePending: true, responseIds: [], createdAt: now, updatedAt: now,
+    const run: RunRecord = { _id: runId, userId, text, ...options, pageContext, fingerprint, chatGeneration: Number(user!.chatGeneration || 0), status: 'queued', reservedNanos: RUN_RESERVE, costNanos: 0, chargedNanos: 0, billingRate: RATE, usagePending: true, responseIds: [], createdAt: now, updatedAt: now,
       draft: '', progress: [], approvals: [], revision: 0, attempts: 0, failures: 0 };
     const files = await retainUploads(userId, options.fileIds, 'agent_input', session);
     await runs().insertOne(run, { session });
@@ -150,6 +150,8 @@ export async function finishRun(runId: string, lease: string, text: string, stat
     const cost = Math.min(Math.max(0, Math.min(run.costNanos, run.purpose === 'automation' ? run.budgetNanos || 0 : Infinity) - (run.chargedNanos || 0)), Math.max(0, owner.balanceNanos - owner.reservedNanos + run.reservedNanos));
     const chargedNanos = (run.chargedNanos || 0) + cost;
     let message = text || error || (status === 'cancelled' ? 'Stopped.' : '');
+    const artifacts = run.purpose !== 'automation' && status !== 'cancelled' && !run.cancelRequested && !run.superseded && owner.activeRun === runId &&
+      Number(run.chatGeneration || 0) === Number(owner.chatGeneration || 0) ? run.artifacts || [] : [];
     const now = new Date().toISOString();
     if (run.purpose === 'automation') {
       const allowed = !run.cancelRequested && await automationAuthorized(run, session);
@@ -176,9 +178,9 @@ export async function finishRun(runId: string, lease: string, text: string, stat
     const rate=run.billingRate||RATE;
     if (cost) {await rows('ledger').updateOne({ _id: `usage:${runId}` }, { $set: { userId: run.userId, amountNanos: -chargedNanos, label: 'Agent usage',
       details: { model: rate.model, responseIds: run.responseIds, rateVersion: rate.version, status: 'reported' } }, $setOnInsert: { createdAt: now } }, { session, upsert: true });await queueLedgerActivity(run.userId,`usage:${runId}`,session);}
-    if(status==='completed'&&message)await commitRouterThread(run,session);
+    if(status==='completed'&&(message||artifacts.length))await commitRouterThread(run,session);
     await rows('routerStates').deleteOne({_id:runId},{session});
-    if (message) await rows('messages').insertOne({ _id: `${runId}:assistant`, userId: run.userId, role: 'assistant', text: message,
+    if (message || artifacts.length) await rows('messages').insertOne({ _id: `${runId}:assistant`, userId: run.userId, role: 'assistant', text: message, ...(artifacts.length ? { artifacts } : {}),
       source: 'app', status: status === 'completed' ? 'complete' : 'interrupted', createdAt: now }, { session });
     if (message) await enqueueChatSearch(run.userId, `${runId}:assistant`, session);
   });

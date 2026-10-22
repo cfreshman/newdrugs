@@ -25,6 +25,13 @@ it('keeps post menus reachable across the layout viewport',()=>{
  const anchor=document.createElement('summary');document.body.append(anchor);
  expect(menuVisibleBounds(anchor)).toEqual({left:0,top:0,right:390,bottom:844});
 });
+it('stops at a native top-layer surface instead of clipping to the underlying chat',()=>{
+ const chat=document.createElement('div'),dialog=document.createElement('dialog'),anchor=document.createElement('summary');document.body.append(chat);chat.append(dialog);dialog.append(anchor);
+ chat.style.overflow='hidden';dialog.style.overflow='hidden';chat.getBoundingClientRect=()=>rect(50,400,300,200);dialog.getBoundingClientRect=()=>rect(0,0,390,844);
+ Object.defineProperties(chat,{clientWidth:{value:300},clientHeight:{value:200}});Object.defineProperties(dialog,{clientWidth:{value:390},clientHeight:{value:844}});
+ const matches=dialog.matches.bind(dialog);vi.spyOn(dialog,'matches').mockImplementation(selector=>selector.includes(':modal')||matches(selector));
+ expect(menuVisibleBounds(anchor)).toEqual({left:0,right:390,top:0,bottom:844});
+});
 function Probe(){const ref=useRef<HTMLDetailsElement>(null);useEdgeAwareMenu(ref,true);return createElement('section',{style:{overflowX:'hidden',overflowY:'hidden'}},createElement('details',{ref},createElement('summary',null,'More'),createElement('div',null,createElement('button',null,'Unfriend'))));}
 it('positions before revealing, follows scrolling, and closes when the trigger leaves the panel',async()=>{
  let top=690;

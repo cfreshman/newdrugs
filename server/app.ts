@@ -18,6 +18,9 @@ import {listAdminUsers} from './adminUsers';
 import {mountAdminFrontend} from './adminFrontend';
 import {EMBED_ORIGINS} from '../shared/postLinks';
 import { recordReferenceSchema } from '../shared/recordContext';
+import {ARTIFACT_REQUEST_BYTES} from '../shared/artifacts';
+import {sendArtifactFrame} from './artifactFrame';
+import {publicArtifact,publicArtifactImage,publicArtifactState} from './artifacts';
 import type {LiveTopic} from '../shared/liveState';
 import { revokeAutomationCredential } from './automations';
 import { clearAgentChat, changeUsername, changeAccountPassword, verifyAccountPassword } from './account';
@@ -71,6 +74,7 @@ const passkeySessionId=(req:Request)=>{const token=req.cookies?.[config.SESSION_
 const availableHandle=credentials.shape.handle.refine(handle=>!reservedWebsiteUsername(handle),'Usernames cannot begin with u_.');
 const registrationCredentials=credentials.extend({handle:availableHandle});
 const makeRequestBytes=MAX_SQUARE_BYTES+1024*1024;
+const artifactVersionQuery=(req:Request)=>req.query.version===undefined?undefined:req.query.version==='legacy'?'legacy' as const:z.string().max(16).regex(/^[1-9][0-9]*$/).transform(Number).pipe(z.number().int().positive()).parse(req.query.version);
 
 
 export function createApp() {
@@ -80,7 +84,7 @@ export function createApp() {
   app.use(websiteRequest);
   app.use(helmet({ contentSecurityPolicy: config.production ? {
     directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], fontSrc: ["'self'"],
-      connectSrc: ["'self'"], workerSrc:["'self'",'blob:'], frameSrc:EMBED_ORIGINS, imgSrc: ["'self'", 'data:','blob:','https:'], mediaSrc:["'self'",'https:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
+      connectSrc: ["'self'"], workerSrc:["'self'",'blob:'], frameSrc:["'self'",...EMBED_ORIGINS], imgSrc: ["'self'", 'data:','blob:','https:'], mediaSrc:["'self'",'https:'], objectSrc: ["'none'"], frameAncestors: ["'none'"] },
   } : false, crossOriginEmbedderPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.get('/api/health', async (_req, res) => { await db().command({ ping: 1 }); res.json({ ok: true }); });
   app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '128kb' }), async (req, res) => {
@@ -161,13 +165,30 @@ export function createApp() {
     const image=await uploadVideoPoster({userId:file.userId,source:'external',scope:'read'},file._id);
     res.set({'Content-Type':'image/webp','X-Content-Type-Options':'nosniff'}).send(image);
   });
-  const ordinaryJson=express.json({limit:'32kb'}),passkeyJson=express.json({limit:'64kb'}),websiteJson=express.json({limit:'2200kb'}),makeJson=express.json({limit:makeRequestBytes}),websiteSourceLimit=limiter('/api/website/source',30);
+  const ordinaryJson=express.json({limit:'32kb'}),passkeyJson=express.json({limit:'64kb'}),websiteJson=express.json({limit:'2200kb'}),artifactJson=express.json({limit:ARTIFACT_REQUEST_BYTES}),makeJson=express.json({limit:makeRequestBytes}),websiteSourceLimit=limiter('/api/website/source',30);
   const requestLimits=apiRequestLimits();
   app.use('/api', devApiGate, cookieParser(), csrf, (req,res,next)=>authenticate(req,res,authError=>{
     if(authError)delete req.actor;
-    requestLimits(req,res,limitError=>next(limitError||authError));
-  }), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):/^\/operations\/make\.(?:create|edit)$/.test(req.path)?makeJson(req,res,next):/^\/account\/passkeys\/(?:register|login)\/complete$/.test(req.path)?passkeyJson(req,res,next):ordinaryJson(req,res,next));
+    // A bearer URL grants its own read capability, independent of the reader's
+    // expired or suspended identity. Staging still needs its real private gate.
+    const capabilityRead=['GET','HEAD'].includes(req.method)&&/^\/artifacts\/[^/]+(?:\/state|\/assets\/[^/]+)?\/?$/.test(req.path)&&
+      (config.APP_ENV!=='staging'||trustedDevKey(req.get('X-NewDrugs-Dev-Key')));
+    const identityError=capabilityRead&&authError instanceof AppError&&[401,403,404].includes(authError.status)?undefined:authError;
+    requestLimits(req,res,limitError=>next(limitError||identityError));
+  }), (req,res,next)=>/^\/operations\/website\.(?:create|patch)$/.test(req.path)?websiteSourceLimit(req,res,error=>error?next(error):websiteJson(req,res,next)):/^\/operations\/artifacts\.(?:create|update)$/.test(req.path)?artifactJson(req,res,next):/^\/operations\/make\.(?:create|edit)$/.test(req.path)?makeJson(req,res,next):/^\/account\/passkeys\/(?:register|login)\/complete$/.test(req.path)?passkeyJson(req,res,next):ordinaryJson(req,res,next));
   app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  app.get('/api/artifacts/frame',sendArtifactFrame);
+  app.get('/api/artifacts/:artifactId/state',async(req,res)=>{
+    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'}).json(await publicArtifactState(String(req.params.artifactId),artifactVersionQuery(req)));
+  });
+  app.get('/api/artifacts/:artifactId/assets/:assetId',async(req,res)=>{
+    const file=await publicArtifactImage(String(req.params.artifactId),String(req.params.assetId),artifactVersionQuery(req));
+    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow','Content-Disposition':'inline'});
+    await sendMedia(file,req,res);
+  });
+  app.get('/api/artifacts/:artifactId',async(req,res)=>{
+    res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'}).json(await publicArtifact(String(req.params.artifactId),artifactVersionQuery(req)));
+  });
   app.post('/api/session', limiter('/api/session', 30, 15 * 60000), async (req, res) => {
     if (!req.actor) {
       const user = await createGuest(req.ip);

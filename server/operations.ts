@@ -35,6 +35,9 @@ import { automationOperation, ownAutomation,validateAutomationConfiguration } fr
 import { wakeRun } from './sleep';
 import { assertBackgroundAuthority,operationAvailable } from './backgroundAuthority';
 import { inboxOperation, validateInboxLinks, ownInbox } from './inbox';
+import {artifactOperation,publicArtifactSummary} from './artifacts';
+import {bindPrimaryArtifact} from './artifactDelivery';
+import {artifactPresentationReferenceSchema} from '../shared/artifacts';
 import { enqueueChatSearch, searchChat } from './search/chat';
 import {enqueueDMSearch,searchDM} from './search/dm';
 import {searchGlobal} from './search/global';
@@ -104,7 +107,7 @@ async function connectionFor(userId: string, id: string, session?: ClientSession
   return c;
 }
 export function chatMessage(row: Row): Message {
-  return { id: row._id, role: row.role as Message['role'], text: String(row.text), source: row.source as Message['source'], createdAt: String(row.createdAt), ...(row.status ? { status: row.status as Message['status'] } : {}), ...(Array.isArray(row.records)?{records:row.records as Message['records']} : {}), ...(Array.isArray(row.inbox) ? { inbox: row.inbox as Message['inbox'] } : {}), ...(Array.isArray(row.files) ? { files: row.files as Message['files'] } : {}) };
+  return { id: row._id, role: row.role as Message['role'], text: String(row.text || ''), source: row.source as Message['source'], createdAt: String(row.createdAt), ...(row.status ? { status: row.status as Message['status'] } : {}), ...(Array.isArray(row.artifacts)?{artifacts:row.artifacts as Message['artifacts']} : {}), ...(Array.isArray(row.records)?{records:row.records as Message['records']} : {}), ...(Array.isArray(row.inbox) ? { inbox: row.inbox as Message['inbox'] } : {}), ...(Array.isArray(row.files) ? { files: row.files as Message['files'] } : {}) };
 }
 export async function conversation(userId: string, limit = 30, before?: string, session?: ClientSession) {
   const cursor = before ? requireValue(await rows('messages').findOne({ _id: before, userId }, { session })) : null;
@@ -135,6 +138,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
   if(name.startsWith('agent.memory.')||name.startsWith('agent.instructions.')){registered(user);return memoryOperation(name,d,actor,session);}
   if (name.startsWith('log.')) { registered(user); return logOperation(name,d,actor,session); }
   if (name.startsWith('website.')) { registered(user); return websiteOperation(name,d,actor,session); }
+  if (name.startsWith('artifacts.')) { registered(user); return artifactOperation(name,d,actor,session); }
   if (name.startsWith('quizzes.')) { registered(user); return quizOperation(name,d,actor,session); }
   if (name.startsWith('dinder.')) { if(!['dinder.catalog','dinder.recipe'].includes(name))registered(user); return dinderOperation(name,d,actor,session); }
   if (name.startsWith('make.')) { registered(user); return makeOperation(name,d,actor,session); }
@@ -216,6 +220,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
     case 'links.preview': return linkPreview(String(d.url), userId);
     case 'locations.resolve': return resolveArea(String(d.cell));
     case 'app.open': {
+      if(d.artifactVersion!==undefined&&(d.view!=='artifacts'||!d.resourceId))throw new AppError(422,'artifact_version','Choose an artifact for its saved content version.');
       if(d.dinderTab&&(d.view!=='dinder'||!d.resourceId||isDinderPage(d.resourceId)))throw new AppError(422,'meal_required','Choose a meal match for its chat.');
       if(['log','log_code'].includes(String(d.view))&&d.resourceId)await logEntryFor(userId,String(d.resourceId),session);
       if(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_join','log_scan'].includes(String(d.view)))registered(user);
@@ -223,9 +228,10 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
       if(d.view==='log_join')await logOperation('log.join_preview',{code:String(d.resourceId||'')},actor,session);
       if(d.view==='people'&&d.scope&&!['all','nearby'].includes(String(d.scope)))throw new AppError(422,'people_scope','People supports Nearby or All people.');
       if (d.view === 'connections') d.view = 'messages';
-      if (actor.background && actor.privateAccess===false && (!['people','person','feed','post','post_list','location'].includes(String(d.view)) || ['saved','hidden','friends','circle'].includes(String(d.scope)))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');
+      if (actor.background && actor.privateAccess===false && ((!['people','person','feed','post','post_list','location'].includes(String(d.view))&&!(d.view==='artifacts'&&d.resourceId)) || ['saved','hidden','friends','circle'].includes(String(d.scope)))) throw new AppError(403, 'automation_scope', 'This view is outside the automation context.');
       if (d.view === 'automations' && d.resourceId) await ownAutomation(userId, String(d.resourceId), session, true);
       if (d.view === 'inbox' && d.resourceId) await ownInbox(userId, String(d.resourceId), session);
+      if (d.view === 'artifacts') { if(d.resourceId)await publicArtifactSummary(String(d.resourceId),d.artifactVersion as import('../shared/artifacts').ArtifactVersionSelector|undefined);else registered(user); }
       if (d.view === 'chat_history' && d.resourceId) requireValue(await rows('messages').findOne({ _id: String(d.resourceId), userId }, options));
       if(d.view==='post_list'){if(!Array.isArray(d.postIds)||!d.postIds.length)throw new AppError(422,'posts_required','Choose posts for this list.');const selected=await run('posts.list',{scope:'selected',postIds:d.postIds},actor,session) as {items:{id:string}[]};d.postIds=selected.items.map(post=>post.id);if(!(d.postIds as string[]).length)throw new AppError(404,'unavailable','These posts are no longer available.');}
       if(d.view==='quizzes'&&d.resourceId)await quizOperation('quizzes.get',{personId:String(d.resourceId)},actor,session);
@@ -238,7 +244,7 @@ async function run(name: string, d: Record<string, unknown>, actor: Actor, sessi
         await notBlocked(userId, (connection.members as string[]).find(id => id !== userId)!, session);
       }
       if(d.messageId){if(d.view!=='messages'||!d.resourceId)throw new AppError(422,'message_destination','Choose a conversation for this message.');requireValue(await rows('directMessages').findOne({_id:String(d.messageId),connectionId:String(d.resourceId)},options),'This message is unavailable.');}
-      return { open:d.view,dinderTab:d.dinderTab,date:d.date,logMonth:d.logMonth,logScope:d.logScope,personId:d.personId, resourceId:d.resourceId, messageId:d.messageId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
+      return { open:d.view,artifactVersion:d.artifactVersion,dinderTab:d.dinderTab,date:d.date,logMonth:d.logMonth,logScope:d.logScope,personId:d.personId, resourceId:d.resourceId, messageId:d.messageId, postIds:d.postIds, areaCell:d.areaCell, radiusMiles:d.radiusMiles, query:d.query,scope:d.scope,waitForCompletion:d.waitForCompletion };
     }
     case 'profile.update': {
       if (actor.source !== 'browser') throw new AppError(403, 'human_authored', 'Profiles are written by the person, not by their agent. Open the profile editor instead.');
@@ -715,6 +721,11 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
   if (actor.source === 'agent' && !op.agent) throw new AppError(403, 'unavailable', 'This operation is not available to the hosted agent.');
   if (name === 'inbox.publish') await validateInboxLinks(actor.userId, parsed.links as import('../shared/inbox').InboxItem['links'], String(parsed.body));
   if (op.kind === 'read') {
+    if(name==='artifacts.present'&&actor.source==='agent'&&!actor.background)return transaction(async session=>{
+      const result=artifactPresentationReferenceSchema.parse(await run(name,parsed,actor,session));
+      await bindPrimaryArtifact(actor,proof,result,session);
+      return result;
+    });
     const result=op.outputSchema.parse(await run(name, parsed, actor));
     // Owner activity, including their poll selection, stays private on public-only reads.
     return actor.background&&actor.privateAccess===false?JSON.parse(JSON.stringify(result,(key,value)=>key==='userVoteIndex'?null:['saved','liked','hidden','friendAction','connectionId'].includes(key)?undefined:value)):result;
@@ -771,6 +782,7 @@ export async function executeOperation(name: string, input: unknown, actor: Acto
     // Store the same JSON shape that the HTTP/MCP client receives. BSON would
     // otherwise turn nested undefined optional fields into null on a retry.
     const result = JSON.parse(JSON.stringify(op.outputSchema.parse(await run(name,{...parsed,...(makeFileId?{_makeFileId:makeFileId}:{}),...(websiteFileId?{_websiteFileId:websiteFileId}:{})}, actor, session))));
+    if(['artifacts.create','artifacts.update','artifacts.delete'].includes(name))await syncSourceAttachments('artifacts',String(result.id||result.artifactId),session);
     if((name.startsWith('agent.memory.')||name==='agent.instructions.update')&&result.saved!==false)await rows('recordEvents').insertOne({_id:randomUUID(),userIds:[actor.userId],payload:{keys:['agent_memory']},expiresAt:new Date(Date.now()+3600000)},{session});
     if(name==='profile.update')await syncSourceAttachments('profile',actor.userId,session);
     if(['posts.create','posts.reply','posts.delete'].includes(name))await syncSourceAttachments('posts',name==='posts.delete'?String(parsed.postId):String(result.id),session);

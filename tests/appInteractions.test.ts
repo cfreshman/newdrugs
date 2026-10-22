@@ -360,7 +360,7 @@ describe('chat interaction integration', () => {
   it.each(surfaceViews)('opens the exact native destination requested by the agent: %s', async view => {
     sessionStorage.setItem('nd-client', 'browser');
     await mount();
-    await act(async () => { bootstrap.resolve({ ...initial, user: { ...initial.user, handle: 'test' }, run: { ...active, status: 'waiting_for_input', surface: { id: `surface-${view}`, view, resourceId: view === 'chat_history' ? undefined : 'resource', waiting: true } } }); });
+    await act(async () => { bootstrap.resolve({ ...initial, user: { ...initial.user, handle: 'test' }, run: { ...active, status: 'waiting_for_input', surface: { id: `surface-${view}`, view, resourceId: ['chat_history','artifacts'].includes(view) ? undefined : 'resource', waiting: true } } }); });
     if(view.startsWith('log')){expect(dom.container.querySelector('.social-log:not([hidden]) .log-native')).not.toBeNull();expect(dom.container.querySelector('.social-log .mode-content-header')).toBeNull();}else expect(dom.container.querySelector('dialog h2, .composer-surface h2, .social-experience:not([hidden]) .mode-content-header h1')?.textContent).toBe(surfaceTitles[view]);
     expect(Boolean(dom.container.querySelector('.connection-setup'))).toBe(view === 'agents');
     if (view === 'location') {

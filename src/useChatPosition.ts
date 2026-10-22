@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { clampChat, mobileChatLayout, type ChatDimensions, type Point, type Viewport } from './chatPosition';
+import { ARTIFACT_EDITABLE_FOCUS_EVENT, artifactEditableFocused } from './embeddedArtifactFocus';
 
 const readViewport = (): Viewport => {
   return { width: innerWidth, height: innerHeight, left: 0, top: 0 };
@@ -54,7 +55,10 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
   useLayoutEffect(() => {
     if (!ready) return;
     const visual=window.visualViewport;
-    const editing = () => document.activeElement instanceof HTMLElement && document.activeElement.matches('textarea, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]), [contenteditable="true"]');
+    const editing = () => {
+      const embedded = artifactEditableFocused();
+      return embedded || document.activeElement instanceof HTMLElement && document.activeElement.matches('textarea, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]), [contenteditable="true"]');
+    };
     const fit = () => {
       const next = readViewport();
       const baseline = keyboard.current;
@@ -73,15 +77,26 @@ export function useChatPosition(composer: RefObject<HTMLDivElement | null>, read
     };
     fit();
     const fitViewport = () => flushSync(fit);
+    let stopped = false, artifactFitQueued = false;
+    const fitArtifactFocus = () => {
+      if (artifactFitQueued) return;
+      artifactFitQueued = true;
+      // Frame cleanup may relay during React's commit. Flush after that stack,
+      // in the same pre-paint microtask checkpoint as an ordinary focus relay.
+      queueMicrotask(() => { artifactFitQueued = false; if (!stopped) fitViewport(); });
+    };
     const observer = new ResizeObserver(() => setComposerHeight(composer.current?.offsetHeight ?? 156));
     if (composer.current) observer.observe(composer.current);
     window.addEventListener('resize', fitViewport);
+    window.addEventListener(ARTIFACT_EDITABLE_FOCUS_EVENT, fitArtifactFocus);
     document.addEventListener('focusin', fitViewport);
     document.addEventListener('focusout', fitViewport);
     visual?.addEventListener('resize',fitViewport);
     visual?.addEventListener('scroll',fitViewport);
     return () => {
+      stopped = true;
       observer.disconnect(); window.removeEventListener('resize', fitViewport);
+      window.removeEventListener(ARTIFACT_EDITABLE_FOCUS_EVENT, fitArtifactFocus);
       document.removeEventListener('focusin', fitViewport); document.removeEventListener('focusout', fitViewport);
       visual?.removeEventListener('resize',fitViewport);visual?.removeEventListener('scroll',fitViewport);
     };

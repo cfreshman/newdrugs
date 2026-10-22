@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {estimatedInputTokens,type RouterMessage,type RouterTool} from './openRouter';
 import type {AgentModelSnapshot} from '../shared/agentModel';
 import type {RunRecord} from './runTypes';
-import {sessionContinuity,interactionGuidance} from './sessionContext';
+import {sessionContinuity,interactionGuidance,historyText} from './sessionContext';
 import {agentClockText} from './agentClock';
 import {ANTHROPIC_COMPACTION_TOKENS,usesAnthropicMessages} from './routerAnthropic';
 
@@ -34,9 +34,9 @@ export async function compactionRecentInput(run:RunRecord):Promise<RouterMessage
  const recent:RouterMessage[]=[];
  if(run.purpose!=='automation'){
   const packet=await sessionContinuity(run);let characters=0;
-  for(const message of [...packet.messages].reverse()){if(recent.length>=12||characters+message.text.length>16000)break;recent.unshift({role:message.role,content:message.text});characters+=message.text.length;}
+  for(const message of [...packet.messages].reverse()){const text=historyText(message);if(recent.length>=12||characters+text.length>16000)break;recent.unshift({role:message.role,content:text});characters+=text.length;}
  }
- recent.push({role:'user',content:[{type:'text',text:run.text},{type:'text',text:`Host context for the exact current request: ${JSON.stringify({fileIds:run.fileIds,inboxIds:run.inboxIds,recordRefs:run.recordRefs,pageContext:run.pageContext,interaction:interactionGuidance(run.inputContext),...(run.purpose==='automation'?{privateAccess:run.privateAccess!==false,writeAccess:run.writeAccess!==false}:{})})}\n${agentClockText(run.timezone)}`}]});
+ recent.push({role:'user',content:[{type:'text',text:run.text},{type:'text',text:`Host context for the exact current request: ${JSON.stringify({fileIds:run.fileIds,inboxIds:run.inboxIds,recordRefs:run.recordRefs,artifacts:run.artifacts,pageContext:run.pageContext,interaction:interactionGuidance(run.inputContext),...(run.purpose==='automation'?{privateAccess:run.privateAccess!==false,writeAccess:run.writeAccess!==false}:{})})}\n${agentClockText(run.timezone)}`}]});
  for(const reply of run.reviewReplies||[])recent.push({role:'user',content:[{type:'text',text:reply.text},{type:'text',text:`Host-verified review reply. The reviewed writes were declined. ${JSON.stringify({files:reply.files,recordRefs:reply.recordRefs,pageContext:reply.pageContext,interaction:interactionGuidance(reply.inputContext)})}`}]});
  return recent;
 }

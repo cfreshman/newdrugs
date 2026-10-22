@@ -41,7 +41,7 @@ export async function clearAgentChat(userId: string) {
     const sessions = [...new Set([...affected.map(run => run.providerSessionId), ...savedSessions.map(record => record.sessionId)].filter((id): id is string => typeof id === 'string'))];
     for (const id of sessions) await rows('agentSessionCleanup').updateOne({ _id: id }, { $setOnInsert: { userId, requestedAt: now, availableAt: Date.now(), attempts: 0 } }, { session, upsert: true });
     await rows('runs').updateMany({ ...target, status: { $nin: ['completed','cancelled','failed'] } }, { $set: { status: 'queued', cancelRequested: true, superseded: true, reservedNanos: 0, nextAttempt: 0, leaseUntil: 0 } }, { session });
-    await rows('runs').updateMany(target, { $set: { text: '', draft: '', progress: [], approvals: [], fileIds: [], inboxIds: [], recordRefs:[], reviewReplies: [], recentDeliveries: [], completedSleeps: {}, error: '' }, $unset: { sleep: '', delivery: '', memorySnapshot: '' } }, { session });
+    await rows('runs').updateMany(target, { $set: { text: '', draft: '', progress: [], approvals: [], fileIds: [], inboxIds: [], recordRefs:[], artifacts: [], reviewReplies: [], recentDeliveries: [], completedSleeps: {}, error: '' }, $unset: { sleep: '', delivery: '', memorySnapshot: '' } }, { session });
     await rows('agentCredentials').updateMany({ userId, $or: [{ runId: { $in: affected.map(run => run._id) } }, { runId: { $exists: false } }] }, { $set: { revokedAt: now } }, { session });
     await rows('agentSessions').deleteMany({ _id: { $in: keys } }, { session });
     await rows('routerStates').deleteMany({userId,purpose:{$ne:'public_automation'}},{session});

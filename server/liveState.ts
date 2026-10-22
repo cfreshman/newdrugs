@@ -13,6 +13,7 @@ import {AppError,requireValue} from './errors';
 import type {LiveChange,LiveTopic,RecordInvalidation} from '../shared/liveState';
 import {notificationState} from './notifications';
 import {acquireLiveLease,liveInstance,liveLeases,recordKeys,type LiveLease} from './liveSubscriptions';
+import {revokeArtifactUploadReferences} from './uploads';
 const topics:LiveTopic[]=['preferences','user','wallet','messages','run','notifications'];
 type Subscriber={userId:string;sessionId:string;lease:LiveLease;keys:Set<string>|null;topics:Set<LiveTopic>;state(value:LiveChange,requested:LiveTopic[]):void;records(change:RecordInvalidation):void;close(auth?:boolean):void};
 type Group={listeners:Set<Subscriber>;dirty:Set<LiveTopic>;timer?:ReturnType<typeof setTimeout>;pending?:Promise<void>};
@@ -86,7 +87,11 @@ export async function dispatchLiveChange(event:ChangeStreamDocument<Document>){
  if(collection==='agentInbox'||collection==='automations'){records([owner],{keys:[collection==='agentInbox'?'inbox':'automations']});dirty(owner,['notifications']);return;}
  if(collection==='chatSearchChunks'){records([owner],{keys:['chat_history']});return;}
  if(collection==='postSaves'){records([owner],{keys:['posts']});return;}
- if(collection==='uploads'){records([owner],{keys:['storage']});return;}
+ if(collection==='uploads'){
+  const fields='updateDescription' in event?Object.keys(event.updateDescription.updatedFields||{}):[];
+  if((document.deletedAt||document.moderatedAt)&&(event.operationType==='replace'||event.operationType==='insert'||fields.some(field=>field==='deletedAt'||field==='moderatedAt')))await revokeArtifactUploadReferences(String(owner),key);
+  records([owner],{keys:['storage']});return;
+ }
  if(collection==='notifications'){dirty(owner,['notifications']);if(document.connectionId)records([owner],{keys:['connections']});return;}
  if(collection==='ledger'){dirty(owner,['wallet']);return;}
  if(collection==='messages'){dirty(owner,['messages']);return;}
@@ -128,13 +133,13 @@ export async function streamLiveState(req:Request,res:Response){
  const channel=typeof req.query?.channel==='string'&&/^[a-zA-Z0-9-]{1,100}$/.test(req.query.channel)?req.query.channel:randomUUID();
  const lease=await acquireLiveLease(userId,sessionId,channel,recordKeys(req.query?.records));
  let closed=false,sequence=0,recordTimer:ReturnType<typeof setTimeout>|undefined;
- const sent=new Map<LiveTopic,string>(),epoch=randomUUID(),pendingKeys=new Set<string>();let pendingLog:RecordInvalidation['log']=[];
+ const sent=new Map<LiveTopic,string>(),epoch=randomUUID(),pendingKeys=new Set<string>();let pendingLog:RecordInvalidation['log']=[],pendingArtifacts:RecordInvalidation['artifacts']=[];
  let heartbeat:ReturnType<typeof setInterval>|undefined,expiration:ReturnType<typeof setTimeout>|undefined;
  const write=(value:string)=>{if(closed)return;if(res.writableLength>1_000_000){close();return;}if(value.startsWith('event: records'))metrics.recordFrames++;else if(value.startsWith('event: state'))metrics.stateFrames++;res.write(value);};
  const close=(auth=false)=>{if(closed)return;if(auth)write('event: auth-changed\ndata: {}\n\n');closed=true;clearTimeout(recordTimer);clearTimeout(expiration);clearInterval(heartbeat);subscribers.delete(listener);leases.delete(lease._id);const group=groups.get(userId);group?.listeners.delete(listener);if(group&&!group.listeners.size){clearTimeout(group.timer);groups.delete(userId);}const sameSession=sessions.get(sessionId);sameSession?.delete(listener);if(!sameSession?.size)sessions.delete(sessionId);void liveLeases().deleteOne({_id:lease._id,connectionId:lease.connectionId,instance:liveInstance}).catch(()=>{});if(!res.writableEnded)res.end();};
  const listener:Subscriber={userId,sessionId,lease,keys:lease.keys?new Set(lease.keys):null,topics:new Set(requestedTopics),close,
   state(current,requested){const change:LiveChange={};for(const topic of requested){if(!listener.topics.has(topic))continue;const serialized=JSON.stringify(topic==='messages'?[current.messages,current.conversationGeneration]:current[topic]);const fingerprint=hash(serialized);if(sent.get(topic)!==fingerprint){Object.assign(change,{[topic]:current[topic]});sent.set(topic,fingerprint);}}if(change.messages){change.conversationCursor=current.conversationCursor;change.conversationGeneration=current.conversationGeneration;}else if(change.user)change.conversationGeneration=current.conversationGeneration;if(Object.keys(change).length)write(`event: state\ndata: ${JSON.stringify({userId,epoch,sequence:++sequence,change})}\n\n`);},
-  records(change){change.keys.forEach(key=>pendingKeys.add(key));if(change.keys.includes('log'))pendingLog=change.log&&pendingLog&&pendingLog.length+change.log.length<=128?[...pendingLog,...change.log]:undefined;if(recordTimer)return;recordTimer=setTimeout(()=>{recordTimer=undefined;write(`event: records\ndata: ${JSON.stringify({keys:[...pendingKeys],...(pendingLog?.length?{log:pendingLog}:{})})}\n\n`);pendingKeys.clear();pendingLog=[];},50);}
+  records(change){change.keys.forEach(key=>pendingKeys.add(key));if(change.keys.includes('log'))pendingLog=change.log&&pendingLog&&pendingLog.length+change.log.length<=128?[...pendingLog,...change.log]:undefined;if(change.keys.includes('artifacts'))pendingArtifacts=change.artifacts&&pendingArtifacts&&pendingArtifacts.length+change.artifacts.length<=128?[...pendingArtifacts,...change.artifacts]:undefined;if(recordTimer)return;recordTimer=setTimeout(()=>{recordTimer=undefined;write(`event: records\ndata: ${JSON.stringify({keys:[...pendingKeys],...(pendingLog?.length?{log:pendingLog}:{}),...(pendingArtifacts?.length?{artifacts:pendingArtifacts}:{})})}\n\n`);pendingKeys.clear();pendingLog=[];pendingArtifacts=[];},50);}
  };
  res.status(200).set({'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no',Connection:'keep-alive'});res.flushHeaders();res.write('retry: 1000\n\n');res.on('close',()=>close());
  const previous=leases.get(lease._id);previous?.close();subscribers.add(listener);leases.set(lease._id,listener);

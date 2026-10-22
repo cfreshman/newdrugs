@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { bottomAnchoredScroll } from './chatPosition';
 import { captureHistoryAnchor, restoreHistoryAnchor } from './ChatHistory';
 
@@ -23,17 +23,44 @@ export function useConversationScroll(signals: { viewId?:string; submittedId?:st
   const headroom = useRef(0);
   const prepend = useRef<{ anchor: ReturnType<typeof captureHistoryAnchor>; signals: typeof signals } | null>(null);
   const restoreView=useRef<{anchor:ReturnType<typeof captureHistoryAnchor>;following:boolean}|null>(null);
-  const remember = () => {
+  const suspension=useRef<{element:HTMLDivElement|null;anchor:ReturnType<typeof captureHistoryAnchor>|null;viewId?:string;following:boolean;forceBottom:boolean}|null>(null);
+  const measureHeadroom=useRef<(()=>number)|null>(null);
+  const remember = useCallback(() => {
     const el = transcript.current;
     if (el) { previous.current = { top: el.scrollTop, height: el.clientHeight }; setFadedTop(shouldFadeConversationTop(el)); setAwayFromBottom(!forceBottom.current && !following.current && el.scrollHeight - el.scrollTop - el.clientHeight > 24); }
-  };
+  },[]);
+  const suspend=useCallback((active:boolean)=>{
+    if(active){
+      if(suspension.current)return;
+      const element=transcript.current;
+      suspension.current={element,anchor:element?captureHistoryAnchor(element):null,viewId:priorSignals.current.viewId,following:following.current,forceBottom:forceBottom.current};
+      forceBottom.current=false;following.current=false;
+      return;
+    }
+    const saved=suspension.current;if(!saved)return;suspension.current=null;
+    const element=transcript.current;if(!element){forceBottom.current=saved.forceBottom;following.current=saved.following;return;}
+    const delta=measureHeadroom.current?.()||0;
+    if(saved.anchor&&saved.element===element&&saved.viewId===priorSignals.current.viewId){
+      if(saved.anchor.message?.isConnected&&element.contains(saved.anchor.message))restoreHistoryAnchor(element,saved.anchor);
+      else element.scrollTop=saved.anchor.scrollTop+delta;
+      jumpTarget.current=null;prepend.current=null;restoreView.current=null;
+      forceBottom.current=false;
+      following.current=saved.following&&element.scrollHeight-element.scrollTop-element.clientHeight<=24;
+      holdConversationScroll(element);
+    }else{
+      forceBottom.current=saved.forceBottom;following.current=saved.following;
+      if(forceBottom.current||following.current){element.scrollTop=element.scrollHeight;following.current=true;forceBottom.current=false;}
+    }
+    remember();
+  },[remember]);
   // Wayfinder keeps an explicit one-shot follow request separate from resize anchoring.
   // The scroll must happen after React has committed the new message, not before it.
   useLayoutEffect(() => {
     const prior=priorSignals.current;
     const newApprovals = signals.approvalIds?.split(',').some(id => id && !prior.approvalIds?.split(',').includes(id));
-    if(prior.viewId!==signals.viewId || signals.submittedId&&prior.submittedId!==signals.submittedId || signals.completedId&&prior.completedId!==signals.completedId || newApprovals) forceBottom.current=true;
+    if(!suspension.current&&(prior.viewId!==signals.viewId || signals.submittedId&&prior.submittedId!==signals.submittedId || signals.completedId&&prior.completedId!==signals.completedId || newApprovals)) forceBottom.current=true;
     priorSignals.current=signals;
+    if(suspension.current)return;
     const saved = prepend.current; prepend.current = null;
     if (saved && saved.signals.viewId === signals.viewId && saved.signals.submittedId === signals.submittedId && saved.signals.completedId === signals.completedId && saved.signals.approvalIds === signals.approvalIds && transcript.current) {
       restoreHistoryAnchor(transcript.current, saved.anchor);
@@ -42,7 +69,7 @@ export function useConversationScroll(signals: { viewId?:string; submittedId?:st
     const restored=restoreView.current;restoreView.current=null;
     if(restored&&transcript.current){jumpTarget.current=null;following.current=restored.following;forceBottom.current=restored.following;if(!restored.following){restoreHistoryAnchor(transcript.current,restored.anchor);holdConversationScroll(transcript.current);}remember();}
     const frame=requestAnimationFrame(()=>{
-      const el=transcript.current;if(!el)return;
+      const el=transcript.current;if(!el||suspension.current)return;
       if (jumpTarget.current) {
         const target = [...el.querySelectorAll<HTMLElement>('[data-message-id]')].find(node => node.dataset.messageId === jumpTarget.current);
         if (!target) return;
@@ -65,9 +92,10 @@ export function useConversationScroll(signals: { viewId?:string; submittedId?:st
       if (delta) { body.style.paddingTop = `${next}px`; headroom.current = next; }
       return delta;
     };
-    addHeadroom();
-    remember();
+    measureHeadroom.current=addHeadroom;
+    if(!suspension.current){addHeadroom();remember();}
     const layout = new ResizeObserver(() => {
+      if(suspension.current)return;
       const delta = addHeadroom();
       const before = { ...previous.current, top: previous.current.top + delta };
       if (delta && !following.current && !forceBottom.current) el.scrollTop += delta;
@@ -83,22 +111,22 @@ export function useConversationScroll(signals: { viewId?:string; submittedId?:st
       remember();
     });
     layout.observe(el); layout.observe(body);
-    return () => layout.disconnect();
+    return () => {layout.disconnect();if(measureHeadroom.current===addHeadroom)measureHeadroom.current=null;};
   }, [signals.viewId]);
   return {
-    transcript, content, fadedTop, awayFromBottom,
+    transcript, content, fadedTop, awayFromBottom,suspend,
     capture:()=>transcript.current?{anchor:captureHistoryAnchor(transcript.current),following:following.current||forceBottom.current}:null,
     restore:(saved:{anchor:ReturnType<typeof captureHistoryAnchor>;following:boolean}|null)=>{if(saved)restoreView.current=saved;else{forceBottom.current=true;following.current=true;}},
     jumpTo: (messageId: string) => { jumpTarget.current = messageId; forceBottom.current = false; following.current = false; },
     preparePrepend: () => {
-      const el = transcript.current; if (!el || forceBottom.current) return;
+      const el = transcript.current; if (!el || forceBottom.current || suspension.current) return;
       prepend.current = { anchor: captureHistoryAnchor(el), signals: priorSignals.current };
       following.current = false; holdConversationScroll(el);
     },
-    follow: () => { jumpTarget.current = null; forceBottom.current = true; following.current = true; setAwayFromBottom(false); },
+    follow: () => { if(suspension.current)return;jumpTarget.current = null; forceBottom.current = true; following.current = true; setAwayFromBottom(false); },
     onScroll: () => {
       const el = transcript.current;
-      if (!el || forceBottom.current || previous.current.height !== el.clientHeight) return;
+      if (!el || suspension.current || forceBottom.current || previous.current.height !== el.clientHeight) return;
       following.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 24;
       remember();
     },

@@ -14,6 +14,7 @@ import {automationAuthorized} from './automations';
 import {finishRun,guardSpend,recordTurnUsage,runs} from './wallet';
 import {estimatedRequestCost,estimatedInputTokens,inputMessages,routerResponse,routerTokenUsage,visibleRouterText,type RouterMessage,type RouterResponse,type RouterTool} from './openRouter';
 import type {RunRecord} from './runTypes';
+import {artifactHistoryText} from './artifactDelivery';
 
 interface ToolReply {content:string;followUp:RouterMessage[]}
 interface RouterState {_id:string;userId:string;purpose:string;transport?:'messages'|'chat'|'responses';messages:RouterMessage[];outputStart?:number;outputPrefix?:string;tools:RouterTool[];rounds:number;resolved?:string;inflight?:{id?:string};pending?:RouterResponse;compactionPending?:RouterResponse;compactions?:number;inputAnchor?:{estimate:number;reported:number};replies:Record<string,ToolReply>}
@@ -48,7 +49,7 @@ export function routerToolReply(output:unknown):ToolReply{
 }
 async function check(run:RunRecord){
  const current=requireValue(await runs().findOne({_id:run._id,lease:run.lease,status:'running',leaseUntil:{$gt:Date.now()}}),'The task has stopped.');
- run.cancelRequested=current.cancelRequested;run.superseded=current.superseded;
+ run.cancelRequested=current.cancelRequested;run.superseded=current.superseded;run.artifacts=current.artifacts;
  if(run.purpose==='automation'&&!await automationAuthorized(current))run.cancelRequested=true;
  if(run.cancelRequested)throw new AppError(409,'run_cancelled','This task stopped.');
 }
@@ -105,7 +106,7 @@ export async function processOpenRouterRun(run:RunRecord,client?:OpenAI){
      const compact=state.compactionPending;
      await update(run,{providerTurnId:compact.id,billingRate:{model:compact.model,...model.price,version:model.selectedAt}});await recordTurnUsage(run._id,compact.id,routerTokenUsage(compact.usage),0,run.lease,compact.costNanos);await rows('routerUsageJobs').deleteOne({_id:compact.id});
      let replacement:RouterMessage[];
-     if(compact.message.response_items){replacement=[state.messages[0],compact.message];}
+     if(compact.message.response_items){replacement=[state.messages[0],compact.message,...(run.artifacts?.length?[{role:'assistant' as const,content:artifactHistoryText(run.artifacts).trimStart()}]:[])];}
      else{let summary;try{summary=parseConversationSummary(compact.message.content||'');}catch{throw new AppError(502,'compaction_failed','The conversation could not be compacted. Your chat and completed actions are saved.');}replacement=compactedConversation(state.messages[0],summary,await compactionRecentInput(run));if(compactionNeeded(model,replacement,state.tools))throw new AppError(422,'model_context','The current request is too large for the compacted context. Your chat and completed actions are saved.');}
      state.outputPrefix=accumulatedDraft(state);state.messages=replacement;state.outputStart=replacement.length;state.inputAnchor=undefined;state.compactionPending=undefined;state.compactions=(state.compactions||0)+1;await save(run,state);
      await update(run,{preamble:'',phase:'thinking'});

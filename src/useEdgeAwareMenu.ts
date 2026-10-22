@@ -19,10 +19,14 @@ export function menuVisibleBounds(anchor:HTMLElement):MenuBounds {
   const bounds={left:0,top:0,right:innerWidth,bottom:innerHeight};
   for(let parent=anchor.parentElement;parent;parent=parent.parentElement){
     const css=getComputedStyle(parent),clipX=/auto|scroll|hidden|clip/.test(css.overflowX||css.overflow),clipY=/auto|scroll|hidden|clip/.test(css.overflowY||css.overflow);
-    if(!clipX&&!clipY)continue;
-    const box=parent.getBoundingClientRect(),left=box.left+parent.clientLeft,top=box.top+parent.clientTop;
-    if(clipX){bounds.left=Math.max(bounds.left,left);bounds.right=Math.min(bounds.right,left+parent.clientWidth);}
-    if(clipY){bounds.top=Math.max(bounds.top,top);bounds.bottom=Math.min(bounds.bottom,top+parent.clientHeight);}
+    if(clipX||clipY){
+      const box=parent.getBoundingClientRect(),left=box.left+parent.clientLeft,top=box.top+parent.clientTop;
+      if(clipX){bounds.left=Math.max(bounds.left,left);bounds.right=Math.min(bounds.right,left+parent.clientWidth);}
+      if(clipY){bounds.top=Math.max(bounds.top,top);bounds.bottom=Math.min(bounds.bottom,top+parent.clientHeight);}
+    }
+    // Native top-layer surfaces escape all clipping ancestors above them.
+    // An expanded inline artifact still lives beneath the chat in the DOM.
+    try{if(parent.matches(':modal, :popover-open'))break;}catch{/* Older DOM test environments lack top-layer selectors. */}
   }
   return bounds;
 }

@@ -16,6 +16,7 @@ import {customDocumentSchema} from './customMedia';
 import { recordAttachmentSchema } from './recordContext';
 import { automationSchema,automationValidationSchema } from './automations';
 import { inboxItemSchema } from './inbox';
+import { artifactOutputs, artifactPresentationReferencesSchema } from './artifacts';
 import { z } from 'zod';
 import {postMention,postPollOutput} from './postFeatures';
 
@@ -31,12 +32,13 @@ const page = (item: z.ZodType) => z.object({ items: z.array(item), nextCursor: z
 const wallet = z.object({ starterAvailableNanos: z.number().optional(), balanceNanos: z.number(), reservedNanos: z.number(), availableNanos: z.number(), entries: z.array(z.object({ id, amountNanos: z.number(), label: z.string(), createdAt: z.string(), details: z.record(z.string(), z.unknown()).optional() })) });
 const upload=z.object({id,name:z.string(),originalName:z.string().optional().describe('Original filename, private to the owner and their authorized agent. Never publish this metadata.'),purpose:z.enum(['profile_photo','profile_voice','agent_input','log_media']),bytes:z.number(),mime:z.string(),sha256:z.string(),ready:z.boolean(),uploadUrl:z.string(),url:z.string().optional()});
 const websiteSourceSummary=z.object({sourceId:z.string(),url:z.url(),kind:z.enum(['html','css','javascript']),bytes:z.number().int().nonnegative(),sha256:z.string(),title:z.string(),headings:z.array(z.string()),links:z.array(z.object({url:z.url(),label:z.string()})),resourceUrls:z.array(z.url()),mediaUrls:z.array(z.url()),updatedAt:z.string(),cached:z.boolean()});
-const chatMessage = z.object({ id, role: z.enum(['user', 'assistant']), text: z.string(), files:z.array(upload).optional(), inbox:z.array(z.object({id,title:z.string()})).optional(), records:z.array(recordAttachmentSchema).optional(), createdAt: z.string(), source: z.enum(['app', 'external']), status: z.string().optional() });
+const chatMessage = z.object({ id, role: z.enum(['user', 'assistant']), text: z.string(), artifacts:artifactPresentationReferencesSchema.optional(), files:z.array(upload).optional(), inbox:z.array(z.object({id,title:z.string()})).optional(), records:z.array(recordAttachmentSchema).optional(), createdAt: z.string(), source: z.enum(['app', 'external']), status: z.string().optional() });
 export const resourceLinkOutput = z.object({ rel: z.enum(['open_in_newdrugs', 'download']), targetKind: z.enum(['exact', 'surface']), title: z.string(), url: z.url(), resourceType: z.string(), resourceId: z.string().optional() });
 const searchMatch = z.object({ id, dataset:z.enum(['profiles','posts','replies','threads','spaces']), entityType:z.enum(['person','post','space']), entityId:id, ownerId:id, score:z.number(), evidence:z.array(z.object({field:z.string(),text:z.string(),entityId:id,entityType:z.enum(['person','post','space'])})), signals:z.object({semantic:z.number().optional(),lexical:z.number().optional(),freshness:z.number().optional(),distance:z.number().optional(),diversity:z.number().optional(),exact:z.boolean().optional()}), sourceHash:z.string(),sourceRevision:z.string(),record:z.union([profileOutput,post,spaceSchema]) });
 const searchRetrieval = z.object({id,mode:z.enum(['hybrid','semantic','keyword','exact']),model:z.string(),dimensions:z.number(),indexVersion:z.string(),constraints:z.object({includeHidden:z.boolean().optional(),scope:z.enum(['public','friends','saved']).optional(),near:z.string().optional(),radiusMiles:z.number().optional(),authorId:z.string().optional(),after:z.string().optional(),beforeDate:z.string().optional()}),candidates:z.number(),incomplete:z.boolean(),notices:z.array(z.string()),indexedAt:z.string().optional(),approximate:z.boolean()});
 const searchResult = z.object({matches:z.array(searchMatch),retrieval:searchRetrieval,nextCursor:z.string().nullable()});
 export const outputs: Record<string, z.ZodType> = {
+  ...artifactOutputs,
   ...dinderOutputs,
   ...logOutputs,
   'make.create':makeDraftSummary,'make.get':makeDraftOutput,'make.edit':makeDraftSummary,'make.render':makeRenderOutput,'make.publish':makePublishOutput,'make.discard':z.object({discarded:z.literal(true),draftId:z.uuid()}),
@@ -92,7 +94,7 @@ export const outputs: Record<string, z.ZodType> = {
   'people.bff_set':z.object({personId:id,bff:z.boolean()}),
   'people.mutuals':page(z.object({id,name:z.string(),photoId:z.string().optional()})),
   'people.hide':z.object({personId:id,hidden:z.boolean()}),
-  'app.open': z.object({ open: z.string(),dinderTab:z.literal('chat').optional(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), messageId:z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
+  'app.open': z.object({ open: z.string(),artifactVersion:z.union([z.number().int().positive(),z.literal('legacy')]).optional(),dinderTab:z.literal('chat').optional(),logMonth:z.string().optional(),logScope:z.enum(['all','private','shared','invitations']).optional(),personId:z.string().optional(),date:z.string().optional(), resourceId: z.string().optional(), messageId:z.string().optional(), postIds:z.array(z.string()).optional(), areaCell:z.string().optional(),radiusMiles:z.number().optional(), query:z.string().optional(),scope:z.enum(['all','nearby','own','friends','saved']).optional(),waitForCompletion: z.boolean() }),
   'search.query':searchResult, 'posts.search':searchResult, 'search.similar':searchResult, 'search.refine':searchResult,
   'search.global':z.object({items:z.array(z.object({source:z.enum(['public','log','chat','messages']),kind:z.enum(['person','post','talk','log','chat','message']),id,title:z.string(),snippet:z.string(),url:z.url(),score:z.number()})),notices:z.array(z.object({source:z.enum(['public','log','chat','messages']),text:z.string()})),errors:z.array(z.object({source:z.enum(['public','log','chat','messages']),message:z.string()}))}),
   'search.explain':z.object({match:searchMatch,retrieval:searchRetrieval}),
@@ -121,6 +123,7 @@ export const outputs: Record<string, z.ZodType> = {
   'agent.actions.list': page(z.object({ id, operation: z.string(), source: z.string(), createdAt: z.string(), result: z.unknown() })),
 };
 export const consequences: Record<string, string> = {
+  'artifacts.delete':'Permanently delete this artifact, including its HTML, data and refresh instructions. Existing chat references and links will become unavailable. Original uploaded files remain in Storage.',
   'dinder.preferences_update':'Save these dinner preferences. When carrySwipes is enabled, unused likes automatically re-enter future dinner windows and may create a meal match without another swipe.',
   'dinder.swipe':'Save this meal choice for the displayed dinner window. A like can create a private cooking match and notify both people; it does not add a friend.',
   'dinder.cancel':'End this meal match for both people. Its recipe and messages are kept.',

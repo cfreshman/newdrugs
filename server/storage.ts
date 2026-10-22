@@ -3,7 +3,7 @@ import type {User} from './auth';
 import {rows} from './db';
 import {uploads,ownedUploadRef,ownUpload} from './uploads';
 import {logAttachmentLocations} from './log';
-import {attachmentReferences,type AttachmentReference} from './attachmentReferences';
+import {attachmentReferences,attachmentSourceKinds,type AttachmentReference} from './attachmentReferences';
 import {destinationPath} from '../shared/navigation';
 import type {StorageType,StorageLocation,StorageAttachment,StoragePage,StoredFile,LinkedVideoItem} from '../shared/storage';
 import {MAX_ACCOUNT_UPLOAD_BYTES} from '../shared/uploads';
@@ -25,12 +25,13 @@ async function storageCursor(userId:string,before:string,session?:ClientSession)
 const nextStorageCursor=(file:{createdAt:string;_id:string})=>`s2.${Buffer.from(JSON.stringify({createdAt:file.createdAt,id:file._id})).toString('base64url')}`;
 
 async function projectReferences(user:User,refs:AttachmentReference[],session?:ClientSession){
- const selected=(kind:string)=>refs.filter(ref=>ref.kind===kind),postRefs=selected('posts'),chatRefs=selected('chat'),logRefs=selected('hangouts'),websiteRefs=selected('websites');
- const [posts,messages,logs,website]=await Promise.all([
+ const selected=(kind:string)=>refs.filter(ref=>ref.kind===kind),postRefs=selected('posts'),chatRefs=selected('chat'),logRefs=selected('hangouts'),websiteRefs=selected('websites'),artifactRefs=selected('artifacts');
+ const [posts,messages,logs,website,artifacts]=await Promise.all([
   postRefs.length?rows('posts').find({_id:{$in:postRefs.map(ref=>ref.sourceId)},userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session,projection:{fileIds:1,parentId:1,text:1}}).toArray():[],
   chatRefs.length?rows('messages').find({_id:{$in:chatRefs.map(ref=>ref.sourceId)},userId:user._id},{session,projection:{'files.id':1,text:1}}).toArray():[],
   logRefs.length?logAttachmentLocations(user._id,logRefs.map(ref=>ref.fileId),session,logRefs.map(ref=>ref.sourceId)):[],
   websiteRefs.length?rows<WebsiteDoc>('websites').findOne({_id:user._id},{session,projection:{assets:1,published:1,code:1,previewToken:1}}):null,
+  artifactRefs.length?rows('artifacts').find({_id:{$in:artifactRefs.map(ref=>ref.sourceId)},userId:user._id,deletedAt:{$exists:false},moderatedAt:{$exists:false}},{session,projection:{title:1}}).toArray():[],
  ]);
  const projected=new Map<string,StorageAttachment>();
  for(const ref of refs){
@@ -40,6 +41,7 @@ async function projectReferences(user:User,refs:AttachmentReference[],session?:C
   if(ref.kind==='chat'){const message=messages.find(row=>row._id===ref.sourceId&&(row.files as {id:string}[]||[]).some(file=>file.id===ref.fileId));if(message){destination={view:'chat',resourceId:message._id};label=`Chat${snippet(message.text)}`;}}
   if(ref.kind==='hangouts'){const log=logs.find(row=>row._id===ref.sourceId&&row.contributions.some(person=>person.userId===user._id&&person.fileIds.includes(ref.fileId)));if(log){destination={view:'log',resourceId:log._id};label=log.title?`Hangout: ${log.title}`:`Hangout · ${log.date}`;}}
   if(ref.kind==='websites'&&website){const live=website.published?.assets?.find(asset=>asset.fileId===ref.fileId),draft=website.assets?.find(asset=>asset.fileId===ref.fileId),asset=live||draft;if(asset){const origin=live?websitePublicUrl(user.handle||'',website.code):websitePreviewUrl(website.previewToken);projected.set(ref._id,{label:`Website${live?'':' draft'}: ${asset.path}`,url:new URL(asset.path,origin).href});continue;}}
+  if(ref.kind==='artifacts'){const artifact=artifacts.find(row=>row._id===ref.sourceId);if(artifact){destination={view:'artifacts',resourceId:artifact._id};label=`Artifact${snippet(artifact.title)}`;}}
   if(destination)projected.set(ref._id,{label,destination,url:destinationPath(destination)});
  }
  return projected;
@@ -62,7 +64,7 @@ export async function listStorage(user:User,{type='all',attachedTo='all',before,
  const page=ordered.slice(0,limit),filePage=page.flatMap(item=>item.kind==='file'?[item.file]:[]);
  const groups=await Promise.all(filePage.map(file=>referenceGate.run(()=>attachmentReferences().find({ownerId:user._id,fileId:file._id,...(attachedTo!=='all'?{kind:attachedTo}:{})},{session}).sort({_id:1}).limit(7).toArray())));
  const projected=await projectReferences(user,groups.flat(),session);
- const order={person:0,post:1,chat:2,log:3,website:4};
+ const order={person:0,post:1,chat:2,log:3,website:4,artifacts:5};
  const uploadItems=new Map<string,StoredFile>();
  filePage.forEach((file,index)=>{const refs=groups[index],attachments=refs.slice(0,6).flatMap(ref=>projected.get(ref._id)||[]).sort((a,b)=>order[a.destination?.view||'website']-order[b.destination?.view||'website']);if(attachedTo==='all'||refs.length>6||refs.some(ref=>ref.kind===attachedTo&&projected.has(ref._id)))uploadItems.set(file._id,{...ownedUploadRef(file),createdAt:file.createdAt,attached:Boolean(file.retained),inProfile:Boolean(user.photos?.includes(file._id)||user.voiceFileId===file._id),inWebsite:refs.some(ref=>ref.kind==='websites'),...(file.posterBytes?{posterBytes:file.posterBytes}:{}),attachments,attachmentCursor:refs.length>6?refs[5]._id:null});});
  const postIds=[...new Set(page.flatMap(item=>item.kind==='link'?[item.link.postId]:[]))];
@@ -75,6 +77,6 @@ export async function listStorage(user:User,{type='all',attachedTo='all',before,
   const video:LinkedVideoItem={kind:'linked_video',id:link._id,sourceUrl:link.sourceUrl,title:link.title,postId:link.postId,createdAt:link.createdAt,bytes:link.bytes,...(link.bytes?{posterUrl:`/api/post-video-links/${link._id}/poster`}:{}),attachments:[attachment]};
   return [video];
  });
- const indexing=await rows('attachmentReferenceMeta').countDocuments({done:true},{session})<5;
+ const indexing=await rows('attachmentReferenceMeta').countDocuments({_id:{$in:attachmentSourceKinds},done:true},{session})<attachmentSourceKinds.length;
  return {usedBytes:Math.max(0,user.storageBytes||0),limitBytes:MAX_ACCOUNT_UPLOAD_BYTES,items,indexing,nextCursor:ordered.length>limit?nextStorageCursor(page.at(-1)!):null};
 }

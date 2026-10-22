@@ -14,6 +14,7 @@ import { rows, transaction } from './db';
 import { users, type Actor } from './auth';
 import { AppError, requireValue } from './errors';
 import { MAX_UPLOAD_BYTES, MAX_ACCOUNT_UPLOAD_BYTES, type UploadPurpose, type UploadRef } from '../shared/uploads';
+import {ARTIFACT_MAX_ACCOUNT_COUNT} from '../shared/artifacts';
 import type { InputContentParam } from 'openai/resources/beta/agents/agents';
 
 export interface Upload { _id:string; userId:string; name:string; originalName?:string; purpose:UploadPurpose; expectedBytes:number; sourceHash:string; bytes:number; posterBytes?:number; mime:string; sha256:string; ready:boolean; retained?:boolean; logEntryId?:string; referenceRevision?:number; createdAt:string; requestId?:string; expiresAt?:Date; deletedAt?:string;storage?:ObjectLocation }
@@ -142,15 +143,36 @@ export async function discardUpload(actor:Actor,id:string,session?:ClientSession
   await uploads().updateOne({_id:id,userId,retained:{$ne:true}},{$set:{expiresAt:new Date(Date.now()+30000)}},{session});
   return {discarded:true,id};
 }
-export async function deleteUpload(actor:Actor,id:string,session?:ClientSession){
+/** Revoke embedded copies in the same transaction as file removal or moderation. */
+export async function revokeArtifactUploadReferences(userId:string,fileId:string,session?:ClientSession):Promise<{artifactIds:string[]}>{
+  if(!session)return transaction(next=>revokeArtifactUploadReferences(userId,fileId,next));
+  const {removeArtifactFileAttachments,attachmentReferences}=await import('./attachmentReferences');
+  const references=await attachmentReferences().find({ownerId:userId,fileId,kind:'artifacts'},{session,projection:{sourceId:1}}).limit(ARTIFACT_MAX_ACCOUNT_COUNT+1).toArray();
+  if(references.length>ARTIFACT_MAX_ACCOUNT_COUNT)throw new AppError(503,'artifact_limit','Artifact attachment cleanup is unavailable. Try again later.');
+  const artifacts=await rows<{_id:string;userId:string;revision:number;contentRevision:number;assets:{id:string;fileId:string}[]}>('artifacts').find({userId,deletedAt:{$exists:false},$or:[{'assets.fileId':fileId},...(references.length?[{_id:{$in:references.map(reference=>reference.sourceId)}}]:[])]},{session,projection:{assets:1,revision:1}}).limit(ARTIFACT_MAX_ACCOUNT_COUNT+1).toArray();
+  if(artifacts.length>ARTIFACT_MAX_ACCOUNT_COUNT)throw new AppError(503,'artifact_limit','Artifact attachment cleanup is unavailable. Try again later.');
+  if(!artifacts.length){await removeArtifactFileAttachments(userId,fileId,session);return {artifactIds:[]};}
+  const {publishArtifactChange}=await import('./artifacts');
+  const now=new Date().toISOString();
+  for(const artifact of artifacts){
+    const updated=await rows<{_id:string;userId:string;revision:number;contentRevision:number;assets:{id:string;fileId:string}[]}>('artifacts').updateOne({_id:artifact._id,userId,revision:artifact.revision},{$pull:{assets:{fileId}},$set:{updatedAt:now},$inc:{revision:1}},{session});
+    if(!updated.matchedCount)throw new AppError(409,'artifact_changed','This artifact changed. Retry the file removal.');
+    await publishArtifactChange(userId,artifact._id,session);
+  }
+  await removeArtifactFileAttachments(userId,fileId,session);
+  return {artifactIds:artifacts.map(artifact=>artifact._id)};
+}
+export async function deleteUpload(actor:Actor,id:string,session?:ClientSession):Promise<{deleted:boolean;id:string;bytesFreed:number}>{
+  if(!session)return transaction(next=>deleteUpload(actor,id,next));
   const file=await ownUpload(actor.userId,id,session);
   if(['profile_photo','profile_voice'].includes(file.purpose)&&actor.source!=='browser')throw new AppError(403,'human_authored','Profile media is managed by the person in Settings.');
   const site=await rows<import('./websites').WebsiteDoc>('websites').findOne({_id:actor.userId,$or:[{'assets.fileId':id},{'published.assets.fileId':id}]},{session});
   if(site){const published=site.published?{...site.published,assets:(site.published.assets||[]).filter(asset=>asset.fileId!==id)}:null;
     const updated=await rows<import('./websites').WebsiteDoc>('websites').updateOne({_id:actor.userId,revision:site.revision},{$set:{assets:(site.assets||[]).filter(asset=>asset.fileId!==id),published,updatedAt:new Date().toISOString()},$inc:{revision:1}},{session});
     if(!updated.matchedCount)throw new AppError(409,'website_changed','This website changed. Retry the file deletion.');}
-  await rows('attachmentReferences').deleteMany({ownerId:actor.userId,fileId:id},{session});
   await uploads().updateOne({_id:id,userId:actor.userId},{$set:{deletedAt:new Date().toISOString(),ready:false,retained:false,bytes:0,posterBytes:0,expiresAt:new Date()}},{session});
+  await revokeArtifactUploadReferences(actor.userId,id,session);
+  await rows('attachmentReferences').deleteMany({ownerId:actor.userId,fileId:id},{session});
   await users().updateOne({_id:actor.userId},{$inc:{storageBytes:-file.bytes-(file.posterBytes||0)},$pull:{photos:id}},{session});
   await users().updateOne({_id:actor.userId,voiceFileId:id},{$set:{voiceFileId:null}},{session});
   await rows('uploadPosters').deleteOne({_id:id},{session});

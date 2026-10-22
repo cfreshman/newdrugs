@@ -15,6 +15,12 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   };
   if(name.startsWith('agent.instructions.')){add({view:'agent_instructions'},'Guidance','surface','agent_instructions');return links;}
   if(name.startsWith('agent.memory.')){add({view:'agent_memory'},'Agent memory','surface','agent_memory');return links;}
+  if(name.startsWith('artifacts.')){
+   if(name==='artifacts.delete')return links;
+   for(const item of rows){const id=item.id||item.artifactId,reference=object(item.reference),version=input.contentRevision??reference.contentRevision??(name==='artifacts.present'?item.contentRevision:undefined)??(name==='artifacts.present'||typeof reference.artifactId==='string'?'legacy':undefined);if(typeof id==='string')add({view:'artifacts',resourceId:id,...(version==='legacy'?{artifactVersion:'legacy' as const}:Number.isSafeInteger(version)&&Number(version)>0?{artifactVersion:Number(version)}:{})},String(item.title||'Open artifact'),'exact','artifact',id);}
+   if(name==='artifacts.list')add({view:'artifacts'},'Artifacts','surface','artifacts');
+   return links;
+  }
   if(name==='access.get'){add({view:'agents'},'Connected agents','surface','agents');return links;}
   if(name==='account.preferences'||name==='account.preferences_update'){add({view:'preferences'},'Preferences','surface','preferences');return links;}
   if(name.startsWith('dinder.')){
@@ -96,7 +102,7 @@ export function buildResourceLinks(name: string, input: Record<string, unknown>,
   }
   else if (name === 'app.open' && data.open === 'chat_history' && data.resourceId) add({ view: 'chat', resourceId: data.resourceId }, 'Open chat message', 'exact', 'chat_message', data.resourceId);
   else if (name.startsWith('conversation.')) add({ view: 'chat' }, 'Open your agent chat', 'surface', 'chat');
-  else if (name === 'app.open') add({ view: data.open,dinderTab:data.dinderTab,date:data.date,logMonth:data.logMonth,logScope:data.logScope,personId:data.personId, resourceId: data.resourceId, messageId:data.messageId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.messageId||data.resourceId);
+  else if (name === 'app.open') add({ view: data.open,artifactVersion:data.artifactVersion,dinderTab:data.dinderTab,date:data.date,logMonth:data.logMonth,logScope:data.logScope,personId:data.personId, resourceId: data.resourceId, messageId:data.messageId, postIds:data.postIds, areaCell: data.areaCell, radiusMiles: data.radiusMiles,query:data.query,scope:data.scope }, 'Open ' + data.open, data.resourceId ? 'exact' : 'surface', data.open, data.messageId||data.resourceId);
   else if (name === 'files.get' || name === 'files.list') for (const row of rows) if (row.ready && typeof row.id === 'string') links.push({ rel: 'download', targetKind: 'exact', title: String(row.name), url: new URL(`/api/files/${encodeURIComponent(row.id)}`, config.APP_ORIGIN).href, resourceType: 'file', resourceId: row.id });
   // Deleted/blocked/reported records have no promised inspectable destination.
   return links.filter((link, index) => links.findIndex(other => other.url === link.url) === index).slice(0, 40);

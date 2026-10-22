@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { destinationPath, parseDestination, surfaceViews } from '../shared/navigation';
+import { cleanDestinationContext, destinationPath, parseDestination, surfaceViews } from '../shared/navigation';
 import { buildResourceLinks } from '../server/resourceLinks';
 const actor = { userId: 'me', source: 'external' as const, scope: 'read' as const };
 it('returns an exact original-recipe link for cooking through CLI and MCP',()=>{
@@ -66,4 +66,41 @@ it('uses the natural mode without a prefix and retains an explicit alternate mod
 });
 it('round-trips a date-specific Log chooser without a timezone conversion',()=>{
  const destination={view:'log' as const,date:'2024-02-29'};expect(destinationPath(destination)).toBe('/log?date=2024-02-29');expect(parseDestination('/log?date=2024-02-29','https://druggie.org')).toMatchObject(destination);expect(parseDestination('/agent/log?date=2024-02-29','https://druggie.org')).toMatchObject({...destination,mode:'agent'});expect(parseDestination('/log?date=2023-02-29','https://druggie.org')).toBeNull();
+});
+it('round-trips artifact viewer links in their natural and preserved modes',()=>{
+ const id='e1f7a222-7804-46a4-8f85-b694a726e935';
+ for(const mode of ['agent','friends','posts','log'] as const){const destination={view:'artifacts' as const,resourceId:id,mode};const path=destinationPath(destination);expect(path).toBe(mode==='agent'?`/artifacts/${id}`:`/${mode}/artifacts/${id}`);expect(parseDestination(path,'https://druggie.org')).toEqual({view:'artifacts',resourceId:id,...(mode==='agent'?{}:{mode})});}
+ const reference={artifactId:id,presentation:'inline',presentedRevision:1,title:'A graph'};
+ for(const [name,result] of [['artifacts.create',{id,title:'A graph'}],['artifacts.present',reference],['artifacts.get',{id,title:'A graph',ephemeral:true}]] as const){const links=buildResourceLinks(name,{},result,actor);expect(links).toHaveLength(1);expect(links[0]).toMatchObject({targetKind:'exact',resourceType:'artifact',resourceId:id,title:'A graph'});expect(parseDestination(links[0].url,'https://dev.druggie.org')).toEqual({view:'artifacts',resourceId:id,...(name==='artifacts.present'?{artifactVersion:'legacy'}:{})});}
+ expect(buildResourceLinks('artifacts.delete',{artifactId:id},{deleted:true,artifactId:id},actor)).toEqual([]);
+});
+
+it('round-trips saved artifact versions in every mode and rejects malformed versions',()=>{
+ const id='e1f7a222-7804-46a4-8f85-b694a726e935';
+ for(const artifactVersion of [1,27,'legacy'] as const)for(const mode of ['agent','friends','posts','log'] as const){
+  const destination={view:'artifacts' as const,resourceId:id,mode,artifactVersion},path=destinationPath(destination);
+  expect(path).toBe(`${mode==='agent'?'':`/${mode}`}/artifacts/${id}?version=${artifactVersion}`);
+  expect(parseDestination(path,'https://druggie.org')).toEqual({view:'artifacts',resourceId:id,artifactVersion,...(mode==='agent'?{}:{mode})});
+ }
+ for(const version of ['','0','-1','1.5','1e2','9007199254740992','latest','Legacy'])expect(parseDestination(`/artifacts/${id}?version=${version}`,'https://druggie.org')).toBeNull();
+ expect(parseDestination('/artifacts?version=1','https://druggie.org')).toBeNull();
+});
+
+it('keeps artifact presentation links pinned while canonical storage reads and library links stay latest',()=>{
+ const id='e1f7a222-7804-46a4-8f85-b694a726e935',reference={artifactId:id,title:'A graph',presentation:'inline',presentedRevision:9,contentRevision:3};
+ expect(new URL(buildResourceLinks('artifacts.present',{},reference,actor)[0].url).search).toBe('?version=3');
+ for(const contentRevision of [2,'legacy'] as const)expect(new URL(buildResourceLinks('artifacts.view',{artifactId:id,contentRevision},{id,title:'Version'},actor)[0].url).search).toBe(`?version=${contentRevision}`);
+ for(const name of ['artifacts.get','artifacts.view','artifacts.create','artifacts.update'])expect(new URL(buildResourceLinks(name,{}, {id,title:'Latest',contentRevision:3},actor)[0].url).search).toBe('');
+ const links=buildResourceLinks('artifacts.list',{}, {items:[{id,title:'Latest',contentRevision:3}]},actor);
+ expect(links.every(link=>new URL(link.url).search==='')).toBe(true);
+});
+
+it('preserves validated artifact versions through persisted surfaces and native navigation links',()=>{
+ const id='e1f7a222-7804-46a4-8f85-b694a726e935';
+ for(const artifactVersion of [3,'legacy'] as const){
+  expect(cleanDestinationContext({resourceId:id,artifactVersion})).toEqual({resourceId:id,artifactVersion});
+  const link=buildResourceLinks('app.open',{}, {open:'artifacts',resourceId:id,artifactVersion},actor)[0];
+  expect(parseDestination(link.url,'https://dev.druggie.org')).toEqual({view:'artifacts',resourceId:id,artifactVersion});
+ }
+ for(const artifactVersion of [null,0,1.5,Infinity,'latest'])expect(cleanDestinationContext({artifactVersion} as any)).not.toHaveProperty('artifactVersion');
 });

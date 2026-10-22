@@ -10,7 +10,7 @@ export function useRecordRefreshDetails(keys:string[],refresh:(change?:RecordInv
  useEffect(()=>{
   let timer:ReturnType<typeof setTimeout>|undefined;
   const invalidate=(event:Event)=>{if(!(event instanceof CustomEvent))return;const change:RecordInvalidation=Array.isArray(event.detail)?{keys:event.detail}:event.detail;if(!change?.keys?.some((key:string)=>scope.split(',').includes(key)))return;
-   const previous=pending.current;pending.current={keys:[...new Set([...(previous?.keys||[]),...change.keys])],...(previous?.log&&change.log&&previous.log.length+change.log.length<=128?{log:[...previous.log,...change.log]}:!previous&&change.log?{log:change.log}:{})};
+   const previous=pending.current;pending.current={keys:[...new Set([...(previous?.keys||[]),...change.keys])],...(previous?.log&&change.log&&previous.log.length+change.log.length<=128?{log:[...previous.log,...change.log]}:!previous&&change.log?{log:change.log}:{}),...(previous?.artifacts&&change.artifacts&&previous.artifacts.length+change.artifacts.length<=128?{artifacts:[...previous.artifacts,...change.artifacts]}:!previous&&change.artifacts?{artifacts:change.artifacts}:{})};
    clearTimeout(timer);if(isVisible.current)timer=setTimeout(()=>{const update=pending.current;pending.current=null;void latest.current(update||undefined);},75);
   };
   window.addEventListener('newdrugs:records',invalidate);return()=>{clearTimeout(timer);window.removeEventListener('newdrugs:records',invalidate);};

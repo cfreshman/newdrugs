@@ -33,10 +33,13 @@ import { AccountSettings } from './AccountSettings';
 import {PaymentHandlesSettings} from './PaymentHandlesSettings';
 import { InboxPanel } from './InboxPanel';
 import { AutomationsPanel } from './AutomationsPanel';
+import {ArtifactsPanel} from './ArtifactsPanel';
+import {ArtifactExperience,ArtifactAttachment,type ArtifactOpening} from './ArtifactExperience';
+import type {ArtifactDetail,ArtifactVersionSelector} from '../shared/artifacts';
 import type { InboxAttachment, InboxItem } from '../shared/inbox';
 import { ChatSearchPanel } from './ChatSearchPanel';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Star, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Image, Shield, EyeSlash, HardDrives, ArrowClockwise, VideoCamera, Wallet } from '@phosphor-icons/react';
+import { Cube, Lightning, Tray, LockKey, Robot, ArrowDown, ArrowUp, Stop, GearSix, Star, Sun, UserCircle, CreditCard, Plugs, Heart, SignOut, Bell, X, ArrowLeft, SquaresFour, Users, Article, ChatCircle, Paperclip, Image, Shield, EyeSlash, HardDrives, ArrowClockwise, VideoCamera, Wallet } from '@phosphor-icons/react';
 import type { Bootstrap, Message, RunView } from '../shared/types';
 import { api, post, errorText, ApiError, balanceLabel, balanceDigits } from './api';
 import { useDictation } from './useDictation';
@@ -82,7 +85,8 @@ const settingsViews = new Set(['agent_instructions','agent_memory','preferences'
 const mobileNotificationLink=()=>window.innerWidth<=760||window.matchMedia('(pointer: coarse)').matches;
 const inlineViews = new Set(['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'dinder', 'quizzes', 'location', 'uploads']);
 const accountViews = new Set(['agent_instructions','agent_memory','log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join','compose', 'connections', 'account_settings', 'payment_handles', 'inbox', 'automations', 'chat_history', 'people', 'person', 'feed', 'post_list', 'post', 'messages', 'dinder', 'quizzes', 'location', 'uploads', 'storage', 'blocked', 'hidden_people', 'notifications', 'notification_settings', 'agents']);
-const requiresSavedAccount = (view: string, context: Omit<Destination, 'view'>) => accountViews.has(view) && !(view === 'agents' && context.resourceId === 'device') && !(view === 'dinder' && context.resourceId === 'catalog');
+inlineViews.add('artifacts');accountViews.add('artifacts');
+const requiresSavedAccount = (view: string, context: Omit<Destination, 'view'>) => accountViews.has(view) && !(view === 'artifacts' && context.resourceId) && !(view === 'agents' && context.resourceId === 'device') && !(view === 'dinder' && context.resourceId === 'catalog');
 interface ComposerScreen { panel: Panel; context: Omit<Destination, 'view'>; history: { panel: Exclude<Panel, null>; context: Omit<Destination, 'view'> }[]; title: string; content: ReactNode; open: boolean; reset: number }
 function mergeRun(previous: RunView | null, next: RunView | null) {
   if (!next || !previous || next.id !== previous.id) return next;
@@ -102,7 +106,10 @@ export function App() {
   useLayoutEffect(()=>{document.title='New Drugs';},[]);
   const standalone=useStandalone();
   const [clientId] = useState(browserSession);
-  const [mode,setMode]=useState<AppMode>('agent'),[agentDockOpen,setAgentDockOpen]=useState(false),[notificationMode,setNotificationMode]=useState<AppMode|null>(null);
+  const [artifactOpening,setArtifactOpening]=useState<ArtifactOpening|null>(()=>{const route=parseDestination(location.href,location.origin);return route?.view==='artifacts'&&route.resourceId?{id:route.resourceId,...(route.artifactVersion!==undefined?{contentRevision:route.artifactVersion}:{})}:null;});
+  const [publicArtifactOnly,setPublicArtifactOnly]=useState(Boolean(artifactOpening));
+  const [artifactTask,setArtifactTask]=useState<{kind:'refresh'|'discuss';artifact:ArtifactDetail}|null>(null);
+  const [mode,setMode]=useState<AppMode>(()=>parseDestination(location.href,location.origin)?.mode||'agent'),[agentDockOpen,setAgentDockOpen]=useState(false),[notificationMode,setNotificationMode]=useState<AppMode|null>(null);
   const pendingAgentDestination=useRef<Destination|null>(null),pendingHandoffDock=useRef<AppMode|null>(null);
   const pendingAgentTask=useRef<{kind:'discuss';item:InboxItem}|{kind:'example';prompt:string}|{kind:'record';record:RecordContext}|null>(null);
   const activeModeRef=useRef(mode);activeModeRef.current=mode;
@@ -156,13 +163,14 @@ export function App() {
   const {available:dockAvailable,belowControls}=useAgentDockAvailability(page,available=>{if(mode!=='agent'&&agentDockOpen){if(!available)tabWorkspaces.current[mode]=captureWorkspace();else scroll.restore(tabWorkspaces.current[mode]?.scroll||null);}});
   const agentDockVisible=agentDockOpen&&dockAvailable;
   const chatVisible=mode==='agent'||agentDockVisible,chatVisibleRef=useRef(chatVisible);chatVisibleRef.current=chatVisible;
-  const { style, sideBySide, keyboardOpen, ...dragHandlers } = useChatPosition(composer, Boolean(data), launcherOpen && Boolean(panelSpace === 'composer' ? panel : underlay?.panel), launcherOpen);
+  const { style, sideBySide, keyboardOpen, ...dragHandlers } = useChatPosition(composer, Boolean(data)||Boolean(artifactOpening), launcherOpen && Boolean(panelSpace === 'composer' ? panel : underlay?.panel), launcherOpen);
   useMobileInputFocus(page, Boolean(data));
   const dockStyle=useAgentDockGeometry(page,mode!=='agent'&&agentDockVisible,`${mode}:${keyboardOpen}`);
   const inputOccupied = launcherOpen && !sideBySide;
   const effectiveDrag={...dragHandlers,draggable:mode==='agent'&&dragHandlers.draggable};
   const launcherDrag = useControlDrag(effectiveDrag);
   const scroll = useConversationScroll({viewId:data?.user.id,submittedId:!chatHistory.windowed?data?.messages.findLast(m=>m.role==='user')?.id:undefined,completedId:!chatHistory.windowed?data?.messages.findLast(m=>m.role==='assistant'&&m.status!=='pending')?.id:undefined,approvalIds:!chatHistory.windowed?run?.approvals.map(a=>a.id).join(','):undefined});
+  useLayoutEffect(()=>{scroll.suspend(Boolean(artifactOpening));},[Boolean(artifactOpening)]);
   const tabWorkspaces=useRef<Partial<Record<AppMode,{
     dockOpen:boolean;draft:string;launcherOpen:boolean;panel:Panel;panelSpace:'modal'|'composer';panelContext:Omit<Destination,'view'>;
     panelHistory:typeof panelHistory;panelReset:number;underlay:ComposerScreen|null;lastComposer:ComposerScreen|null;
@@ -215,6 +223,7 @@ export function App() {
     if (change.messages) chatHistory.receive(actorId, change.messages, change.conversationCursor, undefined, change.conversationGeneration);
   }, refresh);
   useEffect(() => {
+    if(publicArtifactOnly)return;
     let cancelled = false;
     void (async () => {
       try {
@@ -256,7 +265,7 @@ export function App() {
       } catch (e) { logError(errorText(e)); }
     })();
     return () => { cancelled = true; };
-  }, [observeRelease]);
+  }, [observeRelease,publicArtifactOnly]);
   useEffect(() => {
     if (!data) return;
     try {
@@ -269,10 +278,10 @@ export function App() {
     el.style.height = 'auto'; el.style.height = `${Math.min(180, Math.max(76, el.scrollHeight))}px`;
   }, [draft, Boolean(data)]);
   useEffect(() => {
-    if (!data || chatHistory.windowed || panel && panelSpace === 'modal' || launcherOpen) return;
+    if (!data || artifactOpening || chatHistory.windowed || panel && panelSpace === 'modal' || launcherOpen) return;
     const frame = requestAnimationFrame(() => textarea.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
-  }, [Boolean(data), panel, panelSpace, launcherOpen]);
+  }, [Boolean(data), panel, panelSpace, launcherOpen,Boolean(artifactOpening)]);
   const placeMessage = useMessagePlacement(inputForm, scroll.transcript, data?.user.id, Boolean(panel && panelSpace === 'modal') || inputOccupied);
   const captureWorkspace=()=>({dockOpen:agentDockOpen,draft,launcherOpen,panel,panelSpace,panelContext,panelHistory,panelReset,underlay,lastComposer:lastComposer.current,attachments,inboxAttachments,recordAttachments,scroll:mode==='agent'||agentDockVisible?scroll.capture():tabWorkspaces.current[mode]?.scroll||null});
   const changeMode=(next:AppMode)=>{
@@ -306,7 +315,14 @@ export function App() {
   const socialNavigate=(destination:Destination)=>{if(mode==='agent')return;setSocialRequests(previous=>({...previous,[mode]:{id:++routeRequestId.current,destination}}));setPanel(null);setPanelHistory([]);setUnderlay(null);setLauncherOpen(false);};
   const revealConversation=()=>{setPanel(null);setPanelHistory([]);setUnderlay(null);setLauncherOpen(false);if(mode!=='agent')showAgent();};
   const askAbout=(context:RecordContext)=>{if(mode!=='agent'&&!agentDockAvailable()){pendingAgentTask.current={kind:'record',record:context};changeMode('agent');return;}setRecordAttachments(previous=>[...previous.filter(item=>item.kind!==context.kind||item.id!==context.id),context].slice(-3));if(mode!=='agent')showAgent();else if(!sideBySide)setLauncherOpen(false);requestAnimationFrame(()=>textarea.current?.focus({preventScroll:true}));};
+  const openArtifact=(id:string,placement?:string,contentRevision?:ArtifactVersionSelector,replace=false)=>{
+    if(replace)artifactRoute.replaceArtifact();
+    dictation.stop();scroll.suspend(true);
+    if(panel&&panelSpace==='modal'){if(settingsViews.has(panel))resumeSettings.current=true;void closePanel();}
+    setArtifactOpening({id,...(placement?{placement}:{}),...(contentRevision!==undefined?{contentRevision}:{})});
+  };
   const open = (next: Panel, context: Omit<Destination, 'view'> = {}, space: 'modal' | 'composer' = 'modal') => {
+    if(next==='artifacts'&&context.resourceId){openArtifact(context.resourceId,undefined,context.artifactVersion);return;}
     if (data?.user.id !== identity.current) return;
     if(next&&mode!=='agent'&&BROWSER_VIEWS.has(next)&&data?.user.handle){socialNavigate({...context,view:next as Destination['view']});return;}
     if(next&&mode!=='agent'&&space==='composer'&&!agentDockAvailable()){pendingAgentDestination.current={...context,view:next as Destination['view']};changeMode('agent');return;}
@@ -335,6 +351,7 @@ export function App() {
   };
   const backPanel = () => { const previous = panelHistory.at(-1); if (previous) { setPanel(previous.panel); setPanelContext(previous.context); setPanelHistory(history => history.slice(0, -1)); } else if (panelSpace === 'composer') setPanel(null); };
   const navigate = (destination: Destination) => {
+    if(destination.view==='artifacts'&&destination.resourceId){openArtifact(destination.resourceId,undefined,destination.artifactVersion);return;}
     if(destination.view==='spaces'&&destination.mode==='agent')destination={...destination,mode:'posts'};
     if(panel&&panelSpace==='modal'&&settingsViews.has(panel)&&!settingsViews.has(destination.view==='profile'?'account':destination.view))resumeSettings.current=true;
     if(mode==='agent'&&['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(destination.view)&&!destination.mode){pendingRoute.current={destination:{...destination,mode:'log'}};changeMode('log');return;}
@@ -373,6 +390,10 @@ export function App() {
     if (panel && (launcherOpen || panelSpace === 'modal')) navigatePanel(next, destination); else open(next, destination, inlineViews.has(next) ? 'composer' : 'modal');
   };
   const restoreRoute=(state:PrimaryRouteState)=>{
+    setArtifactOpening(state.artifact||null);
+    if(!state.artifact&&publicArtifactOnly)setPublicArtifactOnly(false);
+    // Closing the top-layer viewer leaves its original mounted panel and scroll alone.
+    if((artifactOpening||state.artifact)&&destinationPath({...primaryRoute.destination,mode})===destinationPath(state.destination))return;
     const target=state.destination.mode||modeForDestination(state.destination);
     if(target!==mode){pendingRoute.current=state;changeMode(target);return;}
     const {mode:_mode,...destination}=state.destination;
@@ -400,7 +421,13 @@ export function App() {
     previousTalkNavigationPath.current=talkNavigationPath;
     if(previous!==null&&previous!==talkNavigationPath&&talk.expanded&&talk.space?.pins?.length)talk.setExpanded(false);
   },[talkNavigationPath,talk.expanded,talk.space?.pins?.length,talk.setExpanded]);
-  usePrimaryRoute(Boolean(data),mode,primaryRoute,restoreRoute,data?.preferences?.landingPage||'agent');
+  const artifactRoute=usePrimaryRoute(Boolean(data)||Boolean(artifactOpening),mode,{...primaryRoute,...(artifactOpening?{artifact:artifactOpening}:{})},restoreRoute,data?.preferences?.landingPage||'agent');
+  const closeArtifact=()=>{
+    if(artifactRoute.closeArtifact())return;
+    // Direct share visits start the ordinary app only after the person closes the viewer.
+    if(publicArtifactOnly)history.replaceState(history.state,'',destinationPath({...primaryRoute.destination,mode}));
+    setArtifactOpening(null);setPublicArtifactOnly(false);
+  };
   useLayoutEffect(()=>{
     if(mode!=='agent')return;
     const destination=pendingAgentDestination.current,task=pendingAgentTask.current;pendingAgentDestination.current=null;pendingAgentTask.current=null;
@@ -494,10 +521,10 @@ export function App() {
     catch(error){setQuickError(errorText(error));}
     finally{setQuickUploading(false);}
   };
-  const send = async (event?: FormEvent, textOverride?: string, retry?: Message, fromExample = false, contextOverride?:Partial<ChatInputContext>) => {
+  const send = async (event?: FormEvent, textOverride?: string, retry?: Message, fromExample = false, contextOverride?:Partial<ChatInputContext>, taskRecords?:RecordContext[]) => {
     event?.preventDefault();
     if (inputOccupied && !fromExample || (dictation.active && textOverride === undefined) || quickUploading&&!retry || busyRef.current || !data || data.user.id !== identity.current) return;
-    const text = (textOverride ?? draft).trim(); const files = fromExample ? [] : retry?.files || attachments; const attachedUpdates = fromExample ? [] : retry?.inbox || inboxAttachments; const records=fromExample?[]:retry?.records||recordAttachments; if (!text && !files.length && !attachedUpdates.length && !records.length) return;
+    const text = (textOverride ?? draft).trim(); const files = fromExample ? [] : retry?.files || attachments; const attachedUpdates = fromExample ? [] : retry?.inbox || inboxAttachments; const records=taskRecords?.slice(0,3)||(fromExample?[]:retry?.records||recordAttachments); if (!text && !files.length && !attachedUpdates.length && !records.length) return;
     const inputContext=retry?.inputContext||{mobile:contextOverride?.mobile??mobileNotificationLink(),dictated:contextOverride?.dictated??false};
     const commands: Record<string, Panel> = { '/profile': 'account', '/account': 'account', '/credits': 'credits', '/connect': 'agents', '/nearby': 'people', '/feed': 'feed', '/location': 'location', '/messages': 'messages', '/upload': 'uploads' };
     if (commands[text.toLowerCase()]) { const destination = commands[text.toLowerCase()]!; open(destination, {}, inlineViews.has(destination) ? 'composer' : 'modal'); setDraft(''); return; }
@@ -516,7 +543,7 @@ export function App() {
     setMessages(previous => [...previous.filter(m => m.id !== id), message]);
     let accepted = false;
     try {
-      const result = await post<{ run: RunView }>('/chat', { text, fileIds: files.map(file => file.id), ...(attachedUpdates.length ? { inboxIds: attachedUpdates.map(item => item.id) } : {}), ...(records.length?{recordRefs:records.map(({kind,id})=>({kind,id}))}:{}), requestId, clientId, inputContext, ...(pageContext?{pageContext}:{}), ...(review ? { review } : {}), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      const result = await post<{ run: RunView }>('/chat', { text, fileIds: files.map(file => file.id), ...(attachedUpdates.length ? { inboxIds: attachedUpdates.map(item => item.id) } : {}), ...(records.length?{recordRefs:records.map(({kind,id,revision,contentRevision})=>({kind,id,...(revision?{revision}:{}),...(contentRevision!==undefined?{contentRevision}:{})}))}:{}), requestId, clientId, inputContext, ...(pageContext?{pageContext}:{}), ...(review ? { review } : {}), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
       if (data.user.id !== identity.current) return;
       accepted = true;
       if (submission.current === runId) { submission.current = null; setSubmitting(false); }
@@ -543,9 +570,9 @@ export function App() {
     if (panelHistory.length) backPanel(); else await closePanel(true);
   };
   useEffect(()=>{if(!authReturn||!data?.user.handle||data.user.id!==identity.current)return;const destination=authReturn;setAuthReturn(null);void closePanel().then(()=>navigate(destination));},[authReturn,data?.user.id,data?.user.handle]);
-  const bubble = (message: Message) => <article className={`message ${message.role}`} data-message-id={message.id} data-search-target={chatHistory.windowed && chatHistory.targetId === message.id || undefined} key={message.id}>
+  const bubble = (message: Message) => <article className={`message ${message.role}${message.artifacts?.some(item=>item.presentation==='inline')?' has-inline-artifact':''}`} data-message-id={message.id} data-search-target={chatHistory.windowed && chatHistory.targetId === message.id || undefined} key={message.id}>
     <span className="sr-only">{message.role === 'user' ? 'You' : 'Your agent'}: </span>
-    <div className="bubble">{message.text && <NavigationContext.Provider value={message.role==='assistant'?navigateFromAgent:navigate}><CollapsibleMessage collapsible={message.id !== `intro:${data?.user.id}`} reveal={chatHistory.windowed && chatHistory.targetId === message.id} text={message.text} assistant={message.role === 'assistant'} scrollRef={scroll.transcript} /></NavigationContext.Provider>}{message.records?.map(item=>{const destination:Destination=item.kind==='log'?{view:'log',resourceId:item.id}:item.kind==='post'?{view:'post',resourceId:item.id}:item.kind==='person'?{view:'person',resourceId:item.id}:{view:'messages'};return <NavLink className="message-file" key={`${item.kind}:${item.id}`} to={destination}>{item.title}</NavLink>;})}{message.inbox?.map(item => <NavLink className="message-file inbox-reference" key={item.id} to={{view:'inbox',resourceId:item.id}}>{item.title}</NavLink>)}{message.files?.map(file => <a className="message-file" href={`/api/files/${encodeURIComponent(file.id)}`} target="_blank" rel="noopener noreferrer" key={file.id}>{file.originalName??file.name}</a>)}{message.id === `intro:${data?.user.id}` && !data?.user.handle && <div className="welcome-actions"><button onClick={() => { setAccountMode('register'); open('account'); }}>Create account</button><button onClick={() => { setAccountMode('login'); open('account'); }}>Sign in</button></div>}</div>
+    <div className="bubble">{message.text && <NavigationContext.Provider value={message.role==='assistant'?navigateFromAgent:navigate}><CollapsibleMessage collapsible={message.id !== `intro:${data?.user.id}`} reveal={chatHistory.windowed && chatHistory.targetId === message.id} text={message.text} assistant={message.role === 'assistant'} scrollRef={scroll.transcript} /></NavigationContext.Provider>}{message.artifacts?.map(reference=><ArtifactAttachment key={`${reference.artifactId}:${reference.contentRevision??'legacy'}`} reference={reference} messageId={message.id} createdAt={message.createdAt}/>)}{message.records?.map(item=>{const destination:Destination=item.kind==='artifact'?{view:'artifacts',resourceId:item.id,artifactVersion:item.contentRevision}:item.kind==='log'?{view:'log',resourceId:item.id}:item.kind==='post'?{view:'post',resourceId:item.id}:item.kind==='person'?{view:'person',resourceId:item.id}:{view:'messages'};return <NavLink className="message-file" key={`${item.kind}:${item.id}`} to={destination}>{item.title}</NavLink>;})}{message.inbox?.map(item => <NavLink className="message-file inbox-reference" key={item.id} to={{view:'inbox',resourceId:item.id}}>{item.title}</NavLink>)}{message.files?.map(file => <a className="message-file" href={`/api/files/${encodeURIComponent(file.id)}`} target="_blank" rel="noopener noreferrer" key={file.id}>{file.originalName??file.name}</a>)}{message.id === `intro:${data?.user.id}` && !data?.user.handle && <div className="welcome-actions"><button onClick={() => { setAccountMode('register'); open('account'); }}>Create account</button><button onClick={() => { setAccountMode('login'); open('account'); }}>Sign in</button></div>}</div>
     {message.failure && <span className="small">{message.failure}</span>}
     {message.status === 'failed' && !message.failure && <button className="retry-message" disabled={busy} onClick={() => void send(undefined, message.text, message)}>Not sent · retry</button>}
   </article>;
@@ -563,6 +590,17 @@ export function App() {
     if(mode!=='agent'){revealConversation();requestAnimationFrame(()=>void send(undefined,prompt,undefined,true));}
     else void closePanel().then(()=>send(undefined,prompt,undefined,true));
   };
+  useEffect(()=>{
+    if(!artifactTask||artifactOpening||!data)return;
+    if(mode!=='agent'&&!agentDockAvailable()){changeMode('agent');return;}
+    const task=artifactTask;setArtifactTask(null);
+    const record:RecordContext={kind:'artifact',id:task.artifact.id,title:task.artifact.title};
+    if(task.kind==='discuss'){askAbout({...record,contentRevision:task.artifact.contentRevision});return;}
+    if(sendBusy||reviewing){askAbout(record);return;}
+    const prompt=`Refresh this artifact using its saved refresh instructions. Keep its presentation and update only what those instructions request.`;
+    const request=()=>void send(undefined,prompt,undefined,true,undefined,[{...record,revision:task.artifact.revision}]);
+    if(mode!=='agent'){revealConversation();requestAnimationFrame(request);}else void closePanel().then(request);
+  },[artifactTask,artifactOpening,Boolean(data),mode]);
   const unreadNotifications=data?.notifications?.unread||0,notificationsCapped=Boolean(data?.notifications?.unreadCapped),hasUnreadNotifications=Boolean(unreadNotifications||notificationsCapped);
   const notificationBadge=unreadNotifications>9?'9+':notificationsCapped?`${unreadNotifications||''}+`:String(unreadNotifications);
   const completeLog=(entry?:import('../shared/log').LogEntry)=>{if(!surface||!['log','log_people','log_birthdays','log_anniversaries','log_settings','log_compose','log_code','log_scan','log_join'].includes(surface.view))return;if(!run?.surface?.waiting){setSurface(null);return;}const current=surface;void post(`/runs/${current.runId}/surface`,{id:current.id,saved:Boolean(entry),...(entry?{resourceId:entry.id}:{})}).then(()=>{setSurface(null);return refresh();}).catch(error=>logError(errorText(error)));};
@@ -602,6 +640,7 @@ export function App() {
                       : panel === 'hidden_people' ? <HiddenPeoplePanel navigate={destination=>{resumeSettings.current=true;void closePanel().then(()=>navigate(destination));}} />
                       : panel === 'storage' ? <StoragePanel navigate={destination=>{resumeSettings.current=true;void closePanel().then(()=>navigate(destination));}} />
                       : panel === 'inbox' ? <InboxPanel itemId={panelContext.resourceId} navigate={navigate} discuss={discussUpdate} />
+                      : panel === 'artifacts' ? <ArtifactsPanel navigate={navigate}/>
                       : panel === 'automations' ? <AutomationsPanel automationId={panelContext.resourceId} navigate={navigate} chatBusy={sendBusy} example={sendExample} />
                       : panel === 'chat_history' ? <ChatSearchPanel initialQuery={panelContext.query} initialRole={panelContext.role} onStateChange={context=>setPanelContext(previous=>({...previous,...context}))} openMessage={openChatMessage} />
                       : panel === 'notifications' ? <NotificationsPanel userId={data.user.id} state={data.notifications} refresh={refresh} navigate={destination=>{if(!mobileNotificationLink()){navigate(destination);return;}resumeSettings.current=true;void closePanel().then(()=>requestAnimationFrame(()=>navigate(destination)));}} />
@@ -619,12 +658,12 @@ export function App() {
   const dictationControl=<div className="dictation-slot"><Orb hideIcon={inputOccupied || Boolean(draft.trim())} active={dictation.active && !inputOccupied} listening={dictation.listening} finishing={dictation.finishing} canSend={Boolean(draft.trim()) && Boolean(data)} busy={sendBusy}
           onTap={() => { if (!inputOccupied) dictation.start(); }} onCancel={dictation.cancel} onSend={() => { void dictation.finish().then(text => { void send(undefined, text,undefined,false,{dictated:true}); }); }} {...effectiveDrag} /></div>;
   return <CallProvider userId={data?.user.id} beforeEnter={async()=>{if(talk.room)await talk.leave();}}><TalkContext.Provider value={talk}><ExperienceContext.Provider value={{mode,changeMode,ask:askAbout,media:(items,index)=>setMedia({items,index}),navigate}}><NavigationContext.Provider value={navigate}><div className="app" inert={Boolean(media)} data-mode={mode} data-standalone={standalone||undefined} data-agent-dock={agentDockVisible||undefined} data-panel-below-controls={mode!=='agent'&&belowControls||undefined} data-talk-active={Boolean(talk.space&&talk.room)||undefined} style={style} data-keyboard-open={keyboardOpen || undefined} ref={page} onKeyDown={event => { if (event.key === 'Escape' && launcherOpen && !event.defaultPrevented) { event.preventDefault(); void closePanel(); } }}>
-    <Atmosphere/><div className="grain" aria-hidden="true" />
-    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockVisible} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockVisible} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={startAccount}/>)}{mode!=='agent'&&dockAvailable&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockVisible} inert={mode!=='agent'&&!agentDockVisible}>
+    <ArtifactExperience scrollRef={scroll.transcript} accountId={data?.user.id} opened={artifactOpening} visible={chatVisible&&!inputOccupied} refreshDisabled={Boolean(sendBusy||reviewing)} open={openArtifact} close={closeArtifact} refresh={artifact=>{setArtifactTask({kind:'refresh',artifact});closeArtifact();}} discuss={artifact=>{setArtifactTask({kind:'discuss',artifact});closeArtifact();}}><Atmosphere/><div className="grain" aria-hidden="true" />
+    {data && <><ModeSwitcher mode={mode} change={changeMode} chat={workspaceRef} chatVisible={mode==='agent'||agentDockVisible} layoutKey={`${style['--chat-x' as keyof typeof style]}:${style['--chat-y' as keyof typeof style]}:${mode}:${agentDockOpen}`}/>{(['friends','posts','log'] as const).map(value=><SocialExperience key={`${data.user.id}:${value}`} mode={value} covered={Boolean(media)||Boolean(artifactOpening)} onLogDone={completeLog} onRoute={reportSocialRoute} reset={socialReset[value]} dockOpen={agentDockVisible} active={mode===value} data={data} request={socialRequests[value]} globalNavigate={navigate} discuss={discussUpdate} example={sendExample} chatBusy={sendBusy} openMessage={openChatMessage} openAgent={showAgent} signup={startAccount}/>)}{mode!=='agent'&&dockAvailable&&!agentDockOpen&&<AgentDockToggle mode={mode} busy={busy} open={showAgent}/>}<main className="workspace" ref={workspaceRef} style={mode==='agent'?undefined:dockStyle} hidden={mode!=='agent'&&!agentDockVisible} inert={mode!=='agent'&&!agentDockVisible}>
       <div className="conversation" data-fade-top={mode==='agent'&&scroll.fadedTop || undefined} ref={scroll.transcript} role="log" aria-label="Your conversation" aria-live="polite" aria-relevant="additions text" onScroll={scroll.onScroll}>
         <div className="conversation-content" ref={scroll.content}>
           <OlderMessages hasMore={Boolean(chatHistory.cursor)} loading={chatHistory.loading} error={chatHistory.error} retry={() => void chatHistory.loadOlder()} />
-          {messages.filter(m => m.text || m.files?.length || m.inbox?.length || m.records?.length).map(bubble)}
+          {messages.filter(m => m.text || m.files?.length || m.inbox?.length || m.records?.length || m.artifacts?.length).map(bubble)}
           {chatHistory.windowed && chatHistory.newerCursor && <div className="history-loader"><button className="text-link small" disabled={chatHistory.newerLoading} onClick={() => void chatHistory.loadNewer()}>{chatHistory.newerLoading ? 'Loading…' : chatHistory.newerError ? 'Retry newer messages' : 'Load newer messages'}</button></div>}
           {busy && !chatHistory.windowed && <AgentLiveMessage run={run} />}
           {run && !chatHistory.windowed && <RunProgress run={run} refresh={refresh} open={() => openRunSurface(run)} />}
@@ -640,7 +679,7 @@ export function App() {
           {recordAttachments.length>0&&<div className="composer-files record-contexts">{recordAttachments.map(item=><button type="button" key={`${item.kind}:${item.id}`} onClick={()=>setRecordAttachments(items=>items.filter(value=>value!==item))} aria-label={`Remove ${item.title}`}><span>{item.title}</span><X size={14}/></button>)}</div>}{(attachments.length > 0||quickUploading||quickError)&&<div className="composer-files">{attachments.map(file => <button type="button" key={file.id} aria-label={`Remove ${file.originalName??file.name}`} onClick={() => setAttachments(previous => previous.filter(candidate => candidate.id !== file.id))}><span>{file.originalName??file.name}</span><X size={14} aria-hidden="true" /></button>)}{quickUploading&&<span className="quiet small" role="status">Uploading…</span>}{quickError&&<TransientError as="span" className="error small" role="alert">{quickError}</TransientError>}</div>}
           {inboxAttachments.length > 0 && <div className="composer-files inbox-attachments">{inboxAttachments.map(item => <button type="button" key={item.id} aria-label={`Remove ${item.title}`} onClick={() => setInboxAttachments(prior => prior.filter(value => value.id !== item.id))}><span>{item.title}</span><X size={14} /></button>)}</div>}
           {(draft.trim() || attachments.length > 0 || inboxAttachments.length > 0 || recordAttachments.length>0) && !dictation.active && <button className="send" type="submit" disabled={sendBusy || quickUploading || !data} aria-label="Send message" title={reviewing ? 'Reject pending actions and send message' : undefined}><ArrowUp size={19} weight="bold" /></button>}
-        </form>}><PreservedPanels retainVisited key={data.user.id} activeKey={workspaceViewKey(mode,composerScreen)} ancestorKeys={workspaceAncestors} reset={0}>{composerScreen?.panel ? <ConversationHeaderProvider><section className="composer-surface" aria-label={composerScreen.title}><header className="composer-surface-header" onClick={event=>scrollFromPanelHeader(event,event.currentTarget.parentElement?.querySelector<HTMLElement>('.composer-surface-content')||null)}><button type="button" className="close" aria-label="Back" onClick={backPanel}><ArrowLeft size={21} /></button>{data.user.handle&&['messages','connections'].includes(composerScreen.panel)&&composerScreen.context.resourceId?<ConversationHeaderHost/>:<h2>{composerScreen.title}</h2>}</header><div className="composer-surface-content" key={`${composerScreen.panel}:${composerScreen.context.resourceId || ''}:${composerScreen.reset}`}><div className="composer-surface-body">{composerScreen.content}</div></div><footer className="composer-surface-footer"><button type="button" className="close" aria-label="Back" onClick={backPanel}><ArrowLeft size={21} /></button><h2>{composerScreen.title}</h2></footer></section></ConversationHeaderProvider> : <nav className="launcher-menu" aria-label="New Drugs"><NavLink to={{view:'inbox'}} navigate={()=>open('inbox',{},'composer')}><Tray size={24} />Agent inbox</NavLink><NavLink to={{view:'automations'}} navigate={()=>open('automations',{},'composer')}><Lightning size={24} />Automations</NavLink><NavLink to={{view:'chat_history'}} navigate={()=>open('chat_history',{},'composer')}><Robot size={24} />Chat search</NavLink><hr className="launcher-divider" /><NavLink to={{view:'people'}} navigate={()=>open('people',{},'composer')}><Users size={24} />People nearby</NavLink><NavLink to={{view:'feed'}} navigate={()=>open('feed',{},'composer')}><Article size={24} />Posts</NavLink><NavLink to={{view:'messages'}} navigate={()=>open('messages',{},'composer')}><ChatCircle size={24} />Messages &amp; invites</NavLink><NavLink to={{view:'uploads'}} navigate={()=>open('uploads',{},'composer')}><Paperclip size={24} />Attach files</NavLink></nav>}</PreservedPanels></ComposerPanel>
+        </form>}><PreservedPanels retainVisited key={data.user.id} activeKey={workspaceViewKey(mode,composerScreen)} ancestorKeys={workspaceAncestors} reset={0}>{composerScreen?.panel ? <ConversationHeaderProvider><section className="composer-surface" aria-label={composerScreen.title}><header className="composer-surface-header" onClick={event=>scrollFromPanelHeader(event,event.currentTarget.parentElement?.querySelector<HTMLElement>('.composer-surface-content')||null)}><button type="button" className="close" aria-label="Back" onClick={backPanel}><ArrowLeft size={21} /></button>{data.user.handle&&['messages','connections'].includes(composerScreen.panel)&&composerScreen.context.resourceId?<ConversationHeaderHost/>:<h2>{composerScreen.title}</h2>}</header><div className="composer-surface-content" key={`${composerScreen.panel}:${composerScreen.context.resourceId || ''}:${composerScreen.reset}`}><div className="composer-surface-body">{composerScreen.content}</div></div><footer className="composer-surface-footer"><button type="button" className="close" aria-label="Back" onClick={backPanel}><ArrowLeft size={21} /></button><h2>{composerScreen.title}</h2></footer></section></ConversationHeaderProvider> : <nav className="launcher-menu" aria-label="New Drugs"><NavLink to={{view:'inbox'}} navigate={()=>open('inbox',{},'composer')}><Tray size={24} />Agent inbox</NavLink><NavLink to={{view:'automations'}} navigate={()=>open('automations',{},'composer')}><Lightning size={24} />Automations</NavLink><NavLink to={{view:'chat_history'}} navigate={()=>open('chat_history',{},'composer')}><Robot size={24} />Chat search</NavLink><NavLink to={{view:'artifacts'}} navigate={()=>open('artifacts',{},'composer')}><Cube size={24}/>Artifacts</NavLink><hr className="launcher-divider" /><NavLink to={{view:'people'}} navigate={()=>open('people',{},'composer')}><Users size={24} />People nearby</NavLink><NavLink to={{view:'feed'}} navigate={()=>open('feed',{},'composer')}><Article size={24} />Posts</NavLink><NavLink to={{view:'messages'}} navigate={()=>open('messages',{},'composer')}><ChatCircle size={24} />Messages &amp; invites</NavLink><NavLink to={{view:'uploads'}} navigate={()=>open('uploads',{},'composer')}><Paperclip size={24} />Attach files</NavLink></nav>}</PreservedPanels></ComposerPanel>
         {mode==='agent'&&<div className="composer-controls"><div className="launcher-controls"><button type="button" className={`launcher-button ${launcherDrag.dragging ? 'dragging' : ''}`} {...launcherDrag.handlers} aria-label={launcherOpen ? 'Close launcher' : 'Open New Drugs'} aria-expanded={launcherOpen} onClick={() => launcherDrag.click(() => { dictation.stop(); if (launcherOpen) void closePanel(); else { if (lastComposer.current) { setPanel(lastComposer.current.panel); setPanelContext(lastComposer.current.context); setPanelHistory(lastComposer.current.history); } else { setPanel(null); setPanelHistory([]); } setPanelSpace('composer'); setLauncherOpen(true); } })}>{launcherOpen ? <X size={24} /> : <SquaresFour size={24} />}</button>{launcherOpen && composerScreen?.panel && <button type="button" className="launcher-button reset-panel" aria-label="Reset launcher" title="Return to launcher options and clear this view" onClick={() => { setPanel(null); setPanelContext({}); setPanelHistory([]); setPanelReset(value => value + 1); }}><ArrowClockwise size={22} /></button>}<input ref={quickFileInput} type="file" hidden multiple accept="image/jpeg,image/png,image/webp,application/pdf,.txt,.md,.csv,.json,.jsonl,.log" onChange={event=>{const files=Array.from(event.target.files||[]);event.currentTarget.value='';void attachQuick(files);}}/><button type="button" className="launcher-button quick-attach-button" aria-label={quickUploading?'Uploading attachment':'Attach image or file'} disabled={quickUploading} onClick={()=>quickFileInput.current?.click()}><Image size={24}/></button></div>
         {dictationControl}</div>}
         <span id="orb-hint" className="sr-only">{dictation.active ? 'Cancel on the left or send on the right. Either clears the draft.' : effectiveDrag.draggable ? 'Tap to dictate. Drag sideways to move chat, or use left and right arrow keys while focused.' : 'Tap to dictate.'}</span>
@@ -653,5 +692,5 @@ export function App() {
     <div ref={talk.audioHost} hidden aria-hidden="true"/>
     {settingsSnapshot&&<Dialog key={`settings:${settingsSnapshot.userId}`} visible={settingsVisible} title={settingsSnapshot.title} close={()=>{resumeSettings.current=false;void closePanel();}} back={settingsSnapshot.history.length?backPanel:undefined}>{settingsSnapshot.content}</Dialog>}
     {panel && panelSpace === 'modal' && !settingsViews.has(panel) && <Dialog placement="task" title={panelTitle} close={() => void closePanel()} back={panelHistory.length ? backPanel : undefined}>{panelContent}</Dialog>}
-  </div>{media&&<ImageViewer items={media.items} index={media.index} close={()=>setMedia(null)}/>}</NavigationContext.Provider></ExperienceContext.Provider></TalkContext.Provider></CallProvider>;
+  </ArtifactExperience></div>{media&&<ImageViewer items={media.items} index={media.index} close={()=>setMedia(null)}/>}</NavigationContext.Provider></ExperienceContext.Provider></TalkContext.Provider></CallProvider>;
 }

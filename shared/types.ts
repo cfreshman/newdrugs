@@ -16,6 +16,7 @@ export interface Message { pageContext?:import('./pageContext').PageContextCandi
   id: string; role: 'user' | 'assistant'; text: string; createdAt: string;
   source: 'app' | 'external'; status?: 'complete' | 'interrupted' | 'pending' | 'failed';
   files?: import('./uploads').UploadRef[];
+  artifacts?: import('./artifacts').ArtifactPresentationReference[];
   review?: { runId: string; revision: number };
   failure?: string; inbox?: import('./inbox').InboxAttachment[];
 }
@@ -43,6 +44,7 @@ export interface RunView {
   phase?: import('./agentUi').AgentPhase; preamble?: string; cancelRequested?: boolean;
   outputComplete?: boolean; sleep?: { until: number; reason: string };
   approvals: Approval[]; clientId: string; error?: string; revision: number;
-  surface?: { id: string; view: string; dinderTab?:'chat'; date?:string; logMonth?:string;logScope?:import('./navigation').Destination['logScope'];personId?:string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
+  surface?: { id: string; view: string; artifactVersion?:import('./artifacts').ArtifactVersionSelector; dinderTab?:'chat'; date?:string; logMonth?:string;logScope?:import('./navigation').Destination['logScope'];personId?:string; resourceId?: string; areaCell?: string; radiusMiles?:number;postIds?:string[];query?:string;scope?:'all'|'nearby'|'own'; waiting: boolean; completed?: boolean };
   sources?: { url: string; title: string }[];
+  artifacts?: import('./artifacts').ArtifactPresentationReference[];
 }

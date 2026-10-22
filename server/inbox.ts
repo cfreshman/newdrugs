@@ -10,6 +10,7 @@ import { config } from './config';
 import { parseDestination } from '../shared/navigation';
 import type { InboxItem } from '../shared/inbox';
 import { executeOperation } from './operations';
+import {publicArtifactSummary} from './artifacts';
 export interface InboxRow { _id: string; userId: string; title: string; body: string; links: InboxItem['links']; producer: InboxItem['producer']; createdAt: string; readAt: string | null; archivedAt: string | null; automationId?: string; runId?: string; automationGeneration?: number }
 export const inboxRows = () => rows<InboxRow>('agentInbox');
 export async function validateInboxLinks(userId: string, links: InboxItem['links'], body = '') {
@@ -28,6 +29,7 @@ export async function validateInboxLinks(userId: string, links: InboxItem['links
     if (destination.view === 'messages') await executeOperation('connections.get', { connectionId: id }, actor);
     if (destination.view === 'chat') await executeOperation('conversation.window', { messageId: id }, actor);
     if (destination.view === 'inbox') requireValue(await inboxRows().findOne({ _id: id, userId }));
+    if (destination.view === 'artifacts') await publicArtifactSummary(id,destination.artifactVersion);
   }
 }
 export async function inboxView(row: InboxRow): Promise<InboxItem> {

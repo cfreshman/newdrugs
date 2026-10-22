@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { CaretDown, CaretUp } from '@phosphor-icons/react';
 import { AgentMarkdown } from './AgentMarkdown';
-import { holdConversationScroll } from './useConversationScroll';
+import { messagePreviewHeight,useMessageExpansion } from './useMessageExpansion';
 import { LinkedText } from './LinkedText';
 
 const interactive = 'a[href], button, input, select, textarea, summary, [role="button"], [role="link"], [contenteditable]:not([contenteditable="false"])';
@@ -13,11 +13,9 @@ export function CollapsibleMessage({ text, assistant, scrollRef, social = false,
   const wrapper = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const pointerInteractive = useRef(false);
-  const pendingScroll = useRef<{ top: number; bottom: number | null } | null>(null);
   const [preview, setPreview] = useState(256);
   const [long, setLong] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  useLayoutEffect(() => { if (reveal) setExpanded(true); }, [reveal]);
+  const {expanded,setExpanded,toggle}=useMessageExpansion({wrapper,scrollRef,reveal});
   const collapsed = collapsible && long && !expanded;
   useLayoutEffect(() => {
     const node = content.current;
@@ -25,7 +23,7 @@ export function CollapsibleMessage({ text, assistant, scrollRef, social = false,
     const measure = () => {
       const css = getComputedStyle(node);
       const multiplier = assistant && window.matchMedia('(min-width: 640px)').matches ? 2 : 1;
-      const height = (parseFloat(css.getPropertyValue('--message-preview')) || 256) * multiplier;
+      const height = messagePreviewHeight(node,assistant);
       const threshold = (parseFloat(css.getPropertyValue('--message-collapse-threshold')) || 320) * multiplier;
       const line = parseFloat(css.lineHeight) || 24;
       setPreview(height);
@@ -37,20 +35,6 @@ export function CollapsibleMessage({ text, assistant, scrollRef, social = false,
     window.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('resize', measure); };
   }, [text, assistant, collapsible]);
-  useLayoutEffect(() => {
-    const anchor = pendingScroll.current, scroller = scrollRef.current, message = wrapper.current;
-    if (!anchor || !scroller || !message) return;
-    scroller.scrollTop = anchor.bottom === null ? anchor.top : Math.max(0, scroller.scrollTop + message.getBoundingClientRect().bottom - anchor.bottom);
-    pendingScroll.current = null;
-  }, [expanded, scrollRef]);
-  const toggle = () => {
-    const scroller = scrollRef.current, message = wrapper.current;
-    if (scroller && message) {
-      holdConversationScroll(scroller);
-      pendingScroll.current = { top: scroller.scrollTop, bottom: expanded ? message.getBoundingClientRect().bottom : null };
-    }
-    setExpanded(value => !value);
-  };
   return <div className="collapsible-message" ref={wrapper}>
     <div id={id} className="message-preview" style={collapsed ? { maxHeight: preview } : undefined}
       onPointerDownCapture={event => { pointerInteractive.current = event.target instanceof Element && Boolean(event.target.closest(interactive)); }}
