@@ -22,14 +22,26 @@ function revealField(field: HTMLElement, root: HTMLElement) {
   }
 }
 
-/** Native taps own focus and caret placement; only reveal the resulting field. */
+/** Preserve native field editing and keep action taps stable while typing. */
 export function bindMobileInputFocus(root: HTMLElement) {
   let frame = 0;
+  const keepActionFocus = (event: MouseEvent) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || root.dataset.keyboardOpen !== 'true') return;
+    const field = textField(document.activeElement);
+    if (!field || !root.contains(field) || !(event.target instanceof Element)) return;
+    if (event.target.closest('textarea, select, input:not([type="button"]):not([type="submit"]):not([type="reset"]), [contenteditable]:not([contenteditable="false"])')) return;
+    const control = event.target.closest('button, a[href], summary, input[type="button"], input[type="submit"], input[type="reset"], [role="button"]');
+    if (!control || !root.contains(control) || control.matches(':disabled, [aria-disabled="true"]') || control.closest('[inert]')) return;
+    // Blur restores headers and panel height before mouseup, moving the target
+    // away from the finger. Keep focus here; the native click still owns the action.
+    event.preventDefault();
+  };
   const reveal = () => {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => { const active = textField(document.activeElement); if (active && root.contains(active)) revealField(active, root); });
   };
   root.addEventListener('focusin', reveal);
+  root.addEventListener('mousedown', keepActionFocus, true);
   window.addEventListener('resize', reveal);
   const visual=window.visualViewport;
   const revealKeyboard=()=>{if(!visual||Math.abs(visual.scale-1)<.01)reveal();};
@@ -37,6 +49,7 @@ export function bindMobileInputFocus(root: HTMLElement) {
   return () => {
     cancelAnimationFrame(frame);
     root.removeEventListener('focusin', reveal); window.removeEventListener('resize', reveal);
+    root.removeEventListener('mousedown', keepActionFocus, true);
     visual?.removeEventListener('resize',revealKeyboard);
   };
 }

@@ -37,3 +37,32 @@ it('does not intercept readonly fields or native pickers', () => {
 it('removes its listeners when the app unmounts', () => {
   cleanup(); touch('touchstart', [{ clientX: 10, clientY: 20 }]); expect(touch('touchend', []).defaultPrevented).toBe(false);
 });
+
+function down(target: Element, options: MouseEventInit = {}) {
+  const event = new MouseEvent('mousedown', {bubbles:true,cancelable:true,button:0,...options});
+  target.dispatchEvent(event); return event;
+}
+it.each(['button', 'a', 'summary'])('keeps keyboard focus until a %s action receives its native click', tag => {
+  const control = document.createElement(tag), child = document.createElement('span'), click = vi.fn();
+  if (control instanceof HTMLAnchorElement) control.href = '#destination';
+  child.textContent = 'Save'; control.append(child); control.addEventListener('click', click); dom.container.append(control);
+  input.focus(); input.value = 'Keep the draft'; input.setSelectionRange(2, 6); dom.container.dataset.keyboardOpen = 'true';
+  expect(down(child).defaultPrevented).toBe(true);
+  expect(document.activeElement).toBe(input); expect(input.selectionStart).toBe(2); expect(input.selectionEnd).toBe(6);
+  expect(click).not.toHaveBeenCalled(); control.click(); expect(click).toHaveBeenCalledOnce();
+});
+it('keeps normal focus, native pickers, disabled actions and modified links untouched', () => {
+  const button = document.createElement('button'), other = document.createElement('textarea'), select = document.createElement('select'), file = document.createElement('input'), link = document.createElement('a');
+  file.type = 'file'; link.href = '#destination'; dom.container.append(button, other, select, file, link);
+  input.focus(); expect(down(button).defaultPrevented).toBe(false);
+  dom.container.dataset.keyboardOpen = 'true';
+  for (const control of [input, other, select, file, dom.container]) expect(down(control).defaultPrevented).toBe(false);
+  button.disabled = true; expect(down(button).defaultPrevented).toBe(false); button.disabled = false;
+  button.setAttribute('aria-disabled','true'); expect(down(button).defaultPrevented).toBe(false);
+  for (const options of [{button:1},{button:2},{ctrlKey:true},{metaKey:true},{shiftKey:true},{altKey:true}]) expect(down(link, options).defaultPrevented).toBe(false);
+  input.blur(); expect(down(link).defaultPrevented).toBe(false);
+});
+it('releases the action-focus handler on cleanup', () => {
+  const button = document.createElement('button'); dom.container.append(button); input.focus(); dom.container.dataset.keyboardOpen = 'true';
+  cleanup(); expect(down(button).defaultPrevented).toBe(false);
+});
