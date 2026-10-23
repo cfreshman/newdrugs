@@ -185,7 +185,8 @@ export function LogDetail({entryId,user,navigate,onSaved,onCancel,onClose,onAdja
 
 
    <div className="log-adjacent panel-actions"><button aria-label="Previous entry" aria-busy={adjacent.pending||undefined} disabled={!neighbors.previous} onClick={()=>neighbors.previous&&visitAdjacent(neighbors.previous)}><CaretLeft size={18}/><span>{adjacent.list?'Previous':'Older'}</span></button><button aria-label="Next entry" aria-busy={adjacent.pending||undefined} disabled={!neighbors.next} onClick={()=>neighbors.next&&visitAdjacent(neighbors.next)}><span>{adjacent.list?'Next':'Newer'}</span><CaretRight size={18}/></button></div>
-   <div className="panel-actions log-entry-actions">{entry.membership==='member'&&(fresh?<NavLink to={{view:'log_code',resourceId:entry.id}} navigate={navigate}>Code</NavLink>:<button disabled>Code</button>)}<button onClick={closeDetail}>{closeLabel}</button>{entry.membership==='member'&&<button disabled={!fresh} onClick={()=>setEditing(true)}>Edit</button>}</div>
+   {/* Code reauthorizes on open and keeps its link mounted while details refresh. */}
+   <div className="panel-actions log-entry-actions">{entry.membership==='member'&&<NavLink to={{view:'log_code',resourceId:entry.id}} navigate={navigate}>Code</NavLink>}<button onClick={closeDetail}>{closeLabel}</button>{entry.membership==='member'&&<button disabled={!fresh} onClick={()=>setEditing(true)}>Edit</button>}</div>
   </footer>
  {media.detail}</article></PanelVisibilityContext.Provider>;
 }

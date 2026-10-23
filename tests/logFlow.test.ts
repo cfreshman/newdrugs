@@ -99,6 +99,37 @@ it('returns from QR-origin scanning to its QR code and Close returns through pre
  await act(async()=>activeButton('Back').click());expect(dom.container.querySelector('.log-modal[data-open=true] .log-detail')).not.toBeNull();await act(async()=>activeButton('Close').click());expect(dom.container.querySelector('.log-modal[data-open=true]')).toBeNull();expect(dom.container.querySelector('.composer-view:not([hidden]) .log-browser')).not.toBeNull();
 });
 
+it('keeps the same Code link after Back while the hangout refresh is pending or fails',async()=>{
+ const props={mode:'log' as const,active:true,data:{user,messages:[]} as any,reset:0,dockOpen:false,chatBusy:false,onRoute:vi.fn(),globalNavigate:vi.fn(),openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()};
+ const original=mocks.operation.getMockImplementation()!;
+ let defer=false,resolve!:(value:typeof entry)=>void,reject!:(error:Error)=>void;
+ mocks.operation.mockImplementation((name,...args)=>name==='log.code'?Promise.resolve({entryId:entry.id,code:'a'.repeat(32),url:'https://druggie.org/log/join/'+ 'a'.repeat(32)}):name==='log.get'&&defer?new Promise((done,fail)=>{resolve=done;reject=fail;}):original(name,...args));
+ const active=()=>dom.container.querySelector<HTMLElement>('.log-modal[data-open=true]')!;
+ const control=(label:string)=>[...active().querySelectorAll<HTMLElement>('button,a')].find(element=>element.textContent===label)!;
+ await act(async()=>dom.root.render(createElement(SocialExperience,props)));
+ await act(async()=>dom.container.querySelector<HTMLAnchorElement>('.log-today-card')!.click());
+ const detail=active().querySelector('.log-detail'),code=control('Code');
+ expect(code.tagName).toBe('A');
+ await act(async()=>code.click());
+ expect(active().querySelector('.log-code')).not.toBeNull();
+ defer=true;
+ await act(async()=>control('Back').click());
+ expect(active().querySelector('.log-detail')).toBe(detail);
+ expect(control('Code')).toBe(code);
+ expect(code.isConnected).toBe(true);
+ expect(code.getAttribute('href')).toBe(`/log/code/${entry.id}`);
+ await act(async()=>resolve({...entry,revision:2}));
+ expect(control('Code')).toBe(code);
+ await act(async()=>code.click());
+ expect(active().querySelector('.log-code')).not.toBeNull();
+ await act(async()=>control('Back').click());
+ await act(async()=>reject(new Error('Connection interrupted')));
+ expect(control('Code')).toBe(code);
+ expect(control('Code').textContent).toBe('Code');
+ await act(async()=>code.click());
+ expect(active().querySelector('.log-code')).not.toBeNull();
+});
+
 it('replaces the active hangout on Older/Newer so Close does not walk through neighbors',async()=>{
  const next={...entry,id:'next',title:'Next hangout'},route=vi.fn(),original=mocks.operation.getMockImplementation()!;mocks.operation.mockImplementation(async(name,input,...args)=>name==='log.neighbors'?{previous:null,next}:name==='log.get'&&input.entryId==='next'?next:original(name,input,...args));
  await act(async()=>dom.root.render(createElement(SocialExperience,{mode:'log',active:true,data:{user,messages:[]} as any,reset:0,dockOpen:false,chatBusy:false,onRoute:route,globalNavigate:vi.fn(),openAgent:vi.fn(),signup:vi.fn(),discuss:vi.fn(),example:vi.fn(),openMessage:vi.fn()})));await act(async()=>dom.container.querySelector<HTMLButtonElement>('.log-day:has(.log-day-mosaic)')!.click());
